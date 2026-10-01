@@ -11,11 +11,6 @@ export const appConfig = {
   accent: "#a3e635",
   upcomingFeatures: [
     {
-      title: "Feed de hackathons",
-      description:
-        "Descubra os hackathons rolando no Brasil e no mundo numa lista curada, com datas, links e formato.",
-    },
-    {
       title: "Inscrição em 1 clique",
       description:
         "Use seu perfil pra se inscrever direto nos hackathons parceiros — sem preencher formulário novo toda vez.",
