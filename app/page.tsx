@@ -9,15 +9,28 @@ export default function Home() {
       </span>
       <h1 className="text-5xl font-bold tracking-tight">{appConfig.name}</h1>
       <p className="max-w-xl text-lg text-black/70">{appConfig.description}</p>
+      <div className="flex flex-wrap items-center justify-center gap-3 text-left">
+        {[
+          "Um perfil pra todas as inscrições",
+          "Feed curado de hackathons BR + mundo",
+          "Histórico e skills em página pública",
+        ].map((item) => (
+          <span
+            key={item}
+            className="rounded-full border border-black/10 bg-black/[0.03] px-4 py-2 text-sm"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
       <Link
         href="/dashboard"
         className="rounded-full bg-accent px-6 py-3 font-medium text-white shadow-sm transition hover:opacity-90"
       >
-        Get early access →
+        Entrar pro early access →
       </Link>
       <p className="text-sm text-black/50">
-        This page is public. The early-access page should be for signed-in users
-        only.
+        Landing pública. A página de early access é só pra membros logados.
       </p>
     </section>
   );

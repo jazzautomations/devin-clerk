@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { appConfig } from "@/app.config";
 import { Header } from "@/components/Header";
@@ -22,15 +23,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      style={{ "--accent": appConfig.accent } as CSSProperties}
+    <ClerkProvider
+      appearance={{ variables: { colorPrimary: appConfig.accent } }}
     >
-      <body className="flex min-h-full flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
-      </body>
-    </html>
+      <html
+        lang="pt-BR"
+        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+        style={{ "--accent": appConfig.accent } as CSSProperties}
+      >
+        <body className="flex min-h-full flex-col">
+          <Header />
+          <main className="flex-1">{children}</main>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
