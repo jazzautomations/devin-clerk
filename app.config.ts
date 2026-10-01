@@ -8,7 +8,7 @@ export const appConfig = {
   description:
     "O hub brasileiro de hackathons: um perfil, todas as competições. Monte sua identidade de hacker, inscreva-se em 1 clique e descubra o que tá rolando no Brasil e no mundo.",
   emoji: "⚡",
-  accent: "#7c3aed",
+  accent: "#a3e635",
   upcomingFeatures: [
     {
       title: "Feed de hackathons",

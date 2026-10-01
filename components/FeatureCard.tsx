@@ -8,12 +8,21 @@ export function FeatureCard({
   index: number;
 }) {
   return (
-    <article className="flex flex-col gap-3 rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-      <span className="w-fit rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
-        Coming soon · #{index + 1}
-      </span>
-      <h3 className="text-lg font-semibold">{feature.title}</h3>
-      <p className="text-sm text-black/70">{feature.description}</p>
+    <article className="group flex flex-col gap-3 border border-line bg-surface p-5 transition hover:border-accent/40">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs text-accent">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <span className="font-mono text-[10px] tracking-widest text-muted uppercase">
+          coming soon
+        </span>
+      </div>
+      <h3 className="font-display text-lg font-semibold tracking-tight">
+        {feature.title}
+      </h3>
+      <p className="text-sm leading-relaxed text-muted">
+        {feature.description}
+      </p>
     </article>
   );
 }

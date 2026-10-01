@@ -4,23 +4,32 @@ import { appConfig } from "@/app.config";
 
 export function Header() {
   return (
-    <header className="border-b border-black/10 bg-white/80 backdrop-blur">
+    <header className="border-b border-line bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
-          <span aria-hidden>{appConfig.emoji}</span>
-          {appConfig.name}
+        <Link
+          href="/"
+          className="font-mono text-sm font-semibold tracking-tight"
+        >
+          <span className="text-accent">{"> "}</span>
+          {appConfig.name.toLowerCase()}
+          <span className="text-accent">_</span>
         </Link>
-        <nav className="flex items-center gap-6 text-sm">
-          <Link href="/dashboard" className="hover:text-accent">
-            Dashboard
+        <nav className="flex items-center gap-6 font-mono text-xs tracking-wide">
+          <Link
+            href="/dashboard"
+            className="text-muted transition hover:text-accent"
+          >
+            dashboard
           </Link>
           <Show when="signed-out">
             <SignInButton mode="modal">
-              <button className="hover:text-accent">Entrar</button>
+              <button className="text-muted transition hover:text-accent">
+                entrar
+              </button>
             </SignInButton>
             <SignUpButton mode="modal">
-              <button className="rounded-full bg-accent px-4 py-2 font-medium text-white transition hover:opacity-90">
-                Criar conta
+              <button className="bg-accent px-4 py-2 font-semibold text-black transition hover:brightness-110">
+                criar conta
               </button>
             </SignUpButton>
           </Show>
