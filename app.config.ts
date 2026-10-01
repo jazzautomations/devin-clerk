@@ -4,7 +4,7 @@ export type Feature = {
 };
 
 export const appConfig = {
-  name: "Hackbase",
+  name: "HackaHub",
   description:
     "O hub brasileiro de hackathons: um perfil, todas as competições. Monte sua identidade de hacker, inscreva-se em 1 clique e descubra o que tá rolando no Brasil e no mundo.",
   emoji: "⚡",
