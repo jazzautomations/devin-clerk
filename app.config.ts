@@ -40,5 +40,10 @@ export const appConfig = {
       description:
         "Empresas postam desafios e vagas pra quem se destacou nos hackathons — modelo tipo Unstop/Devpost.",
     },
+    {
+      title: "Trilhas de preparação",
+      description:
+        "Conteúdo gratuito e pago focado em hackathon: MVP em 24h, pitch, IA sob pressão — nicho que Rocketseat/Alura não cobre.",
+    },
   ] satisfies Feature[],
 };
