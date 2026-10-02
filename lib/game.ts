@@ -7,6 +7,7 @@ export const XP = {
   register: 50,
   identidade: 25,
   teamBoard: 10,
+  teamSubmit: 15,
 } as const;
 
 export type Level = { n: number; name: string; min: number };

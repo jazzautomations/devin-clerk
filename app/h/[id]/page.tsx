@@ -18,6 +18,8 @@ import { DeployPanel } from "@/components/DeployPanel";
 import { getLatestDeployForTeam } from "@/lib/deploys";
 import { listBoardEntries } from "@/lib/teamboard";
 import { TeamBoardPanel } from "@/components/TeamBoardPanel";
+import { memberTeamFor } from "@/lib/teams";
+import { MyTeamPanel } from "@/components/MyTeamPanel";
 import { countdownTarget, editionPhase } from "@/lib/arena";
 import type { EditionPhase } from "@/lib/arena";
 import { ArenaCountdown } from "@/components/ArenaCountdown";
@@ -99,6 +101,9 @@ export default async function HackathonPage({
   const member = userId ? getMemberByClerkId(userId) : null;
   const registered =
     member !== null && getRegistrationIds(member.id).includes(h.id);
+  // spec 021 — time do próprio membro na edição (null = ainda não submeteu)
+  const myTeam =
+    member && registered ? memberTeamFor(h.id, member.username) : null;
   const attendees = getRegistrationsByHackathon(h.id);
   const cardRarity = getCardRarity(h.id);
   const cardSupply = getCardSupply(h.id);
@@ -228,6 +233,17 @@ export default async function HackathonPage({
         >
           inscrever no site oficial →
         </a>
+      )}
+
+      {/* spec 021 — inscrito submete/edita o próprio time; edição encerrada
+          vira arquivo e o painel some (o time já tá em "resultado") */}
+      {!past && registered && (
+        <div className="flex flex-col gap-3">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            {"// meu time"}
+          </h2>
+          <MyTeamPanel hackathonId={h.id} initialTeam={myTeam} />
+        </div>
       )}
 
       {challenges.length > 0 && (
