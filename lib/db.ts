@@ -170,7 +170,8 @@ seedAll();
 const seedIds = [...seed, ...pastSeed].map((h) => h.id);
 db.prepare(
   `UPDATE hackathons SET active = 0
-   WHERE id NOT IN (SELECT value FROM json_each(?))
+   WHERE source IS NULL
+     AND id NOT IN (SELECT value FROM json_each(?))
      AND id NOT IN (SELECT hackathonId FROM registrations)`,
 ).run(JSON.stringify(seedIds));
 

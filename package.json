@@ -10,6 +10,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "scrape": "uv run --python .venv-scraper/bin/python scripts/scrape_radar.py",
+    "test:scrape": "uv run --python .venv-scraper/bin/python scripts/test_scrape_radar.py",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

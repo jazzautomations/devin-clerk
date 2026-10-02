@@ -50,3 +50,5 @@ data/*.db
 .venv-scraper/
 test-results/
 playwright-report/
+data/*.db-shm
+data/*.db-wal
