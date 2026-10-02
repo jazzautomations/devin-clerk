@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Hackathon, HackathonFormat } from "@/lib/hackathons";
+import { eventRegion, getRegions } from "@/lib/regions";
 import { HackathonCard } from "@/components/HackathonCard";
 
 const FORMATS: { value: HackathonFormat | null; label: string }[] = [
@@ -24,12 +25,15 @@ export function HackathonFeed({
 }) {
   const [format, setFormat] = useState<HackathonFormat | null>(null);
   const [tag, setTag] = useState<string | null>(null);
+  const [region, setRegion] = useState<string | null>(null);
   const nowDate = new Date(now);
+  const regions = getRegions(hackathons);
 
   const filtered = hackathons.filter(
     (h) =>
       (format === null || h.format === format) &&
-      (tag === null || h.tags.includes(tag)),
+      (tag === null || h.tags.includes(tag)) &&
+      (region === null || eventRegion(h) === region),
   );
 
   return (
@@ -64,6 +68,25 @@ export function HackathonFeed({
         ))}
       </div>
 
+      {regions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <span className="text-muted">onde:</span>
+          {regions.map((r) => (
+            <button
+              key={r}
+              onClick={() => setRegion(region === r ? null : r)}
+              className={
+                region === r
+                  ? "border border-accent bg-accent/10 px-3 py-1.5 text-accent"
+                  : "border border-line px-3 py-1.5 text-muted transition hover:border-accent/50 hover:text-foreground"
+              }
+            >
+              {r.toLowerCase()}
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="flex flex-col items-start gap-3 border border-dashed border-line px-6 py-10">
           <p className="font-mono text-sm text-muted">
@@ -76,6 +99,7 @@ export function HackathonFeed({
               onClick={() => {
                 setFormat(null);
                 setTag(null);
+                setRegion(null);
               }}
               className="border border-line px-4 py-2 font-mono text-xs text-muted transition hover:border-accent/50 hover:text-foreground"
             >
