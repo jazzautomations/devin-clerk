@@ -9,6 +9,7 @@ import {
 import { RegisterButton } from "@/components/RegisterButton";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
+import { getArchive } from "@/lib/archive";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -39,6 +40,10 @@ export default async function HackathonPage({
   const cardRarity = getCardRarity(h.id);
   const cardSupply = getCardSupply(h.id);
   const myCard = member ? getMemberCard(member.id, h.id) : null;
+  const archive = getArchive(h.id);
+  const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
+  const podium = archive.teams.filter((t) => t.placement >= 1 && t.placement <= 3);
+  const field = archive.teams.filter((t) => t.placement === 0);
 
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -146,6 +151,150 @@ export default async function HackathonPage({
           </div>
         </div>
       </div>
+
+      {(past || hasArchive) && (
+        <div className="flex flex-col gap-5">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            resultado
+          </h2>
+          {podium.length > 0 ? (
+            <ol className="grid gap-3 sm:grid-cols-3">
+              {podium.map((t) => (
+                <li
+                  key={t.id}
+                  className={`flex flex-col gap-2 border p-4 ${
+                    t.placement === 1
+                      ? "border-lendario/60 bg-lendario/5"
+                      : "border-line bg-surface"
+                  }`}
+                >
+                  <span
+                    className={`font-mono text-2xl font-bold ${
+                      t.placement === 1 ? "text-lendario" : "text-muted"
+                    }`}
+                  >
+                    {t.placement}º
+                  </span>
+                  <p className="font-display font-bold tracking-tight">
+                    {t.name}
+                  </p>
+                  {t.project && (
+                    <div className="flex flex-col gap-1">
+                      <p className="font-mono text-xs text-foreground">
+                        {t.project.title}
+                      </p>
+                      {t.project.description && (
+                        <p className="text-xs text-muted">
+                          {t.project.description}
+                        </p>
+                      )}
+                      <span className="flex gap-3 font-mono text-[10px] text-accent">
+                        {t.project.repoUrl && (
+                          <a
+                            href={t.project.repoUrl}
+                            target="_blank"
+                            rel="noopener"
+                            className="hover:underline"
+                          >
+                            repo →
+                          </a>
+                        )}
+                        {t.project.demoUrl && (
+                          <a
+                            href={t.project.demoUrl}
+                            target="_blank"
+                            rel="noopener"
+                            className="hover:underline"
+                          >
+                            demo →
+                          </a>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {t.members.length > 0 && (
+                    <p className="mt-auto font-mono text-[10px] text-muted">
+                      {t.members.map((u) => `@${u}`).join(" ")}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          ) : hasArchive ? (
+            <p className="border border-dashed border-line px-5 py-6 font-mono text-xs text-muted">
+              {"// pódio em organização"}
+            </p>
+          ) : (
+            <p className="border border-dashed border-line px-5 py-6 font-mono text-xs text-muted">
+              {"// arquivo em organização — resultado entra aqui depois do evento"}
+            </p>
+          )}
+
+          {field.length > 0 && (
+            <ul className="divide-y divide-line border-y border-line">
+              {field.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-baseline justify-between gap-4 py-3"
+                >
+                  <div>
+                    <p className="font-display font-semibold">{t.name}</p>
+                    {t.project && (
+                      <p className="font-mono text-xs text-muted">
+                        {t.project.title}
+                        {t.project.repoUrl && (
+                          <>
+                            {" "}
+                            —{" "}
+                            <a
+                              href={t.project.repoUrl}
+                              target="_blank"
+                              rel="noopener"
+                              className="text-accent hover:underline"
+                            >
+                              repo →
+                            </a>
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {t.members.length > 0 && (
+                    <span className="font-mono text-[10px] text-muted">
+                      {t.members.map((u) => `@${u}`).join(" ")}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {archive.assets.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="font-mono text-[10px] tracking-widest text-muted uppercase">
+                materiais & fotos
+              </h3>
+              <ul className="divide-y divide-line border-y border-line">
+                {archive.assets.map((a) => (
+                  <li key={a.id} className="flex items-baseline gap-3 py-2">
+                    <span className="w-16 shrink-0 font-mono text-[10px] text-muted uppercase">
+                      {a.type}
+                    </span>
+                    <a
+                      href={a.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="font-mono text-xs text-accent hover:underline"
+                    >
+                      {a.caption ?? a.url.replace(/^https?:\/\//, "").slice(0, 50)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {attendees.length > 0 && (
         <div className="flex flex-col gap-3">

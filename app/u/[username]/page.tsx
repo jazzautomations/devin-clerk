@@ -3,6 +3,7 @@ import { getMemberByUsername } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberBadges, getMemberCards } from "@/lib/xp";
+import { getMemberProjects } from "@/lib/archive";
 import { levelFor } from "@/lib/game";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
@@ -22,6 +23,7 @@ export default async function PublicProfilePage({
     .filter(Boolean);
   const badges = getMemberBadges(member.id);
   const cards = getMemberCards(member.id);
+  const projects = getMemberProjects(member.username);
   const { level } = levelFor(member.xp);
 
   return (
@@ -149,6 +151,43 @@ export default async function PublicProfilePage({
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {projects.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            projetos ({projects.length})
+          </h2>
+          <ul className="divide-y divide-line border-y border-line">
+            {projects.map((p) => (
+              <li key={`${p.hackathonId}-${p.teamName}`} className="py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="font-display font-semibold">
+                    {p.project?.title ?? p.teamName}
+                  </p>
+                  {p.placement > 0 && (
+                    <span className="border border-lendario/50 bg-lendario/10 px-1.5 font-mono text-[10px] text-lendario">
+                      {p.placement}º lugar
+                    </span>
+                  )}
+                </div>
+                <p className="font-mono text-xs text-muted">
+                  {p.teamName} · {p.hackathonName}
+                </p>
+                {p.project?.repoUrl && (
+                  <a
+                    href={p.project.repoUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="font-mono text-xs text-accent hover:underline"
+                  >
+                    repo →
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

@@ -85,6 +85,38 @@ CREATE TABLE IF NOT EXISTS member_cards (
   awardedAt TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (memberId, hackathonId)
 );
+
+CREATE TABLE IF NOT EXISTS teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
+  name TEXT NOT NULL,
+  placement INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (hackathonId, name)
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  teamId INTEGER NOT NULL REFERENCES teams(id),
+  username TEXT NOT NULL,
+  PRIMARY KEY (teamId, username)
+);
+
+CREATE TABLE IF NOT EXISTS team_projects (
+  teamId INTEGER PRIMARY KEY REFERENCES teams(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  repoUrl TEXT,
+  demoUrl TEXT
+);
+
+CREATE TABLE IF NOT EXISTS edition_assets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
+  type TEXT NOT NULL CHECK (type IN ('foto','slide','material')),
+  url TEXT NOT NULL,
+  caption TEXT,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // migrações leves — ALTER TABLE idempotente pra bancos já existentes
@@ -156,5 +188,32 @@ const seedCard = db.prepare(
 for (const id of seedIds) {
   seedCard.run(id, cardRarity[id] ?? "comum");
 }
+
+// seed do arquivo: pódio público da Unifacens (dado real divulgado);
+// o resto entra pelo admin quando os organizadores cadastrarem
+const seedTeams = db.transaction(() => {
+  db.prepare(
+    `INSERT OR IGNORE INTO teams (hackathonId, name, placement)
+     VALUES ('hack-inova-unifacens-2026', 'One Day Hospital', 1)`,
+  ).run();
+  const team = db
+    .prepare(
+      "SELECT id FROM teams WHERE hackathonId = ? AND name = ?",
+    )
+    .get("hack-inova-unifacens-2026", "One Day Hospital") as
+    | { id: number }
+    | undefined;
+  if (team) {
+    db.prepare(
+      `INSERT OR IGNORE INTO team_projects (teamId, title, description)
+       VALUES (?, ?, ?)`,
+    ).run(
+      team.id,
+      "One Day Hospital",
+      "Vencedora da 1ª edição — solução de saúde apresentada depois na Oracle SP",
+    );
+  }
+});
+seedTeams();
 
 export default db;
