@@ -6,6 +6,7 @@ export const XP = {
   likeReceived: 5,
   register: 50,
   identidade: 25,
+  teamBoard: 10,
 } as const;
 
 export type Level = { n: number; name: string; min: number };

@@ -16,6 +16,8 @@ import { getArchive } from "@/lib/archive";
 import { getChallenges } from "@/lib/challenges";
 import { DeployPanel } from "@/components/DeployPanel";
 import { getLatestDeployForTeam } from "@/lib/deploys";
+import { listBoardEntries } from "@/lib/teamboard";
+import { TeamBoardPanel } from "@/components/TeamBoardPanel";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -76,6 +78,7 @@ export default async function HackathonPage({
   const archive = getArchive(h.id);
   const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
   const challenges = getChallenges(h.id);
+  const boardEntries = listBoardEntries(h.id);
   const podium = archive.teams.filter((t) => t.placement >= 1 && t.placement <= 3);
   const field = archive.teams.filter((t) => t.placement === 0);
 
@@ -395,10 +398,26 @@ export default async function HackathonPage({
         </div>
       )}
 
+      {(!past || boardEntries.length > 0) && (
+        <div className="flex flex-col gap-3">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            {"// quem tá procurando time"} ({boardEntries.length})
+          </h2>
+          <TeamBoardPanel
+            hackathonId={h.id}
+            canPost={!past && registered}
+            myUsername={member?.username ?? null}
+            initialEntries={boardEntries}
+          />
+        </div>
+      )}
+
       {attendees.length > 0 && (
         <div className="flex flex-col gap-3">
           <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
             inscritos ({attendees.length})
+            {boardEntries.length > 0 &&
+              ` · ${boardEntries.length} procurando time`}
           </h2>
           <ul className="divide-y divide-line border-y border-line font-mono text-xs">
             {attendees.map((a) => (

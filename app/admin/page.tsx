@@ -5,9 +5,11 @@ import { getOrCreateMember } from "@/lib/members";
 import { listRegistrants } from "@/lib/registrations";
 import { listSubscribers } from "@/lib/admin";
 import { listChallenges } from "@/lib/challenges";
+import { listAllBoardEntries } from "@/lib/teamboard";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { EditEventForm } from "@/components/EditEventForm";
 import { ChallengeForm, ChallengeToggle } from "@/components/ChallengeForm";
+import { TeamBoardToggle } from "@/components/TeamBoardPanel";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -52,6 +54,11 @@ export default async function AdminPage() {
   // desafios por edição — inclui inativos (o admin gere o inventário)
   const challengesByEvent = new Map(
     events.map((e) => [e.id, listChallenges(e.id)]),
+  );
+
+  // board "procuro time" por edição — inclui inativos (moderação)
+  const boardByEvent = new Map(
+    events.map((e) => [e.id, listAllBoardEntries(e.id)]),
   );
 
   const subscribers = listSubscribers();
@@ -206,6 +213,38 @@ export default async function AdminPage() {
                         </ul>
                       )}
                       <ChallengeForm hackathonId={e.id} />
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <h3
+                        className={`${mono} tracking-widest text-muted uppercase`}
+                      >
+                        {"// procurando time"} (
+                        {boardByEvent.get(e.id)?.length ?? 0})
+                      </h3>
+                      {(boardByEvent.get(e.id) ?? []).length > 0 && (
+                        <ul className="divide-y divide-line border-y border-line">
+                          {(boardByEvent.get(e.id) ?? []).map((b) => (
+                            <li
+                              key={b.id}
+                              className="flex items-baseline justify-between gap-4 py-2"
+                            >
+                              <span className={mono}>
+                                @{b.username} — {b.need}
+                                {!b.active && (
+                                  <span className="ml-2 text-muted">
+                                    (inativo)
+                                  </span>
+                                )}
+                              </span>
+                              <TeamBoardToggle
+                                entryId={b.id}
+                                hackathonId={e.id}
+                                active={b.active}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                     <div className="flex flex-col gap-3">
                       <h3
