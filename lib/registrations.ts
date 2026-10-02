@@ -34,3 +34,21 @@ export function getRegistrationsByHackathon(
     )
     .all(hackathonId) as { username: string; name: string | null; createdAt: string }[];
 }
+
+// versão operacional (admin): inclui e-mail — nunca usar em rota pública
+export function listRegistrants(
+  hackathonId: string,
+): { username: string; name: string | null; email: string; createdAt: string }[] {
+  return db
+    .prepare(
+      `SELECT m.username, m.name, m.email, r.createdAt
+       FROM registrations r JOIN members m ON m.id = r.memberId
+       WHERE r.hackathonId = ? ORDER BY r.createdAt`,
+    )
+    .all(hackathonId) as {
+    username: string;
+    name: string | null;
+    email: string;
+    createdAt: string;
+  }[];
+}

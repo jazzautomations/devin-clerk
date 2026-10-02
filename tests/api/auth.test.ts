@@ -46,4 +46,28 @@ describe("rotas autenticadas respondem 401 deslogado", () => {
     const res = await PATCH(req("PATCH", { bio: "x" }));
     expect(res.status).toBe(401);
   });
+
+  it("PATCH /api/admin/hackathons/[id]", async () => {
+    const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
+    const res = await PATCH(req("PATCH", { name: "x" }), {
+      params: Promise.resolve({ id: "hack-inova-alphaville-2026" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/admin/hackathons/[id]/registrations", async () => {
+    const { GET } = await import(
+      "@/app/api/admin/hackathons/[id]/registrations/route"
+    );
+    const res = await GET(req("GET"), {
+      params: Promise.resolve({ id: "hack-inova-alphaville-2026" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/admin/subscribers", async () => {
+    const { GET } = await import("@/app/api/admin/subscribers/route");
+    const res = await GET(req("GET"));
+    expect(res.status).toBe(401);
+  });
 });

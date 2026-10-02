@@ -2,7 +2,10 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import db from "@/lib/db";
 import { getOrCreateMember } from "@/lib/members";
+import { listRegistrants } from "@/lib/registrations";
+import { listSubscribers } from "@/lib/admin";
 import { CreateEventForm } from "@/components/CreateEventForm";
+import { EditEventForm } from "@/components/EditEventForm";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -29,31 +32,22 @@ export default async function AdminPage() {
     name: string;
     organizer: string;
     startsAt: string;
+    endsAt: string | null;
+    format: string;
     location: string | null;
+    registrationUrl: string;
+    registrationDeadline: string | null;
+    tags: string;
     active: number;
     inscritos: number;
   }[];
 
-  const registrations = db
-    .prepare(
-      `SELECT r.id, r.createdAt, m.username, m.name, m.email, h.name AS evento
-       FROM registrations r
-       JOIN members m ON m.id = r.memberId
-       JOIN hackathons h ON h.id = r.hackathonId
-       ORDER BY r.id DESC LIMIT 100`,
-    )
-    .all() as {
-    id: number;
-    createdAt: string;
-    username: string;
-    name: string | null;
-    email: string;
-    evento: string;
-  }[];
+  // inscritos por edição — server-side direto na lib (com e-mail, é tela admin)
+  const registrantsByEvent = new Map(
+    events.map((e) => [e.id, listRegistrants(e.id)]),
+  );
 
-  const subscribers = db
-    .prepare("SELECT email, createdAt FROM subscribers ORDER BY id DESC")
-    .all() as { email: string; createdAt: string }[];
+  const subscribers = listSubscribers();
 
   const members = db
     .prepare(
@@ -91,88 +85,126 @@ export default async function AdminPage() {
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>
           edições ({events.length})
         </h2>
-        <div className="overflow-x-auto border border-line">
-          <table className="w-full min-w-[640px] border-collapse px-4">
-            <thead>
-              <tr className="border-b border-line">
-                <th className={`${th} pl-4`}>evento</th>
-                <th className={th}>data</th>
-                <th className={th}>inscritos</th>
-                <th className={th}>status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e) => (
-                <tr key={e.id} className="border-b border-line/50">
-                  <td className={`${td} pl-4`}>
-                    <a
-                      href={`/h/${e.id}`}
-                      className="text-foreground hover:text-accent"
-                    >
+        <ul className="divide-y divide-line border-y border-line">
+          {events.map((e) => {
+            const registrants = registrantsByEvent.get(e.id) ?? [];
+            return (
+              <li key={e.id}>
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 [&::-webkit-details-marker]:hidden">
+                    <span className={mono}>
                       {e.name}
-                    </a>
-                    <span className="block text-muted">{e.organizer}</span>
-                  </td>
-                  <td className={td}>
-                    {new Intl.DateTimeFormat("pt-BR").format(
-                      new Date(e.startsAt),
-                    )}
-                  </td>
-                  <td className={`${td} text-accent`}>{e.inscritos}</td>
-                  <td className={`${td} ${e.active ? "" : "text-muted"}`}>
-                    {e.active ? "ativo" : "arquivado"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-          inscrições ({registrations.length})
-        </h2>
-        <div className="overflow-x-auto border border-line">
-          <table className="w-full min-w-[640px] border-collapse">
-            <thead>
-              <tr className="border-b border-line">
-                <th className={`${th} pl-4`}>hacker</th>
-                <th className={th}>e-mail</th>
-                <th className={th}>evento</th>
-                <th className={th}>em</th>
-              </tr>
-            </thead>
-            <tbody>
-              {registrations.map((r) => (
-                <tr key={r.id} className="border-b border-line/50">
-                  <td className={`${td} pl-4`}>
-                    {r.name ?? `@${r.username}`}
-                  </td>
-                  <td className={td}>{r.email}</td>
-                  <td className={td}>{r.evento}</td>
-                  <td className={`${td} text-muted`}>
-                    {new Intl.DateTimeFormat("pt-BR").format(
-                      new Date(r.createdAt + "Z"),
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {registrations.length === 0 && (
-            <p className="px-4 py-6 font-mono text-xs text-muted">
-              {"// nenhuma inscrição ainda"}
-            </p>
-          )}
-        </div>
+                      <span className="block text-muted">{e.organizer}</span>
+                    </span>
+                    <span className={`${mono} shrink-0 text-right text-muted`}>
+                      {new Intl.DateTimeFormat("pt-BR").format(
+                        new Date(e.startsAt),
+                      )}{" "}
+                      ·{" "}
+                      <span className="text-accent">
+                        {registrants.length} inscritos
+                      </span>{" "}
+                      · {e.active ? "ativo" : "arquivado"}{" "}
+                      <span className="group-open:hidden">▸</span>
+                      <span className="hidden group-open:inline">▾</span>
+                    </span>
+                  </summary>
+                  <div className="flex flex-col gap-5 border-t border-line/50 py-4">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-baseline justify-between">
+                        <h3
+                          className={`${mono} tracking-widest text-muted uppercase`}
+                        >
+                          inscritos ({registrants.length})
+                        </h3>
+                        <a
+                          href={`/h/${e.id}`}
+                          className={`${mono} text-accent hover:underline`}
+                        >
+                          ver página pública →
+                        </a>
+                      </div>
+                      {registrants.length > 0 ? (
+                        <div className="overflow-x-auto border border-line">
+                          <table className="w-full min-w-[480px] border-collapse">
+                            <thead>
+                              <tr className="border-b border-line">
+                                <th className={`${th} pl-4`}>hacker</th>
+                                <th className={th}>e-mail</th>
+                                <th className={th}>inscreveu em</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {registrants.map((r) => (
+                                <tr
+                                  key={r.username}
+                                  className="border-b border-line/50"
+                                >
+                                  <td className={`${td} pl-4`}>
+                                    {r.name ?? `@${r.username}`}
+                                    <span className="ml-2 text-muted">
+                                      @{r.username}
+                                    </span>
+                                  </td>
+                                  <td className={td}>{r.email}</td>
+                                  <td className={`${td} text-muted`}>
+                                    {new Intl.DateTimeFormat("pt-BR").format(
+                                      new Date(r.createdAt + "Z"),
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="border border-dashed border-line px-4 py-4 font-mono text-xs text-muted">
+                          {"// nenhuma inscrição ainda"}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <h3
+                        className={`${mono} tracking-widest text-muted uppercase`}
+                      >
+                        editar edição
+                      </h3>
+                      <EditEventForm
+                        event={{
+                          id: e.id,
+                          name: e.name,
+                          startsAt: e.startsAt,
+                          endsAt: e.endsAt,
+                          format: e.format,
+                          location: e.location,
+                          registrationUrl: e.registrationUrl,
+                          registrationDeadline: e.registrationDeadline,
+                          tags: JSON.parse(e.tags) as string[],
+                          active: e.active === 1,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </details>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       <div className="grid gap-8 sm:grid-cols-2">
         <div className="flex flex-col gap-4">
-          <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-            newsletter ({subscribers.length})
-          </h2>
+          <div className="flex items-baseline justify-between">
+            <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+              newsletter ({subscribers.length})
+            </h2>
+            <a
+              href="/api/admin/subscribers?format=csv"
+              className={`${mono} text-accent hover:underline`}
+            >
+              exportar csv ↓
+            </a>
+          </div>
           <ul className="divide-y divide-line border-y border-line">
             {subscribers.map((s) => (
               <li
