@@ -73,6 +73,12 @@ if (!memberCols.includes("role")) {
   // primeiro membro da plataforma é admin (bootstrap da operação)
   db.exec(`UPDATE members SET role = 'admin' WHERE id = 1`);
 }
+const hackCols = (
+  db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]
+).map((c) => c.name);
+if (!hackCols.includes("source")) {
+  db.exec(`ALTER TABLE hackathons ADD COLUMN source TEXT`);
+}
 const postCols = (
   db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
 ).map((c) => c.name);
