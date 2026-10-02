@@ -31,15 +31,28 @@ function toHackathon(row: Row): Hackathon {
   };
 }
 
-export function getUpcomingHackathons(now = new Date()): Hackathon[] {
+function allActive(): Hackathon[] {
   const rows = db
-    .prepare("SELECT * FROM hackathons WHERE active = 1 AND startsAt > ?")
-    .all(now.toISOString()) as Row[];
-  return rows
-    .map(toHackathon)
+    .prepare("SELECT * FROM hackathons WHERE active = 1")
+    .all() as Row[];
+  return rows.map(toHackathon);
+}
+
+export function getUpcomingHackathons(now = new Date()): Hackathon[] {
+  return allActive()
+    .filter((h) => new Date(h.startsAt) > now)
     .sort(
       (a, b) =>
         new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+    );
+}
+
+export function getPastHackathons(now = new Date()): Hackathon[] {
+  return allActive()
+    .filter((h) => new Date(h.startsAt) <= now)
+    .sort(
+      (a, b) =>
+        new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
     );
 }
 

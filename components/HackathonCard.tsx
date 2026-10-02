@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Hackathon } from "@/lib/hackathons";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
@@ -50,7 +51,9 @@ export function HackathonCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h3 className="font-display text-lg font-semibold tracking-tight">
-            {hackathon.name}
+            <Link href={`/h/${hackathon.id}`} className="hover:text-accent">
+              {hackathon.name}
+            </Link>
           </h3>
           <p className="font-mono text-xs text-muted">
             {hackathon.organizer}

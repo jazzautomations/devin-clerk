@@ -3,7 +3,11 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { appConfig } from "@/app.config";
 import { FeatureCard } from "@/components/FeatureCard";
 import { HackathonFeed } from "@/components/HackathonFeed";
-import { getTags, getUpcomingHackathons } from "@/lib/hackathons";
+import {
+  getPastHackathons,
+  getTags,
+  getUpcomingHackathons,
+} from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
 
@@ -25,6 +29,7 @@ export default async function DashboardPage() {
   const hackathons = getUpcomingHackathons(now);
   const tags = getTags(hackathons);
   const registeredIds = getRegistrationIds(member.id);
+  const past = getPastHackathons(now);
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
@@ -51,6 +56,37 @@ export default async function DashboardPage() {
         now={now.toISOString()}
         registeredIds={registeredIds}
       />
+
+      {past.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            arquivo — edições passadas
+          </h2>
+          <ul className="divide-y divide-line border-y border-line">
+            {past.map((h) => (
+              <li key={h.id}>
+                <Link
+                  href={`/h/${h.id}`}
+                  className="flex items-center justify-between gap-4 py-3 transition hover:text-accent"
+                >
+                  <div>
+                    <p className="font-display font-semibold">{h.name}</p>
+                    <p className="font-mono text-xs text-muted">
+                      {h.organizer} · {h.location ?? "online"}
+                    </p>
+                  </div>
+                  <span className="font-mono text-xs text-muted">
+                    {new Intl.DateTimeFormat("pt-BR", {
+                      month: "short",
+                      year: "numeric",
+                    }).format(new Date(h.startsAt))}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">

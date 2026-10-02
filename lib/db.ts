@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { hackathons as seed } from "@/data/hackathons";
+import { hackathons as seed, pastHackathons as pastSeed } from "@/data/hackathons";
 
 const dir = join(process.cwd(), "data");
 mkdirSync(dir, { recursive: true });
@@ -45,27 +45,29 @@ CREATE TABLE IF NOT EXISTS registrations (
 );
 `);
 
-const count = db
-  .prepare("SELECT COUNT(*) AS c FROM hackathons")
-  .get() as { c: number };
-if (count.c === 0) {
-  const insert = db.prepare(`
-    INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
-    VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active)
-  `);
-  const seedAll = db.transaction(() => {
-    for (const h of seed) {
-      insert.run({
-        ...h,
-        endsAt: h.endsAt ?? null,
-        location: h.location ?? null,
-        registrationDeadline: h.registrationDeadline ?? null,
-        tags: JSON.stringify(h.tags),
-        active: h.active ? 1 : 0,
-      });
-    }
-  });
-  seedAll();
-}
+const insert = db.prepare(`
+  INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
+  VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active)
+`);
+const seedAll = db.transaction(() => {
+  for (const h of [...seed, ...pastSeed]) {
+    insert.run({
+      ...h,
+      endsAt: h.endsAt ?? null,
+      location: h.location ?? null,
+      registrationDeadline: h.registrationDeadline ?? null,
+      tags: JSON.stringify(h.tags),
+      active: h.active ? 1 : 0,
+    });
+  }
+});
+seedAll();
+
+const seedIds = [...seed, ...pastSeed].map((h) => h.id);
+db.prepare(
+  `UPDATE hackathons SET active = 0
+   WHERE id NOT IN (SELECT value FROM json_each(?))
+     AND id NOT IN (SELECT hackathonId FROM registrations)`,
+).run(JSON.stringify(seedIds));
 
 export default db;

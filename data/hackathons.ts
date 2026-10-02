@@ -1,19 +1,7 @@
 import type { Hackathon } from "@/lib/hackathons";
 
 export const hackathons: Omit<Hackathon, "partner">[] = [
-  {
-    id: "hack-inova-saude-2026",
-    name: "Hack Inova — Saúde com IA",
-    organizer: "Hack Inova",
-    startsAt: "2026-10-18T09:00:00-03:00",
-    endsAt: "2026-10-19T18:00:00-03:00",
-    format: "presencial",
-    location: "São Paulo, BR",
-    registrationUrl: "https://hackinova.vercel.app",
-    registrationDeadline: "2026-10-10T23:59:00-03:00",
-    tags: ["ia", "saude"],
-    active: true,
-  },
+
   {
     id: "nasa-space-apps-2026",
     name: "NASA Space Apps Challenge",
@@ -77,6 +65,36 @@ export const hackathons: Omit<Hackathon, "partner">[] = [
     registrationUrl: "https://thedevconf.com",
     registrationDeadline: "2026-11-28T23:59:00-03:00",
     tags: ["comunidade", "devops"],
+    active: true,
+  },
+];
+
+// edições passadas — arquivo/histórico da comunidade (dados reais dos sites)
+export const pastHackathons: Omit<Hackathon, "partner">[] = [
+  {
+    id: "hackinova-os-2-anhembi-2026",
+    name: "HackInova.OS 2 — IA na Saúde",
+    organizer: "Hack Inova",
+    startsAt: "2026-09-22T19:00:00-03:00",
+    endsAt: "2026-09-25T22:00:00-03:00",
+    format: "presencial",
+    location: "Anhembi Morumbi · Av. Paulista 2000, São Paulo",
+    registrationUrl: "https://hackinova-anhembi.vercel.app",
+    registrationDeadline: null,
+    tags: ["ia", "saude", "agentes"],
+    active: true,
+  },
+  {
+    id: "hack-inova-puc-saude-2026",
+    name: "Hackathon de IA na Saúde — PUC Consolação",
+    organizer: "Hack Inova × Hackathon Shift",
+    startsAt: "2026-09-12T09:00:00-03:00",
+    endsAt: "2026-09-12T19:00:00-03:00",
+    format: "presencial",
+    location: "PUC-SP Consolação, São Paulo",
+    registrationUrl: "https://hackinova.vercel.app",
+    registrationDeadline: null,
+    tags: ["ia", "saude", "oracle"],
     active: true,
   },
 ];
