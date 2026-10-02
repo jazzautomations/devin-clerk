@@ -1,5 +1,15 @@
 import db from "@/lib/db";
 
+// avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
+// este módulo sem passar por members.ts; pattern idempotente PRAGMA + ADD COLUMN
+if (
+  !(db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).some(
+    (c) => c.name === "avatarUrl",
+  )
+) {
+  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
+}
+
 export function register(memberId: number, hackathonId: string): void {
   db.prepare(
     `INSERT OR IGNORE INTO registrations (memberId, hackathonId) VALUES (?, ?)`,
@@ -25,14 +35,24 @@ export function getRegistrationsForMember(memberId: number): string[] {
 
 export function getRegistrationsByHackathon(
   hackathonId: string,
-): { username: string; name: string | null; createdAt: string }[] {
+): {
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+}[] {
   return db
     .prepare(
-      `SELECT m.username, m.name, r.createdAt
+      `SELECT m.username, m.name, m.avatarUrl, r.createdAt
        FROM registrations r JOIN members m ON m.id = r.memberId
        WHERE r.hackathonId = ? ORDER BY r.createdAt`,
     )
-    .all(hackathonId) as { username: string; name: string | null; createdAt: string }[];
+    .all(hackathonId) as {
+    username: string;
+    name: string | null;
+    avatarUrl: string | null;
+    createdAt: string;
+  }[];
 }
 
 // versão operacional (admin): inclui e-mail — nunca usar em rota pública

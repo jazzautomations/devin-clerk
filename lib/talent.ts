@@ -19,6 +19,10 @@ const memberCols = (
 if (!memberCols.includes("openTo")) {
   db.exec("ALTER TABLE members ADD COLUMN openTo TEXT");
 }
+// avatarUrl é de lib/members — mesmo guard aqui pra import isolado
+if (!memberCols.includes("avatarUrl")) {
+  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
+}
 
 /**
  * Grava o opt-in comercial do membro. Valida contra a whitelist (throw em
@@ -51,6 +55,7 @@ export type TalentEntry = {
   memberId: number;
   username: string;
   name: string | null;
+  avatarUrl: string | null;
   headline: string | null;
   persona: string | null;
   skills: string[];
@@ -73,8 +78,8 @@ export type TalentEntry = {
 export function listTalent(limit = 100): TalentEntry[] {
   const rows = db
     .prepare(
-      `SELECT m.id, m.username, m.name, m.headline, m.persona, m.skills,
-              m.github, m.xp, m.openTo
+      `SELECT m.id, m.username, m.name, m.avatarUrl, m.headline, m.persona,
+              m.skills, m.github, m.xp, m.openTo
        FROM members m
        WHERE m.openTo IS NOT NULL AND m.openTo != ''
        ORDER BY m.xp DESC, m.username ASC
@@ -84,6 +89,7 @@ export function listTalent(limit = 100): TalentEntry[] {
     id: number;
     username: string;
     name: string | null;
+    avatarUrl: string | null;
     headline: string | null;
     persona: string | null;
     skills: string;
@@ -101,6 +107,7 @@ export function listTalent(limit = 100): TalentEntry[] {
       memberId: r.id,
       username: r.username,
       name: r.name,
+      avatarUrl: r.avatarUrl,
       headline: r.headline,
       persona: r.persona,
       skills: JSON.parse(r.skills || "[]") as string[],

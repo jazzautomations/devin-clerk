@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { listLeaderboard, type LeaderboardSort } from "@/lib/members";
 import { XpBar } from "@/components/XpBar";
+import { Avatar } from "@/components/Avatar";
 
 // pódio usa os tokens de raridade — ouro lendário pro #1, acento sutil #2/#3
 const PODIUM_ROW: Record<number, string> = {
@@ -88,6 +89,12 @@ export default async function MembrosPage({
                 >
                   #{rank}
                 </span>
+                <Avatar
+                  username={m.username}
+                  name={m.name}
+                  avatarUrl={m.avatarUrl}
+                  size="md"
+                />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex flex-wrap items-baseline gap-x-2">
                     <span className="font-display font-semibold tracking-tight transition group-hover:text-accent">

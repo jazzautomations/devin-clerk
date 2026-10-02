@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
     email: user?.primaryEmailAddress?.emailAddress ?? "",
+    imageUrl: user?.imageUrl ?? null,
   });
   const body = await req.json().catch(() => null);
   if (typeof body?.body !== "string" || !body.body.trim()) {

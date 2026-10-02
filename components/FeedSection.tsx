@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { levelFor } from "@/lib/game";
+import { Avatar } from "@/components/Avatar";
 
 export type FeedPost = {
   id: number;
@@ -11,6 +12,7 @@ export type FeedPost = {
   createdAt: string;
   username: string;
   name: string | null;
+  avatarUrl: string | null;
   headline: string | null;
   persona: string | null;
   xp: number;
@@ -26,6 +28,7 @@ export type FeedComment = {
   createdAt: string;
   username: string;
   name: string | null;
+  avatarUrl: string | null;
   persona: string | null;
   xp: number;
 };
@@ -40,9 +43,13 @@ const fmt = new Intl.DateTimeFormat("pt-BR", {
 export function FeedSection({
   initialPosts,
   canPost = true,
+  me = null,
+  isAdmin = false,
 }: {
   initialPosts: FeedPost[];
   canPost?: boolean;
+  me?: string | null;
+  isAdmin?: boolean;
 }) {
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [body, setBody] = useState("");
@@ -119,6 +126,50 @@ export function FeedSection({
     setSending((s) => ({ ...s, [id]: false }));
   }
 
+  // moderação: autor ou admin; otimista — se o DELETE falhar, refaz o fetch
+  async function refreshPosts() {
+    const res = await fetch("/api/posts");
+    if (res.ok) {
+      const { posts: fresh } = await res.json();
+      setPosts(fresh);
+    }
+  }
+
+  async function removePost(id: number) {
+    if (!confirm("Apagar esse post? some junto com likes e comentários.")) {
+      return;
+    }
+    setPosts((ps) => ps.filter((p) => p.id !== id));
+    const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
+    if (!res.ok) await refreshPosts();
+  }
+
+  async function removeComment(postId: number, cid: number) {
+    if (!confirm("Apagar esse comentário?")) return;
+    setThreads((t) => ({
+      ...t,
+      [postId]: (t[postId] ?? []).filter((c) => c.id !== cid),
+    }));
+    setPosts((ps) =>
+      ps.map((p) =>
+        p.id === postId ? { ...p, commentCount: p.commentCount - 1 } : p,
+      ),
+    );
+    const res = await fetch(`/api/posts/${postId}/comments/${cid}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const r = await fetch(`/api/posts/${postId}/comments`);
+      if (r.ok) {
+        const { comments } = await r.json();
+        setThreads((t) => ({ ...t, [postId]: comments }));
+        await refreshPosts();
+      }
+    }
+  }
+
+  const canDelete = (username: string) => isAdmin || username === me;
+
   return (
     <div className="flex flex-col gap-4">
       {canPost && (
@@ -164,6 +215,13 @@ export function FeedSection({
             <li key={p.id} className="flex flex-col gap-2 py-4">
               <div className="flex items-baseline justify-between gap-4">
                 <div className="flex flex-wrap items-baseline gap-x-2">
+                  <Avatar
+                    username={p.username}
+                    name={p.name}
+                    avatarUrl={p.avatarUrl}
+                    size="sm"
+                    className="self-center"
+                  />
                   <Link
                     href={`/u/${p.username}`}
                     className="font-mono text-sm text-accent hover:underline"
@@ -187,8 +245,18 @@ export function FeedSection({
                     </span>
                   )}
                 </div>
-                <span className="shrink-0 font-mono text-[10px] text-muted">
+                <span className="flex shrink-0 items-baseline gap-2 font-mono text-[10px] text-muted">
                   {fmt.format(new Date(p.createdAt + "Z"))}
+                  {canDelete(p.username) && (
+                    <button
+                      onClick={() => removePost(p.id)}
+                      title="apagar post"
+                      aria-label="apagar post"
+                      className="text-muted transition hover:text-red-400"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </span>
               </div>
               <p className="text-sm leading-relaxed">{p.body}</p>
@@ -226,6 +294,13 @@ export function FeedSection({
                   {(threads[p.id] ?? []).map((c) => (
                     <div key={c.id} className="flex flex-col gap-1">
                       <div className="flex flex-wrap items-baseline gap-x-2">
+                        <Avatar
+                          username={c.username}
+                          name={c.name}
+                          avatarUrl={c.avatarUrl}
+                          size="sm"
+                          className="self-center"
+                        />
                         <Link
                           href={`/u/${c.username}`}
                           className="font-mono text-xs text-accent hover:underline"
@@ -243,6 +318,16 @@ export function FeedSection({
                         <span className="font-mono text-[10px] text-muted">
                           {fmt.format(new Date(c.createdAt + "Z"))}
                         </span>
+                        {canDelete(c.username) && (
+                          <button
+                            onClick={() => removeComment(p.id, c.id)}
+                            title="apagar comentário"
+                            aria-label="apagar comentário"
+                            className="font-mono text-[10px] text-muted transition hover:text-red-400"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                       <p className="text-sm leading-relaxed text-muted">
                         {c.body}

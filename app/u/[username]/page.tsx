@@ -11,6 +11,7 @@ import { levelFor } from "@/lib/game";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
 import { CollectibleCard } from "@/components/CollectibleCard";
+import { Avatar } from "@/components/Avatar";
 
 export async function generateMetadata({
   params,
@@ -63,9 +64,17 @@ export default async function PublicProfilePage({
           {"// hacker · lv"}
           {level.n} {level.name}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
-          {member.name ?? `@${member.username}`}
-        </h1>
+        <div className="flex items-center gap-4">
+          <Avatar
+            username={member.username}
+            name={member.name}
+            avatarUrl={member.avatarUrl}
+            size="lg"
+          />
+          <h1 className="font-display text-4xl font-bold tracking-tight">
+            {member.name ?? `@${member.username}`}
+          </h1>
+        </div>
         <div className="flex items-center gap-2">
           <p className="font-mono text-sm text-muted">@{member.username}</p>
           <span className="border border-line bg-surface px-1.5 font-mono text-[10px] text-foreground">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { listTalent } from "@/lib/talent";
 import { levelFor } from "@/lib/game";
+import { Avatar } from "@/components/Avatar";
 
 // diretório público "open to" — spec 014. Participante nunca paga: a vitrine
 // é pra empresa que quer alcançar quem prova em hackathon.
@@ -42,6 +43,13 @@ export default async function TalentoPage() {
               className="border border-line bg-background transition hover:bg-surface"
             >
               <div className="flex flex-col gap-4 p-4 sm:flex-row sm:gap-6">
+                <Avatar
+                  username={t.username}
+                  name={t.name}
+                  avatarUrl={t.avatarUrl}
+                  size="md"
+                  className="sm:mt-0.5"
+                />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <Link

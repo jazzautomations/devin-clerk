@@ -25,6 +25,7 @@ export default async function RadarPage() {
       firstName: user?.firstName ?? null,
       lastName: user?.lastName ?? null,
       email: user?.primaryEmailAddress?.emailAddress ?? "",
+      imageUrl: user?.imageUrl ?? null,
     });
     registeredIds = getRegistrationIds(member.id);
   }

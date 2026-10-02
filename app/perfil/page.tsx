@@ -15,6 +15,7 @@ export default async function PerfilPage() {
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
     email: user?.primaryEmailAddress?.emailAddress ?? "",
+    imageUrl: user?.imageUrl ?? null,
   });
 
   return (

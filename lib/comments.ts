@@ -1,5 +1,15 @@
 import db from "@/lib/db";
 
+// avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
+// este módulo sem passar por members.ts; pattern idempotente PRAGMA + ADD COLUMN
+if (
+  !(db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).some(
+    (c) => c.name === "avatarUrl",
+  )
+) {
+  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
+}
+
 export type Comment = {
   id: number;
   postId: number;
@@ -7,12 +17,13 @@ export type Comment = {
   createdAt: string;
   username: string;
   name: string | null;
+  avatarUrl: string | null;
   persona: string | null;
   xp: number;
 };
 
 const select = `SELECT c.id, c.postId, c.body, c.createdAt,
-       m.username, m.name, m.persona, m.xp
+       m.username, m.name, m.avatarUrl, m.persona, m.xp
        FROM post_comments c JOIN members m ON m.id = c.memberId`;
 
 // conversa se lê na ordem — ASC com desempate por id (mesmo segundo)

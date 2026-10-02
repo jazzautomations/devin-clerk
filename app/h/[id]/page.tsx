@@ -21,6 +21,7 @@ import { TeamBoardPanel } from "@/components/TeamBoardPanel";
 import { countdownTarget, editionPhase } from "@/lib/arena";
 import type { EditionPhase } from "@/lib/arena";
 import { ArenaCountdown } from "@/components/ArenaCountdown";
+import { Avatar } from "@/components/Avatar";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -43,6 +44,13 @@ const PHASE_CLASS: Record<EditionPhase, string> = {
   live: "text-accent animate-pulse",
   ended: "text-muted",
   archived: "text-muted",
+};
+
+// spec 019 — chip de tier do sponsor vinculado: master é o pacote lendário
+const TIER_CLASS: Record<string, string> = {
+  master: "border-lendario/40 bg-lendario/5 text-lendario",
+  sponsor: "border-accent/40 bg-accent/5 text-accent",
+  apoio: "border-line text-muted",
 };
 
 export async function generateMetadata({
@@ -234,7 +242,25 @@ export default async function HackathonPage({
                 className="flex flex-col gap-2 border border-line bg-surface p-5"
               >
                 <p className="font-mono text-xs tracking-widest text-accent uppercase">
-                  {c.sponsor}
+                  {c.sponsorUrl ? (
+                    <a
+                      href={c.sponsorUrl}
+                      target="_blank"
+                      rel="noopener"
+                      className="hover:underline"
+                    >
+                      {c.sponsor}
+                    </a>
+                  ) : (
+                    c.sponsor
+                  )}
+                  {c.sponsorTier && (
+                    <span
+                      className={`ml-2 inline-block border px-1.5 py-0.5 text-[10px] ${TIER_CLASS[c.sponsorTier] ?? "border-line text-muted"}`}
+                    >
+                      {c.sponsorTier}
+                    </span>
+                  )}
                 </p>
                 <h3 className="font-display text-xl font-bold tracking-tight">
                   {c.title}
@@ -479,8 +505,19 @@ export default async function HackathonPage({
           </h2>
           <ul className="divide-y divide-line border-y border-line font-mono text-xs">
             {attendees.map((a) => (
-              <li key={a.username} className="flex justify-between py-2">
-                <span>@{a.username}</span>
+              <li
+                key={a.username}
+                className="flex items-center justify-between gap-2 py-2"
+              >
+                <span className="flex items-center gap-2">
+                  <Avatar
+                    username={a.username}
+                    name={a.name}
+                    avatarUrl={a.avatarUrl}
+                    size="sm"
+                  />
+                  @{a.username}
+                </span>
                 <span className="text-muted">
                   {new Intl.DateTimeFormat("pt-BR", {
                     day: "2-digit",

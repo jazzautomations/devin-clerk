@@ -1,11 +1,22 @@
 import db from "@/lib/db";
 
+// migração idempotente — avatarUrl vive aqui e não no schema principal de
+// lib/db.ts (trabalho paralelo naquele arquivo); mesmo pattern do bloco
+// memberCols no rodapé de lib/db.ts e do openTo em lib/talent.ts
+const memberCols = (
+  db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
+).map((c) => c.name);
+if (!memberCols.includes("avatarUrl")) {
+  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
+}
+
 export type Member = {
   id: number;
   clerkId: string;
   username: string;
   name: string | null;
   email: string;
+  avatarUrl: string | null;
   bio: string | null;
   skills: string[];
   github: string | null;
@@ -33,11 +44,23 @@ export function getOrCreateMember(clerkUser: {
   firstName: string | null;
   lastName: string | null;
   email: string;
+  imageUrl?: string | null;
 }): Member {
   const existing = db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkUser.id) as MemberRow | undefined;
-  if (existing) return toMember(existing);
+  if (existing) {
+    // avatar é dado do Clerk: sync na materialização — truthy e diferente
+    // atualiza; nulo preserva (leitura nunca apaga o que já foi gravado)
+    if (clerkUser.imageUrl && clerkUser.imageUrl !== existing.avatarUrl) {
+      db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(
+        clerkUser.imageUrl,
+        existing.id,
+      );
+      existing.avatarUrl = clerkUser.imageUrl;
+    }
+    return toMember(existing);
+  }
 
   const base = clerkUser.email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase() || "hacker";
   let username = base;
@@ -51,14 +74,15 @@ export function getOrCreateMember(clerkUser: {
       .n === 0;
 
   db.prepare(
-    `INSERT INTO members (clerkId, username, name, email, role)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO members (clerkId, username, name, email, role, avatarUrl)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(
     clerkUser.id,
     username,
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null,
     clerkUser.email,
     isFirst ? "admin" : "member",
+    clerkUser.imageUrl ?? null,
   );
   return toMember(
     db.prepare("SELECT * FROM members WHERE clerkId = ?").get(clerkUser.id) as MemberRow,
