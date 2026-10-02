@@ -24,6 +24,8 @@ import { countdownTarget, editionPhase } from "@/lib/arena";
 import type { EditionPhase } from "@/lib/arena";
 import { ArenaCountdown } from "@/components/ArenaCountdown";
 import { Avatar } from "@/components/Avatar";
+import { FeedSection } from "@/components/FeedSection";
+import { listPosts } from "@/lib/posts";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -545,6 +547,24 @@ export default async function HackathonPage({
           </ul>
         </div>
       )}
+
+      {/* spec 028 — mural da edição: recorte do feed por hackathonId;
+          leitura pública, postar exige inscrição (mesmo gate do board) */}
+      <div className="flex flex-col gap-3">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          {"// mural da edição"}
+        </h2>
+        <FeedSection
+          initialPosts={listPosts(50, member?.id ?? null, {
+            hackathonId: h.id,
+          })}
+          canPost={Boolean(member && registered)}
+          me={member?.username ?? null}
+          isAdmin={member?.role === "admin"}
+          hackathonId={h.id}
+          editionLabel={h.name}
+        />
+      </div>
     </section>
   );
 }

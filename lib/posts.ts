@@ -12,11 +12,25 @@ if (
   db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
 }
 
+// hackathonId = mural da edição (spec 028): NULL é post global do /feed —
+// ALTER guardado aqui mesmo, lib/db.ts continua intocado
+if (
+  !(db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]).some(
+    (c) => c.name === "hackathonId",
+  )
+) {
+  db.exec(
+    "ALTER TABLE posts ADD COLUMN hackathonId TEXT REFERENCES hackathons(id)",
+  );
+}
+
 export type Post = {
   id: number;
   body: string;
   link: string | null;
   createdAt: string;
+  hackathonId: string | null;
+  hackathonName: string | null;
   username: string;
   name: string | null;
   avatarUrl: string | null;
@@ -28,17 +42,34 @@ export type Post = {
   commentCount: number;
 };
 
-const select = `SELECT p.id, p.body, p.link, p.createdAt,
+const select = `SELECT p.id, p.body, p.link, p.createdAt, p.hackathonId,
+       h.name AS hackathonName,
        m.username, m.name, m.avatarUrl, m.headline, m.persona, m.xp,
        (SELECT COUNT(*) FROM likes l WHERE l.postId = p.id) AS likeCount,
        (SELECT COUNT(*) FROM post_comments c WHERE c.postId = p.id) AS commentCount,
        EXISTS(SELECT 1 FROM likes l WHERE l.postId = p.id AND l.memberId = @me) AS likedByMe
-       FROM posts p JOIN members m ON m.id = p.memberId`;
+       FROM posts p JOIN members m ON m.id = p.memberId
+       LEFT JOIN hackathons h ON h.id = p.hackathonId`;
 
-export function listPosts(limit = 50, meId: number | null = null): Post[] {
+// spec 028 — escopo do mural: omitido agrega tudo (/feed mostra global +
+// edições com chip); {hackathonId} isola a edição; {global} só posts sem edição
+export type PostScope = { hackathonId: string } | { global: true };
+
+export function listPosts(
+  limit = 50,
+  meId: number | null = null,
+  scope?: PostScope,
+): Post[] {
+  const where = scope
+    ? "hackathonId" in scope
+      ? "WHERE p.hackathonId = @h"
+      : "WHERE p.hackathonId IS NULL"
+    : "";
+  const params: Record<string, unknown> = { me: meId ?? -1, limit };
+  if (scope && "hackathonId" in scope) params.h = scope.hackathonId;
   return db
-    .prepare(`${select} ORDER BY p.id DESC LIMIT @limit`)
-    .all({ me: meId ?? -1, limit })
+    .prepare(`${select} ${where} ORDER BY p.id DESC LIMIT @limit`)
+    .all(params)
     .map((p) => ({ ...(p as Post), likedByMe: Boolean((p as Post).likedByMe) }));
 }
 
@@ -46,16 +77,17 @@ export function createPost(
   memberId: number,
   body: string,
   link?: string | null,
+  hackathonId?: string | null,
 ): Post {
   const trimmed = body.trim().slice(0, 500);
   if (!trimmed) throw new Error("Post vazio");
   const url = link?.trim() || null;
   if (url && !/^https?:\/\//i.test(url)) throw new Error("Link inválido");
-  db.prepare("INSERT INTO posts (memberId, body, link) VALUES (?, ?, ?)").run(
-    memberId,
-    trimmed,
-    url,
-  );
+  // escopo é só persistido aqui — edição existe/ativa e inscrição do membro
+  // são validados na rota, que tem os códigos HTTP (404/400/403)
+  db.prepare(
+    "INSERT INTO posts (memberId, body, link, hackathonId) VALUES (?, ?, ?, ?)",
+  ).run(memberId, trimmed, url, hackathonId?.trim() || null);
   const post = db
     .prepare(`${select} ORDER BY p.id DESC LIMIT 1`)
     .get({ me: memberId }) as Post;

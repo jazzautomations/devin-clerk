@@ -10,6 +10,8 @@ export type FeedPost = {
   body: string;
   link: string | null;
   createdAt: string;
+  hackathonId: string | null;
+  hackathonName: string | null;
   username: string;
   name: string | null;
   avatarUrl: string | null;
@@ -40,16 +42,23 @@ const fmt = new Intl.DateTimeFormat("pt-BR", {
   minute: "2-digit",
 });
 
+// spec 028 — hackathonId/editionLabel transformam a seção no mural da
+// edição: POST vai marcado, refresh refaz o GET escopado. Sem as props o
+// componente é idêntico ao de sempre (/feed, /dashboard)
 export function FeedSection({
   initialPosts,
   canPost = true,
   me = null,
   isAdmin = false,
+  hackathonId = null,
+  editionLabel = null,
 }: {
   initialPosts: FeedPost[];
   canPost?: boolean;
   me?: string | null;
   isAdmin?: boolean;
+  hackathonId?: string | null;
+  editionLabel?: string | null;
 }) {
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [body, setBody] = useState("");
@@ -65,7 +74,11 @@ export function FeedSection({
     const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body, link: link || undefined }),
+      body: JSON.stringify({
+        body,
+        link: link || undefined,
+        hackathonId: hackathonId ?? undefined,
+      }),
     });
     if (res.ok) {
       const { post } = await res.json();
@@ -128,7 +141,11 @@ export function FeedSection({
 
   // moderação: autor ou admin; otimista — se o DELETE falhar, refaz o fetch
   async function refreshPosts() {
-    const res = await fetch("/api/posts");
+    const res = await fetch(
+      hackathonId
+        ? `/api/posts?h=${encodeURIComponent(hackathonId)}`
+        : "/api/posts",
+    );
     if (res.ok) {
       const { posts: fresh } = await res.json();
       setPosts(fresh);
@@ -174,6 +191,12 @@ export function FeedSection({
     <div className="flex flex-col gap-4">
       {canPost && (
         <div className="flex flex-col gap-3 border border-line bg-surface p-4">
+          {hackathonId && (
+            <p className="font-mono text-[10px] text-accent">
+              {"// postando no mural: "}
+              {editionLabel ?? hackathonId}
+            </p>
+          )}
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -205,9 +228,17 @@ export function FeedSection({
         </div>
       )}
 
+      {hackathonId && !canPost && (
+        <p className="font-mono text-[10px] text-muted/60">
+          {"// só inscritos postam no mural"}
+        </p>
+      )}
+
       {posts.length === 0 ? (
         <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {"// feed vazio — seja o primeiro a postar o que tá construindo"}
+          {hackathonId
+            ? "// mural vazio — seja o primeiro a postar da edição"
+            : "// feed vazio — seja o primeiro a postar o que tá construindo"}
         </p>
       ) : (
         <ul className="divide-y divide-line border-y border-line">
@@ -243,6 +274,16 @@ export function FeedSection({
                     <span className="font-mono text-xs text-muted">
                       {p.headline}
                     </span>
+                  )}
+                  {/* chip da edição (spec 028) — no próprio mural é
+                      redundante, então só aparece no feed agregado */}
+                  {p.hackathonId && p.hackathonId !== hackathonId && (
+                    <Link
+                      href={`/h/${p.hackathonId}`}
+                      className="border border-line px-1.5 font-mono text-[10px] text-muted transition hover:border-accent/50 hover:text-accent"
+                    >
+                      → {p.hackathonName ?? p.hackathonId}
+                    </Link>
                   )}
                 </div>
                 <span className="flex shrink-0 items-baseline gap-2 font-mono text-[10px] text-muted">
