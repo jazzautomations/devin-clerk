@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getOrCreateMember } from "@/lib/members";
+import { getOpenTo } from "@/lib/talent";
 import { ProfileForm } from "@/components/ProfileForm";
 
 export default async function PerfilPage() {
@@ -35,7 +36,7 @@ export default async function PerfilPage() {
           </Link>
         </p>
       </div>
-      <ProfileForm member={member} />
+      <ProfileForm member={member} openTo={getOpenTo(member.id)} />
     </section>
   );
 }

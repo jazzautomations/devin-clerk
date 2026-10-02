@@ -2,9 +2,17 @@
 
 import { useState } from "react";
 import type { Member } from "@/lib/members";
+import { OPEN_TO } from "@/lib/openTo";
 
-export function ProfileForm({ member }: { member: Member }) {
+export function ProfileForm({
+  member,
+  openTo: initialOpenTo = [],
+}: {
+  member: Member;
+  openTo?: string[];
+}) {
   const [name, setName] = useState(member.name ?? "");
+  const [openTo, setOpenTo] = useState<string[]>(initialOpenTo);
   const [bio, setBio] = useState(member.bio ?? "");
   const [skills, setSkills] = useState(member.skills.join(", "));
   const [github, setGithub] = useState(member.github ?? "");
@@ -31,6 +39,7 @@ export function ProfileForm({ member }: { member: Member }) {
         website,
         headline,
         persona,
+        openTo,
         skills: skills
           .split(",")
           .map((s) => s.trim())
@@ -89,6 +98,35 @@ export function ProfileForm({ member }: { member: Member }) {
           <option value="organizador">organizador</option>
         </select>
       </label>
+      <fieldset className="flex flex-col gap-1.5">
+        <span className="font-mono text-xs text-muted">
+          open to — como empresas podem te chamar (te lista em /talento)
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {OPEN_TO.map((v) => {
+            const on = openTo.includes(v);
+            return (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={on}
+                onClick={() =>
+                  setOpenTo(
+                    on ? openTo.filter((x) => x !== v) : [...openTo, v],
+                  )
+                }
+                className={`border px-3 py-1.5 font-mono text-xs transition ${
+                  on
+                    ? "border-accent/50 bg-accent/10 text-accent"
+                    : "border-line text-muted hover:text-foreground"
+                }`}
+              >
+                {v}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
           headline — título @ empresa (aparece no wall da comunidade)

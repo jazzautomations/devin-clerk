@@ -26,6 +26,7 @@ const STATIC_ROUTES: { path: string; priority: number; freq: "weekly" | "daily" 
   { path: "/radar", priority: 0.9, freq: "daily" },
   { path: "/feed", priority: 0.7, freq: "daily" },
   { path: "/membros", priority: 0.6, freq: "daily" },
+  { path: "/talento", priority: 0.6, freq: "daily" },
   { path: "/blog", priority: 0.8, freq: "weekly" },
 ];
 

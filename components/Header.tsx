@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import { appConfig } from "@/app.config";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function Header() {
   return (
@@ -32,6 +33,12 @@ export function Header() {
             className="text-muted transition hover:text-accent"
           >
             membros
+          </Link>
+          <Link
+            href="/talento"
+            className="text-muted transition hover:text-accent"
+          >
+            talento
           </Link>
           <Link
             href="/blog"
@@ -66,6 +73,7 @@ export function Header() {
             </SignUpButton>
           </Show>
           <Show when="signed-in">
+            <NotificationBell />
             <UserButton />
           </Show>
         </nav>
