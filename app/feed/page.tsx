@@ -22,6 +22,7 @@ export default async function FeedPage() {
       firstName: user?.firstName ?? null,
       lastName: user?.lastName ?? null,
       email: user?.primaryEmailAddress?.emailAddress ?? "",
+      imageUrl: user?.imageUrl ?? null,
     });
   }
   const posts = listPosts(50, member?.id ?? null);
@@ -46,7 +47,12 @@ export default async function FeedPage() {
         </p>
       </div>
 
-      <FeedSection initialPosts={posts} canPost={Boolean(member)} />
+      <FeedSection
+        initialPosts={posts}
+        canPost={Boolean(member)}
+        me={member?.username ?? null}
+        isAdmin={member?.role === "admin"}
+      />
     </section>
   );
 }

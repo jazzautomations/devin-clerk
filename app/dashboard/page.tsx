@@ -15,6 +15,7 @@ import { getMemberBadges, getMemberCards } from "@/lib/xp";
 import { FeedSection } from "@/components/FeedSection";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
+import { Avatar } from "@/components/Avatar";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
     email,
+    imageUrl: user?.imageUrl ?? null,
   });
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
@@ -47,9 +49,17 @@ export default async function DashboardPage() {
         <p className="font-mono text-xs tracking-widest text-accent">
           {"// feed"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
-          Salve{name ? `, ${name}` : ""}.
-        </h1>
+        <div className="flex items-center gap-3">
+          <Avatar
+            username={member.username}
+            name={name}
+            avatarUrl={member.avatarUrl}
+            size="md"
+          />
+          <h1 className="font-display text-4xl font-bold tracking-tight">
+            Salve{name ? `, ${name}` : ""}.
+          </h1>
+        </div>
         <p className="max-w-xl text-lg text-muted">
           Hackathons abertos — os da comunidade com inscrição em 1 clique, e o
           resto do mundo curado embaixo.{" "}
@@ -87,7 +97,11 @@ export default async function DashboardPage() {
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
           comunidade — o que a galera tá construindo
         </h2>
-        <FeedSection initialPosts={listPosts(50, member.id)} />
+        <FeedSection
+          initialPosts={listPosts(50, member.id)}
+          me={member.username}
+          isAdmin={member.role === "admin"}
+        />
       </div>
 
       {sessoes.length > 0 && (
