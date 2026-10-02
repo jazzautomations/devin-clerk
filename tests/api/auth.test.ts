@@ -70,4 +70,24 @@ describe("rotas autenticadas respondem 401 deslogado", () => {
     const res = await GET(req("GET"));
     expect(res.status).toBe(401);
   });
+
+  it("POST /api/admin/hackathons/[id]/challenges", async () => {
+    const { POST } = await import(
+      "@/app/api/admin/hackathons/[id]/challenges/route"
+    );
+    const res = await POST(req("POST", { sponsor: "S", title: "T" }), {
+      params: Promise.resolve({ id: "hack-inova-puc-saude-2026" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH /api/admin/challenges/[challengeId]", async () => {
+    const { PATCH } = await import(
+      "@/app/api/admin/challenges/[challengeId]/route"
+    );
+    const res = await PATCH(req("PATCH", { active: false }), {
+      params: Promise.resolve({ challengeId: "x" }),
+    });
+    expect(res.status).toBe(401);
+  });
 });

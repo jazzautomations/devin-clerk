@@ -4,8 +4,10 @@ import db from "@/lib/db";
 import { getOrCreateMember } from "@/lib/members";
 import { listRegistrants } from "@/lib/registrations";
 import { listSubscribers } from "@/lib/admin";
+import { listChallenges } from "@/lib/challenges";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { EditEventForm } from "@/components/EditEventForm";
+import { ChallengeForm, ChallengeToggle } from "@/components/ChallengeForm";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -45,6 +47,11 @@ export default async function AdminPage() {
   // inscritos por edição — server-side direto na lib (com e-mail, é tela admin)
   const registrantsByEvent = new Map(
     events.map((e) => [e.id, listRegistrants(e.id)]),
+  );
+
+  // desafios por edição — inclui inativos (o admin gere o inventário)
+  const challengesByEvent = new Map(
+    events.map((e) => [e.id, listChallenges(e.id)]),
   );
 
   const subscribers = listSubscribers();
@@ -162,6 +169,43 @@ export default async function AdminPage() {
                           {"// nenhuma inscrição ainda"}
                         </p>
                       )}
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <h3
+                        className={`${mono} tracking-widest text-muted uppercase`}
+                      >
+                        {"// desafios patrocinados"} (
+                        {challengesByEvent.get(e.id)?.length ?? 0})
+                      </h3>
+                      {(challengesByEvent.get(e.id) ?? []).length > 0 && (
+                        <ul className="divide-y divide-line border-y border-line">
+                          {(challengesByEvent.get(e.id) ?? []).map((c) => (
+                            <li
+                              key={c.id}
+                              className="flex items-baseline justify-between gap-4 py-2"
+                            >
+                              <span className={mono}>
+                                <span className="text-accent uppercase">
+                                  {c.sponsor}
+                                </span>{" "}
+                                — {c.title}
+                                {c.prize && (
+                                  <span className="ml-2 text-lendario">
+                                    {c.prize}
+                                  </span>
+                                )}
+                                {!c.active && (
+                                  <span className="ml-2 text-muted">
+                                    (inativo)
+                                  </span>
+                                )}
+                              </span>
+                              <ChallengeToggle id={c.id} active={c.active} />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <ChallengeForm hackathonId={e.id} />
                     </div>
                     <div className="flex flex-col gap-3">
                       <h3

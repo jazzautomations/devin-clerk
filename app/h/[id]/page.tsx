@@ -10,6 +10,9 @@ import { RegisterButton } from "@/components/RegisterButton";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
 import { getArchive } from "@/lib/archive";
+import { getChallenges } from "@/lib/challenges";
+import { DeployPanel } from "@/components/DeployPanel";
+import { getLatestDeployForTeam } from "@/lib/deploys";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -42,6 +45,7 @@ export default async function HackathonPage({
   const myCard = member ? getMemberCard(member.id, h.id) : null;
   const archive = getArchive(h.id);
   const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
+  const challenges = getChallenges(h.id);
   const podium = archive.teams.filter((t) => t.placement >= 1 && t.placement <= 3);
   const field = archive.teams.filter((t) => t.placement === 0);
 
@@ -121,6 +125,37 @@ export default async function HackathonPage({
         >
           inscrever no site oficial →
         </a>
+      )}
+
+      {challenges.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            {"// desafios patrocinados"}
+          </h2>
+          <ul className="grid gap-3">
+            {challenges.map((c) => (
+              <li
+                key={c.id}
+                className="flex flex-col gap-2 border border-line bg-surface p-5"
+              >
+                <p className="font-mono text-xs tracking-widest text-accent uppercase">
+                  {c.sponsor}
+                </p>
+                <h3 className="font-display text-xl font-bold tracking-tight">
+                  {c.title}
+                </h3>
+                {c.prize && (
+                  <p className="w-fit border border-lendario/40 bg-lendario/5 px-2 py-1 font-mono text-xs text-lendario">
+                    prêmio: {c.prize}
+                  </p>
+                )}
+                {c.description && (
+                  <p className="text-sm text-muted">{c.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="flex flex-col gap-3">
@@ -210,6 +245,16 @@ export default async function HackathonPage({
                           </a>
                         )}
                       </span>
+                      <DeployPanel
+                        teamId={t.id}
+                        hasRepo={!!t.project.repoUrl}
+                        initialDeploy={getLatestDeployForTeam(t.id)}
+                        canDeploy={
+                          !!member &&
+                          (member.role === "admin" ||
+                            t.members.includes(member.username))
+                        }
+                      />
                     </div>
                   )}
                   {t.members.length > 0 && (
@@ -257,6 +302,18 @@ export default async function HackathonPage({
                           </>
                         )}
                       </p>
+                    )}
+                    {t.project && (
+                      <DeployPanel
+                        teamId={t.id}
+                        hasRepo={!!t.project.repoUrl}
+                        initialDeploy={getLatestDeployForTeam(t.id)}
+                        canDeploy={
+                          !!member &&
+                          (member.role === "admin" ||
+                            t.members.includes(member.username))
+                        }
+                      />
                     )}
                   </div>
                   {t.members.length > 0 && (

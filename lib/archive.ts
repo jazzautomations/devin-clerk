@@ -150,6 +150,7 @@ export function addAsset(
 export type MemberProject = {
   hackathonId: string;
   hackathonName: string;
+  teamId: number;
   teamName: string;
   placement: number;
   project: TeamProject | null;
@@ -158,7 +159,7 @@ export type MemberProject = {
 export function getMemberProjects(username: string): MemberProject[] {
   return db
     .prepare(
-      `SELECT t.hackathonId, h.name AS hackathonName, t.name AS teamName,
+      `SELECT t.hackathonId, h.name AS hackathonName, t.id AS teamId, t.name AS teamName,
               t.placement, tp.title, tp.description, tp.repoUrl, tp.demoUrl
        FROM team_members tm
        JOIN teams t ON t.id = tm.teamId
@@ -172,6 +173,7 @@ export function getMemberProjects(username: string): MemberProject[] {
       const row = r as {
         hackathonId: string;
         hackathonName: string;
+        teamId: number;
         teamName: string;
         placement: number;
         title: string | null;
@@ -182,6 +184,7 @@ export function getMemberProjects(username: string): MemberProject[] {
       return {
         hackathonId: row.hackathonId,
         hackathonName: row.hackathonName,
+        teamId: row.teamId,
         teamName: row.teamName,
         placement: row.placement,
         project: row.title

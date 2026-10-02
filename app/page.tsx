@@ -166,6 +166,17 @@ export default function Home() {
           </div>
         </section>
 
+        {/* porta comercial — participante nunca paga; quem paga é a marca */}
+        <p className="mt-20 font-mono text-xs text-muted">
+          {"// marca/empresa? "}
+          <Link
+            href="/h/hack-inova-puc-saude-2026"
+            className="text-accent transition hover:underline"
+          >
+            sua marca pode lançar um desafio patrocinado numa edição →
+          </Link>
+        </p>
+
         {/* newsletter */}
         <section className="mt-20 border border-accent/30 bg-accent/5 p-6 sm:p-10">
           <div className="flex max-w-2xl flex-col gap-6">

@@ -117,6 +117,17 @@ CREATE TABLE IF NOT EXISTS edition_assets (
   caption TEXT,
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS challenges (
+  id TEXT PRIMARY KEY,
+  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
+  sponsor TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  prize TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // migrações leves — ALTER TABLE idempotente pra bancos já existentes
@@ -216,5 +227,34 @@ const seedTeams = db.transaction(() => {
   }
 });
 seedTeams();
+
+// desafios patrocinados — o inventário de monetização (participante nunca
+// paga; quem paga é a marca que lança o desafio). seeds = patrocínio real
+// divulgado das edições; o resto entra pelo admin
+const seedChallenge = db.prepare(
+  `INSERT OR IGNORE INTO challenges (id, hackathonId, sponsor, title, description, prize)
+   VALUES (@id, @hackathonId, @sponsor, @title, @description, @prize)`,
+);
+const seedChallenges = db.transaction(() => {
+  seedChallenge.run({
+    id: "seed-puc-jornada-paciente",
+    hackathonId: "hack-inova-puc-saude-2026",
+    sponsor: "Oracle",
+    title: "Jornada do paciente",
+    description:
+      "A edição rodou 7 desafios da jornada do paciente — do agendamento ao pós-consulta — com contexto e dados da Oracle.",
+    prize: "créditos OCI + visita Oracle Innovation Center",
+  });
+  seedChallenge.run({
+    id: "seed-unifacens-ia-saude",
+    hackathonId: "hack-inova-unifacens-2026",
+    sponsor: "Oracle + Enterprise X Ventures",
+    title: "IA aplicada à saúde",
+    description:
+      "Desafio aberto de IA pra saúde na 1ª edição — o projeto vencedor (One Day Hospital) foi apresentado depois na Oracle SP.",
+    prize: "R$5k em consultoria + créditos OCI",
+  });
+});
+seedChallenges();
 
 export default db;
