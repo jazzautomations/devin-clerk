@@ -26,8 +26,12 @@ test.describe("/projetos — portfólio público de tudo que nasceu", () => {
       page.locator(`a[href="/h/${HACK}"]`).first(),
     ).toBeVisible();
 
-    await title.click();
-    await expect(page).toHaveURL(/\/p\/\d+/);
+    // dev frio compila a rota sob demanda — o clique pode cair antes do
+    // hidratar; repete até a navegação pra /p/<id> pegar
+    await expect(async () => {
+      await title.click();
+      await expect(page).toHaveURL(/\/p\/\d+/, { timeout: 3000 });
+    }).toPass({ timeout: 20000 });
     await expect(
       page.getByRole("heading", { name: "One Day Hospital", exact: true }),
     ).toBeVisible();

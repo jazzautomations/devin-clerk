@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
 import { appConfig } from "@/app.config";
 import { getProjectByTeamId } from "@/lib/archive";
 import { getLatestDeployForTeam } from "@/lib/deploys";
+import { getMemberByClerkId } from "@/lib/members";
+import { hasVoted, voteCountFor } from "@/lib/votes";
+import { VoteButton } from "@/components/VoteButton";
 
 type Props = { params: Promise<{ teamId: string }> };
 
@@ -41,6 +45,11 @@ export default async function ProjectPage({ params }: Props) {
   const deploy = getLatestDeployForTeam(data.teamId);
   const live = deploy?.status === "running" ? deploy : null;
   const place = data.placement;
+
+  // escolha do povo (spec 025): placar público; voto só logado e fora do time
+  const { userId } = await auth();
+  const member = userId ? getMemberByClerkId(userId) : null;
+  const own = member !== null && data.members.includes(member.username);
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
@@ -122,6 +131,19 @@ export default async function ProjectPage({ params }: Props) {
           {"// sem links públicos cadastrados — pergunta pro time"}
         </p>
       )}
+
+      <div className="flex flex-col gap-2 border-t border-line pt-6">
+        <VoteButton
+          teamId={data.teamId}
+          initialCount={voteCountFor(data.teamId)}
+          initialVoted={member ? hasVoted(member.id, data.teamId) : false}
+          loggedIn={member !== null}
+          own={own}
+        />
+        <p className="font-mono text-xs text-muted">
+          {"// escolha do povo — a comunidade vota, o júri decide o pódio"}
+        </p>
+      </div>
 
       <div className="flex flex-col gap-3">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">

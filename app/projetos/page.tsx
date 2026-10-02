@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { auth } from "@clerk/nextjs/server";
+import { getMemberByClerkId } from "@/lib/members";
 import { listProjectEditions, listProjects } from "@/lib/projects";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,11 +14,17 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-function hrefFor(f: { h?: string; live?: boolean; q?: string }): string {
+function hrefFor(f: {
+  h?: string;
+  live?: boolean;
+  q?: string;
+  sort?: string;
+}): string {
   const params = new URLSearchParams();
   if (f.h) params.set("h", f.h);
   if (f.live) params.set("live", "1");
   if (f.q) params.set("q", f.q);
+  if (f.sort === "votes") params.set("sort", "votes");
   const qs = params.toString();
   return qs ? `/projetos?${qs}` : "/projetos";
 }
@@ -24,14 +32,30 @@ function hrefFor(f: { h?: string; live?: boolean; q?: string }): string {
 export default async function ProjetosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ h?: string; live?: string; q?: string }>;
+  searchParams: Promise<{
+    h?: string;
+    live?: string;
+    q?: string;
+    sort?: string;
+  }>;
 }) {
-  const { h, live, q: rawQ } = await searchParams;
+  const { h, live, q: rawQ, sort } = await searchParams;
   const hackathonId = h?.trim() || undefined;
   const liveOnly = live === "1";
   const q = rawQ?.trim() ?? "";
+  const sortVotes = sort === "votes"; // escolha do povo — spec 025
 
-  const projects = listProjects({ hackathonId, liveOnly, q: q || undefined });
+  // member logado alimenta votedByMe nos cards (placar destaca o próprio voto)
+  const { userId } = await auth();
+  const member = userId ? getMemberByClerkId(userId) : null;
+
+  const projects = listProjects({
+    hackathonId,
+    liveOnly,
+    q: q || undefined,
+    sort: sortVotes ? "votes" : "jury",
+    meId: member?.id ?? null,
+  });
   const editions = listProjectEditions();
   const filtering = !!hackathonId || liveOnly || !!q;
 
@@ -60,6 +84,7 @@ export default async function ProjetosPage({
             <input type="hidden" name="h" value={hackathonId} />
           )}
           {liveOnly && <input type="hidden" name="live" value="1" />}
+          {sortVotes && <input type="hidden" name="sort" value="votes" />}
           <input
             type="search"
             name="q"
@@ -80,7 +105,7 @@ export default async function ProjetosPage({
       {editions.length > 0 && (
         <div className="flex flex-wrap gap-2 font-mono text-xs">
           <Link
-            href={hrefFor({ live: liveOnly, q })}
+            href={hrefFor({ live: liveOnly, q, sort })}
             aria-current={!hackathonId ? "page" : undefined}
             className={chip(!hackathonId)}
           >
@@ -89,7 +114,7 @@ export default async function ProjetosPage({
           {editions.map((e) => (
             <Link
               key={e.id}
-              href={hrefFor({ h: e.id, live: liveOnly, q })}
+              href={hrefFor({ h: e.id, live: liveOnly, q, sort })}
               aria-current={hackathonId === e.id ? "page" : undefined}
               className={chip(hackathonId === e.id)}
             >
@@ -97,11 +122,28 @@ export default async function ProjetosPage({
             </Link>
           ))}
           <Link
-            href={hrefFor({ h: hackathonId, live: !liveOnly, q })}
+            href={hrefFor({
+              h: hackathonId,
+              live: !liveOnly,
+              q,
+              sort,
+            })}
             aria-current={liveOnly ? "page" : undefined}
             className={chip(liveOnly)}
           >
             só ao vivo
+          </Link>
+          <Link
+            href={hrefFor({
+              h: hackathonId,
+              live: liveOnly,
+              q,
+              sort: sortVotes ? undefined : "votes",
+            })}
+            aria-current={sortVotes ? "page" : undefined}
+            className={chip(sortVotes)}
+          >
+            ▲ escolha do povo
           </Link>
         </div>
       )}
@@ -159,6 +201,13 @@ export default async function ProjetosPage({
               )}
 
               <div className="mt-auto flex flex-wrap items-center gap-3 font-mono text-xs">
+                <span
+                  title="escolha do povo — votos da comunidade"
+                  aria-label={`${c.voteCount} votos da comunidade`}
+                  className={c.votedByMe ? "text-accent" : "text-muted"}
+                >
+                  ▲ {c.voteCount}
+                </span>
                 {c.liveDeployId && (
                   <a
                     href={`/demo/${c.liveDeployId}/`}
