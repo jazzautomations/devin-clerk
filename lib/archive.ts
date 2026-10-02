@@ -198,3 +198,64 @@ export function getMemberProjects(username: string): MemberProject[] {
       };
     });
 }
+
+export type ProjectPage = {
+  teamId: number;
+  teamName: string;
+  placement: number; // 1/2/3 = pódio; 0 = participante
+  hackathonId: string;
+  hackathonName: string;
+  members: string[];
+  project: TeamProject;
+};
+
+/** ficha pública do projeto (/p/[teamId]) — null quando o time ou o projeto não existem */
+export function getProjectByTeamId(teamId: number): ProjectPage | null {
+  const row = db
+    .prepare(
+      `SELECT t.id AS teamId, t.name AS teamName, t.placement,
+              t.hackathonId, h.name AS hackathonName,
+              tp.title, tp.description, tp.repoUrl, tp.demoUrl
+       FROM teams t
+       JOIN hackathons h ON h.id = t.hackathonId
+       JOIN team_projects tp ON tp.teamId = t.id
+       WHERE t.id = ?`,
+    )
+    .get(teamId) as
+    | {
+        teamId: number;
+        teamName: string;
+        placement: number;
+        hackathonId: string;
+        hackathonName: string;
+        title: string;
+        description: string | null;
+        repoUrl: string | null;
+        demoUrl: string | null;
+      }
+    | undefined;
+  if (!row) return null;
+
+  const members = (
+    db
+      .prepare(
+        "SELECT username FROM team_members WHERE teamId = ? ORDER BY username",
+      )
+      .all(teamId) as { username: string }[]
+  ).map((m) => m.username);
+
+  return {
+    teamId: row.teamId,
+    teamName: row.teamName,
+    placement: row.placement,
+    hackathonId: row.hackathonId,
+    hackathonName: row.hackathonName,
+    members,
+    project: {
+      title: row.title,
+      description: row.description,
+      repoUrl: row.repoUrl,
+      demoUrl: row.demoUrl,
+    },
+  };
+}

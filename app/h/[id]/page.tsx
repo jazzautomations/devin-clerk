@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
+import { absoluteUrl, eventJsonLd, jsonLd } from "@/lib/seo";
 import { getMemberByClerkId } from "@/lib/members";
 import {
   getRegistrationIds,
@@ -19,6 +22,33 @@ const FORMAT_LABEL: Record<string, string> = {
   presencial: "presencial",
   hibrido: "híbrido",
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const h = getHackathon(id);
+  if (!h || !h.active) return { title: "edição não encontrada" };
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(h.startsAt));
+  const description = `${date} · ${h.location ?? "online"} · ${h.organizer}`;
+  return {
+    title: h.name,
+    description,
+    alternates: { canonical: `/h/${h.id}` },
+    openGraph: {
+      title: h.name,
+      description,
+      url: absoluteUrl(`/h/${h.id}`),
+      type: "website",
+    },
+  };
+}
 
 export default async function HackathonPage({
   params,
@@ -57,6 +87,10 @@ export default async function HackathonPage({
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(eventJsonLd(h)) }}
+      />
       <div className="flex flex-col gap-3">
         <p className="font-mono text-xs tracking-widest text-accent">
           {past ? "// arquivo" : "// hackathon"}
@@ -215,9 +249,12 @@ export default async function HackathonPage({
                   </p>
                   {t.project && (
                     <div className="flex flex-col gap-1">
-                      <p className="font-mono text-xs text-foreground">
+                      <Link
+                        href={`/p/${t.id}`}
+                        className="font-mono text-xs text-foreground transition hover:text-accent"
+                      >
                         {t.project.title}
-                      </p>
+                      </Link>
                       {t.project.description && (
                         <p className="text-xs text-muted">
                           {t.project.description}
@@ -286,7 +323,12 @@ export default async function HackathonPage({
                     <p className="font-display font-semibold">{t.name}</p>
                     {t.project && (
                       <p className="font-mono text-xs text-muted">
-                        {t.project.title}
+                        <Link
+                          href={`/p/${t.id}`}
+                          className="text-foreground transition hover:text-accent"
+                        >
+                          {t.project.title}
+                        </Link>
                         {t.project.repoUrl && (
                           <>
                             {" "}

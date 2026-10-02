@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { getMemberByUsername } from "@/lib/members";
+import { absoluteUrl } from "@/lib/seo";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberBadges, getMemberCards } from "@/lib/xp";
@@ -8,6 +11,33 @@ import { levelFor } from "@/lib/game";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
 import { CollectibleCard } from "@/components/CollectibleCard";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ username: string }>;
+}): Promise<Metadata> {
+  const { username } = await params;
+  const member = getMemberByUsername(username);
+  if (!member) return { title: "perfil não encontrado" };
+  const name = member.name ?? `@${member.username}`;
+  const description =
+    member.headline ??
+    member.bio ??
+    `${name} no hackahub — nível, badges, projetos e campanhas de hackathon.`;
+  return {
+    title: name,
+    description,
+    alternates: { canonical: `/u/${member.username}` },
+    openGraph: {
+      title: name,
+      description,
+      url: absoluteUrl(`/u/${member.username}`),
+      type: "profile",
+      username: member.username,
+    },
+  };
+}
 
 export default async function PublicProfilePage({
   params,
@@ -164,7 +194,16 @@ export default async function PublicProfilePage({
               <li key={`${p.hackathonId}-${p.teamName}`} className="py-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="font-display font-semibold">
-                    {p.project?.title ?? p.teamName}
+                    {p.project ? (
+                      <Link
+                        href={`/p/${p.teamId}`}
+                        className="transition hover:text-accent"
+                      >
+                        {p.project.title}
+                      </Link>
+                    ) : (
+                      p.teamName
+                    )}
                   </p>
                   {p.placement > 0 && (
                     <span className="border border-lendario/50 bg-lendario/10 px-1.5 font-mono text-[10px] text-lendario">
