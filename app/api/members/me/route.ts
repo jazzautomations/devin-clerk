@@ -17,6 +17,10 @@ export async function PATCH(req: Request) {
       ? body.skills.filter((s: unknown) => typeof s === "string")
       : undefined,
     github: typeof body.github === "string" ? body.github : undefined,
+    linkedin: typeof body.linkedin === "string" ? body.linkedin : undefined,
+    twitter: typeof body.twitter === "string" ? body.twitter : undefined,
+    website: typeof body.website === "string" ? body.website : undefined,
+    headline: typeof body.headline === "string" ? body.headline : undefined,
   });
   return Response.json({ ok: true });
 }

@@ -8,6 +8,10 @@ export function ProfileForm({ member }: { member: Member }) {
   const [bio, setBio] = useState(member.bio ?? "");
   const [skills, setSkills] = useState(member.skills.join(", "));
   const [github, setGithub] = useState(member.github ?? "");
+  const [linkedin, setLinkedin] = useState(member.linkedin ?? "");
+  const [twitter, setTwitter] = useState(member.twitter ?? "");
+  const [website, setWebsite] = useState(member.website ?? "");
+  const [headline, setHeadline] = useState(member.headline ?? "");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
@@ -21,6 +25,10 @@ export function ProfileForm({ member }: { member: Member }) {
         name,
         bio,
         github,
+        linkedin,
+        twitter,
+        website,
+        headline,
         skills: skills
           .split(",")
           .map((s) => s.trim())
@@ -60,14 +68,54 @@ export function ProfileForm({ member }: { member: Member }) {
         />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="font-mono text-xs text-muted">github user</span>
+        <span className="font-mono text-xs text-muted">
+          headline — título @ empresa (aparece no wall da comunidade)
+        </span>
         <input
           className={input}
-          value={github}
-          onChange={(e) => setGithub(e.target.value)}
-          placeholder="teuusuario"
+          value={headline}
+          onChange={(e) => setHeadline(e.target.value)}
+          placeholder="engenheiro de software @ empresa"
         />
       </label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">github</span>
+          <input
+            className={input}
+            value={github}
+            onChange={(e) => setGithub(e.target.value)}
+            placeholder="teuusuario"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">linkedin</span>
+          <input
+            className={input}
+            value={linkedin}
+            onChange={(e) => setLinkedin(e.target.value)}
+            placeholder="in/teuusuario"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">twitter / x</span>
+          <input
+            className={input}
+            value={twitter}
+            onChange={(e) => setTwitter(e.target.value)}
+            placeholder="@teuusuario"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">site pessoal</span>
+          <input
+            className={input}
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            placeholder="teusite.dev"
+          />
+        </label>
+      </div>
       <button
         onClick={save}
         disabled={status === "saving"}

@@ -9,7 +9,9 @@ import {
   getUpcomingHackathons,
 } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
+import { listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
+import { FeedSection } from "@/components/FeedSection";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -49,7 +51,20 @@ export default async function DashboardPage() {
           <Link href={`/u/${member.username}`} className="text-accent hover:underline">
             teu perfil público →
           </Link>
+          {member.role === "admin" && (
+            <Link href="/admin" className="text-accent hover:underline">
+              {" "}
+              · painel do organizador →
+            </Link>
+          )}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          comunidade — o que a galera tá construindo
+        </h2>
+        <FeedSection initialPosts={listPosts()} />
       </div>
 
       {sessoes.length > 0 && (

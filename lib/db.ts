@@ -49,7 +49,36 @@ CREATE TABLE IF NOT EXISTS subscribers (
   email TEXT UNIQUE NOT NULL,
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  memberId INTEGER NOT NULL REFERENCES members(id),
+  body TEXT NOT NULL,
+  link TEXT,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
+
+// migrações leves — ALTER TABLE idempotente pra bancos já existentes
+const memberCols = (
+  db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
+).map((c) => c.name);
+for (const col of ["linkedin", "twitter", "website", "headline"]) {
+  if (!memberCols.includes(col)) {
+    db.exec(`ALTER TABLE members ADD COLUMN ${col} TEXT`);
+  }
+}
+if (!memberCols.includes("role")) {
+  db.exec(`ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'`);
+  // primeiro membro da plataforma é admin (bootstrap da operação)
+  db.exec(`UPDATE members SET role = 'admin' WHERE id = 1`);
+}
+const postCols = (
+  db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
+).map((c) => c.name);
+if (!postCols.includes("link")) {
+  db.exec(`ALTER TABLE posts ADD COLUMN link TEXT`);
+}
 
 const insert = db.prepare(`
   INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)

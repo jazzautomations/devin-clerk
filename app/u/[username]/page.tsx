@@ -26,17 +26,60 @@ export default async function PublicProfilePage({
           {member.name ?? `@${member.username}`}
         </h1>
         <p className="font-mono text-sm text-muted">@{member.username}</p>
-        {member.bio && <p className="max-w-xl text-muted">{member.bio}</p>}
-        {member.github && (
-          <a
-            href={`https://github.com/${member.github}`}
-            target="_blank"
-            rel="noopener"
-            className="font-mono text-xs text-accent hover:underline"
-          >
-            github.com/{member.github} →
-          </a>
+        {member.headline && (
+          <p className="font-mono text-sm text-foreground">{member.headline}</p>
         )}
+        {member.bio && <p className="max-w-xl text-muted">{member.bio}</p>}
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {member.github && (
+            <a
+              href={`https://github.com/${member.github.replace(/^@/, "")}`}
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-xs text-accent hover:underline"
+            >
+              github/{member.github.replace(/^@/, "")} →
+            </a>
+          )}
+          {member.linkedin && (
+            <a
+              href={
+                member.linkedin.startsWith("http")
+                  ? member.linkedin
+                  : `https://linkedin.com/${member.linkedin.replace(/^@/, "")}`
+              }
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-xs text-accent hover:underline"
+            >
+              linkedin →
+            </a>
+          )}
+          {member.twitter && (
+            <a
+              href={`https://x.com/${member.twitter.replace(/^@/, "")}`}
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-xs text-accent hover:underline"
+            >
+              x/{member.twitter.replace(/^@/, "")} →
+            </a>
+          )}
+          {member.website && (
+            <a
+              href={
+                member.website.startsWith("http")
+                  ? member.website
+                  : `https://${member.website}`
+              }
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-xs text-accent hover:underline"
+            >
+              site →
+            </a>
+          )}
+        </div>
       </div>
 
       {member.skills.length > 0 && (

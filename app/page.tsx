@@ -2,6 +2,7 @@ import Link from "next/link";
 import { appConfig } from "@/app.config";
 import { NewsletterForm } from "@/components/NewsletterForm";
 import { getPastHackathons, getUpcomingHackathons } from "@/lib/hackathons";
+import { listMembers } from "@/lib/members";
 
 const educacao = [
   {
@@ -32,6 +33,7 @@ export default function Home() {
   const sessoes = upcoming.filter((h) => h.partner);
   const radar = upcoming.filter((h) => !h.partner);
   const arquivo = getPastHackathons(now);
+  const members = listMembers(24);
 
   return (
     <div className="relative">
@@ -190,6 +192,37 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        {/* comunidade — member wall estilo AI Tinkerers */}
+        {members.length > 0 && (
+          <section className="mt-20 flex flex-col gap-6">
+            <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
+              <h2 className="font-display text-2xl font-bold tracking-tight">
+                Comunidade
+              </h2>
+              <span className="font-mono text-xs text-muted">
+                quem constrói aqui
+              </span>
+            </div>
+            <ul className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+              {members.map((m) => (
+                <li key={m.username}>
+                  <Link
+                    href={`/u/${m.username}`}
+                    className="group flex flex-col gap-0.5"
+                  >
+                    <span className="font-medium transition group-hover:text-accent">
+                      {m.name ?? `@${m.username}`}
+                    </span>
+                    <span className="font-mono text-xs text-muted">
+                      {m.headline ?? m.skills.slice(0, 3).join(" · ") ?? ""}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* newsletter */}
         <section className="mt-20 flex flex-col gap-6 border border-line bg-surface p-6 sm:p-8">

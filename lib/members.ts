@@ -9,6 +9,11 @@ export type Member = {
   bio: string | null;
   skills: string[];
   github: string | null;
+  linkedin: string | null;
+  twitter: string | null;
+  website: string | null;
+  headline: string | null;
+  role: "member" | "admin";
   createdAt: string;
 };
 
@@ -36,14 +41,19 @@ export function getOrCreateMember(clerkUser: {
     username = `${base}${i++}`;
   }
 
+  const isFirst =
+    (db.prepare("SELECT COUNT(*) AS n FROM members").get() as { n: number })
+      .n === 0;
+
   db.prepare(
-    `INSERT INTO members (clerkId, username, name, email)
-     VALUES (?, ?, ?, ?)`,
+    `INSERT INTO members (clerkId, username, name, email, role)
+     VALUES (?, ?, ?, ?, ?)`,
   ).run(
     clerkUser.id,
     username,
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null,
     clerkUser.email,
+    isFirst ? "admin" : "member",
   );
   return toMember(
     db.prepare("SELECT * FROM members WHERE clerkId = ?").get(clerkUser.id) as MemberRow,
@@ -57,6 +67,15 @@ export function getMemberByUsername(username: string): Member | null {
   return row ? toMember(row) : null;
 }
 
+export function listMembers(limit = 60): Member[] {
+  const rows = db
+    .prepare(
+      "SELECT * FROM members ORDER BY id DESC LIMIT ?",
+    )
+    .all(limit) as MemberRow[];
+  return rows.map(toMember);
+}
+
 export function getMemberByClerkId(clerkId: string): Member | null {
   const row = db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
@@ -66,14 +85,27 @@ export function getMemberByClerkId(clerkId: string): Member | null {
 
 export function updateMemberProfile(
   clerkId: string,
-  patch: { name?: string; bio?: string; skills?: string[]; github?: string },
+  patch: {
+    name?: string;
+    bio?: string;
+    skills?: string[];
+    github?: string;
+    linkedin?: string;
+    twitter?: string;
+    website?: string;
+    headline?: string;
+  },
 ): void {
   db.prepare(
     `UPDATE members SET
        name = COALESCE(@name, name),
        bio = COALESCE(@bio, bio),
        skills = COALESCE(@skills, skills),
-       github = COALESCE(@github, github)
+       github = COALESCE(@github, github),
+       linkedin = COALESCE(@linkedin, linkedin),
+       twitter = COALESCE(@twitter, twitter),
+       website = COALESCE(@website, website),
+       headline = COALESCE(@headline, headline)
      WHERE clerkId = @clerkId`,
   ).run({
     clerkId,
@@ -81,5 +113,9 @@ export function updateMemberProfile(
     bio: patch.bio ?? null,
     skills: patch.skills ? JSON.stringify(patch.skills) : null,
     github: patch.github ?? null,
+    linkedin: patch.linkedin ?? null,
+    twitter: patch.twitter ?? null,
+    website: patch.website ?? null,
+    headline: patch.headline ?? null,
   });
 }

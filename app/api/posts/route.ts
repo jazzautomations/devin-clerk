@@ -1,0 +1,31 @@
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { getOrCreateMember } from "@/lib/members";
+import { createPost, listPosts } from "@/lib/posts";
+
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return Response.json({ posts: listPosts() });
+}
+
+export async function POST(req: Request) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const user = await currentUser();
+  const member = getOrCreateMember({
+    id: userId,
+    firstName: user?.firstName ?? null,
+    lastName: user?.lastName ?? null,
+    email: user?.primaryEmailAddress?.emailAddress ?? "",
+  });
+  const body = await req.json().catch(() => null);
+  if (typeof body?.body !== "string" || !body.body.trim()) {
+    return Response.json({ error: "Post vazio" }, { status: 400 });
+  }
+  const post = createPost(member.id, body.body);
+  return Response.json({ post }, { status: 201 });
+}
