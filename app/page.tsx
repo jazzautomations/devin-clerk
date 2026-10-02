@@ -170,7 +170,7 @@ export default function Home() {
         <p className="mt-20 font-mono text-xs text-muted">
           {"// marca/empresa? "}
           <Link
-            href="/h/hack-inova-puc-saude-2026"
+            href="/empresas"
             className="text-accent transition hover:underline"
           >
             sua marca pode lançar um desafio patrocinado numa edição →

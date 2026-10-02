@@ -7,6 +7,7 @@ import { listSubscribers } from "@/lib/admin";
 import { listChallenges } from "@/lib/challenges";
 import { listSponsors } from "@/lib/sponsors";
 import { listAllBoardEntries } from "@/lib/teamboard";
+import { LEAD_INTEREST_LABELS, listLeads } from "@/lib/leads";
 import { getArchive } from "@/lib/archive";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { EditEventForm } from "@/components/EditEventForm";
@@ -73,6 +74,9 @@ export default async function AdminPage() {
 
   // CRM de marcas (spec 019) — cadastro único, vínculo nos desafios via API
   const sponsors = listSponsors();
+
+  // fila de prospecção (spec 022) — leads do /empresas, mais recente primeiro
+  const leads = listLeads();
 
   const members = db
     .prepare(
@@ -379,6 +383,43 @@ export default async function AdminPage() {
           </ul>
         )}
         <SponsorForm />
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+          {"// leads"} ({leads.length})
+        </h2>
+        {leads.length > 0 ? (
+          <ul className="divide-y divide-line border-y border-line">
+            {leads.map((l) => (
+              <li
+                key={l.id}
+                className="flex items-baseline justify-between gap-4 py-2"
+              >
+                <span className={mono}>
+                  <span className="text-accent">{l.company}</span>
+                  <span className="ml-2 text-muted">{l.email}</span>
+                  <span className="ml-2 border border-line px-1.5 text-[10px] text-muted uppercase">
+                    {LEAD_INTEREST_LABELS[l.interest]}
+                  </span>
+                  {l.message && (
+                    <span className="mt-1 block text-muted">{l.message}</span>
+                  )}
+                </span>
+                <span className={`${mono} shrink-0 text-muted`}>
+                  {new Intl.DateTimeFormat("pt-BR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  }).format(new Date(l.createdAt))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="border border-dashed border-line px-4 py-4 font-mono text-xs text-muted">
+            {"// nenhum lead ainda — a porta é /empresas"}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-8 sm:grid-cols-2">

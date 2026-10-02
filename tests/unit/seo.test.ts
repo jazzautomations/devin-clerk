@@ -26,8 +26,12 @@ describe("buildSitemap", () => {
       "/radar",
       "/feed",
       "/membros",
+      "/talento",
       "/projetos",
       "/blog",
+      "/empresas",
+      "/legal/termos",
+      "/legal/privacidade",
     ]) {
       expect(urls).toContain(absoluteUrl(path));
     }

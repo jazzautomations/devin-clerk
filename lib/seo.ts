@@ -29,6 +29,9 @@ const STATIC_ROUTES: { path: string; priority: number; freq: "weekly" | "daily" 
   { path: "/talento", priority: 0.6, freq: "daily" },
   { path: "/projetos", priority: 0.7, freq: "weekly" },
   { path: "/blog", priority: 0.8, freq: "weekly" },
+  { path: "/empresas", priority: 0.7, freq: "weekly" },
+  { path: "/legal/termos", priority: 0.2, freq: "weekly" },
+  { path: "/legal/privacidade", priority: 0.2, freq: "weekly" },
 ];
 
 export function buildSitemap(now = new Date()): MetadataRoute.Sitemap {
