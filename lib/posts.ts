@@ -9,12 +9,13 @@ export type Post = {
   name: string | null;
   headline: string | null;
   persona: string | null;
+  xp: number;
   likeCount: number;
   likedByMe: boolean;
 };
 
 const select = `SELECT p.id, p.body, p.link, p.createdAt,
-       m.username, m.name, m.headline, m.persona,
+       m.username, m.name, m.headline, m.persona, m.xp,
        (SELECT COUNT(*) FROM likes l WHERE l.postId = p.id) AS likeCount,
        EXISTS(SELECT 1 FROM likes l WHERE l.postId = p.id AND l.memberId = @me) AS likedByMe
        FROM posts p JOIN members m ON m.id = p.memberId`;

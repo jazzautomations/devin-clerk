@@ -13,6 +13,7 @@ export function RegisterButton({
   const router = useRouter();
   const [isRegistered, setIsRegistered] = useState(registered);
   const [loading, setLoading] = useState(false);
+  const [reward, setReward] = useState<string | null>(null);
 
   async function toggle() {
     setLoading(true);
@@ -27,6 +28,15 @@ export function RegisterButton({
       if (res.ok) {
         const data = await res.json();
         setIsRegistered(data.registered);
+        if (data.registered) {
+          const parts = [data.xp ? `${data.xp} xp` : null]
+            .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
+            .concat(data.newBadges?.length ? [`badge nova: ${data.newBadges.join(", ")}`] : [])
+            .filter(Boolean);
+          setReward(parts.join(" · "));
+        } else {
+          setReward(null);
+        }
         router.refresh();
       }
     } finally {
@@ -35,6 +45,7 @@ export function RegisterButton({
   }
 
   return (
+    <div className="flex flex-col gap-2">
     <button
       onClick={toggle}
       disabled={loading}
@@ -50,5 +61,9 @@ export function RegisterButton({
           ? "✓ inscrito — cancelar inscrição"
           : "inscrever-se em 1 clique"}
     </button>
+    {reward && (
+      <p className="font-mono text-xs text-accent">{"// "}{reward}</p>
+    )}
+    </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { levelFor } from "@/lib/game";
 
 export type FeedPost = {
   id: number;
@@ -12,6 +13,7 @@ export type FeedPost = {
   name: string | null;
   headline: string | null;
   persona: string | null;
+  xp: number;
   likeCount: number;
   likedByMe: boolean;
 };
@@ -119,6 +121,9 @@ export function FeedSection({
                   </Link>
                   <span className="font-mono text-xs text-muted">
                     @{p.username}
+                  </span>
+                  <span className="border border-line px-1.5 font-mono text-[10px] text-muted">
+                    LV{levelFor(p.xp).level.n}
                   </span>
                   {p.persona && (
                     <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">

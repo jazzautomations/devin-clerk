@@ -7,6 +7,8 @@ import {
   getRegistrationsByHackathon,
 } from "@/lib/registrations";
 import { RegisterButton } from "@/components/RegisterButton";
+import { CollectibleCard } from "@/components/CollectibleCard";
+import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -34,6 +36,9 @@ export default async function HackathonPage({
   const registered =
     member !== null && getRegistrationIds(member.id).includes(h.id);
   const attendees = getRegistrationsByHackathon(h.id);
+  const cardRarity = getCardRarity(h.id);
+  const cardSupply = getCardSupply(h.id);
+  const myCard = member ? getMemberCard(member.id, h.id) : null;
 
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -112,6 +117,35 @@ export default async function HackathonPage({
           inscrever no site oficial →
         </a>
       )}
+
+      <div className="flex flex-col gap-3">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          cartinha colecionável desta edição
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
+          <CollectibleCard
+            hackathonId={h.id}
+            name={h.name}
+            startsAt={h.startsAt}
+            location={h.location}
+            rarity={cardRarity}
+            serial={myCard?.serial}
+            supply={myCard === null ? cardSupply : undefined}
+          />
+          <div className="flex flex-col justify-center gap-2 border border-line bg-surface p-5 font-mono text-xs text-muted">
+            <p>
+              {myCard
+                ? `// tu tens a № ${String(myCard.serial).padStart(3, "0")} — prova de presença na tua coleção`
+                : past
+                  ? "// edição encerrada — a tiragem desta carta fechou"
+                  : "// inscreve-te pra mintar a tua — serial na ordem de chegada"}
+            </p>
+            <p className="text-foreground">
+              {cardSupply} {cardSupply === 1 ? "mintada" : "mintadas"} até agora
+            </p>
+          </div>
+        </div>
+      </div>
 
       {attendees.length > 0 && (
         <div className="flex flex-col gap-3">

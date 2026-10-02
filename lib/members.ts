@@ -15,6 +15,9 @@ export type Member = {
   headline: string | null;
   persona: string | null;
   role: "member" | "admin";
+  xp: number;
+  campaigns?: number;
+  cards?: number;
   createdAt: string;
 };
 
@@ -71,7 +74,10 @@ export function getMemberByUsername(username: string): Member | null {
 export function listMembers(limit = 60): Member[] {
   const rows = db
     .prepare(
-      "SELECT * FROM members ORDER BY id DESC LIMIT ?",
+      `SELECT m.*,
+              (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id) AS campaigns,
+              (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
+       FROM members m ORDER BY m.id DESC LIMIT ?`,
     )
     .all(limit) as MemberRow[];
   return rows.map(toMember);

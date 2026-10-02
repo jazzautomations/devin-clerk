@@ -2,6 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
 import { register, unregister } from "@/lib/registrations";
+import { XP } from "@/lib/game";
+import { awardXp, checkBadges, mintCard } from "@/lib/xp";
 
 export async function POST(
   _req: Request,
@@ -21,7 +23,16 @@ export async function POST(
     return Response.json({ error: "Member not found" }, { status: 404 });
   }
   register(member.id, hackathon.id);
-  return Response.json({ registered: true, hackathonId: hackathon.id });
+  awardXp(member.id, XP.register);
+  const cardSerial = mintCard(member.id, hackathon.id);
+  const newBadges = checkBadges(member.id);
+  return Response.json({
+    registered: true,
+    hackathonId: hackathon.id,
+    xp: `+${XP.register}`,
+    cardSerial,
+    newBadges: newBadges.map((b) => b.id),
+  });
 }
 
 export async function DELETE(

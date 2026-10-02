@@ -63,6 +63,27 @@ CREATE TABLE IF NOT EXISTS likes (
   memberId INTEGER NOT NULL REFERENCES members(id),
   PRIMARY KEY (postId, memberId)
 );
+
+CREATE TABLE IF NOT EXISTS member_badges (
+  memberId INTEGER NOT NULL REFERENCES members(id),
+  badgeId TEXT NOT NULL,
+  awardedAt TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (memberId, badgeId)
+);
+
+CREATE TABLE IF NOT EXISTS cards (
+  hackathonId TEXT PRIMARY KEY REFERENCES hackathons(id),
+  rarity TEXT NOT NULL DEFAULT 'comum'
+    CHECK (rarity IN ('comum','raro','epico','lendario'))
+);
+
+CREATE TABLE IF NOT EXISTS member_cards (
+  memberId INTEGER NOT NULL REFERENCES members(id),
+  hackathonId TEXT NOT NULL REFERENCES cards(hackathonId),
+  serial INTEGER NOT NULL,
+  awardedAt TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (memberId, hackathonId)
+);
 `);
 
 // migrações leves — ALTER TABLE idempotente pra bancos já existentes
@@ -91,6 +112,9 @@ const postCols = (
 if (!postCols.includes("link")) {
   db.exec(`ALTER TABLE posts ADD COLUMN link TEXT`);
 }
+if (!memberCols.includes("xp")) {
+  db.exec(`ALTER TABLE members ADD COLUMN xp INTEGER NOT NULL DEFAULT 0`);
+}
 
 const insert = db.prepare(`
   INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
@@ -116,5 +140,20 @@ db.prepare(
    WHERE id NOT IN (SELECT value FROM json_each(?))
      AND id NOT IN (SELECT hackathonId FROM registrations)`,
 ).run(JSON.stringify(seedIds));
+
+// card colecionável por edição — raridade das edições Hack Inova é curadoria;
+// eventos raspados mintam 'comum' sob demanda no register
+const cardRarity: Record<string, string> = {
+  "hack-inova-unifacens-2026": "lendario", // a 1ª edição — peça de arquivo
+  "hack-inova-puc-saude-2026": "epico",
+  "hackinova-os-2-anhembi-2026": "epico",
+  "hack-inova-alphaville-2026": "raro",
+};
+const seedCard = db.prepare(
+  "INSERT OR IGNORE INTO cards (hackathonId, rarity) VALUES (?, ?)",
+);
+for (const id of seedIds) {
+  seedCard.run(id, cardRarity[id] ?? "comum");
+}
 
 export default db;

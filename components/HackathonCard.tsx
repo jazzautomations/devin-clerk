@@ -23,6 +23,7 @@ export function HackathonCard({
   const router = useRouter();
   const [isRegistered, setIsRegistered] = useState(registered);
   const [loading, setLoading] = useState(false);
+  const [reward, setReward] = useState<string | null>(null);
   const starts = new Date(hackathon.startsAt);
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -46,6 +47,15 @@ export function HackathonCard({
       if (res.ok) {
         const data = await res.json();
         setIsRegistered(data.registered);
+        if (data.registered) {
+          const parts = [data.xp ? `${data.xp} xp` : null]
+            .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
+            .concat(data.newBadges?.length ? [`badge nova: ${data.newBadges.join(", ")}`] : [])
+            .filter(Boolean);
+          setReward(parts.length ? parts.join(" · ") : null);
+        } else {
+          setReward(null);
+        }
       }
     } finally {
       setLoading(false);
@@ -134,6 +144,9 @@ export function HackathonCard({
         >
           {closed ? "ver evento →" : "inscrever no site oficial →"}
         </a>
+      )}
+      {reward && (
+        <p className="font-mono text-[10px] text-accent">{"// "}{reward}</p>
       )}
     </article>
   );

@@ -7,6 +7,9 @@
   --surface: #121517;
   --line: rgba(255, 255, 255, 0.09);
   --muted: #8b8f94;
+  --raro: #38bdf8;
+  --epico: #a78bfa;
+  --lendario: #f59e0b;
 }
 
 @theme inline {
@@ -16,6 +19,9 @@
   --color-surface: var(--surface);
   --color-line: var(--line);
   --color-muted: var(--muted);
+  --color-raro: var(--raro);
+  --color-epico: var(--epico);
+  --color-lendario: var(--lendario);
   --font-sans: var(--font-geist-sans);
   --font-display: var(--font-space-grotesk);
   --font-mono: var(--font-geist-mono);
@@ -33,4 +39,42 @@ body {
     linear-gradient(to bottom, var(--line) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
+}
+
+/* efeito holo das cartinhas — faixa de luz atravessa no hover */
+.holo {
+  position: relative;
+  overflow: hidden;
+}
+.holo::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.07) 47%,
+    rgba(255, 255, 255, 0.13) 50%,
+    rgba(255, 255, 255, 0.07) 53%,
+    transparent 58%
+  );
+  transform: translateX(-130%);
+  transition: transform 0.7s ease;
+  pointer-events: none;
+}
+.holo:hover::after {
+  transform: translateX(130%);
+}
+
+/* textura de scanlines sutil — acabamento CRT no topo de card/art */
+.scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(0, 0, 0, 0.18) 3px 4px
+  );
+  pointer-events: none;
 }

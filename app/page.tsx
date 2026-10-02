@@ -9,7 +9,7 @@ const pilares = [
   {
     num: "01",
     title: "Sessões Hack Inova",
-    desc: "Os eventos da comunidade com inscrição em 1 clique — sem Google Forms. Arquivo completo de todas as edições.",
+    desc: "Os eventos da comunidade com inscrição em 1 clique — sem Google Forms. Cada edição minta uma cartinha colecionável de prova de presença.",
     href: "/radar",
     cta: "ver sessões →",
   },
@@ -30,7 +30,7 @@ const pilares = [
   {
     num: "04",
     title: "Comunidade",
-    desc: "Diretório de quem constrói: perfis públicos com skills, projetos e histórico de campanhas.",
+    desc: "Diretório de quem constrói: perfis públicos com nível, badges, skills, projetos e histórico de campanhas.",
     href: "/membros",
     cta: "ver membros →",
   },

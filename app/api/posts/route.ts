@@ -1,6 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
+import { XP } from "@/lib/game";
+import { awardXp, checkBadges } from "@/lib/xp";
 
 export async function GET() {
   // leitura pública — rede social é vitrine; postar exige conta
@@ -25,6 +27,13 @@ export async function POST(req: Request) {
   if (typeof body?.body !== "string" || !body.body.trim()) {
     return Response.json({ error: "Post vazio" }, { status: 400 });
   }
-  const post = createPost(member.id, body.body);
+  let post;
+  try {
+    post = createPost(member.id, body.body, body.link);
+  } catch {
+    return Response.json({ error: "Link inválido" }, { status: 400 });
+  }
+  awardXp(member.id, XP.post);
+  checkBadges(member.id);
   return Response.json({ post }, { status: 201 });
 }

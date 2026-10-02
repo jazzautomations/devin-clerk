@@ -11,7 +11,10 @@ import {
 import { getOrCreateMember } from "@/lib/members";
 import { listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
+import { getMemberBadges, getMemberCards } from "@/lib/xp";
 import { FeedSection } from "@/components/FeedSection";
+import { XpBar } from "@/components/XpBar";
+import { BadgeChip } from "@/components/BadgeChip";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -34,6 +37,8 @@ export default async function DashboardPage() {
   const tags = getTags(hackathons);
   const registeredIds = getRegistrationIds(member.id);
   const past = getPastHackathons(now);
+  const badges = getMemberBadges(member.id);
+  const cards = getMemberCards(member.id);
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
@@ -58,6 +63,24 @@ export default async function DashboardPage() {
             </Link>
           )}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-3 border border-line bg-surface p-5">
+        <XpBar xp={member.xp} />
+        <div className="flex flex-wrap items-center gap-2">
+          {badges.map((b) => (
+            <BadgeChip key={b.id} badge={b} />
+          ))}
+          {cards.length > 0 && (
+            <Link
+              href={`/u/${member.username}`}
+              className="font-mono text-[10px] text-muted transition hover:text-accent"
+            >
+              {cards.length} {cards.length === 1 ? "cartinha" : "cartinhas"} na
+              coleção →
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">

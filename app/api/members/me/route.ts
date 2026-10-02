@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
-import { updateMemberProfile } from "@/lib/members";
+import { getMemberByClerkId, updateMemberProfile } from "@/lib/members";
+import { checkBadges } from "@/lib/xp";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
@@ -23,5 +24,7 @@ export async function PATCH(req: Request) {
     headline: typeof body.headline === "string" ? body.headline : undefined,
     persona: typeof body.persona === "string" ? body.persona : undefined,
   });
-  return Response.json({ ok: true });
+  const member = getMemberByClerkId(userId);
+  const newBadges = member ? checkBadges(member.id).map((b) => b.id) : [];
+  return Response.json({ ok: true, newBadges });
 }
