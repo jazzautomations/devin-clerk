@@ -16,6 +16,7 @@ export type Member = {
   persona: string | null;
   role: "member" | "admin";
   xp: number;
+  badges?: number;
   campaigns?: number;
   cards?: number;
   createdAt: string;
@@ -78,6 +79,30 @@ export function listMembers(limit = 60): Member[] {
               (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id) AS campaigns,
               (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
        FROM members m ORDER BY m.id DESC LIMIT ?`,
+    )
+    .all(limit) as MemberRow[];
+  return rows.map(toMember);
+}
+
+export type LeaderboardSort = "xp" | "recent";
+
+// ranking público: xp desc com desempate determinístico por username;
+// "recent" ordena por entrada — ordem cronológica não é mérito
+export function listLeaderboard(
+  sort: LeaderboardSort = "xp",
+  limit = 100,
+): Member[] {
+  const orderBy =
+    sort === "recent"
+      ? "m.createdAt DESC, m.id DESC"
+      : "m.xp DESC, m.username ASC";
+  const rows = db
+    .prepare(
+      `SELECT m.*,
+              (SELECT COUNT(*) FROM member_badges mb WHERE mb.memberId = m.id) AS badges,
+              (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id) AS campaigns,
+              (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
+       FROM members m ORDER BY ${orderBy} LIMIT ?`,
     )
     .all(limit) as MemberRow[];
   return rows.map(toMember);

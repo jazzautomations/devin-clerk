@@ -1,72 +1,121 @@
 import Link from "next/link";
-import { listMembers } from "@/lib/members";
-import { levelFor } from "@/lib/game";
+import { listLeaderboard, type LeaderboardSort } from "@/lib/members";
+import { XpBar } from "@/components/XpBar";
 
-export default function MembrosPage() {
-  const members = listMembers(100);
+// pódio usa os tokens de raridade — ouro lendário pro #1, acento sutil #2/#3
+const PODIUM_ROW: Record<number, string> = {
+  1: "border-lendario/60 bg-lendario/5",
+  2: "border-epico/40",
+  3: "border-raro/40",
+};
+const PODIUM_RANK: Record<number, string> = {
+  1: "text-lendario",
+  2: "text-epico",
+  3: "text-raro",
+};
+
+export default async function MembrosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort } = await searchParams;
+  const mode: LeaderboardSort = sort === "recent" ? "recent" : "xp";
+  const members = listLeaderboard(mode, 100);
+  const isXp = mode === "xp";
+
+  const chip = (active: boolean) =>
+    `border px-3 py-1.5 transition ${
+      active
+        ? "border-accent/50 bg-accent/10 text-accent"
+        : "border-line text-muted hover:text-foreground"
+    }`;
 
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
       <div className="flex flex-col gap-3">
         <p className="font-mono text-xs tracking-widest text-accent">
-          {"// diretório"}
+          {"// leaderboard"}
         </p>
         <h1 className="font-display text-4xl font-bold tracking-tight">
-          Quem constrói aqui
+          Quem tá na frente
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Devs, empreendedores, investidores, professores, marcas — todo mundo
-          que gira o ecossistema de hackathons no Brasil.
+          XP acumulado em inscrições, posts e presença nas edições. O topo é
+          lendário — literalmente.
         </p>
       </div>
 
-      <ul className="grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-        {members.map((m) => {
-          const { level } = levelFor(m.xp);
+      <div className="flex gap-2 font-mono text-xs">
+        <Link href="/membros" aria-current={isXp ? "page" : undefined} className={chip(isXp)}>
+          por xp
+        </Link>
+        <Link
+          href="/membros?sort=recent"
+          aria-current={!isXp ? "page" : undefined}
+          className={chip(!isXp)}
+        >
+          recém-chegados
+        </Link>
+      </div>
+
+      <ol className="flex flex-col gap-2">
+        {members.map((m, i) => {
+          const rank = i + 1;
+          const podium = isXp ? PODIUM_ROW[rank] : undefined;
+          const rankColor = (isXp && PODIUM_RANK[rank]) || "text-muted";
           return (
-            <li key={m.username} className="bg-background">
+            <li
+              key={m.username}
+              data-rank={rank}
+              className={`border bg-background transition hover:bg-surface ${podium ?? "border-line"}`}
+            >
               <Link
                 href={`/u/${m.username}`}
-                className="group flex h-full flex-col gap-2 p-5 transition hover:bg-surface"
+                aria-label={`#${rank} — @${m.username}`}
+                className="group flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-6"
               >
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-display font-semibold tracking-tight transition group-hover:text-accent">
-                    {m.name ?? `@${m.username}`}
+                <span
+                  className={`w-12 shrink-0 font-display text-xl font-bold ${rankColor}`}
+                >
+                  #{rank}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-display font-semibold tracking-tight transition group-hover:text-accent">
+                      {m.name ?? `@${m.username}`}
+                    </span>
+                    <span className="font-mono text-xs text-muted">
+                      @{m.username}
+                    </span>
+                    {m.persona && (
+                      <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">
+                        {m.persona}
+                      </span>
+                    )}
                   </span>
-                  <span className="shrink-0 border border-line px-1.5 font-mono text-[10px] text-foreground">
-                    LV{level.n}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {m.persona && (
-                    <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">
-                      {m.persona}
+                  {m.headline && (
+                    <span className="font-mono text-xs text-muted">
+                      {m.headline}
                     </span>
                   )}
                   <span className="font-mono text-[10px] text-muted">
-                    {level.name}
+                    {m.badges ?? 0} badges · {m.campaigns ?? 0} camp. ·{" "}
+                    {m.cards ?? 0} cards
                   </span>
-                </div>
-                {m.headline && (
-                  <span className="font-mono text-xs text-muted">
-                    {m.headline}
-                  </span>
-                )}
-                <span className="mt-auto flex items-center justify-between font-mono text-[10px] text-muted">
-                  <span>{m.skills.slice(0, 3).join(" · ")}</span>
-                  <span>
-                    {m.campaigns ?? 0} camp. · {m.cards ?? 0} cards
-                  </span>
+                </span>
+                <span className="w-full shrink-0 sm:w-60">
+                  <XpBar xp={m.xp} />
                 </span>
               </Link>
             </li>
           );
         })}
-      </ul>
+      </ol>
 
       {members.length === 0 && (
         <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {"// ainda vazio — cria tua conta e entra pro wall"}
+          {"// ainda vazio — cria tua conta e entra pro ranking"}
         </p>
       )}
     </section>

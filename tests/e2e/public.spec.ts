@@ -79,7 +79,7 @@ test.describe("comunidade e feed — rede social pública", () => {
   test("/membros lista quem constrói", async ({ page }) => {
     await page.goto("/membros");
     await expect(
-      page.getByRole("heading", { name: /quem constrói aqui/i }),
+      page.getByRole("heading", { name: /quem tá na frente/i }),
     ).toBeVisible();
   });
 
