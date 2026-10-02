@@ -26,11 +26,12 @@ export const metadata: Metadata = {
 export default async function MembrosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sort?: string }>;
+  searchParams: Promise<{ sort?: string; q?: string }>;
 }) {
-  const { sort } = await searchParams;
+  const { sort, q: rawQ } = await searchParams;
+  const q = rawQ?.trim() ?? "";
   const mode: LeaderboardSort = sort === "recent" ? "recent" : "xp";
-  const members = listLeaderboard(mode, 100);
+  const members = listLeaderboard(mode, 100, q);
   const isXp = mode === "xp";
 
   const chip = (active: boolean) =>
@@ -55,12 +56,38 @@ export default async function MembrosPage({
         </p>
       </div>
 
+      <form action="/membros" className="flex gap-2">
+        {!isXp && <input type="hidden" name="sort" value="recent" />}
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="username, nome, skill…"
+          aria-label="buscar membros"
+          className="w-full max-w-md border border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
+        />
+        <button
+          type="submit"
+          className="border border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
+        >
+          buscar
+        </button>
+      </form>
+
       <div className="flex gap-2 font-mono text-xs">
-        <Link href="/membros" aria-current={isXp ? "page" : undefined} className={chip(isXp)}>
+        <Link
+          href={q ? `/membros?q=${encodeURIComponent(q)}` : "/membros"}
+          aria-current={isXp ? "page" : undefined}
+          className={chip(isXp)}
+        >
           por xp
         </Link>
         <Link
-          href="/membros?sort=recent"
+          href={
+            q
+              ? `/membros?sort=recent&q=${encodeURIComponent(q)}`
+              : "/membros?sort=recent"
+          }
           aria-current={!isXp ? "page" : undefined}
           className={chip(!isXp)}
         >
@@ -130,7 +157,9 @@ export default async function MembrosPage({
 
       {members.length === 0 && (
         <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {"// ainda vazio — cria tua conta e entra pro ranking"}
+          {q
+            ? `// nenhum membro com "${q}"`
+            : "// ainda vazio — cria tua conta e entra pro ranking"}
         </p>
       )}
     </section>

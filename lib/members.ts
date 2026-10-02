@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { toLikePattern } from "@/lib/search";
 
 // migração idempotente — avatarUrl vive aqui e não no schema principal de
 // lib/db.ts (trabalho paralelo naquele arquivo); mesmo pattern do bloco
@@ -115,20 +116,29 @@ export type LeaderboardSort = "xp" | "recent";
 export function listLeaderboard(
   sort: LeaderboardSort = "xp",
   limit = 100,
+  q?: string,
 ): Member[] {
   const orderBy =
     sort === "recent"
       ? "m.createdAt DESC, m.id DESC"
       : "m.xp DESC, m.username ASC";
+  // ?q= (spec 023): username/name/headline/skills — LIKE com curinga escapado
+  // (toLikePattern); LIKE do sqlite já é case-insensitive pra ASCII
   const rows = db
     .prepare(
       `SELECT m.*,
               (SELECT COUNT(*) FROM member_badges mb WHERE mb.memberId = m.id) AS badges,
               (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id) AS campaigns,
               (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
-       FROM members m ORDER BY ${orderBy} LIMIT ?`,
+       FROM members m
+       WHERE (@q IS NULL
+              OR m.username LIKE @q ESCAPE '\\'
+              OR m.name LIKE @q ESCAPE '\\'
+              OR m.headline LIKE @q ESCAPE '\\'
+              OR m.skills LIKE @q ESCAPE '\\')
+       ORDER BY ${orderBy} LIMIT @limit`,
     )
-    .all(limit) as MemberRow[];
+    .all({ q: toLikePattern(q), limit }) as MemberRow[];
   return rows.map(toMember);
 }
 

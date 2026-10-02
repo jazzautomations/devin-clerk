@@ -56,6 +56,21 @@ export function getPastHackathons(now = new Date()): Hackathon[] {
     );
 }
 
+// busca textual do radar (?q=, spec 023) — substring case-insensitive sobre
+// nome/local/tags. A lista já é materializada em JS (tags são JSON), então
+// filtrar aqui é mais honesto que LIKE na coluna serializada
+export function searchHackathons(q: string, now = new Date()): Hackathon[] {
+  const list = getUpcomingHackathons(now);
+  const needle = q.trim().toLowerCase();
+  if (!needle) return list;
+  return list.filter((h) =>
+    [h.name, h.location ?? "", ...h.tags]
+      .join("\n")
+      .toLowerCase()
+      .includes(needle),
+  );
+}
+
 export function getHackathon(id: string): Hackathon | null {
   const row = db
     .prepare("SELECT * FROM hackathons WHERE id = ?")

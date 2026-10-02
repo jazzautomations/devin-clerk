@@ -4,6 +4,7 @@ import { HackathonFeed } from "@/components/HackathonFeed";
 import {
   getTags,
   getUpcomingHackathons,
+  searchHackathons,
 } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
@@ -15,7 +16,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/radar" },
 };
 
-export default async function RadarPage() {
+export default async function RadarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { userId } = await auth();
   let registeredIds: string[] = [];
   if (userId) {
@@ -30,8 +35,12 @@ export default async function RadarPage() {
     registeredIds = getRegistrationIds(member.id);
   }
 
+  const { q: rawQ } = await searchParams;
+  const q = rawQ?.trim() ?? "";
   const now = new Date();
-  const hackathons = getUpcomingHackathons(now);
+  const hackathons = q
+    ? searchHackathons(q, now)
+    : getUpcomingHackathons(now);
   const sessoes = hackathons.filter((h) => h.partner);
   const radar = hackathons.filter((h) => !h.partner);
   const tags = getTags(hackathons);
@@ -49,7 +58,29 @@ export default async function RadarPage() {
           Os da comunidade com inscrição em 1 clique, e o resto do cenário
           curado do Brasil e do mundo — raspado das fontes oficiais.
         </p>
+        <form action="/radar" className="mt-1 flex gap-2">
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="buscar por nome, cidade ou tag…"
+            aria-label="buscar no radar"
+            className="w-full max-w-md border border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
+          />
+          <button
+            type="submit"
+            className="border border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
+          >
+            buscar
+          </button>
+        </form>
       </div>
+
+      {q && hackathons.length === 0 && (
+        <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
+          {`// nada no radar pra "${q}" — tenta outro termo`}
+        </p>
+      )}
 
       {sessoes.length > 0 && (
         <div className="flex flex-col gap-4">
@@ -65,17 +96,19 @@ export default async function RadarPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-          radar — brasil + mundo
-        </h2>
-        <HackathonFeed
-          hackathons={radar}
-          tags={tags}
-          now={now.toISOString()}
-          registeredIds={registeredIds}
-        />
-      </div>
+      {!(q && hackathons.length === 0) && (
+        <div className="flex flex-col gap-4">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            radar — brasil + mundo
+          </h2>
+          <HackathonFeed
+            hackathons={radar}
+            tags={tags}
+            now={now.toISOString()}
+            registeredIds={registeredIds}
+          />
+        </div>
+      )}
     </section>
   );
 }

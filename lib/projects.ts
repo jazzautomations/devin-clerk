@@ -1,5 +1,6 @@
 import db from "@/lib/db";
 import { getLatestDeployForTeam } from "@/lib/deploys";
+import { toLikePattern } from "@/lib/search";
 import type { TeamProject } from "@/lib/archive";
 
 // Índice público de projetos (spec 017) — o "/companies" do Colosseum:
@@ -21,6 +22,8 @@ export type ProjectCard = {
 export type ProjectFilter = {
   hackathonId?: string;
   liveOnly?: boolean;
+  /** ?q= — título do projeto, descrição ou nome do time (spec 023) */
+  q?: string;
 };
 
 type Row = {
@@ -48,11 +51,18 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
        JOIN team_projects tp ON tp.teamId = t.id
        JOIN hackathons h ON h.id = t.hackathonId
        WHERE (@h IS NULL OR t.hackathonId = @h)
+         AND (@q IS NULL
+              OR tp.title LIKE @q ESCAPE '\\'
+              OR tp.description LIKE @q ESCAPE '\\'
+              OR t.name LIKE @q ESCAPE '\\')
        ORDER BY CASE WHEN t.placement = 0 THEN 99 ELSE t.placement END,
                 h.startsAt DESC,
                 t.id`,
     )
-    .all({ h: filter.hackathonId ?? null }) as Row[];
+    .all({
+      h: filter.hackathonId ?? null,
+      q: toLikePattern(filter.q),
+    }) as Row[];
 
   const cards = rows.map((r) => {
     const deploy = getLatestDeployForTeam(r.teamId);
