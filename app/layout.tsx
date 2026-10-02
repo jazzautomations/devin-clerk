@@ -22,6 +22,11 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
+// tudo SSR por request: radar/feed/membros/perfil servem dados vivos do
+// banco — prerender estático serviria snapshot obsoleto da comunidade
+// (e quebraria o e2e, que roda contra `next start` e seeda depois do build)
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {

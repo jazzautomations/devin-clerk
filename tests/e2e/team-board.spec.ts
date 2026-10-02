@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do board "procuro time" — spec 012. Leitura é pública; anunciar
 // exige login + inscrição (Clerk captcha bloqueia automação — ver AGENTS.md),
@@ -12,7 +11,7 @@ const NEED = "busco alguém de dados pra fechar o time e2e";
 
 // idempotente: garante membro + inscrição + anúncio, sem duplicar em rerun
 function ensureBoardEntry() {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS looking_for_team (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

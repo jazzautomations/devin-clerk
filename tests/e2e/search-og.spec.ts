@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do spec 023 — busca ?q= nas listas públicas + OG dinâmico por edição.
 
@@ -8,7 +7,7 @@ import { join } from "node:path";
 // talento.spec.ts): bate /membros primeiro pra forçar o init/migrações do db
 async function ensureSearchMember(request: APIRequestContext): Promise<void> {
   await request.get("/membros");
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email)

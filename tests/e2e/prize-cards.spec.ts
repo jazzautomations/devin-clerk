@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do spec 024 — prêmio vende o clique: card do radar mostra o valor
 // em lendário, verbatim. Evento e2e próprio (source='e2e', nunca expira,
@@ -11,7 +10,7 @@ const PRIZE = "R$ 42 mil";
 async function ensurePrizeEvent(request: APIRequestContext): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
   await request.get("/radar");
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   const cols = (
     db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]

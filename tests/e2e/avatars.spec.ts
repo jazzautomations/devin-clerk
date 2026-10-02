@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD dos avatares — spec 020. Leitura pública: membro com avatarUrl (foto
 // do Clerk) renderiza <img>; sem foto renderiza o bloco de iniciais. Seed
@@ -11,7 +10,7 @@ const POST_COM = "post e2e — autor com avatar";
 const POST_SEM = "post e2e — autor sem avatar";
 
 function ensureAvatarPosts() {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   // a coluna é migração de lib/members.ts no dev server — garante aqui pra
   // o seed não depender da ordem de import do servidor

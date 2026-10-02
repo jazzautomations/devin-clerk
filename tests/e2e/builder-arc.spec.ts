@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD da trajetória no perfil — spec 029. Leitura é pública; o seed vincula
 // membro a time/inscrição direto no banco do dev server (pattern de
@@ -13,7 +12,7 @@ const MEMBER = "e2e_arc";
 // um segundo placement=1 quebraria o pódio único do arquivo), time próprio
 // com projeto na PUC e inscrição solta no Anhembi
 function ensureArc(): void {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
 
   db.prepare(

@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD da escolha do povo — spec 025. Votar exige login (Clerk captcha bloqueia
 // automação — ver AGENTS.md), então o e2e cobre o lado público: placar ▲ nos
@@ -10,7 +9,7 @@ const HACK = "hack-inova-unifacens-2026"; // seed: One Day Hospital, 1º lugar
 
 // teamId real do seed — a ficha /p/[teamId] e a rota de voto dependem dele
 function seedTeamId(): number {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   const t = db
     .prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?")

@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD da submissão de time — spec 021. Criar/editar exige login + inscrição
 // (Clerk captcha bloqueia automação — ver AGENTS.md), então o teste cobre o
@@ -12,7 +11,7 @@ const HID = "hack-inova-alphaville-2026"; // edição futura ativa (seed)
 // idempotente: membro inscrito existir é irrelevante pro anon — mas garante
 // que a edição tem dados reais no banco do dev server
 function ensureRegistrant() {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, name) VALUES ('e2e_teamowner', 'e2e_teamowner', 'e2e-team-owner@t.dev', 'E2E Owner')",

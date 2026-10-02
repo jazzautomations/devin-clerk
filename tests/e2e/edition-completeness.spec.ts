@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do spec 030 — duas pontas da completude da edição:
 // (A) /h/[id] de edição ongoing (startsAt passado, endsAt futuro — janela
@@ -25,7 +24,7 @@ async function seed(
 ): Promise<number | null> {
   // dev server faz init do db ao servir qualquer rota — bate uma antes
   await request.get("/radar");
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   // as colunas novas chegam pelo ALTER guardado de lib/archive.ts quando o
   // server importa o módulo — garante aqui caso o seed rode antes (pattern

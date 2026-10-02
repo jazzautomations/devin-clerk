@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do diretório /talento — spec 014. Leitura é pública; o opt-in em si é
 // PATCH autenticado (coberto em vitest), então o teste seeda membro com
@@ -12,7 +11,7 @@ const MEMBER = "e2e_talent";
 // server só a cria quando alguém importa a lib), membro opted-in e um time
 // campeão com projeto na 1ª edição
 function ensureTalent(): void {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   const cols = (
     db.prepare("PRAGMA table_info(members)").all() as { name: string }[]

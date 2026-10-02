@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do CRM de sponsors — spec 019. O vínculo desafio→sponsor via API exige
 // admin logado (Clerk captcha bloqueia automação — ver AGENTS.md), então o
@@ -17,7 +16,7 @@ const CHAL_ID = "e2e-chal-sponsored";
 // idempotente: garante tabela sponsors + coluna sponsorId + vínculo,
 // espelhando o schema de lib/sponsors.ts (o dev server também cria no import)
 function ensureLinkedChallenge() {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS sponsors (
     id TEXT PRIMARY KEY,

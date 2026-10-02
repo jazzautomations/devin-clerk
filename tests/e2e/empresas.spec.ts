@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD da porta comercial — spec 022. /empresas, /legal/* e POST /api/leads são
 // públicos (a venda não exige login), então tudo é testável sem Clerk.
@@ -15,7 +14,7 @@ const xff = () => ({
 });
 
 const leadCount = (email: string) => {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   const n = (
     db.prepare("SELECT COUNT(*) n FROM leads WHERE email = ?").get(email) as

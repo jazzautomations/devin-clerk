@@ -13,6 +13,8 @@
     "test:scrape": "uv run --python .venv-scraper/bin/python scripts/test_scrape_radar.py",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:e2e": "node tests/e2e/reset-db.mjs && HACKAHUB_DB=data/e2e.db HACKAHUB_DIST_DIR=.next-e2e npx next build",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

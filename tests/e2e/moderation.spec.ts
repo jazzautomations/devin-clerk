@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD da moderação — spec 018. Apagar exige login (Clerk captcha bloqueia
 // automação — ver AGENTS.md), então o e2e cobre o contrato anon: DELETE
@@ -10,7 +9,7 @@ import { join } from "node:path";
 const MARKER = "post e2e — alvo de moderação";
 
 function ensurePost(): number {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES ('e2e_commenter', 'e2e_commenter', 'e2e@t.dev')",

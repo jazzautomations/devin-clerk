@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD da indicação de hackathon — spec 026. O POST /api/submissions é
 // público (indicar não exige login), então o fluxo inteiro de entrada é
@@ -14,7 +13,7 @@ const xff = () => ({
 });
 
 const subsCount = (url: string) => {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   const n = (
     db

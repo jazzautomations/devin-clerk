@@ -112,7 +112,10 @@ test.describe("seo — metadata e dados estruturados", () => {
       .locator('meta[property="og:image"]')
       .getAttribute("content");
     expect(ogImage).toBeTruthy();
-    const res = await request.get(ogImage!);
+    // og:image sai absoluto com a origem canônica (SITE_URL) — certo pra
+    // SEO; o teste valida a rota servindo a imagem, então rebaixa o host
+    const ogPath = new URL(ogImage!).pathname + new URL(ogImage!).search;
+    const res = await request.get(ogPath);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toContain("image/");
   });

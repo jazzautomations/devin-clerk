@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD dos comentários no feed — spec 011. Leitura é pública; escrever
 // comentário exige login (Clerk captcha bloqueia automação — ver AGENTS.md),
@@ -13,7 +12,7 @@ const C2 = "comentário e2e: resposta em sequência";
 
 // idempotente: garante membro + post + 2 comentários, sem duplicar em rerun
 function ensureThread(): number {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS post_comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

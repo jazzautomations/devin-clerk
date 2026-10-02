@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do spec 032 — edição curada (requiresApproval) troca "inscrever-se em
 // 1 clique" por "pedir lugar". Login real é bloqueado pelo captcha (ver
@@ -13,7 +12,7 @@ async function ensureCuratedEdition(
 ): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
   await request.get("/radar");
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   // a coluna nasce do ALTER guardado em lib/registrations; garante aqui
   // caso o dev server ainda não tenha importado o módulo nesta sessão
@@ -56,7 +55,9 @@ test.describe("edição curada — apply to attend (spec 032)", () => {
     request,
   }) => {
     await ensureCuratedEdition(request);
-    await page.goto("/radar?q=curada jam");
+    // o request.get acima já aqueceu o compile da rota; domcontentloaded
+    // evita depender do 'load' (scripts externos lentos/flaky)
+    await page.goto("/radar?q=curada jam", { waitUntil: "domcontentloaded" });
     const card = page.locator("article", { hasText: "E2E Curada Jam" });
     await expect(card).toHaveCount(1);
     await expect(

@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do spec 027 — evento em andamento (janela de submissão já abriu, ainda
 // não fechou — padrão Devpost) aparece no radar marcado "em andamento"; e a
@@ -15,7 +14,7 @@ async function ensureOngoingEvents(
 ): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
   await request.get("/radar");
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   const cols = (
     db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]

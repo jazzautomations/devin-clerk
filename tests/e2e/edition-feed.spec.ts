@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import { openE2eDb } from "./db";
 
 // BDD do mural da edição — spec 028. Leitura é pública; postar no mural
 // exige inscrição (Clerk captcha bloqueia automação — ver AGENTS.md),
@@ -13,7 +12,7 @@ const MARKER = "post e2e — mural da edição";
 
 // idempotente: garante membro + post escopado, sem duplicar em rerun
 function ensureEditionPost(): void {
-  const db = new Database(join(process.cwd(), "data", "hackahub.db"));
+  const db = openE2eDb();
   db.pragma("busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
