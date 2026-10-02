@@ -4,10 +4,11 @@ import { toggleLike } from "@/lib/posts";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
 import { notify } from "@/lib/notifications";
+import { limitOrNull } from "@/lib/ratelimit";
 import db from "@/lib/db";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
@@ -22,6 +23,11 @@ export async function POST(
   const member = getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // spec 031 — like é toggle; 60/h por membro freia script de spam
+  const limited = limitOrNull(req, "likes", member.id);
+  if (limited) {
+    return limited;
   }
   const liked = toggleLike(postId, member.id);
   if (liked) {

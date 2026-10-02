@@ -4,6 +4,7 @@ import { createComment, listComments } from "@/lib/comments";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
 import { notify } from "@/lib/notifications";
+import { limitOrNull } from "@/lib/ratelimit";
 import db from "@/lib/db";
 
 function postExists(postId: number): boolean {
@@ -41,6 +42,11 @@ export async function POST(
   const member = getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // spec 031 — comentar demais vira 429 (30/h por membro)
+  const limited = limitOrNull(req, "comments", member.id);
+  if (limited) {
+    return limited;
   }
   const body = await req.json().catch(() => null);
   const text = typeof body?.body === "string" ? body.body.trim() : "";

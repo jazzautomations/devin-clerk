@@ -20,10 +20,17 @@ beforeEach(() => {
   db.prepare("DELETE FROM hackathons WHERE source = 'comunidade'").run();
 });
 
+// spec 031: POST /api/submissions limita 5/h por IP (xff → 'anon'). Os
+// casos aqui testam fluxo/curadoria — não volume — então cada request
+// ganha IP único; o caminho 429 mora em ratelimit.test.ts.
+let ipSeq = 0;
 const req = (method: string, body?: unknown) =>
   new Request("http://t", {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-forwarded-for": `10.98.0.${ipSeq++}`,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 

@@ -4,11 +4,17 @@ import {
   createSubmission,
   listPendingSubmissions,
 } from "@/lib/submissions";
+import { limitOrNull } from "@/lib/ratelimit";
 
 // POST /api/submissions — porta PÚBLICA da comunidade (spec 026): indicar um
-// hackathon não exige login. Abuso é freado pelo honeypot `company` (201
-// silencioso) e pelo dedupe de 24h por url em createSubmission (200).
+// hackathon não exige login. Abuso é freado por rate limit 5/h por IP (031),
+// honeypot `company` (201 silencioso) e dedupe de 24h por url em
+// createSubmission (200).
 export async function POST(req: Request) {
+  const limited = limitOrNull(req, "submissions");
+  if (limited) {
+    return limited;
+  }
   const b = (await req.json().catch(() => null)) as Record<
     string,
     unknown

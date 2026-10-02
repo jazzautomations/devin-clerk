@@ -5,6 +5,7 @@ import { createPost, listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
+import { limitOrNull } from "@/lib/ratelimit";
 
 export async function GET(req?: Request) {
   // leitura pública — rede social é vitrine; postar exige conta.
@@ -38,6 +39,11 @@ export async function POST(req: Request) {
     email: user?.primaryEmailAddress?.emailAddress ?? "",
     imageUrl: user?.imageUrl ?? null,
   });
+  // spec 031 — flood de posts é freado por membro (20/h), não por IP
+  const limited = limitOrNull(req, "posts", member.id);
+  if (limited) {
+    return limited;
+  }
   const body = await req.json().catch(() => null);
   if (typeof body?.body !== "string" || !body.body.trim()) {
     return Response.json({ error: "Post vazio" }, { status: 400 });

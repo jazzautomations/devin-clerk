@@ -5,6 +5,13 @@ import { join } from "node:path";
 // BDD da indicação de hackathon — spec 026. O POST /api/submissions é
 // público (indicar não exige login), então o fluxo inteiro de entrada é
 // testável sem Clerk. A curadoria é admin-only: anon recebe 401 JSON.
+// spec 031: /api/submissions limita 5/h por IP — xff único por request pra
+// não esgotar o bucket 'anon' (dev server compartilhado entre specs/runs).
+
+const rand = () => Math.floor(Math.random() * 254) + 1;
+const xff = () => ({
+  "x-forwarded-for": `10.${rand()}.${rand()}.${rand()}`,
+});
 
 const subsCount = (url: string) => {
   const db = new Database(join(process.cwd(), "data", "hackahub.db"));
@@ -42,6 +49,7 @@ test.describe("POST /api/submissions — público", () => {
   }) => {
     const url = `https://e2e-${Date.now()}.dev/hack`;
     const ok = await request.post("/api/submissions", {
+      headers: xff(),
       data: { name: "Hack E2E", url },
     });
     expect(ok.status()).toBe(201);
@@ -49,6 +57,7 @@ test.describe("POST /api/submissions — público", () => {
 
     const botUrl = `https://e2e-bot-${Date.now()}.dev`;
     const bot = await request.post("/api/submissions", {
+      headers: xff(),
       data: { name: "Bot Hack", url: botUrl, company: "Spam Co" },
     });
     expect(bot.status()).toBe(201);
@@ -57,18 +66,21 @@ test.describe("POST /api/submissions — público", () => {
 
   test("inválido → 400; mesma url → 200 sem duplicar", async ({ request }) => {
     const bad = await request.post("/api/submissions", {
+      headers: xff(),
       data: { name: "X", url: "javascript:alert(1)" },
     });
     expect(bad.status()).toBe(400);
 
     const url = `https://e2e-dup-${Date.now()}.dev`;
     const body = { name: "Dup", url };
-    expect((await request.post("/api/submissions", { data: body })).status()).toBe(
-      201,
-    );
-    expect((await request.post("/api/submissions", { data: body })).status()).toBe(
-      200,
-    );
+    expect(
+      (await request.post("/api/submissions", { headers: xff(), data: body }))
+        .status(),
+    ).toBe(201);
+    expect(
+      (await request.post("/api/submissions", { headers: xff(), data: body }))
+        .status(),
+    ).toBe(200);
     expect(subsCount(url)).toBe(1);
   });
 });

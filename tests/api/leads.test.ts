@@ -9,10 +9,17 @@ beforeEach(() => {
   db.prepare("DELETE FROM leads").run();
 });
 
+// spec 031: o limit é por IP (xff → 'anon'). Estes casos testam
+// fluxo/validação/dedupe — não volume — então cada request ganha um IP
+// único pra não dividir bucket; o caminho 429 mora em ratelimit.test.ts.
+let ipSeq = 0;
 const req = (body?: unknown) =>
   new Request("http://t/api/leads", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-forwarded-for": `10.99.0.${ipSeq++}`,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 

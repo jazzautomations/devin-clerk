@@ -3,11 +3,17 @@ import {
   LEAD_INTERESTS,
   type LeadInterest,
 } from "@/lib/leads";
+import { limitOrNull } from "@/lib/ratelimit";
 
 // POST /api/leads — porta comercial PÚBLICA (spec 022): a marca não loga pra
-// dizer "quero patrocinar". Sem auth por desenho; abuso é freado pelo honeypot
-// `website` (201 silencioso) e pelo dedupe de 10min em createLead (200).
+// dizer "quero patrocinar". Sem auth por desenho; abuso é freado por rate
+// limit 5/h por IP (031), honeypot `website` (201 silencioso) e dedupe de
+// 10min em createLead (200).
 export async function POST(req: Request) {
+  const limited = limitOrNull(req, "leads");
+  if (limited) {
+    return limited;
+  }
   const b = (await req.json().catch(() => null)) as Record<
     string,
     unknown

@@ -5,6 +5,14 @@ import { join } from "node:path";
 // BDD da porta comercial — spec 022. /empresas, /legal/* e POST /api/leads são
 // públicos (a venda não exige login), então tudo é testável sem Clerk.
 // A seção // leads do /admin fica coberta pelo guard de auth existente.
+// spec 031: /api/leads limita 5/h por IP — cada request abaixo usa um xff
+// único pra não esgotar o bucket 'anon' (o dev server é compartilhado entre
+// specs/runs); o comportamento de volume mora em rate-limit.spec.ts.
+
+const rand = () => Math.floor(Math.random() * 254) + 1;
+const xff = () => ({
+  "x-forwarded-for": `10.${rand()}.${rand()}.${rand()}`,
+});
 
 const leadCount = (email: string) => {
   const db = new Database(join(process.cwd(), "data", "hackahub.db"));
@@ -56,6 +64,12 @@ test.describe("/empresas — pitch pra marca", () => {
 
   test("form envia lead e confirma sem recarregar", async ({ page }) => {
     const email = `e2e-${Date.now()}@empresa.dev`;
+    // injeta um IP único no POST do browser pra não contar no bucket 'anon'
+    await page.route("**/api/leads", (route) =>
+      route.continue({
+        headers: { ...route.request().headers(), ...xff() },
+      }),
+    );
     await page.goto("/empresas");
     await page.getByLabel(/empresa/i).fill("Empresa E2E");
     await page.getByLabel(/e-mail/i).fill(email);
@@ -80,6 +94,7 @@ test.describe("/empresas — pitch pra marca", () => {
 test.describe("POST /api/leads — porta pública", () => {
   test("lead válido → 201; inválido → 400", async ({ request }) => {
     const ok = await request.post("/api/leads", {
+      headers: xff(),
       data: {
         company: "Empresa Request",
         email: `req-${Date.now()}@empresa.dev`,
@@ -88,6 +103,7 @@ test.describe("POST /api/leads — porta pública", () => {
     });
     expect(ok.status()).toBe(201);
     const bad = await request.post("/api/leads", {
+      headers: xff(),
       data: { company: "", email: "x@y.dev", interest: "talento" },
     });
     expect(bad.status()).toBe(400);
@@ -98,6 +114,7 @@ test.describe("POST /api/leads — porta pública", () => {
   }) => {
     const botEmail = `bot-${Date.now()}@farm.dev`;
     const bot = await request.post("/api/leads", {
+      headers: xff(),
       data: {
         company: "Bot Co",
         email: botEmail,
@@ -111,10 +128,10 @@ test.describe("POST /api/leads — porta pública", () => {
     const email = `dup-${Date.now()}@empresa.dev`;
     const body = { company: "Dup Co", email, interest: "outro" };
     expect(
-      (await request.post("/api/leads", { data: body })).status(),
+      (await request.post("/api/leads", { headers: xff(), data: body })).status(),
     ).toBe(201);
     expect(
-      (await request.post("/api/leads", { data: body })).status(),
+      (await request.post("/api/leads", { headers: xff(), data: body })).status(),
     ).toBe(200);
     expect(leadCount(email)).toBe(1);
   });

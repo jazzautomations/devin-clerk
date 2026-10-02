@@ -1,17 +1,23 @@
 import { auth } from "@clerk/nextjs/server";
 import { getMemberByClerkId } from "@/lib/members";
 import { toggleVote, voteCountFor, VoteError } from "@/lib/votes";
+import { limitOrNull } from "@/lib/ratelimit";
 
 type Ctx = { params: Promise<{ teamId: string }> };
 
 // escolha do povo (spec 025): um POST alterna o voto do membro no projeto.
 // 401 sem sessão/member → 404 time inválido ou sem projeto → 403 próprio
 // time → 200 {voted, count}. Sem XP: voto é sinal, não moeda.
-export async function POST(_req: Request, ctx: Ctx) {
+export async function POST(req: Request, ctx: Ctx) {
   const { userId } = await auth();
   const member = userId ? getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // spec 031 — flood de votos é freado por membro (60/h), não por IP
+  const limited = limitOrNull(req, "votes", member.id);
+  if (limited) {
+    return limited;
   }
   const teamId = Number((await ctx.params).teamId);
   try {

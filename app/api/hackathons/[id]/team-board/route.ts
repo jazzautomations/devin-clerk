@@ -12,6 +12,7 @@ import {
 } from "@/lib/teamboard";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
+import { limitOrNull } from "@/lib/ratelimit";
 
 // leitura pública — o board é vitrine/prova social; anunciar exige inscrição
 export async function GET(
@@ -42,6 +43,11 @@ export async function POST(
   const member = getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // spec 031 — reanunciar em loop é freado por membro (10/h)
+  const limited = limitOrNull(req, "team-board", member.id);
+  if (limited) {
+    return limited;
   }
   // sem inscrição o board vira spam — FR-002
   if (!getRegistrationIds(member.id).includes(h.id)) {
