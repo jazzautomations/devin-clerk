@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { HackathonFeed } from "@/components/HackathonFeed";
 import {
@@ -6,6 +7,13 @@ import {
 } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
+
+export const metadata: Metadata = {
+  title: "radar",
+  description:
+    "Hackathons abertos no Brasil e no mundo — sessões Hack Inova com inscrição em 1 clique e o radar curado das fontes oficiais.",
+  alternates: { canonical: "/radar" },
+};
 
 export default async function RadarPage() {
   const { userId } = await auth();

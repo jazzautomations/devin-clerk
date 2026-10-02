@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { appConfig } from "@/app.config";
+import { SITE_URL } from "@/lib/seo";
 import { Header } from "@/components/Header";
 import "./globals.css";
 
@@ -22,8 +23,18 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: appConfig.name,
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${appConfig.name} — a rede social dos hackathons`,
+    template: `%s — ${appConfig.name}`,
+  },
   description: appConfig.description,
+  openGraph: {
+    siteName: appConfig.name,
+    locale: "pt_BR",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

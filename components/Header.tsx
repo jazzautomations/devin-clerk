@@ -34,6 +34,12 @@ export function Header() {
             membros
           </Link>
           <Link
+            href="/blog"
+            className="text-muted transition hover:text-accent"
+          >
+            blog
+          </Link>
+          <Link
             href="/dashboard"
             className="text-muted transition hover:text-accent"
           >

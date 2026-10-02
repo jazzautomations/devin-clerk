@@ -1,8 +1,16 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { FeedSection } from "@/components/FeedSection";
 import { getOrCreateMember } from "@/lib/members";
 import { listPosts } from "@/lib/posts";
+
+export const metadata: Metadata = {
+  title: "feed",
+  description:
+    "O que a comunidade tá construindo — demos, projetos e bastidores dos hackathons, postados por devs, empreendedores e marcas.",
+  alternates: { canonical: "/feed" },
+};
 
 export default async function FeedPage() {
   const { userId } = await auth();

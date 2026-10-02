@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { listLeaderboard, type LeaderboardSort } from "@/lib/members";
 import { XpBar } from "@/components/XpBar";
 
@@ -12,6 +13,13 @@ const PODIUM_RANK: Record<number, string> = {
   1: "text-lendario",
   2: "text-epico",
   3: "text-raro",
+};
+
+export const metadata: Metadata = {
+  title: "membros",
+  description:
+    "Quem tá na frente — leaderboard de XP, badges, skills e histórico de campanhas da comunidade HackaHub.",
+  alternates: { canonical: "/membros" },
 };
 
 export default async function MembrosPage({
