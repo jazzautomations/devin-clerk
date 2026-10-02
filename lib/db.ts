@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS registrations (
   createdAt TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (memberId, hackathonId)
 );
+
+CREATE TABLE IF NOT EXISTS subscribers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 const insert = db.prepare(`

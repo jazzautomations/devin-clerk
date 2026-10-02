@@ -27,6 +27,8 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
   const hackathons = getUpcomingHackathons(now);
+  const sessoes = hackathons.filter((h) => h.partner);
+  const radar = hackathons.filter((h) => !h.partner);
   const tags = getTags(hackathons);
   const registeredIds = getRegistrationIds(member.id);
   const past = getPastHackathons(now);
@@ -50,12 +52,31 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <HackathonFeed
-        hackathons={hackathons}
-        tags={tags}
-        now={now.toISOString()}
-        registeredIds={registeredIds}
-      />
+      {sessoes.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="font-mono text-xs tracking-widest text-accent uppercase">
+            sessões hack inova — inscrição direta
+          </h2>
+          <HackathonFeed
+            hackathons={sessoes}
+            tags={[]}
+            now={now.toISOString()}
+            registeredIds={registeredIds}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-4">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          radar — brasil + mundo
+        </h2>
+        <HackathonFeed
+          hackathons={radar}
+          tags={tags}
+          now={now.toISOString()}
+          registeredIds={registeredIds}
+        />
+      </div>
 
       {past.length > 0 && (
         <div className="flex flex-col gap-4">
