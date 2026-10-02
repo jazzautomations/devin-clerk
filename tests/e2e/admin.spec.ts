@@ -24,6 +24,22 @@ test.describe("admin operacional — APIs trancadas sem login", () => {
     expect(patch.status()).toBe(401);
   });
 
+  test("arquivo (spec 015) — POST teams/assets respondem 401", async ({
+    request,
+  }) => {
+    const hack = "hack-inova-unifacens-2026";
+    const team = await request.post(`/api/admin/hackathons/${hack}/teams`, {
+      data: { name: "invasão", placement: 1 },
+    });
+    expect(team.status()).toBe(401);
+    expect(team.headers()["content-type"]).toContain("application/json");
+    const asset = await request.post(`/api/admin/hackathons/${hack}/assets`, {
+      data: { type: "foto", url: "https://x.dev/a.png" },
+    });
+    expect(asset.status()).toBe(401);
+    expect(asset.headers()["content-type"]).toContain("application/json");
+  });
+
   test("/admin exige login — redirect pro sign-in", async ({ page }) => {
     await page.goto("/admin");
     await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });

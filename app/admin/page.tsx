@@ -6,10 +6,12 @@ import { listRegistrants } from "@/lib/registrations";
 import { listSubscribers } from "@/lib/admin";
 import { listChallenges } from "@/lib/challenges";
 import { listAllBoardEntries } from "@/lib/teamboard";
+import { getArchive } from "@/lib/archive";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { EditEventForm } from "@/components/EditEventForm";
 import { ChallengeForm, ChallengeToggle } from "@/components/ChallengeForm";
 import { TeamBoardToggle } from "@/components/TeamBoardPanel";
+import { AssetForm, TeamForm } from "@/components/ArchiveForms";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -61,6 +63,9 @@ export default async function AdminPage() {
     events.map((e) => [e.id, listAllBoardEntries(e.id)]),
   );
 
+  // arquivo da edição (times + materiais) — cadastro pós-evento, spec 015
+  const archiveByEvent = new Map(events.map((e) => [e.id, getArchive(e.id)]));
+
   const subscribers = listSubscribers();
 
   const members = db
@@ -102,6 +107,10 @@ export default async function AdminPage() {
         <ul className="divide-y divide-line border-y border-line">
           {events.map((e) => {
             const registrants = registrantsByEvent.get(e.id) ?? [];
+            const archive = archiveByEvent.get(e.id) ?? {
+              teams: [],
+              assets: [],
+            };
             return (
               <li key={e.id}>
                 <details className="group">
@@ -266,6 +275,56 @@ export default async function AdminPage() {
                           active: e.active === 1,
                         }}
                       />
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <h3
+                        className={`${mono} tracking-widest text-muted uppercase`}
+                      >
+                        {"// arquivo"} ({archive.teams.length}{" "}
+                        {archive.teams.length === 1 ? "time" : "times"} ·{" "}
+                        {archive.assets.length}{" "}
+                        {archive.assets.length === 1 ? "material" : "materiais"})
+                      </h3>
+                      {archive.teams.length > 0 && (
+                        <ul className="divide-y divide-line border-y border-line">
+                          {archive.teams.map((t) => (
+                            <li
+                              key={t.id}
+                              className="flex items-baseline justify-between gap-4 py-2"
+                            >
+                              <span className={mono}>
+                                {t.placement > 0 && (
+                                  <span
+                                    className={
+                                      t.placement === 1
+                                        ? "text-lendario"
+                                        : "text-muted"
+                                    }
+                                  >
+                                    {t.placement}º{" "}
+                                  </span>
+                                )}
+                                {t.name}
+                                {t.project && (
+                                  <span className="text-muted">
+                                    {" "}
+                                    — {t.project.title}
+                                  </span>
+                                )}
+                                {t.members.length > 0 && (
+                                  <span className="ml-2 text-muted">
+                                    {t.members
+                                      .map((u) => `@${u}`)
+                                      .join(" ")}
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <TeamForm hackathonId={e.id} />
+                      <AssetForm hackathonId={e.id} />
                     </div>
                   </div>
                 </details>

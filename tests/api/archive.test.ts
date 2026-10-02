@@ -63,6 +63,40 @@ describe("POST /api/admin/hackathons/[id]/teams", () => {
     });
     expect(nf.status).toBe(404);
   });
+
+  it("400 em projeto com repoUrl inválida — UI manda o que o admin digitou", async () => {
+    const { POST } = await import(
+      "@/app/api/admin/hackathons/[id]/teams/route"
+    );
+    const res = await POST(
+      post("/x", {
+        name: "Time X",
+        placement: 0,
+        project: { title: "P", repoUrl: "javascript:alert(1)" },
+      }),
+      { params: Promise.resolve({ id: HACK }) },
+    );
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBeTruthy();
+  });
+
+  it("projeto sem título é ignorado — time entra só com nome+colocação", async () => {
+    const { POST } = await import(
+      "@/app/api/admin/hackathons/[id]/teams/route"
+    );
+    const res = await POST(
+      post("/x", {
+        name: "Sem Projeto",
+        placement: 2,
+        project: { description: "órfão" },
+      }),
+      { params: Promise.resolve({ id: HACK }) },
+    );
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.team.project).toBeNull();
+  });
 });
 
 describe("POST /api/admin/hackathons/[id]/assets", () => {
@@ -80,5 +114,25 @@ describe("POST /api/admin/hackathons/[id]/assets", () => {
       { params: Promise.resolve({ id: HACK }) },
     );
     expect(bad.status).toBe(400);
+  });
+
+  it("400 sem url ou com url não-http; 404 edição inexistente", async () => {
+    const { POST } = await import(
+      "@/app/api/admin/hackathons/[id]/assets/route"
+    );
+    const noUrl = await POST(post("/x", { type: "foto" }), {
+      params: Promise.resolve({ id: HACK }),
+    });
+    expect(noUrl.status).toBe(400);
+    const badUrl = await POST(
+      post("/x", { type: "foto", url: "ftp://x" }),
+      { params: Promise.resolve({ id: HACK }) },
+    );
+    expect(badUrl.status).toBe(400);
+    const nf = await POST(
+      post("/x", { type: "foto", url: "https://x" }),
+      { params: Promise.resolve({ id: "fantasma" }) },
+    );
+    expect(nf.status).toBe(404);
   });
 });
