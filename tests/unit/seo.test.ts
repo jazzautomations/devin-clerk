@@ -21,7 +21,14 @@ describe("SITE_URL / absoluteUrl", () => {
 describe("buildSitemap", () => {
   it("cobre rotas estáticas, edições /h/* e posts /blog/*", () => {
     const urls = buildSitemap().map((e) => e.url);
-    for (const path of ["/", "/radar", "/feed", "/membros", "/blog"]) {
+    for (const path of [
+      "/",
+      "/radar",
+      "/feed",
+      "/membros",
+      "/projetos",
+      "/blog",
+    ]) {
       expect(urls).toContain(absoluteUrl(path));
     }
     expect(urls).toContain(absoluteUrl("/h/hack-inova-unifacens-2026"));

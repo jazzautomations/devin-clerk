@@ -41,6 +41,12 @@ export function Header() {
             talento
           </Link>
           <Link
+            href="/projetos"
+            className="text-muted transition hover:text-accent"
+          >
+            projetos
+          </Link>
+          <Link
             href="/blog"
             className="text-muted transition hover:text-accent"
           >
