@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 import { appConfig } from "@/app.config";
 import { listPosts, type PostMeta } from "@/lib/blog";
 import {
+  getOpenHackathons,
   getPastHackathons,
-  getUpcomingHackathons,
   type Hackathon,
 } from "@/lib/hackathons";
 import { listMembers } from "@/lib/members";
@@ -42,7 +42,7 @@ export function buildSitemap(now = new Date()): MetadataRoute.Sitemap {
   }));
 
   const editions = [
-    ...getUpcomingHackathons(now),
+    ...getOpenHackathons(now),
     ...getPastHackathons(now),
   ];
   for (const h of editions) {

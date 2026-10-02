@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 describe("searchHackathons — ?q= do radar", () => {
-  it("filtra por nome, case-insensitive, só upcoming", () => {
+  it("filtra por nome, case-insensitive, só abertos (spec 027)", () => {
     makeHackathon("search-saude", {
       name: "Hackathon Saúde RJ",
       location: "Rio de Janeiro",

@@ -33,6 +33,13 @@ export function HackathonCard({
   const closed =
     hackathon.registrationDeadline !== null &&
     new Date(hackathon.registrationDeadline) < now;
+  // spec 027 — evento na lista aberta com startsAt passado está rolando:
+  // o campo data marca "em andamento" e, quando há, o fim ("até DD/MM")
+  const over =
+    new Date(
+      hackathon.endsAt ?? hackathon.registrationDeadline ?? hackathon.startsAt,
+    ) < now;
+  const ongoing = !over && starts <= now;
 
   async function toggleRegistration() {
     setLoading(true);
@@ -90,7 +97,13 @@ export function HackathonCard({
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
         <div>
           <dt className="text-muted">data</dt>
-          <dd>{fmt.format(starts)}</dd>
+          <dd className={ongoing ? "text-accent" : undefined}>
+            {ongoing
+              ? hackathon.endsAt
+                ? `em andamento · até ${fmt.format(new Date(hackathon.endsAt))}`
+                : "em andamento"
+              : fmt.format(starts)}
+          </dd>
         </div>
         <div>
           <dt className="text-muted">local</dt>

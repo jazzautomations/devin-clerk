@@ -198,7 +198,12 @@ def is_hackathon(name: str, tags=None, description: str | None = None) -> bool:
 
 
 def is_expired(row: dict, now: datetime | None = None) -> bool:
-    dt = parse_date(row.get("endsAt") or row.get("startsAt") or "")
+    # spec 027 — mesma COALESCE do radar: endsAt → registrationDeadline →
+    # startsAt. Evento cuja janela abriu mas não fechou (Devpost usa
+    # startsAt = abertura da submissão) NÃO expira enquanto roda.
+    dt = parse_date(
+        row.get("endsAt") or row.get("registrationDeadline")
+        or row.get("startsAt") or "")
     return bool(dt) and _aware(dt) < (now or NOW)
 
 
@@ -301,11 +306,13 @@ def deactivate_stale_dupes(conn, winners: list[dict]) -> int:
 
 
 def sweep_expired(conn) -> int:
-    """Externos cuja data passou → active=0. Comunidade (source NULL) intacta."""
+    """Externos encerrados → active=0 (spec 027: COALESCE com deadline de
+    inscrição — mesmo critério do radar). Comunidade (source NULL) intacta."""
     cur = conn.execute(
         """UPDATE hackathons SET active=0
            WHERE source IS NOT NULL AND active=1
-             AND datetime(COALESCE(endsAt, startsAt)) < datetime('now')"""
+             AND datetime(COALESCE(endsAt, registrationDeadline, startsAt))
+                 < datetime('now')"""
     )
     return cur.rowcount
 

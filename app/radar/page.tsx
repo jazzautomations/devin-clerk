@@ -3,8 +3,8 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { HackathonFeed } from "@/components/HackathonFeed";
 import { SubmitEventForm } from "@/components/SubmitEventForm";
 import {
+  getOpenHackathons,
   getTags,
-  getUpcomingHackathons,
   searchHackathons,
 } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
@@ -41,7 +41,7 @@ export default async function RadarPage({
   const now = new Date();
   const hackathons = q
     ? searchHackathons(q, now)
-    : getUpcomingHackathons(now);
+    : getOpenHackathons(now);
   const sessoes = hackathons.filter((h) => h.partner);
   const radar = hackathons.filter((h) => !h.partner);
   const tags = getTags(hackathons);

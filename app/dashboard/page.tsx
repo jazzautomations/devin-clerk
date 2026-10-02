@@ -4,9 +4,9 @@ import { appConfig } from "@/app.config";
 import { FeatureCard } from "@/components/FeatureCard";
 import { HackathonFeed } from "@/components/HackathonFeed";
 import {
+  getOpenHackathons,
   getPastHackathons,
   getTags,
-  getUpcomingHackathons,
 } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { listPosts } from "@/lib/posts";
@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   });
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
-  const hackathons = getUpcomingHackathons(now);
+  const hackathons = getOpenHackathons(now);
   const sessoes = hackathons.filter((h) => h.partner);
   const radar = hackathons.filter((h) => !h.partner);
   const tags = getTags(hackathons);

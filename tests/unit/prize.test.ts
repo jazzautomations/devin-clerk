@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
-import { getHackathon, getUpcomingHackathons } from "@/lib/hackathons";
+import { getHackathon, getOpenHackathons } from "@/lib/hackathons";
 import { updateHackathon } from "@/lib/admin";
 
 // spec 024 — prêmio é campo de display livre ("$138,000", "R$ 5 mil"):
@@ -39,7 +39,7 @@ describe("hackathons.prize — coluna e tipo", () => {
   it("edição sem prêmio retorna null e listagem carrega o campo", () => {
     makeHackathon();
     expect(getHackathon(HID)!.prize).toBeNull();
-    const up = getUpcomingHackathons();
+    const up = getOpenHackathons();
     expect(up.find((h) => h.id === HID)?.prize).toBeNull();
   });
 

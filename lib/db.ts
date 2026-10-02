@@ -162,6 +162,15 @@ if (!hackCols.includes("prize")) {
   // display string da fonte/curadoria ("$138,000", "R$ 5 mil") — spec 024
   db.exec(`ALTER TABLE hackathons ADD COLUMN prize TEXT`);
 }
+// first_seen/last_seen são gravados pelo scraper (spec 005), mas a coluna
+// precisa existir em banco que nunca rodou scrape — o momentum "+N · 30d"
+// da landing conta por first_seen (spec 027). Sem backfill aqui: NULL =
+// "não sabemos quando entrou", e o scraper preenche quando roda.
+for (const col of ["first_seen", "last_seen"]) {
+  if (!hackCols.includes(col)) {
+    db.exec(`ALTER TABLE hackathons ADD COLUMN ${col} TEXT`);
+  }
+}
 const postCols = (
   db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
 ).map((c) => c.name);

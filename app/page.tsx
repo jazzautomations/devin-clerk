@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { appConfig } from "@/app.config";
 import { NewsletterForm } from "@/components/NewsletterForm";
-import { getPastHackathons, getUpcomingHackathons } from "@/lib/hackathons";
+import { getOpenHackathons, getPastHackathons } from "@/lib/hackathons";
 import { listMembers } from "@/lib/members";
+import { getStatsMomentum } from "@/lib/momentum";
 import { listPosts } from "@/lib/posts";
 
 const pilares = [
@@ -38,17 +39,20 @@ const pilares = [
 
 export default function Home() {
   const now = new Date();
-  const upcoming = getUpcomingHackathons(now);
+  const upcoming = getOpenHackathons(now);
   const sessoes = upcoming.filter((h) => h.partner);
   const arquivo = getPastHackathons(now);
   const memberCount = listMembers(100).length;
   const postCount = listPosts(100).length;
+  // "+N · 30d" (spec 027): só onde há timestamp real — "edições no arquivo"
+  // não tem data de entrada, então nunca mostra momentum
+  const momentum = getStatsMomentum(now);
 
   const stats = [
-    { n: memberCount, label: "membros" },
-    { n: upcoming.length, label: "hackathons abertos" },
-    { n: arquivo.length, label: "edições no arquivo" },
-    { n: postCount, label: "posts no feed" },
+    { n: memberCount, label: "membros", delta: momentum.members },
+    { n: upcoming.length, label: "hackathons abertos", delta: momentum.events },
+    { n: arquivo.length, label: "edições no arquivo", delta: 0 },
+    { n: postCount, label: "posts no feed", delta: momentum.posts },
   ];
 
   return (
@@ -93,6 +97,11 @@ export default function Home() {
                 <dd className="mt-1 font-display text-3xl font-bold text-accent">
                   {s.n}
                 </dd>
+                {s.delta > 0 && (
+                  <dd className="mt-0.5 font-mono text-[10px] text-muted">
+                    {`+${s.delta} · 30d`}
+                  </dd>
+                )}
               </div>
             ))}
           </dl>

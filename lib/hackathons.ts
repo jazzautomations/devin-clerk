@@ -41,18 +41,32 @@ function allActive(): Hackathon[] {
   return rows.map(toHackathon);
 }
 
-export function getUpcomingHackathons(now = new Date()): Hackathon[] {
+// spec 027 — "aberto" = ainda não encerrado. O fim efetivo é a primeira
+// data disponível: endsAt (fim do evento/janela de submissão) → deadline
+// de inscrição → startsAt. Evento cuja janela já abriu (Devpost usa
+// startsAt = abertura da submissão) segue no radar enquanto roda —
+// antes disso 43 ativos (25 c/ prêmio) sumiam da listagem.
+// Data inválida (NaN) conta como "não encerrado": nunca esconde por dado ruim.
+export function isOver(h: Hackathon, now = new Date()): boolean {
+  const ref = h.endsAt ?? h.registrationDeadline ?? h.startsAt;
+  const t = new Date(ref).getTime();
+  return !Number.isNaN(t) && t < now.getTime();
+}
+
+export function getOpenHackathons(now = new Date()): Hackathon[] {
   return allActive()
-    .filter((h) => new Date(h.startsAt) > now)
+    .filter((h) => !isOver(h, now))
     .sort(
       (a, b) =>
         new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
     );
 }
 
+// arquivo = complemento exato da lista aberta: edição rolando não é
+// histórico; sem data de fim, startsAt passado é tudo que sabemos
 export function getPastHackathons(now = new Date()): Hackathon[] {
   return allActive()
-    .filter((h) => new Date(h.startsAt) <= now)
+    .filter((h) => isOver(h, now))
     .sort(
       (a, b) =>
         new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
@@ -63,7 +77,7 @@ export function getPastHackathons(now = new Date()): Hackathon[] {
 // nome/local/tags. A lista já é materializada em JS (tags são JSON), então
 // filtrar aqui é mais honesto que LIKE na coluna serializada
 export function searchHackathons(q: string, now = new Date()): Hackathon[] {
-  const list = getUpcomingHackathons(now);
+  const list = getOpenHackathons(now);
   const needle = q.trim().toLowerCase();
   if (!needle) return list;
   return list.filter((h) =>
@@ -82,7 +96,7 @@ export function getHackathon(id: string): Hackathon | null {
 }
 
 export function getTags(events?: Hackathon[]): string[] {
-  const list = events ?? getUpcomingHackathons();
+  const list = events ?? getOpenHackathons();
   return [...new Set(list.flatMap((h) => h.tags))].sort();
 }
 

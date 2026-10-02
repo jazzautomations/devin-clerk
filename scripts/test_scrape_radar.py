@@ -238,6 +238,54 @@ def test_ethglobal_md_parser():
     assert sr.parse_ethglobal_md(md_past) == []
 
 
+def test_is_expired_coalesce_boundary():
+    """spec 027 — expiração usa COALESCE(endsAt, registrationDeadline,
+    startsAt): evento cuja janela abriu mas não fechou (Devpost) NÃO expira."""
+    from datetime import datetime, timezone
+    now = datetime(2026, 10, 2, tzinfo=timezone.utc)
+    # ongoing: startsAt passado + endsAt futuro → aberto
+    assert not sr.is_expired(_row(
+        startsAt="2026-09-20T09:00:00", endsAt="2026-10-05T18:00:00"), now)
+    # sem endsAt, registrationDeadline futuro segura o evento
+    assert not sr.is_expired(_row(
+        startsAt="2026-09-20T09:00:00", endsAt=None,
+        registrationDeadline="2026-10-10T00:00:00"), now)
+    # endsAt passado vence deadline futuro — evento acabou é arquivo
+    assert sr.is_expired(_row(
+        startsAt="2026-09-20T09:00:00", endsAt="2026-09-25T18:00:00",
+        registrationDeadline="2026-10-10T00:00:00"), now)
+    # sem nenhuma data de fim, start passado → expirado
+    assert sr.is_expired(_row(
+        startsAt="2026-09-20T09:00:00", endsAt=None,
+        registrationDeadline=None), now)
+    # futuro segue aberto
+    assert not sr.is_expired(_row(), now)
+
+
+def test_sweep_respects_registration_deadline():
+    """spec 027 — o varredor usa a mesma COALESCE do radar: deadline de
+    inscrição futuro protege evento com startsAt passado."""
+    conn = sqlite3.connect(":memory:")
+    sr.ensure_schema(conn)
+    conn.execute(
+        "INSERT INTO hackathons (id, name, organizer, startsAt, endsAt,"
+        " format, registrationUrl, registrationDeadline, active, source)"
+        " VALUES ('reg-open','Hack Deadline Aberta','Org',"
+        " '2020-01-01T09:00:00', NULL, 'online', 'https://x.dev',"
+        " '2999-01-01T00:00:00', 1, 'devpost')")
+    conn.execute(
+        "INSERT INTO hackathons (id, name, organizer, startsAt, endsAt,"
+        " format, registrationUrl, registrationDeadline, active, source)"
+        " VALUES ('all-past','Hack Velha','Org',"
+        " '2020-01-01T09:00:00', NULL, 'online', 'https://x.dev',"
+        " '2020-02-01T00:00:00', 1, 'devpost')")
+    assert sr.sweep_expired(conn) == 1
+    assert conn.execute(
+        "SELECT active FROM hackathons WHERE id='reg-open'").fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT active FROM hackathons WHERE id='all-past'").fetchone()[0] == 0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
