@@ -18,11 +18,31 @@ import { DeployPanel } from "@/components/DeployPanel";
 import { getLatestDeployForTeam } from "@/lib/deploys";
 import { listBoardEntries } from "@/lib/teamboard";
 import { TeamBoardPanel } from "@/components/TeamBoardPanel";
+import { countdownTarget, editionPhase } from "@/lib/arena";
+import type { EditionPhase } from "@/lib/arena";
+import { ArenaCountdown } from "@/components/ArenaCountdown";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
   presencial: "presencial",
   hibrido: "híbrido",
+};
+
+// spec 016 — arena ao vivo: rótulo/estilo da fase (só open/closed-soon/live
+// renderizam faixa; ended/archived ficam no modo arquivo)
+const PHASE_LABEL: Record<EditionPhase, string> = {
+  open: "inscrições abertas",
+  "closed-soon": "inscrições encerradas",
+  live: "começando",
+  ended: "edição encerrada",
+  archived: "arquivada",
+};
+const PHASE_CLASS: Record<EditionPhase, string> = {
+  open: "text-muted",
+  "closed-soon": "text-lendario",
+  live: "text-accent animate-pulse",
+  ended: "text-muted",
+  archived: "text-muted",
 };
 
 export async function generateMetadata({
@@ -79,6 +99,8 @@ export default async function HackathonPage({
   const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
   const challenges = getChallenges(h.id);
   const boardEntries = listBoardEntries(h.id);
+  const phase = editionPhase(h, now);
+  const countdownTo = countdownTarget(h, now);
   const podium = archive.teams.filter((t) => t.placement >= 1 && t.placement <= 3);
   const field = archive.teams.filter((t) => t.placement === 0);
 
@@ -103,6 +125,42 @@ export default async function HackathonPage({
         </h1>
         <p className="font-mono text-sm text-muted">{h.organizer}</p>
       </div>
+
+      {!past && countdownTo && (
+        <div
+          data-testid="arena-strip"
+          className="flex flex-col gap-5 border border-line bg-surface p-6"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+            <p
+              data-testid="arena-phase"
+              className={`font-mono text-xs tracking-widest uppercase ${PHASE_CLASS[phase]}`}
+            >
+              {"// "}
+              {PHASE_LABEL[phase]}
+            </p>
+            <p
+              data-testid="arena-attendees"
+              className="font-mono text-xs text-muted"
+            >
+              {attendees.length}{" "}
+              {attendees.length === 1 ? "inscrito" : "inscritos"}
+              {boardEntries.length > 0 &&
+                ` · ${boardEntries.length} procurando time`}
+            </p>
+          </div>
+          <ArenaCountdown
+            targetIso={countdownTo.iso}
+            nowIso={now.toISOString()}
+            label={
+              countdownTo.kind === "deadline"
+                ? "inscrições fecham em"
+                : "começa em"
+            }
+            live={phase === "live"}
+          />
+        </div>
+      )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-4 border-y border-line py-6 font-mono text-sm sm:grid-cols-4">
         <div>
