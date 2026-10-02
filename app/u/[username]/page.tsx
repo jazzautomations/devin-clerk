@@ -6,12 +6,39 @@ import { absoluteUrl } from "@/lib/seo";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberBadges, getMemberCards } from "@/lib/xp";
-import { getMemberProjects } from "@/lib/archive";
+import { getMemberArc, getMemberProjects } from "@/lib/archive";
+import type { MemberArcEntry } from "@/lib/archive";
 import { levelFor } from "@/lib/game";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { Avatar } from "@/components/Avatar";
+
+// spec 029 — desfecho de cada edição do arco → chip da trajetória:
+// pódio nas cores de raridade, entrega em accent, presença em muted
+function arcOutcome(e: MemberArcEntry): { label: string; cls: string } {
+  if (e.placement === 1)
+    return {
+      label: "1º lugar",
+      cls: "border-lendario/50 bg-lendario/10 text-lendario",
+    };
+  if (e.placement === 2)
+    return {
+      label: "2º lugar",
+      cls: "border-epico/50 bg-epico/10 text-epico",
+    };
+  if (e.placement === 3)
+    return {
+      label: "3º lugar",
+      cls: "border-raro/50 bg-raro/10 text-raro",
+    };
+  if (e.hasProject)
+    return {
+      label: "entregou projeto",
+      cls: "border-accent/40 bg-accent/10 text-accent",
+    };
+  return { label: "participou", cls: "border-line text-muted" };
+}
 
 export async function generateMetadata({
   params,
@@ -55,6 +82,11 @@ export default async function PublicProfilePage({
   const badges = getMemberBadges(member.id);
   const cards = getMemberCards(member.id);
   const projects = getMemberProjects(member.username);
+  const arc = getMemberArc(member.username);
+  const podiums = arc.filter(
+    (e) => e.placement >= 1 && e.placement <= 3,
+  ).length;
+  const delivered = arc.filter((e) => e.hasProject).length;
   const { level } = levelFor(member.xp);
 
   return (
@@ -190,6 +222,59 @@ export default async function PublicProfilePage({
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {arc.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+            {"// trajetória"}
+          </h2>
+          <p className="font-mono text-xs text-muted">
+            {arc.length} {arc.length === 1 ? "edição" : "edições"} · {podiums}{" "}
+            {podiums === 1 ? "pódio" : "pódios"} · {delivered}{" "}
+            {delivered === 1 ? "projeto entregue" : "projetos entregues"}
+          </p>
+          <ol
+            aria-label="trajetória"
+            className="flex flex-wrap items-center gap-x-2 gap-y-2"
+          >
+            {arc.map((e, i) => {
+              const chip = arcOutcome(e);
+              return (
+                <li key={e.hackathonId} className="flex items-center gap-2">
+                  {i > 0 && (
+                    <span
+                      aria-hidden
+                      className="font-mono text-[10px] text-muted"
+                    >
+                      →
+                    </span>
+                  )}
+                  <Link
+                    href={`/h/${e.hackathonId}`}
+                    title={e.teamName ?? e.hackathonName}
+                    className="flex flex-wrap items-center gap-2 border border-line bg-surface px-2.5 py-1.5 transition hover:border-accent/50"
+                  >
+                    <span className="font-mono text-[10px] text-muted">
+                      {new Intl.DateTimeFormat("pt-BR", {
+                        month: "short",
+                        year: "2-digit",
+                      }).format(new Date(e.startsAt))}
+                    </span>
+                    <span className="font-display text-xs font-semibold">
+                      {e.hackathonName}
+                    </span>
+                    <span
+                      className={`border px-1.5 font-mono text-[10px] ${chip.cls}`}
+                    >
+                      {chip.label}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
         </div>
       )}
 

@@ -199,6 +199,75 @@ export function getMemberProjects(username: string): MemberProject[] {
     });
 }
 
+export type MemberArcEntry = {
+  hackathonId: string;
+  hackathonName: string;
+  startsAt: string;
+  teamId: number | null; // null quando participou sem time (só inscrição)
+  teamName: string | null;
+  placement: number; // 1/2/3 = pódio; 0 = sem pódio
+  hasProject: boolean; // o time entregou projeto
+};
+
+// spec 029 — trajetória do builder: união de inscrições (memberId) e vínculos
+// de time (username) por edição, cronológica antiga→nova. Vínculo sem inscrição
+// conta (admin arquiva quem competiu sem passar pelo register); inscrito+time
+// na mesma edição vira uma entrada só, com os dados do time. Membro em dois
+// times na edição (legado) pega o de melhor placement — determinístico.
+export function getMemberArc(username: string): MemberArcEntry[] {
+  const rows = db
+    .prepare(
+      `WITH editions AS (
+         SELECT r.hackathonId
+         FROM registrations r
+         JOIN members m ON m.id = r.memberId
+         WHERE m.username = @username
+         UNION
+         SELECT t.hackathonId
+         FROM team_members tm
+         JOIN teams t ON t.id = tm.teamId
+         WHERE tm.username = @username
+       )
+       SELECT h.id AS hackathonId, h.name AS hackathonName, h.startsAt,
+              t.id AS teamId, t.name AS teamName,
+              COALESCE(t.placement, 0) AS placement,
+              CASE WHEN tp.teamId IS NULL THEN 0 ELSE 1 END AS hasProject
+       FROM editions e
+       JOIN hackathons h ON h.id = e.hackathonId
+       LEFT JOIN teams t ON t.id = (
+         SELECT t2.id
+         FROM team_members tm2
+         JOIN teams t2 ON t2.id = tm2.teamId
+         WHERE tm2.username = @username AND t2.hackathonId = h.id
+         ORDER BY CASE WHEN t2.placement BETWEEN 1 AND 3
+                       THEN t2.placement ELSE 99 END,
+                  t2.id
+         LIMIT 1
+       )
+       LEFT JOIN team_projects tp ON tp.teamId = t.id
+       ORDER BY h.startsAt ASC, h.id ASC`,
+    )
+    .all({ username }) as {
+    hackathonId: string;
+    hackathonName: string;
+    startsAt: string;
+    teamId: number | null;
+    teamName: string | null;
+    placement: number;
+    hasProject: number;
+  }[];
+
+  return rows.map((r) => ({
+    hackathonId: r.hackathonId,
+    hackathonName: r.hackathonName,
+    startsAt: r.startsAt,
+    teamId: r.teamId,
+    teamName: r.teamName,
+    placement: r.placement,
+    hasProject: r.hasProject === 1,
+  }));
+}
+
 export type ProjectPage = {
   teamId: number;
   teamName: string;
