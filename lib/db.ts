@@ -1,0 +1,71 @@
+import Database from "better-sqlite3";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { hackathons as seed } from "@/data/hackathons";
+
+const dir = join(process.cwd(), "data");
+mkdirSync(dir, { recursive: true });
+
+const db = new Database(join(dir, "hackahub.db"));
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS hackathons (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  organizer TEXT NOT NULL,
+  startsAt TEXT NOT NULL,
+  endsAt TEXT,
+  format TEXT NOT NULL CHECK (format IN ('online','presencial','hibrido')),
+  location TEXT,
+  registrationUrl TEXT NOT NULL,
+  registrationDeadline TEXT,
+  tags TEXT NOT NULL DEFAULT '[]',
+  active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  clerkId TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  name TEXT,
+  email TEXT NOT NULL,
+  bio TEXT,
+  skills TEXT NOT NULL DEFAULT '[]',
+  github TEXT,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registrations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  memberId INTEGER NOT NULL REFERENCES members(id),
+  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
+  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (memberId, hackathonId)
+);
+`);
+
+const count = db
+  .prepare("SELECT COUNT(*) AS c FROM hackathons")
+  .get() as { c: number };
+if (count.c === 0) {
+  const insert = db.prepare(`
+    INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
+    VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active)
+  `);
+  const seedAll = db.transaction(() => {
+    for (const h of seed) {
+      insert.run({
+        ...h,
+        endsAt: h.endsAt ?? null,
+        location: h.location ?? null,
+        registrationDeadline: h.registrationDeadline ?? null,
+        tags: JSON.stringify(h.tags),
+        active: h.active ? 1 : 0,
+      });
+    }
+  });
+  seedAll();
+}
+
+export default db;

@@ -15,10 +15,12 @@ export function HackathonFeed({
   hackathons,
   tags,
   now,
+  registeredIds,
 }: {
   hackathons: Hackathon[];
   tags: string[];
   now: string;
+  registeredIds: string[];
 }) {
   const [format, setFormat] = useState<HackathonFormat | null>(null);
   const [tag, setTag] = useState<string | null>(null);
@@ -84,7 +86,12 @@ export function HackathonFeed({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((h) => (
-            <HackathonCard key={h.id} hackathon={h} now={nowDate} />
+            <HackathonCard
+              key={h.id}
+              hackathon={h}
+              now={nowDate}
+              registered={registeredIds.includes(h.id)}
+            />
           ))}
         </div>
       )}

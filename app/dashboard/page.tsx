@@ -1,8 +1,11 @@
+import Link from "next/link";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { appConfig } from "@/app.config";
 import { FeatureCard } from "@/components/FeatureCard";
 import { HackathonFeed } from "@/components/HackathonFeed";
 import { getTags, getUpcomingHackathons } from "@/lib/hackathons";
+import { getOrCreateMember } from "@/lib/members";
+import { getRegistrationIds } from "@/lib/registrations";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -10,11 +13,18 @@ export default async function DashboardPage() {
     return null;
   }
   const user = await currentUser();
-  const name =
-    user?.firstName ?? user?.primaryEmailAddress?.emailAddress.split("@")[0];
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
+  const member = getOrCreateMember({
+    id: userId,
+    firstName: user?.firstName ?? null,
+    lastName: user?.lastName ?? null,
+    email,
+  });
+  const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
   const hackathons = getUpcomingHackathons(now);
   const tags = getTags(hackathons);
+  const registeredIds = getRegistrationIds(member.id);
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
@@ -27,7 +37,11 @@ export default async function DashboardPage() {
           Salve{name ? `, ${name}` : ""}.
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Hackathons abertos agora — BR e mundo, curados pela comunidade.
+          Hackathons abertos — os da comunidade com inscrição em 1 clique, e o
+          resto do mundo curado embaixo.{" "}
+          <Link href={`/u/${member.username}`} className="text-accent hover:underline">
+            teu perfil público →
+          </Link>
         </p>
       </div>
 
@@ -35,6 +49,7 @@ export default async function DashboardPage() {
         hackathons={hackathons}
         tags={tags}
         now={now.toISOString()}
+        registeredIds={registeredIds}
       />
 
       <div className="flex flex-col gap-4">

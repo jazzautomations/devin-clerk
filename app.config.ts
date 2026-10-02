@@ -11,14 +11,9 @@ export const appConfig = {
   accent: "#a3e635",
   upcomingFeatures: [
     {
-      title: "Inscrição em 1 clique",
+      title: "Deploy em 1 comando",
       description:
-        "Use seu perfil pra se inscrever direto nos hackathons parceiros — sem preencher formulário novo toda vez.",
-    },
-    {
-      title: "Perfil público do hacker",
-      description:
-        "Seu histórico de hackathons, skills e projetos numa página pra compartilhar com a comunidade.",
+        "Suba o repo do teu time em container público direto da plataforma — sem mexer em nginx nem porta.",
     },
     {
       title: "Newsletter semanal",

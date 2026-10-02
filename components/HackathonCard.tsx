@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Hackathon } from "@/lib/hackathons";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
@@ -9,10 +12,14 @@ const FORMAT_LABEL: Record<Hackathon["format"], string> = {
 export function HackathonCard({
   hackathon,
   now,
+  registered,
 }: {
   hackathon: Hackathon;
   now: Date;
+  registered: boolean;
 }) {
+  const [isRegistered, setIsRegistered] = useState(registered);
+  const [loading, setLoading] = useState(false);
   const starts = new Date(hackathon.startsAt);
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -22,6 +29,21 @@ export function HackathonCard({
   const closed =
     hackathon.registrationDeadline !== null &&
     new Date(hackathon.registrationDeadline) < now;
+
+  async function toggleRegistration() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/hackathons/${hackathon.id}/register`, {
+        method: isRegistered ? "DELETE" : "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsRegistered(data.registered);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <article className="flex flex-col gap-4 border border-line bg-surface p-5 transition hover:border-accent/40">
@@ -34,9 +56,16 @@ export function HackathonCard({
             {hackathon.organizer}
           </p>
         </div>
-        <span className="shrink-0 border border-line px-2 py-1 font-mono text-[10px] tracking-widest text-muted uppercase">
-          {FORMAT_LABEL[hackathon.format]}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="border border-line px-2 py-1 font-mono text-[10px] tracking-widest text-muted uppercase">
+            {FORMAT_LABEL[hackathon.format]}
+          </span>
+          {hackathon.partner && (
+            <span className="border border-accent/40 bg-accent/10 px-2 py-1 font-mono text-[10px] tracking-widest text-accent uppercase">
+              parceiro
+            </span>
+          )}
+        </div>
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
@@ -71,18 +100,32 @@ export function HackathonCard({
         ))}
       </div>
 
-      <a
-        href={hackathon.registrationUrl}
-        target="_blank"
-        rel="noopener"
-        className={
-          closed
-            ? "mt-auto border border-line px-4 py-2 text-center font-mono text-xs text-muted"
-            : "mt-auto bg-accent px-4 py-2 text-center font-mono text-xs font-semibold text-black transition hover:brightness-110"
-        }
-      >
-        {closed ? "ver evento →" : "inscrever-se →"}
-      </a>
+      {hackathon.partner && !closed ? (
+        <button
+          onClick={toggleRegistration}
+          disabled={loading}
+          className={
+            isRegistered
+              ? "mt-auto border border-accent/50 bg-accent/10 px-4 py-2 font-mono text-xs font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-50"
+              : "mt-auto bg-accent px-4 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+          }
+        >
+          {loading ? "…" : isRegistered ? "✓ inscrito — cancelar" : "inscrever-se em 1 clique"}
+        </button>
+      ) : (
+        <a
+          href={hackathon.registrationUrl}
+          target="_blank"
+          rel="noopener"
+          className={
+            closed
+              ? "mt-auto border border-line px-4 py-2 text-center font-mono text-xs text-muted"
+              : "mt-auto border border-line px-4 py-2 text-center font-mono text-xs text-foreground transition hover:border-accent/50 hover:text-accent"
+          }
+        >
+          {closed ? "ver evento →" : "inscrever no site oficial →"}
+        </a>
+      )}
     </article>
   );
 }

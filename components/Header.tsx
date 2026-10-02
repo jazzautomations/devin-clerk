@@ -21,6 +21,14 @@ export function Header() {
           >
             dashboard
           </Link>
+          <Show when="signed-in">
+            <Link
+              href="/perfil"
+              className="text-muted transition hover:text-accent"
+            >
+              perfil
+            </Link>
+          </Show>
           <Show when="signed-out">
             <SignInButton mode="modal">
               <button className="text-muted transition hover:text-accent">

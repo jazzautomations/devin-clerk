@@ -1,6 +1,6 @@
 import type { Hackathon } from "@/lib/hackathons";
 
-export const hackathons: Hackathon[] = [
+export const hackathons: Omit<Hackathon, "partner">[] = [
   {
     id: "hack-inova-saude-2026",
     name: "Hack Inova — Saúde com IA",
