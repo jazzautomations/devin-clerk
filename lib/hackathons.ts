@@ -18,11 +18,15 @@ export type Hackathon = {
   tags: string[];
   active: boolean;
   partner: boolean;
+  // spec 032 — edição curada: register entra como 'pending' e a recompensa
+  // só cai na aprovação do admin (a coluna nasce do ALTER de registrations)
+  requiresApproval: boolean;
 };
 
-type Row = Omit<Hackathon, "tags" | "active" | "partner"> & {
+type Row = Omit<Hackathon, "tags" | "active" | "partner" | "requiresApproval"> & {
   tags: string;
   active: number;
+  requiresApproval?: number;
 };
 
 function toHackathon(row: Row): Hackathon {
@@ -31,6 +35,7 @@ function toHackathon(row: Row): Hackathon {
     tags: JSON.parse(row.tags),
     active: row.active === 1,
     partner: row.organizer.toLowerCase().includes("hack inova"),
+    requiresApproval: row.requiresApproval === 1,
   };
 }
 

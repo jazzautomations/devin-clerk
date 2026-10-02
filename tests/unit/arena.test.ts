@@ -30,6 +30,7 @@ function makeH(overrides: Partial<Hackathon> = {}): Hackathon {
     tags: [],
     active: true,
     partner: true,
+    requiresApproval: false,
     ...overrides,
   };
 }
@@ -44,17 +45,30 @@ describe("editionPhase — matriz de fases", () => {
     expect(editionPhase(h, T0)).toBe("open");
   });
 
-  it("closed-soon: deadline passado, evento ainda >48h", () => {
-    const h = makeH({ registrationDeadline: iso(-1 * H) });
+  it("closed-soon: deadline passado, evento ainda >48h (endsAt segura)", () => {
+    // spec 030 — closed-soon só existe com fim efetivo futuro: sem endsAt,
+    // deadline passado já é "encerrado" pela COALESCE de isOver (spec 027)
+    const h = makeH({
+      registrationDeadline: iso(-1 * H),
+      endsAt: iso(11 * D),
+    });
     expect(editionPhase(h, T0)).toBe("closed-soon");
   });
 
   it("closed-soon: deadline passado E evento ≤48h (fechado ganha do hype)", () => {
     const h = makeH({
       startsAt: iso(24 * H),
+      endsAt: iso(30 * H),
       registrationDeadline: iso(-1 * H),
     });
     expect(editionPhase(h, T0)).toBe("closed-soon");
+  });
+
+  it("sem endsAt, deadline passado já encerra — vira ended, não closed-soon", () => {
+    // registrationDeadline é proxy de fim quando endsAt falta (spec 027):
+    // evento futuro com inscrição fechada tá fora do radar e fora da arena
+    const h = makeH({ registrationDeadline: iso(-1 * H) });
+    expect(editionPhase(h, T0)).toBe("ended");
   });
 
   it("live: startsAt - now < 48h com inscrição aberta (deadline null)", () => {
@@ -69,9 +83,19 @@ describe("editionPhase — matriz de fases", () => {
     expect(editionPhase(h, T0)).toBe("live");
   });
 
-  it("ended: startsAt já passou (evento rolando conta como arquivo)", () => {
+  it("ongoing: startsAt passado + endsAt futuro — rolando, não arquivo", () => {
+    // spec 030 — a janela Devpost já abriu mas o evento não acabou:
+    // era "ended" no modelo de startsAt; agora é fase própria
     const h = makeH({ startsAt: iso(-1 * H), endsAt: iso(24 * H) });
-    expect(editionPhase(h, T0)).toBe("ended");
+    expect(editionPhase(h, T0)).toBe("ongoing");
+  });
+
+  it("ongoing: sem endsAt, registrationDeadline futuro segura a edição", () => {
+    const h = makeH({
+      startsAt: iso(-3 * D),
+      registrationDeadline: iso(5 * D),
+    });
+    expect(editionPhase(h, T0)).toBe("ongoing");
   });
 
   it("ended: recém-terminado, dentro da grace de 7d", () => {
@@ -101,17 +125,28 @@ describe("editionPhase — boundaries", () => {
     ).toBe("open");
   });
 
-  it("now === startsAt → ended (passou, não é mais live)", () => {
+  it("now === startsAt → ongoing (fronteira < estrita, igual isOver)", () => {
     const h = makeH({ startsAt: iso(0) });
-    expect(editionPhase(h, T0)).toBe("ended");
+    expect(editionPhase(h, T0)).toBe("ongoing");
     expect(editionPhase(h, new Date(T0.getTime() - 1))).toBe("live");
   });
 
+  it("endsAt === now → ainda ongoing; -1ms → ended", () => {
+    const h = makeH({ startsAt: iso(-1 * D), endsAt: iso(0) });
+    expect(editionPhase(h, T0)).toBe("ongoing");
+    expect(
+      editionPhase(makeH({ startsAt: iso(-1 * D), endsAt: iso(-1) }), T0),
+    ).toBe("ended");
+  });
+
   it("deadline === now → ainda aberto (fecha só com deadline < now)", () => {
-    const h = makeH({ registrationDeadline: iso(0) });
+    const h = makeH({ registrationDeadline: iso(0), endsAt: iso(11 * D) });
     expect(editionPhase(h, T0)).toBe("open");
     expect(
-      editionPhase(makeH({ registrationDeadline: iso(-1) }), T0),
+      editionPhase(
+        makeH({ registrationDeadline: iso(-1), endsAt: iso(11 * D) }),
+        T0,
+      ),
     ).toBe("closed-soon");
   });
 
@@ -147,7 +182,10 @@ describe("countdownTarget — o alvo certo do relógio", () => {
   });
 
   it("deadline passado → volta pro startsAt", () => {
-    const h = makeH({ registrationDeadline: iso(-1 * H) });
+    const h = makeH({
+      registrationDeadline: iso(-1 * H),
+      endsAt: iso(11 * D),
+    });
     expect(countdownTarget(h, T0)?.kind).toBe("start");
   });
 
@@ -162,6 +200,28 @@ describe("countdownTarget — o alvo certo do relógio", () => {
   it("edição ended/archived → null (sem relógio no arquivo)", () => {
     expect(countdownTarget(makeH({ startsAt: iso(-1 * H) }), T0)).toBeNull();
     expect(countdownTarget(makeH({ startsAt: iso(-9 * D) }), T0)).toBeNull();
+  });
+
+  it("ongoing com endsAt futuro → conta pro fim (kind 'end')", () => {
+    const h = makeH({ startsAt: iso(-1 * D), endsAt: iso(2 * D) });
+    expect(countdownTarget(h, T0)).toEqual({ iso: h.endsAt, kind: "end" });
+  });
+
+  it("ongoing sem endsAt mas com deadline futuro → 'deadline'", () => {
+    const h = makeH({
+      startsAt: iso(-1 * D),
+      registrationDeadline: iso(2 * D),
+    });
+    expect(countdownTarget(h, T0)).toEqual({
+      iso: h.registrationDeadline,
+      kind: "deadline",
+    });
+  });
+
+  it("ongoing com endsAt inválido e sem deadline → null (não inventa relógio)", () => {
+    const h = makeH({ startsAt: iso(-1 * D), endsAt: "não-é-data" });
+    expect(editionPhase(h, T0)).toBe("ongoing"); // NaN nunca encerra
+    expect(countdownTarget(h, T0)).toBeNull();
   });
 });
 

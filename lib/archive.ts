@@ -1,10 +1,37 @@
 import db from "@/lib/db";
 
+// spec 032 — o arco do builder conta só inscrições aprovadas (pendente é
+// candidato, não participação); guarda da coluna status — dona do schema é
+// lib/registrations, aqui garante pra quem importa archive.ts direto
+if (
+  !(db.prepare("PRAGMA table_info(registrations)").all() as {
+    name: string;
+  }[]).some((c) => c.name === "status")
+) {
+  db.exec(
+    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
+  );
+}
+
+// spec 030 — submissão rica (portal Colosseum): pitch em vídeo + logo do
+// projeto. Colunas chegam por ALTER guardado aqui mesmo — lib/db.ts fica
+// intocado; pattern idempotente PRAGMA + ADD COLUMN (igual posts/members)
+const teamProjectCols = (
+  db.prepare("PRAGMA table_info(team_projects)").all() as { name: string }[]
+).map((c) => c.name);
+for (const col of ["videoUrl", "logoUrl"]) {
+  if (!teamProjectCols.includes(col)) {
+    db.exec(`ALTER TABLE team_projects ADD COLUMN ${col} TEXT`);
+  }
+}
+
 export type TeamProject = {
   title: string;
   description: string | null;
   repoUrl: string | null;
   demoUrl: string | null;
+  videoUrl: string | null;
+  logoUrl: string | null;
 };
 
 export type ArchiveTeam = {
@@ -42,7 +69,7 @@ export function getArchive(hackathonId: string): EditionArchive {
     "SELECT username FROM team_members WHERE teamId = ? ORDER BY username",
   );
   const projectStmt = db.prepare(
-    "SELECT title, description, repoUrl, demoUrl FROM team_projects WHERE teamId = ?",
+    "SELECT title, description, repoUrl, demoUrl, videoUrl, logoUrl FROM team_projects WHERE teamId = ?",
   );
 
   const assets = db
@@ -160,7 +187,8 @@ export function getMemberProjects(username: string): MemberProject[] {
   return db
     .prepare(
       `SELECT t.hackathonId, h.name AS hackathonName, t.id AS teamId, t.name AS teamName,
-              t.placement, tp.title, tp.description, tp.repoUrl, tp.demoUrl
+              t.placement, tp.title, tp.description, tp.repoUrl, tp.demoUrl,
+              tp.videoUrl, tp.logoUrl
        FROM team_members tm
        JOIN teams t ON t.id = tm.teamId
        JOIN hackathons h ON h.id = t.hackathonId
@@ -180,6 +208,8 @@ export function getMemberProjects(username: string): MemberProject[] {
         description: string | null;
         repoUrl: string | null;
         demoUrl: string | null;
+        videoUrl: string | null;
+        logoUrl: string | null;
       };
       return {
         hackathonId: row.hackathonId,
@@ -193,6 +223,8 @@ export function getMemberProjects(username: string): MemberProject[] {
               description: row.description,
               repoUrl: row.repoUrl,
               demoUrl: row.demoUrl,
+              videoUrl: row.videoUrl,
+              logoUrl: row.logoUrl,
             }
           : null,
       };
@@ -221,7 +253,7 @@ export function getMemberArc(username: string): MemberArcEntry[] {
          SELECT r.hackathonId
          FROM registrations r
          JOIN members m ON m.id = r.memberId
-         WHERE m.username = @username
+         WHERE m.username = @username AND r.status = 'approved'
          UNION
          SELECT t.hackathonId
          FROM team_members tm
@@ -284,7 +316,8 @@ export function getProjectByTeamId(teamId: number): ProjectPage | null {
     .prepare(
       `SELECT t.id AS teamId, t.name AS teamName, t.placement,
               t.hackathonId, h.name AS hackathonName,
-              tp.title, tp.description, tp.repoUrl, tp.demoUrl
+              tp.title, tp.description, tp.repoUrl, tp.demoUrl,
+              tp.videoUrl, tp.logoUrl
        FROM teams t
        JOIN hackathons h ON h.id = t.hackathonId
        JOIN team_projects tp ON tp.teamId = t.id
@@ -301,6 +334,8 @@ export function getProjectByTeamId(teamId: number): ProjectPage | null {
         description: string | null;
         repoUrl: string | null;
         demoUrl: string | null;
+        videoUrl: string | null;
+        logoUrl: string | null;
       }
     | undefined;
   if (!row) return null;
@@ -325,6 +360,8 @@ export function getProjectByTeamId(teamId: number): ProjectPage | null {
       description: row.description,
       repoUrl: row.repoUrl,
       demoUrl: row.demoUrl,
+      videoUrl: row.videoUrl,
+      logoUrl: row.logoUrl,
     },
   };
 }

@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Hackathon } from "@/lib/hackathons";
+import type { RegistrationStatus } from "@/lib/registrations";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
   online: "online",
   presencial: "presencial",
   hibrido: "híbrido",
 };
+
+type Status = RegistrationStatus | null;
 
 export function HackathonCard({
   hackathon,
@@ -21,9 +24,28 @@ export function HackathonCard({
   registered: boolean;
 }) {
   const router = useRouter();
-  const [isRegistered, setIsRegistered] = useState(registered);
+  // spec 032 — registered (approved-only) vira status; edição curada
+  // resolve pendente/rejeitado via GET register (a página radar não passa
+  // o mapa de status — o card busca o próprio)
+  const [status, setStatus] = useState<Status>(
+    registered ? "approved" : null,
+  );
   const [loading, setLoading] = useState(false);
   const [reward, setReward] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hackathon.requiresApproval || status !== null) return;
+    let alive = true;
+    fetch(`/api/hackathons/${hackathon.id}/register`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d && typeof d.status === "string") setStatus(d.status);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [hackathon.id, hackathon.requiresApproval, status]);
   const starts = new Date(hackathon.startsAt);
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -45,7 +67,8 @@ export function HackathonCard({
     setLoading(true);
     try {
       const res = await fetch(`/api/hackathons/${hackathon.id}/register`, {
-        method: isRegistered ? "DELETE" : "POST",
+        method:
+          status === "approved" || status === "pending" ? "DELETE" : "POST",
       });
       if (res.status === 401) {
         router.push("/sign-in");
@@ -53,13 +76,16 @@ export function HackathonCard({
       }
       if (res.ok) {
         const data = await res.json();
-        setIsRegistered(data.registered);
-        if (data.registered) {
+        const next: Status = data.status ?? null;
+        setStatus(next);
+        if (next === "approved") {
           const parts = [data.xp ? `${data.xp} xp` : null]
             .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
             .concat(data.newBadges?.length ? [`badge nova: ${data.newBadges.join(", ")}`] : [])
             .filter(Boolean);
           setReward(parts.length ? parts.join(" · ") : null);
+        } else if (next === "pending") {
+          setReward("pedido enviado — a curadoria revisa tua presença");
         } else {
           setReward(null);
         }
@@ -143,14 +169,28 @@ export function HackathonCard({
       {hackathon.partner && !closed ? (
         <button
           onClick={toggleRegistration}
-          disabled={loading}
+          disabled={loading || status === "rejected"}
           className={
-            isRegistered
+            status === "approved"
               ? "mt-auto border border-accent/50 bg-accent/10 px-4 py-2 font-mono text-xs font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-50"
-              : "mt-auto bg-accent px-4 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              : status === "pending"
+                ? "mt-auto border border-accent/40 bg-surface px-4 py-2 font-mono text-xs font-semibold text-muted transition hover:text-accent disabled:opacity-50"
+                : status === "rejected"
+                  ? "mt-auto border border-line px-4 py-2 font-mono text-xs text-muted opacity-60"
+                  : "mt-auto bg-accent px-4 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
           }
         >
-          {loading ? "…" : isRegistered ? "✓ inscrito — cancelar" : "inscrever-se em 1 clique"}
+          {loading
+            ? "…"
+            : status === "approved"
+              ? "✓ inscrito — cancelar"
+              : status === "pending"
+                ? "aguardando aprovação — desistir"
+                : status === "rejected"
+                  ? "não rolou dessa vez"
+                  : hackathon.requiresApproval
+                    ? "pedir lugar"
+                    : "inscrever-se em 1 clique"}
         </button>
       ) : (
         <a

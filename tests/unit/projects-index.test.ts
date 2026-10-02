@@ -77,6 +77,8 @@ describe("listProjects — índice público de projetos", () => {
       description: "triage por IA",
       repoUrl: "https://github.com/x/odh",
       demoUrl: "https://odh.example.com",
+      videoUrl: null, // spec 030 — colunas novas voltam null no legado
+      logoUrl: null,
     });
   });
 

@@ -1,5 +1,8 @@
 import db from "@/lib/db";
 import { getHackathon, type Hackathon } from "@/lib/hackathons";
+// garante o ALTER de requiresApproval (dona: lib/registrations) antes do
+// UPDATE — spec 032
+import "@/lib/registrations";
 
 export type HackathonPatch = {
   name?: string;
@@ -12,6 +15,7 @@ export type HackathonPatch = {
   prize?: string | null;
   tags?: string[];
   active?: boolean;
+  requiresApproval?: boolean;
 };
 
 // update parcial: só os campos presentes no patch são tocados;
@@ -64,6 +68,10 @@ export function updateHackathon(
   if (patch.active !== undefined) {
     sets.push("active = @active");
     values.active = patch.active ? 1 : 0;
+  }
+  if (patch.requiresApproval !== undefined) {
+    sets.push("requiresApproval = @requiresApproval");
+    values.requiresApproval = patch.requiresApproval ? 1 : 0;
   }
 
   if (sets.length > 0) {

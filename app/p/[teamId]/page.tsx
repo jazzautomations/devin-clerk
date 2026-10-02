@@ -103,7 +103,9 @@ export default async function ProjectPage({ params }: Props) {
         </p>
       )}
 
-      {data.project.repoUrl || data.project.demoUrl ? (
+      {data.project.repoUrl ||
+      data.project.demoUrl ||
+      data.project.videoUrl ? (
         <div className="flex flex-wrap gap-3">
           {data.project.repoUrl && (
             <a
@@ -123,6 +125,17 @@ export default async function ProjectPage({ params }: Props) {
               className="border border-line px-6 py-3 font-mono text-sm transition hover:border-accent/50 hover:text-accent"
             >
               demo →
+            </a>
+          )}
+          {/* spec 030 — pitch em vídeo é link externo, sem embed */}
+          {data.project.videoUrl && (
+            <a
+              href={data.project.videoUrl}
+              target="_blank"
+              rel="noopener"
+              className="border border-line px-6 py-3 font-mono text-sm transition hover:border-accent/50 hover:text-accent"
+            >
+              ▶ vídeo →
             </a>
           )}
         </div>

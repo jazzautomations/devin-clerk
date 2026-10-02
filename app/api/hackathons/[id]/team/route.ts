@@ -11,6 +11,7 @@ import {
 } from "@/lib/teams";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
+import { limitOrNull } from "@/lib/ratelimit";
 
 // spec 021 — submissão self-service: o inscrito cria/edita o próprio
 // time+projeto; o arquivo deixa de depender do admin pra se preencher.
@@ -66,6 +67,11 @@ export async function POST(
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // spec 031 — flood de submissão de time é freado por membro (10/h)
+  const limited = limitOrNull(req, "team", member.id);
+  if (limited) {
+    return limited;
+  }
   // time é coisa de quem vai ao evento — mesmo gate do board (012)
   if (!getRegistrationIds(member.id).includes(h.id)) {
     return Response.json({ error: "inscreve-te primeiro" }, { status: 403 });
@@ -102,7 +108,8 @@ export async function POST(
 }
 
 // integrante edita o projeto do próprio time — {teamId, title?,
-// description?, repoUrl?, demoUrl?}; o time precisa ser desta edição
+// description?, repoUrl?, demoUrl?, videoUrl?, logoUrl?} (030);
+// o time precisa ser desta edição
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -138,6 +145,8 @@ export async function PATCH(
       description: b.description,
       repoUrl: b.repoUrl,
       demoUrl: b.demoUrl,
+      videoUrl: b.videoUrl,
+      logoUrl: b.logoUrl,
     });
     return Response.json({ team });
   } catch (e) {

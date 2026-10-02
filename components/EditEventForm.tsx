@@ -13,6 +13,7 @@ export type EditableEvent = {
   registrationDeadline: string | null;
   tags: string[];
   active: boolean;
+  requiresApproval: boolean;
 };
 
 // "2026-12-01T09:00:00-03:00" → "2026-12-01T09:00" (datetime-local)
@@ -50,6 +51,7 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
           .map((t) => t.trim())
           .filter(Boolean),
         active: f.get("active") === "on",
+        requiresApproval: f.get("requiresApproval") === "on",
       }),
     });
     if (res.ok) {
@@ -141,15 +143,26 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
         />
       </label>
       <div className="flex items-end justify-between gap-4 sm:col-span-2">
-        <label className="flex items-center gap-2 font-mono text-xs text-muted">
-          <input
-            type="checkbox"
-            name="active"
-            defaultChecked={event.active}
-            className="accent-(--color-accent)"
-          />
-          ativa no radar (desmarcar arquiva)
-        </label>
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 font-mono text-xs text-muted">
+            <input
+              type="checkbox"
+              name="active"
+              defaultChecked={event.active}
+              className="accent-(--color-accent)"
+            />
+            ativa no radar (desmarcar arquiva)
+          </label>
+          <label className="flex items-center gap-2 font-mono text-xs text-muted">
+            <input
+              type="checkbox"
+              name="requiresApproval"
+              defaultChecked={event.requiresApproval}
+              className="accent-(--color-accent)"
+            />
+            curadoria — vaga só com aprovação (&quot;pedir lugar&quot;)
+          </label>
+        </div>
         <div className="flex items-center gap-4">
           {status === "error" && (
             <span className="font-mono text-xs text-red-400">

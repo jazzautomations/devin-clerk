@@ -2,6 +2,10 @@ import db from "@/lib/db";
 import { getLatestDeployForTeam } from "@/lib/deploys";
 import { toLikePattern } from "@/lib/search";
 import type { TeamProject } from "@/lib/archive";
+// garante o ALTER de videoUrl/logoUrl em team_projects (spec 030) — o
+// import acima é type-only, não roda o módulo; mesmo espírito do import
+// de efeito abaixo pra votes
+import "@/lib/archive";
 import "@/lib/votes"; // garante a tabela votes (schema próprio — spec 025)
 
 // Índice público de projetos (spec 017) — o "/companies" do Colosseum:
@@ -48,6 +52,8 @@ type Row = {
   description: string | null;
   repoUrl: string | null;
   demoUrl: string | null;
+  videoUrl: string | null;
+  logoUrl: string | null;
 };
 
 export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
@@ -67,6 +73,7 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
       `SELECT t.id AS teamId, t.name AS teamName, t.placement,
               t.hackathonId, h.name AS hackathonName,
               tp.title, tp.description, tp.repoUrl, tp.demoUrl,
+              tp.videoUrl, tp.logoUrl,
               (SELECT COUNT(*) FROM team_members tm WHERE tm.teamId = t.id)
                 AS memberCount,
               (SELECT COUNT(*) FROM votes v WHERE v.teamId = t.id)
@@ -106,6 +113,8 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
         description: r.description,
         repoUrl: r.repoUrl,
         demoUrl: r.demoUrl,
+        videoUrl: r.videoUrl,
+        logoUrl: r.logoUrl,
       },
     };
   });

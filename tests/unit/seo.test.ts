@@ -71,6 +71,7 @@ describe("eventJsonLd — schema Event", () => {
       tags: ["ia"],
       active: true,
       partner: true,
+      requiresApproval: false,
     });
     expect(ld["@type"]).toBe("Event");
     expect(ld.name).toBe("Hackathon Inova AI × Payment Shift");
@@ -99,6 +100,7 @@ describe("eventJsonLd — schema Event", () => {
       tags: [],
       active: true,
       partner: false,
+      requiresApproval: false,
     });
     expect(ld.location).toMatchObject({ "@type": "VirtualLocation" });
   });

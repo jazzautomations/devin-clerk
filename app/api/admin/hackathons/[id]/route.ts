@@ -83,6 +83,13 @@ export async function PATCH(
     }
     patch.active = b.active;
   }
+  // spec 032 — edição curada: inscrição vira pedido pendente
+  if ("requiresApproval" in b) {
+    if (typeof b.requiresApproval !== "boolean") {
+      return bad("requiresApproval deve ser booleano");
+    }
+    patch.requiresApproval = b.requiresApproval;
+  }
 
   if (Object.keys(patch).length === 0) {
     return bad("Nenhum campo editável enviado");

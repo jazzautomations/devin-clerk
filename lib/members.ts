@@ -10,6 +10,18 @@ const memberCols = (
 if (!memberCols.includes("avatarUrl")) {
   db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
 }
+// spec 032 — "campanhas" públicas contam só inscrições aprovadas (pedido
+// pendente não é campanha); guarda da coluna status — dona do schema é
+// lib/registrations, aqui garante pra quem importa members.ts direto
+if (
+  !(db.prepare("PRAGMA table_info(registrations)").all() as {
+    name: string;
+  }[]).some((c) => c.name === "status")
+) {
+  db.exec(
+    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
+  );
+}
 
 export type Member = {
   id: number;
@@ -101,7 +113,7 @@ export function listMembers(limit = 60): Member[] {
   const rows = db
     .prepare(
       `SELECT m.*,
-              (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id) AS campaigns,
+              (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id AND r.status = 'approved') AS campaigns,
               (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
        FROM members m ORDER BY m.id DESC LIMIT ?`,
     )
@@ -128,7 +140,7 @@ export function listLeaderboard(
     .prepare(
       `SELECT m.*,
               (SELECT COUNT(*) FROM member_badges mb WHERE mb.memberId = m.id) AS badges,
-              (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id) AS campaigns,
+              (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id AND r.status = 'approved') AS campaigns,
               (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
        FROM members m
        WHERE (@q IS NULL

@@ -6,6 +6,7 @@ import {
   getArchive,
   getMemberArc,
   getMemberProjects,
+  getProjectByTeamId,
 } from "@/lib/archive";
 import { register } from "@/lib/registrations";
 
@@ -106,6 +107,49 @@ describe("getMemberProjects — crédito no perfil", () => {
     expect(projects[0].project?.title).toBe("One Day Hospital");
     expect(projects[0].placement).toBe(1);
     expect(projects[0].hackathonName).toContain("Payment Shift");
+  });
+});
+
+// spec 030 — submissão rica: team_projects.videoUrl/logoUrl chegam por
+// ALTER guardado no topo do próprio lib/archive.ts (lib/db.ts intocado)
+describe("team_projects videoUrl/logoUrl — colunas guardadas", () => {
+  it("colunas existem e voltam em getArchive/getProjectByTeamId/getMemberProjects", () => {
+    makeMember("rica");
+    createTeam(HACK, {
+      name: "Rica",
+      placement: 0,
+      memberUsernames: ["rica"],
+    });
+    const team = getArchive(HACK).teams[0];
+    // createTeam (admin) não conhece os campos — grava direto pra isolar a leitura
+    db.prepare(
+      `INSERT INTO team_projects (teamId, title, videoUrl, logoUrl)
+       VALUES (?, 'Pitch Rico', 'https://youtu.be/x', 'https://img.t.dev/l.png')`,
+    ).run(team.id);
+
+    const viaArchive = getArchive(HACK).teams[0];
+    expect(viaArchive.project?.videoUrl).toBe("https://youtu.be/x");
+    expect(viaArchive.project?.logoUrl).toBe("https://img.t.dev/l.png");
+
+    const page = getProjectByTeamId(team.id);
+    expect(page?.project.videoUrl).toBe("https://youtu.be/x");
+    expect(page?.project.logoUrl).toBe("https://img.t.dev/l.png");
+
+    const mine = getMemberProjects("rica");
+    expect(mine[0].project?.videoUrl).toBe("https://youtu.be/x");
+    expect(mine[0].project?.logoUrl).toBe("https://img.t.dev/l.png");
+  });
+
+  it("projeto criado sem os campos (legado/admin) volta com nulls", () => {
+    createTeam(HACK, {
+      name: "Legado",
+      placement: 0,
+      project: { title: "Antigo", repoUrl: "https://github.com/x/a" },
+    });
+    const t = getArchive(HACK).teams[0];
+    expect(t.project?.videoUrl).toBeNull();
+    expect(t.project?.logoUrl).toBeNull();
+    expect(getProjectByTeamId(t.id)?.project.videoUrl).toBeNull();
   });
 });
 

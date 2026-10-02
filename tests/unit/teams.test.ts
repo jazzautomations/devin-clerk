@@ -140,6 +140,46 @@ describe("submitTeam", () => {
     }
   });
 
+  it("persiste videoUrl/logoUrl do projeto — submissão rica (spec 030)", () => {
+    const m = makeMember("midia_rica");
+    register(m.id);
+    const { team } = submitTeam(HID, m, {
+      name: "Time Pitch",
+      project: {
+        title: "Pitch Deck Vivo",
+        videoUrl: "https://youtube.com/watch?v=abc",
+        logoUrl: "https://img.t.dev/logo.png",
+      },
+    });
+    expect(team.project?.videoUrl).toBe("https://youtube.com/watch?v=abc");
+    expect(team.project?.logoUrl).toBe("https://img.t.dev/logo.png");
+    // e volta do arquivo (getArchive via memberTeamFor)
+    const again = memberTeamFor(HID, "midia_rica");
+    expect(again?.project?.videoUrl).toBe("https://youtube.com/watch?v=abc");
+    expect(again?.project?.logoUrl).toBe("https://img.t.dev/logo.png");
+  });
+
+  it("400 — videoUrl/logoUrl não-http(s), mesma regra do repoUrl", () => {
+    const m = makeMember("urlruim");
+    register(m.id);
+    const bad = [
+      { title: "P", videoUrl: "javascript:alert(1)" },
+      { title: "P", logoUrl: "ftp://nao" },
+      { title: "P", videoUrl: "  https://ok.dev  " }, // trim aceita — separado abaixo
+    ];
+    for (const [i, project] of bad.slice(0, 2).entries()) {
+      try {
+        submitTeam(HID, m, { name: `Ruim ${i}`, project });
+        expect.unreachable();
+      } catch (e) {
+        expect(status(e)).toBe(400);
+      }
+    }
+    // url com espaço em volta passa pelo trim
+    const { team } = submitTeam(HID, m, { name: "Trim OK", project: bad[2] });
+    expect(team.project?.videoUrl).toBe("https://ok.dev");
+  });
+
   it("400 — nome vazio; projeto sem título; URL não-http", () => {
     const m = makeMember("valida");
     register(m.id);
@@ -267,5 +307,49 @@ describe("updateTeamProject", () => {
     } catch (e) {
       expect(status(e)).toBe(400);
     }
+  });
+
+  it("edita videoUrl/logoUrl; string vazia limpa; upsert cobre as colunas", () => {
+    const m = makeMember("editor_midia");
+    register(m.id);
+    const { team } = submitTeam(HID, m, {
+      name: "Com Mídia",
+      project: {
+        title: "M",
+        videoUrl: "https://youtu.be/x",
+        logoUrl: "https://img.t.dev/l.png",
+      },
+    });
+    const updated = updateTeamProject(team.id, m, {
+      videoUrl: "https://vimeo.com/1",
+      logoUrl: "",
+    });
+    expect(updated.project?.videoUrl).toBe("https://vimeo.com/1");
+    expect(updated.project?.logoUrl).toBeNull();
+    // repo/demo intactos — patch parcial não toca o que não veio
+    for (const patch of [
+      { videoUrl: "javascript:x" },
+      { logoUrl: "data:image/png;base64,xx" },
+    ]) {
+      try {
+        updateTeamProject(team.id, m, patch);
+        expect.unreachable();
+      } catch (e) {
+        expect(status(e)).toBe(400);
+      }
+    }
+  });
+
+  it("upsert: time sem projeto recebe videoUrl/logoUrl na criação via patch", () => {
+    const m = makeMember("upsert_midia");
+    register(m.id);
+    const { team } = submitTeam(HID, m, { name: "Nasce Rico" });
+    const updated = updateTeamProject(team.id, m, {
+      title: "Nasceu",
+      videoUrl: "https://youtu.be/nasceu",
+      logoUrl: "https://img.t.dev/n.png",
+    });
+    expect(updated.project?.videoUrl).toBe("https://youtu.be/nasceu");
+    expect(updated.project?.logoUrl).toBe("https://img.t.dev/n.png");
   });
 });

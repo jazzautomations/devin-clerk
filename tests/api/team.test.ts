@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
+import { resetRateLimits } from "@/lib/ratelimit"; // spec 031
 
 const clerk = vi.hoisted(() => ({ uid: "clerk_capitao" as string | null }));
 
@@ -38,6 +39,7 @@ const ctx = (id = HID) => ({ params: Promise.resolve({ id }) });
 
 beforeEach(() => {
   clerk.uid = "clerk_capitao";
+  resetRateLimits(); // capitao soma >10 POSTs no arquivo; quota zera entre casos
   db.prepare("DELETE FROM team_members").run();
   db.prepare("DELETE FROM team_projects").run();
   db.prepare("DELETE FROM teams").run();
@@ -131,6 +133,39 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
       }
     ).xp;
     expect(after - before).toBe(15);
+  });
+
+  it("201 — aceita videoUrl/logoUrl; 400 quando não-http(s) (spec 030)", async () => {
+    const { POST } = await import("@/app/api/hackathons/[id]/team/route");
+    const mid = memberId("clerk_capitao", "capitao");
+    registerMember(mid);
+    const res = await POST(
+      req("POST", {
+        name: "Time Mídia",
+        project: {
+          title: "Pitch",
+          videoUrl: "https://youtu.be/x",
+          logoUrl: "https://img.t.dev/l.png",
+        },
+      }),
+      ctx(),
+    );
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.team.project.videoUrl).toBe("https://youtu.be/x");
+    expect(data.team.project.logoUrl).toBe("https://img.t.dev/l.png");
+
+    for (const [i, project] of [
+      { title: "P", videoUrl: "javascript:x" },
+      { title: "P", logoUrl: "ftp://img" },
+    ].entries()) {
+      clerk.uid = `clerk_bad_${i}`;
+      const badMid = memberId(`clerk_bad_${i}`, `bad_${i}`);
+      registerMember(badMid);
+      const bad = await POST(req("POST", { name: `Bad ${i}`, project }), ctx());
+      expect(bad.status).toBe(400);
+    }
+    clerk.uid = "clerk_capitao";
   });
 
   it("401 — deslogado; clerkId sem member também 401", async () => {
@@ -296,9 +331,36 @@ describe("PATCH /api/hackathons/[id]/team — editar projeto do próprio time", 
       { teamId: team.id },
       { teamId: team.id, title: "  " },
       { teamId: team.id, repoUrl: "javascript:x" },
+      { teamId: team.id, videoUrl: "javascript:x" },
+      { teamId: team.id, logoUrl: "ftp://img" },
     ]) {
       const res = await PATCH(req("PATCH", body), ctx());
       expect(res.status).toBe(400);
     }
+  });
+
+  it("200 — PATCH aceita videoUrl/logoUrl e limpa com string vazia (spec 030)", async () => {
+    const { PATCH } = await import("@/app/api/hackathons/[id]/team/route");
+    const team = await setupTeam();
+    const res = await PATCH(
+      req("PATCH", {
+        teamId: team.id,
+        videoUrl: "https://vimeo.com/1",
+        logoUrl: "https://img.t.dev/l.png",
+      }),
+      ctx(),
+    );
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.team.project.videoUrl).toBe("https://vimeo.com/1");
+    expect(data.team.project.logoUrl).toBe("https://img.t.dev/l.png");
+
+    const cleared = await PATCH(
+      req("PATCH", { teamId: team.id, videoUrl: "", logoUrl: "" }),
+      ctx(),
+    );
+    const d2 = await cleared.json();
+    expect(d2.team.project.videoUrl).toBeNull();
+    expect(d2.team.project.logoUrl).toBeNull();
   });
 });

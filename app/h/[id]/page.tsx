@@ -2,12 +2,12 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { getHackathon } from "@/lib/hackathons";
+import { getHackathon, isOver } from "@/lib/hackathons";
 import { absoluteUrl, eventJsonLd, jsonLd } from "@/lib/seo";
 import { getMemberByClerkId } from "@/lib/members";
 import {
-  getRegistrationIds,
   getRegistrationsByHackathon,
+  getRegistrationStatus,
 } from "@/lib/registrations";
 import { RegisterButton } from "@/components/RegisterButton";
 import { CollectibleCard } from "@/components/CollectibleCard";
@@ -33,12 +33,13 @@ const FORMAT_LABEL: Record<string, string> = {
   hibrido: "híbrido",
 };
 
-// spec 016 — arena ao vivo: rótulo/estilo da fase (só open/closed-soon/live
-// renderizam faixa; ended/archived ficam no modo arquivo)
+// spec 016 + 030 — arena ao vivo: rótulo/estilo da fase (open/closed-soon/
+// live/ongoing renderizam faixa; ended/archived ficam no modo arquivo)
 const PHASE_LABEL: Record<EditionPhase, string> = {
   open: "inscrições abertas",
   "closed-soon": "inscrições encerradas",
   live: "começando",
+  ongoing: "em andamento",
   ended: "edição encerrada",
   archived: "arquivada",
 };
@@ -46,6 +47,7 @@ const PHASE_CLASS: Record<EditionPhase, string> = {
   open: "text-muted",
   "closed-soon": "text-lendario",
   live: "text-accent animate-pulse",
+  ongoing: "text-accent animate-pulse",
   ended: "text-muted",
   archived: "text-muted",
 };
@@ -94,15 +96,20 @@ export default async function HackathonPage({
   if (!h || !h.active) notFound();
 
   const now = new Date();
-  const past = new Date(h.startsAt) <= now;
+  // spec 030 — "encerrada" é a mesma fronteira do radar (027):
+  // COALESCE(endsAt, registrationDeadline, startsAt) < now. startsAt
+  // passado sozinho NÃO arquiva — evento ongoing segue em modo live
+  const past = isOver(h, now);
   const closed =
     h.registrationDeadline !== null &&
     new Date(h.registrationDeadline) < now;
 
   const { userId } = await auth();
   const member = userId ? getMemberByClerkId(userId) : null;
-  const registered =
-    member !== null && getRegistrationIds(member.id).includes(h.id);
+  // spec 032 — "inscrito" = approved; pending/rejected têm estado próprio
+  // no CTA e não abrem os gates (time/board/mural) da página
+  const myStatus = member ? getRegistrationStatus(member.id, h.id) : null;
+  const registered = myStatus === "approved";
   // spec 021 — time do próprio membro na edição (null = ainda não submeteu)
   const myTeam =
     member && registered ? memberTeamFor(h.id, member.username) : null;
@@ -170,9 +177,11 @@ export default async function HackathonPage({
             label={
               countdownTo.kind === "deadline"
                 ? "inscrições fecham em"
-                : "começa em"
+                : countdownTo.kind === "end"
+                  ? "termina em"
+                  : "começa em"
             }
-            live={phase === "live"}
+            live={phase === "live" || phase === "ongoing"}
           />
         </div>
       )}
@@ -217,7 +226,11 @@ export default async function HackathonPage({
 
       {!past && !closed && h.partner && (
         <div className="flex flex-col gap-3 border border-line bg-surface p-6">
-          <RegisterButton hackathonId={h.id} registered={registered} />
+          <RegisterButton
+            hackathonId={h.id}
+            requiresApproval={h.requiresApproval}
+            status={myStatus}
+          />
           {!member && (
             <p className="font-mono text-xs text-muted">
               {"// vai pedir login — é o cadastro único do hackahub, não um Google Form"}

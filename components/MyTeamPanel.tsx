@@ -27,6 +27,8 @@ export function MyTeamPanel({
   const [description, setDescription] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [demoUrl, setDemoUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
@@ -36,6 +38,8 @@ export function MyTeamPanel({
     setDescription(team?.project?.description ?? "");
     setRepoUrl(team?.project?.repoUrl ?? "");
     setDemoUrl(team?.project?.demoUrl ?? "");
+    setVideoUrl(team?.project?.videoUrl ?? "");
+    setLogoUrl(team?.project?.logoUrl ?? "");
     setErr("");
     setOpen(true);
   }
@@ -84,6 +88,8 @@ export function MyTeamPanel({
               description: description || undefined,
               repoUrl: repoUrl || undefined,
               demoUrl: demoUrl || undefined,
+              videoUrl: videoUrl || undefined,
+              logoUrl: logoUrl || undefined,
             }
           : undefined,
       }),
@@ -105,6 +111,8 @@ export function MyTeamPanel({
         description,
         repoUrl,
         demoUrl,
+        videoUrl,
+        logoUrl,
       }),
     });
     await handle(res);
@@ -126,6 +134,7 @@ export function MyTeamPanel({
               {team.project.title}
               {team.project.repoUrl && " · repo ✓"}
               {team.project.demoUrl && " · demo ✓"}
+              {team.project.videoUrl && " · vídeo ✓"}
             </p>
           ) : (
             <p className="font-mono text-xs text-muted">
@@ -238,6 +247,28 @@ export function MyTeamPanel({
               />
             </label>
           </div>
+          {/* spec 030 — pitch em vídeo + logo, estilo portal Colosseum;
+              ambos opcionais, validação http(s) é do servidor */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs text-muted">vídeo (url)</span>
+              <input
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://youtube.com/…"
+                className={input}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs text-muted">logo (url)</span>
+              <input
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://…/logo.png"
+                className={input}
+              />
+            </label>
+          </div>
           <div className="flex items-center gap-3">
             <button
               type="submit"
@@ -309,6 +340,27 @@ export function MyTeamPanel({
                 value={demoUrl}
                 onChange={(e) => setDemoUrl(e.target.value)}
                 placeholder="https://…"
+                className={input}
+              />
+            </label>
+          </div>
+          {/* spec 030 — mesmos campos opcionais do create; vazio limpa */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs text-muted">vídeo (url)</span>
+              <input
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://youtube.com/…"
+                className={input}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs text-muted">logo (url)</span>
+              <input
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://…/logo.png"
                 className={input}
               />
             </label>

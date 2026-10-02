@@ -160,6 +160,19 @@ export default async function ProjetosPage({
               }`}
             >
               <div className="flex items-start justify-between gap-3">
+                {/* spec 030 — logo do projeto como thumb 32px; sem
+                    logoUrl o card não renderiza img nenhuma */}
+                {c.project.logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- logo remoto do time; next/image exigiria remotePatterns só pra isso
+                  <img
+                    src={c.project.logoUrl}
+                    alt=""
+                    width={32}
+                    height={32}
+                    loading="lazy"
+                    className="mt-0.5 h-8 w-8 shrink-0 border border-line object-cover"
+                  />
+                )}
                 <Link
                   href={`/p/${c.teamId}`}
                   className="font-display text-lg font-semibold tracking-tight transition hover:text-accent"

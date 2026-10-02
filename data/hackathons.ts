@@ -2,7 +2,8 @@ import type { Hackathon } from "@/lib/hackathons";
 
 // sessões hack inova — edições da comunidade (o radar externo vem do
 // scraper: `uv run --python .venv-scraper/bin/python scripts/scrape_radar.py`)
-export const hackathons: Omit<Hackathon, "partner">[] = [
+// requiresApproval (spec 032) omite = edição aberta; quem cura liga no admin
+export const hackathons: Omit<Hackathon, "partner" | "requiresApproval">[] = [
   {
     id: "hack-inova-alphaville-2026",
     name: "Hack Inova Alphaville",
@@ -20,7 +21,7 @@ export const hackathons: Omit<Hackathon, "partner">[] = [
 ];
 
 // edições passadas — arquivo/histórico da comunidade (dados reais dos sites)
-export const pastHackathons: Omit<Hackathon, "partner">[] = [
+export const pastHackathons: Omit<Hackathon, "partner" | "requiresApproval">[] = [
   {
     id: "hack-inova-unifacens-2026",
     name: "Hackathon Inova AI × Payment Shift",

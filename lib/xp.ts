@@ -1,6 +1,20 @@
 import db from "@/lib/db";
 import { BADGES, XP, type Badge, type Rarity } from "@/lib/game";
 
+// spec 032 — badges de inscrição (debut/veterano) contam só status
+// 'approved': pedido pendente não é campanha. Guarda própria do ALTER
+// (dona: lib/registrations) pra quem importa xp.ts direto — mesmo pattern
+// do avatarUrl em registrations.ts.
+if (
+  !(db.prepare("PRAGMA table_info(registrations)").all() as {
+    name: string;
+  }[]).some((c) => c.name === "status")
+) {
+  db.exec(
+    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
+  );
+}
+
 export function awardXp(memberId: number, amount: number): void {
   db.prepare("UPDATE members SET xp = xp + ? WHERE id = ?").run(
     amount,
@@ -101,7 +115,10 @@ export function checkBadges(memberId: number): Badge[] {
   const count = (sql: string) =>
     (db.prepare(sql).get(memberId) as { n: number }).n;
   const stats = {
-    regs: count("SELECT COUNT(*) n FROM registrations WHERE memberId = ?"),
+    regs: count(
+      `SELECT COUNT(*) n FROM registrations
+       WHERE memberId = ? AND status = 'approved'`,
+    ),
     posts: count("SELECT COUNT(*) n FROM posts WHERE memberId = ?"),
     likesReceived: count(
       `SELECT COUNT(*) n FROM likes l

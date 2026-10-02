@@ -44,16 +44,22 @@ export type ProjectInput = {
   description?: string | null;
   repoUrl?: string | null;
   demoUrl?: string | null;
+  videoUrl?: string | null;
+  logoUrl?: string | null;
 };
 
 // projeto é opcional no submit, mas quando veio PRECISA de título —
 // engolir o projeto quieto (comportamento do admin em createTeam) aqui
 // apagaria o trabalho do membro sem aviso
+// spec 030 — videoUrl (pitch) e logoUrl seguem a mesma regra de repo/demo:
+// string http(s) ou null; trim antes de validar
 function validateProject(input: unknown): {
   title: string;
   description: string | null;
   repoUrl: string | null;
   demoUrl: string | null;
+  videoUrl: string | null;
+  logoUrl: string | null;
 } | null {
   if (input === undefined || input === null) return null;
   if (typeof input !== "object") throw new TeamError("project inválido", 400);
@@ -61,7 +67,7 @@ function validateProject(input: unknown): {
   const title = typeof p.title === "string" ? p.title.trim() : "";
   if (!title) throw new TeamError("título do projeto obrigatório", 400);
   const urls: string[] = [];
-  for (const k of ["repoUrl", "demoUrl"] as const) {
+  for (const k of ["repoUrl", "demoUrl", "videoUrl", "logoUrl"] as const) {
     const raw = p[k];
     if (raw === undefined || raw === null) {
       urls.push("");
@@ -79,6 +85,8 @@ function validateProject(input: unknown): {
     description: desc || null,
     repoUrl: urls[0] || null,
     demoUrl: urls[1] || null,
+    videoUrl: urls[2] || null,
+    logoUrl: urls[3] || null,
   };
 }
 
@@ -144,14 +152,16 @@ export function submitTeam(
     for (const u of colegas) link.run(teamId, u);
     if (project) {
       db.prepare(
-        `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl, videoUrl, logoUrl)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         teamId,
         project.title,
         project.description,
         project.repoUrl,
         project.demoUrl,
+        project.videoUrl,
+        project.logoUrl,
       );
     }
     return teamId;
@@ -168,6 +178,8 @@ export type ProjectPatch = {
   description?: string;
   repoUrl?: string;
   demoUrl?: string;
+  videoUrl?: string;
+  logoUrl?: string;
 };
 
 // integrante edita (ou cria) o projeto do próprio time — upsert em
@@ -199,6 +211,8 @@ export function updateTeamProject(
     ["description", "description"],
     ["repoUrl", "repoUrl"],
     ["demoUrl", "demoUrl"],
+    ["videoUrl", "videoUrl"],
+    ["logoUrl", "logoUrl"],
   ] as const) {
     const raw = patch[key];
     if (raw === undefined) continue;
@@ -227,9 +241,17 @@ export function updateTeamProject(
     const title = get("title");
     if (!title) throw new TeamError("título do projeto obrigatório", 400);
     db.prepare(
-      `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(teamId, title, get("description"), get("repoUrl"), get("demoUrl"));
+      `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl, videoUrl, logoUrl)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      teamId,
+      title,
+      get("description"),
+      get("repoUrl"),
+      get("demoUrl"),
+      get("videoUrl"),
+      get("logoUrl"),
+    );
   }
 
   return memberTeamFor(team.hackathonId, member.username)!;

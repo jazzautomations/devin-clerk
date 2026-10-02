@@ -17,6 +17,7 @@ import { SponsorForm, SponsorToggle } from "@/components/SponsorForm";
 import { TeamBoardToggle } from "@/components/TeamBoardPanel";
 import { AssetForm, TeamForm } from "@/components/ArchiveForms";
 import { SubmissionActions } from "@/components/SubmissionActions";
+import { RegistrationActions } from "@/components/RegistrationActions";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -51,6 +52,7 @@ export default async function AdminPage() {
     registrationDeadline: string | null;
     tags: string;
     active: number;
+    requiresApproval: number;
     inscritos: number;
   }[];
 
@@ -154,6 +156,10 @@ export default async function AdminPage() {
                           className={`${mono} tracking-widest text-muted uppercase`}
                         >
                           inscritos ({registrants.length})
+                          {/* spec 032 — fila de curadoria da edição */}
+                          {registrants.filter((r) => r.status === "pending")
+                            .length > 0 &&
+                            ` · ${registrants.filter((r) => r.status === "pending").length} aguardando`}
                         </h3>
                         <a
                           href={`/h/${e.id}`}
@@ -170,6 +176,7 @@ export default async function AdminPage() {
                                 <th className={`${th} pl-4`}>hacker</th>
                                 <th className={th}>e-mail</th>
                                 <th className={th}>inscreveu em</th>
+                                <th className={th}>status</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -188,6 +195,34 @@ export default async function AdminPage() {
                                   <td className={`${td} text-muted`}>
                                     {new Intl.DateTimeFormat("pt-BR").format(
                                       new Date(r.createdAt + "Z"),
+                                    )}
+                                  </td>
+                                  <td className={td}>
+                                    {/* spec 032 — pendente mostra a fila de
+                                        decisão; recusado pode re-aprovar */}
+                                    {r.status === "approved" ? (
+                                      <span className="text-accent">
+                                        aprovado
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-3">
+                                        <span
+                                          className={
+                                            r.status === "pending"
+                                              ? "border border-lendario/40 bg-lendario/5 px-1.5 py-0.5 text-[10px] text-lendario uppercase"
+                                              : "border border-line px-1.5 py-0.5 text-[10px] text-muted uppercase"
+                                          }
+                                        >
+                                          {r.status === "pending"
+                                            ? "pendente"
+                                            : "recusado"}
+                                        </span>
+                                        <RegistrationActions
+                                          hackathonId={e.id}
+                                          memberId={r.memberId}
+                                          status={r.status}
+                                        />
+                                      </span>
                                     )}
                                   </td>
                                 </tr>
@@ -288,6 +323,7 @@ export default async function AdminPage() {
                           registrationDeadline: e.registrationDeadline,
                           tags: JSON.parse(e.tags) as string[],
                           active: e.active === 1,
+                          requiresApproval: e.requiresApproval === 1,
                         }}
                       />
                     </div>
