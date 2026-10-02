@@ -53,3 +53,4 @@ playwright-report/
 data/*.db-shm
 data/*.db-wal
 data/deploys/
+__pycache__/

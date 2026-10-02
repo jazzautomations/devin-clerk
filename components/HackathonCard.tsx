@@ -96,6 +96,14 @@ export function HackathonCard({
           <dt className="text-muted">local</dt>
           <dd>{hackathon.location ?? "Online"}</dd>
         </div>
+        {hackathon.prize && (
+          <div className="col-span-2">
+            <dt className="text-muted">prêmio</dt>
+            <dd className="text-sm font-semibold text-lendario">
+              {hackathon.prize}
+            </dd>
+          </div>
+        )}
         <div className="col-span-2">
           <dt className="text-muted">inscrições</dt>
           <dd className={closed ? "text-muted" : "text-accent"}>

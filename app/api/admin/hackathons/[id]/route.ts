@@ -55,7 +55,12 @@ export async function PATCH(
     patch.registrationUrl = b.registrationUrl.trim();
   }
   // campos opcionais que aceitam null/vazio pra limpar
-  for (const k of ["endsAt", "location", "registrationDeadline"] as const) {
+  for (const k of [
+    "endsAt",
+    "location",
+    "registrationDeadline",
+    "prize",
+  ] as const) {
     if (k in b) {
       if (b[k] !== null && typeof b[k] !== "string") {
         return bad(`${k} inválido`);

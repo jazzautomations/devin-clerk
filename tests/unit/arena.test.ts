@@ -26,6 +26,7 @@ function makeH(overrides: Partial<Hackathon> = {}): Hackathon {
     location: null,
     registrationUrl: "https://x.dev",
     registrationDeadline: null,
+    prize: null,
     tags: [],
     active: true,
     partner: true,

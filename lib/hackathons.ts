@@ -12,6 +12,9 @@ export type Hackathon = {
   location: string | null;
   registrationUrl: string;
   registrationDeadline: string | null;
+  // display string da fonte/curadoria ("$138,000", "R$ 5 mil") — spec 024;
+  // a UI repassa verbatim, nunca parseia
+  prize: string | null;
   tags: string[];
   active: boolean;
   partner: boolean;

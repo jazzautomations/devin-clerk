@@ -35,6 +35,7 @@ export default async function Image({
         fmt.format(new Date(h.startsAt)),
         h.location,
         h.format,
+        h.prize, // spec 024 — prêmio vende o clique também no card social
       ]
         .filter(Boolean)
         .join(" · ")

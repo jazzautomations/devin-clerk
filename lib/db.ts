@@ -158,6 +158,10 @@ const hackCols = (
 if (!hackCols.includes("source")) {
   db.exec(`ALTER TABLE hackathons ADD COLUMN source TEXT`);
 }
+if (!hackCols.includes("prize")) {
+  // display string da fonte/curadoria ("$138,000", "R$ 5 mil") — spec 024
+  db.exec(`ALTER TABLE hackathons ADD COLUMN prize TEXT`);
+}
 const postCols = (
   db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
 ).map((c) => c.name);
@@ -169,9 +173,14 @@ if (!memberCols.includes("xp")) {
 }
 
 const insert = db.prepare(`
-  INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
-  VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active)
+  INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)
+  VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active, @prize)
 `);
+const backfillPrize = db.prepare(
+  // OR IGNORE não alcança bancos existentes — preenche só o vazio,
+  // nunca sobrescreve prêmio posto à mão pelo admin
+  "UPDATE hackathons SET prize = @prize WHERE id = @id AND prize IS NULL",
+);
 const seedAll = db.transaction(() => {
   for (const h of [...seed, ...pastSeed]) {
     insert.run({
@@ -181,7 +190,9 @@ const seedAll = db.transaction(() => {
       registrationDeadline: h.registrationDeadline ?? null,
       tags: JSON.stringify(h.tags),
       active: h.active ? 1 : 0,
+      prize: h.prize ?? null,
     });
+    if (h.prize) backfillPrize.run({ id: h.id, prize: h.prize });
   }
 });
 seedAll();

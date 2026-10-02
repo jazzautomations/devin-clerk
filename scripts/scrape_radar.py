@@ -86,12 +86,46 @@ def dedupe_key(row: dict) -> str:
     return f"{norm_name(row.get('name'))}|{(row.get('startsAt') or '')[:10]}"
 
 
+def prize_display(raw: str | None) -> str | None:
+    """'$<span data-currency-value>138,000</span>' → '$138,000'.
+
+    Devpost manda o valor com HTML embutido na listagem (`prizes` separado
+    vem sempre null). String vazia ou montante todo zerado ('$0') vira
+    None — premiação zero não é argumento de venda.
+    """
+    s = " ".join(re.sub(r"<[^>]+>", "", raw or "").split())
+    if not s:
+        return None
+    digits = re.sub(r"\D", "", s)
+    if digits and int(digits) == 0:
+        return None
+    return s
+
+
+TAIKAI_CURRENCY = {"EUR": "€", "USD": "$", "GBP": "£", "BRL": "R$"}
+
+
+def taikai_prize(amount, currency_name: str | None) -> str | None:
+    """prize int + código de moeda → '€20,000' / '$3,500'.
+
+    Símbolo só pros códigos mapeados; moeda desconhecida cai pro código
+    ('XYZ 1,000') — nunca inventa cifrão.
+    """
+    if not amount:
+        return None
+    n = f"{int(amount):,}"
+    sym = TAIKAI_CURRENCY.get((currency_name or "").upper())
+    if sym:
+        return f"{sym}{n}"
+    return f"{currency_name} {n}" if currency_name else n
+
+
 def metadata_score(row: dict) -> float:
     s = sum(
         1
         for f in (
             "organizer", "endsAt", "format", "location",
-            "registrationUrl", "registrationDeadline",
+            "registrationUrl", "registrationDeadline", "prize",
         )
         if row.get(f)
     )
@@ -110,7 +144,7 @@ def merge_rows(group: list[dict]) -> dict:
             continue
         for f in (
             "organizer", "endsAt", "format", "location",
-            "registrationUrl", "registrationDeadline",
+            "registrationUrl", "registrationDeadline", "prize",
         ):
             if not merged.get(f) and r.get(f):
                 merged[f] = r[f]
@@ -188,7 +222,7 @@ def ensure_schema(conn) -> None:
         )"""
     )
     cols = {r[1] for r in conn.execute("PRAGMA table_info(hackathons)")}
-    for col in ("source", "first_seen", "last_seen"):
+    for col in ("source", "first_seen", "last_seen", "prize"):
         if col not in cols:
             conn.execute(f"ALTER TABLE hackathons ADD COLUMN {col} TEXT")
     # backfill: linhas antigas ganham timestamps da migração
@@ -203,11 +237,11 @@ def ensure_schema(conn) -> None:
 
 UPSERT_SQL = """INSERT INTO hackathons
   (id, name, organizer, startsAt, endsAt, format, location,
-   registrationUrl, registrationDeadline, tags, active, source,
+   registrationUrl, registrationDeadline, tags, active, source, prize,
    first_seen, last_seen)
 VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location,
    @registrationUrl, @registrationDeadline, @tags, @active, @source,
-   @now, @now)
+   @prize, @now, @now)
 ON CONFLICT(id) DO UPDATE SET
   name=excluded.name, organizer=excluded.organizer,
   startsAt=excluded.startsAt, endsAt=excluded.endsAt,
@@ -215,6 +249,7 @@ ON CONFLICT(id) DO UPDATE SET
   registrationUrl=excluded.registrationUrl,
   registrationDeadline=excluded.registrationDeadline,
   tags=excluded.tags, active=excluded.active, source=excluded.source,
+  prize=excluded.prize,
   last_seen=excluded.last_seen"""
 
 
@@ -227,6 +262,7 @@ def upsert(conn, rows: list[dict]) -> int:
         r = dict(r)
         r["tags"] = json.dumps(r.get("tags") or [])
         r["active"] = 0 if is_expired(r) else 1
+        r.setdefault("prize", None)  # fonte sem prêmio grava NULL
         r["now"] = NOW.isoformat()
         conn.execute(UPSERT_SQL, r)
         n += 1
@@ -308,7 +344,7 @@ def src_devpost() -> list[dict]:
                 end = parse_date(f"{d2}, {m.group(3)}")
             loc = (h.get("displayed_location") or {}).get("location") or "Online"
             fmt = "online" if loc == "Online" else "presencial"
-            prize = re.sub(r"<[^>]+>", "", h.get("prize_amount") or "")
+            prize = prize_display(h.get("prize_amount"))
             tags = [t["name"].lower().split("/")[0].split(" ")[0]
                     for t in h.get("themes", [])][:3]
             if prize:
@@ -324,6 +360,7 @@ def src_devpost() -> list[dict]:
                 "registrationUrl": h["url"],
                 "registrationDeadline": iso(end),
                 "tags": tags,
+                "prize": prize,
                 "source": "devpost",
             })
         total = (d.get("meta") or {}).get("total_count") or 0
@@ -335,7 +372,8 @@ def src_devpost() -> list[dict]:
 
 def src_taikai() -> list[dict]:
     q = """query { challenges(where: { publishInfo: { state: { equals: ACTIVE } } },
-      perPage: 30) { name slug prize organization { name slug }
+      perPage: 30) { name slug prize prizeCurrency { name }
+      organization { name slug }
       participantsCount currentStep { name startDate } } }"""
     d = requests.post(
         "https://api.taikai.network/api/graphql",
@@ -345,10 +383,11 @@ def src_taikai() -> list[dict]:
     for c in d["data"]["challenges"]:
         step = c.get("currentStep") or {}
         org = c.get("organization") or {}
-        prize = c.get("prize") or 0
+        prize = taikai_prize(c.get("prize"),
+                             (c.get("prizeCurrency") or {}).get("name"))
         tags = []
         if prize:
-            tags.append(f"premio-{int(prize)}")
+            tags.append(f"premio-{prize}")
         out.append({
             "id": f"taikai-{c['slug']}",
             "name": c["name"],
@@ -360,6 +399,7 @@ def src_taikai() -> list[dict]:
             "registrationUrl": f"https://taikai.network/{org.get('slug','')}/hackathons/{c['slug']}",
             "registrationDeadline": None,
             "tags": tags,
+            "prize": prize,
             "source": "taikai",
         })
     return out
@@ -665,6 +705,7 @@ def src_curated() -> list[dict]:
             "registrationUrl": "https://comunidade.devsnorte.com/eventos/1-hackathon-do-tjpa-466",
             "registrationDeadline": None,
             "tags": ["gov", "premio-r15k"],
+            "prize": "R$ 15 mil",
             "source": "curadoria",
         },
         {

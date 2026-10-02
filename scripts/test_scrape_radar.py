@@ -156,6 +156,69 @@ def test_stale_dupe_deactivated():
         "SELECT active FROM hackathons WHERE id='devpost-9'").fetchone()[0] == 1
 
 
+def test_prize_display_devpost():
+    """prize_amount vem com HTML embutido; '$0'/vazio não é argumento de venda."""
+    assert sr.prize_display(
+        "$<span data-currency-value>138,000</span>") == "$138,000"
+    assert sr.prize_display(
+        "₹ <span data-currency-value>100,000</span>") == "₹ 100,000"
+    assert sr.prize_display(None) is None
+    assert sr.prize_display("") is None
+    assert sr.prize_display("$<span data-currency-value>0</span>") is None
+
+
+def test_taikai_prize_display():
+    """prize int + prizeCurrency.name → display com símbolo da moeda."""
+    assert sr.taikai_prize(20000, "EUR") == "€20,000"
+    assert sr.taikai_prize(3500, "USD") == "$3,500"
+    assert sr.taikai_prize(15000, "BRL") == "R$15,000"
+    assert sr.taikai_prize(0, "EUR") is None
+    assert sr.taikai_prize(None, "EUR") is None
+    # moeda fora do mapa cai pro código — nunca inventa símbolo
+    assert sr.taikai_prize(1000, "XYZ") == "XYZ 1,000"
+
+
+def test_dedupe_prefers_row_with_prize():
+    """prêmio pesa no metadata_score — ficha com prize vence o empate."""
+    winners, _ = sr.dedupe([
+        _row(id="a", name="Hack P"),
+        _row(id="b", name="hack  p", prize="$5,000"),
+    ])
+    assert len(winners) == 1
+    assert winners[0]["id"] == "b"
+    assert winners[0]["prize"] == "$5,000"
+
+
+def test_dedupe_fills_prize_from_loser():
+    """vencedor sem prêmio herda o do perdedor (fill de campo vazio)."""
+    rows = [
+        _row(id="rich", name="Hack Prize", location="SP", tags=["a", "b"]),
+        _row(id="poor", name="hack  prize", prize="$10,000"),
+    ]
+    winners, _ = sr.dedupe(rows)
+    assert len(winners) == 1
+    assert winners[0]["id"] == "rich"
+    assert winners[0]["prize"] == "$10,000"
+
+
+def test_upsert_stores_prize():
+    conn = sqlite3.connect(":memory:")
+    sr.ensure_schema(conn)
+    sr.upsert(conn, [_row(id="pz", prize="$10,000")])
+    assert conn.execute(
+        "SELECT prize FROM hackathons WHERE id='pz'"
+    ).fetchone()[0] == "$10,000"
+    # re-upsert atualiza — e limpa quando a fonte some com o prêmio
+    sr.upsert(conn, [_row(id="pz", prize="$20,000")])
+    assert conn.execute(
+        "SELECT prize FROM hackathons WHERE id='pz'"
+    ).fetchone()[0] == "$20,000"
+    sr.upsert(conn, [_row(id="pz", prize=None)])
+    assert conn.execute(
+        "SELECT prize FROM hackathons WHERE id='pz'"
+    ).fetchone()[0] is None
+
+
 def test_ethglobal_md_parser():
     md = ("[![Image 1: Foo logo](https://cdn/x.png) ### ETHGlobal Lisboa 2026 "
           "Jul 24th– Jul 26th, 2999 Jul 24th– Jul 26th, 2999 Hackathon]"

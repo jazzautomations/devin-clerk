@@ -21,8 +21,8 @@ export async function POST(req: Request) {
   }
   db.prepare(
     `INSERT OR REPLACE INTO hackathons
-       (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
-     VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, 1)`,
+       (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)
+     VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, 1, @prize)`,
   ).run({
     id: b.id.trim(),
     name: b.name.trim(),
@@ -40,6 +40,8 @@ export async function POST(req: Request) {
         ? b.registrationDeadline
         : null,
     tags: JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
+    prize:
+      typeof b.prize === "string" && b.prize.trim() ? b.prize.trim() : null,
   });
   return Response.json({ ok: true }, { status: 201 });
 }

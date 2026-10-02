@@ -9,6 +9,7 @@ export type HackathonPatch = {
   location?: string | null;
   registrationUrl?: string;
   registrationDeadline?: string | null;
+  prize?: string | null;
   tags?: string[];
   active?: boolean;
 };
@@ -51,6 +52,10 @@ export function updateHackathon(
   if (patch.registrationDeadline !== undefined) {
     sets.push("registrationDeadline = @registrationDeadline");
     values.registrationDeadline = patch.registrationDeadline;
+  }
+  if (patch.prize !== undefined) {
+    sets.push("prize = @prize");
+    values.prize = patch.prize;
   }
   if (patch.tags !== undefined) {
     sets.push("tags = @tags");

@@ -13,6 +13,7 @@ export const hackathons: Omit<Hackathon, "partner">[] = [
     location: "Alphaville, SP",
     registrationUrl: "https://hackinova.vercel.app",
     registrationDeadline: null,
+    prize: null,
     tags: ["ia", "comunidade"],
     active: true,
   },
@@ -30,6 +31,8 @@ export const pastHackathons: Omit<Hackathon, "partner">[] = [
     location: "UniFACENS, Sorocaba",
     registrationUrl: "https://hackinova.vercel.app",
     registrationDeadline: null,
+    // prêmio real divulgado da 1ª edição (spec 022 cita os R$5 mil)
+    prize: "R$ 5 mil",
     tags: ["ia", "produtos-digitais"],
     active: true,
   },
@@ -43,6 +46,8 @@ export const pastHackathons: Omit<Hackathon, "partner">[] = [
     location: "PUC-SP Consolação, São Paulo",
     registrationUrl: "https://hackinova.vercel.app",
     registrationDeadline: null,
+    // prêmios da PUC são dos desafios Oracle (challenges), não da edição
+    prize: null,
     tags: ["ia", "saude", "oracle"],
     active: true,
   },
@@ -56,6 +61,7 @@ export const pastHackathons: Omit<Hackathon, "partner">[] = [
     location: "Anhembi Morumbi · Av. Paulista 2000, São Paulo",
     registrationUrl: "https://hackinova-anhembi.vercel.app",
     registrationDeadline: null,
+    prize: null,
     tags: ["ia", "saude", "agentes"],
     active: true,
   },
