@@ -72,6 +72,19 @@ export const hackathons: Omit<Hackathon, "partner">[] = [
 // edições passadas — arquivo/histórico da comunidade (dados reais dos sites)
 export const pastHackathons: Omit<Hackathon, "partner">[] = [
   {
+    id: "hack-inova-unifacens-2026",
+    name: "Hackathon Inova AI × Payment Shift",
+    organizer: "Hack Inova × Unifacens · apoio Oracle + Enterprise X Ventures",
+    startsAt: "2026-08-17T09:00:00-03:00",
+    endsAt: "2026-08-17T18:00:00-03:00",
+    format: "presencial",
+    location: "UniFACENS, Sorocaba",
+    registrationUrl: "https://hackinova.vercel.app",
+    registrationDeadline: null,
+    tags: ["ia", "produtos-digitais"],
+    active: true,
+  },
+  {
     id: "hackinova-os-2-anhembi-2026",
     name: "HackInova.OS 2 — IA na Saúde",
     organizer: "Hack Inova",
