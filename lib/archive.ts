@@ -1,29 +1,19 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 
 // spec 032 — o arco do builder conta só inscrições aprovadas (pendente é
 // candidato, não participação); guarda da coluna status — dona do schema é
 // lib/registrations, aqui garante pra quem importa archive.ts direto
-if (
-  !(db.prepare("PRAGMA table_info(registrations)").all() as {
-    name: string;
-  }[]).some((c) => c.name === "status")
-) {
-  db.exec(
-    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
-  );
-}
+ensureColumn(
+  "registrations",
+  "status",
+  "status TEXT NOT NULL DEFAULT 'approved'",
+);
 
 // spec 030 — submissão rica (portal Colosseum): pitch em vídeo + logo do
 // projeto. Colunas chegam por ALTER guardado aqui mesmo — lib/db.ts fica
-// intocado; pattern idempotente PRAGMA + ADD COLUMN (igual posts/members)
-const teamProjectCols = (
-  db.prepare("PRAGMA table_info(team_projects)").all() as { name: string }[]
-).map((c) => c.name);
-for (const col of ["videoUrl", "logoUrl"]) {
-  if (!teamProjectCols.includes(col)) {
-    db.exec(`ALTER TABLE team_projects ADD COLUMN ${col} TEXT`);
-  }
-}
+// intocado
+ensureColumn("team_projects", "videoUrl", "videoUrl TEXT");
+ensureColumn("team_projects", "logoUrl", "logoUrl TEXT");
 
 export type TeamProject = {
   title: string;

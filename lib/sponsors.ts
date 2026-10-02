@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 
 // schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
 db.exec(`CREATE TABLE IF NOT EXISTS sponsors (
@@ -14,14 +14,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS sponsors (
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
-// challenges ganha vínculo pra sponsors — ALTER idempotente via PRAGMA.
+// challenges ganha vínculo pra sponsors — ALTER idempotente.
 // sponsor TEXT segue NOT NULL como nome de exibição/fallback.
-const chalCols = (
-  db.prepare("PRAGMA table_info(challenges)").all() as { name: string }[]
-).map((c) => c.name);
-if (!chalCols.includes("sponsorId")) {
-  db.exec("ALTER TABLE challenges ADD COLUMN sponsorId TEXT");
-}
+ensureColumn("challenges", "sponsorId", "sponsorId TEXT");
 db.exec(
   "CREATE INDEX IF NOT EXISTS idx_challenges_sponsor ON challenges(sponsorId)",
 );

@@ -1,40 +1,26 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 import { XP, type Badge } from "@/lib/game";
 import { awardXp, checkBadges, mintCard } from "@/lib/xp";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
-// este módulo sem passar por members.ts; pattern idempotente PRAGMA + ADD COLUMN
-if (
-  !(db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).some(
-    (c) => c.name === "avatarUrl",
-  )
-) {
-  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
-}
+// este módulo sem passar por members.ts
+ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 
 // spec 032 — "pedir lugar" (apply to attend): edições curadas guardam a
 // inscrição como 'pending' e a recompensa só existe na aprovação do admin.
 // requiresApproval mora em hackathons; status/reviewedAt em registrations —
 // este arquivo é o dono do schema de inscrição (lib/db.ts não é tocado).
-const hackathonCols = (
-  db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]
-).map((c) => c.name);
-if (!hackathonCols.includes("requiresApproval")) {
-  db.exec(
-    "ALTER TABLE hackathons ADD COLUMN requiresApproval INTEGER NOT NULL DEFAULT 0",
-  );
-}
-const registrationCols = (
-  db.prepare("PRAGMA table_info(registrations)").all() as { name: string }[]
-).map((c) => c.name);
-if (!registrationCols.includes("status")) {
-  db.exec(
-    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
-  );
-}
-if (!registrationCols.includes("reviewedAt")) {
-  db.exec("ALTER TABLE registrations ADD COLUMN reviewedAt TEXT");
-}
+ensureColumn(
+  "hackathons",
+  "requiresApproval",
+  "requiresApproval INTEGER NOT NULL DEFAULT 0",
+);
+ensureColumn(
+  "registrations",
+  "status",
+  "status TEXT NOT NULL DEFAULT 'approved'",
+);
+ensureColumn("registrations", "reviewedAt", "reviewedAt TEXT");
 
 export type RegistrationStatus = "pending" | "approved" | "rejected";
 

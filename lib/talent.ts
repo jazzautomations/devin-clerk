@@ -1,4 +1,4 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 import { getMemberProjects } from "@/lib/archive";
 import {
   isOpenToValue,
@@ -11,18 +11,10 @@ import {
 export { OPEN_TO, isOpenToValue, parseOpenTo, type OpenToValue };
 
 // migração idempotente — openTo vive aqui e não no schema principal de
-// lib/db.ts (trabalho paralelo naquele arquivo); mesmo pattern do bloco
-// memberCols no rodapé de lib/db.ts
-const memberCols = (
-  db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
-).map((c) => c.name);
-if (!memberCols.includes("openTo")) {
-  db.exec("ALTER TABLE members ADD COLUMN openTo TEXT");
-}
+// lib/db.ts (trabalho paralelo naquele arquivo)
+ensureColumn("members", "openTo", "openTo TEXT");
 // avatarUrl é de lib/members — mesmo guard aqui pra import isolado
-if (!memberCols.includes("avatarUrl")) {
-  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
-}
+ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 
 /**
  * Grava o opt-in comercial do membro. Valida contra a whitelist (throw em

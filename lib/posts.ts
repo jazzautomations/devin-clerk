@@ -1,28 +1,17 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 import type { Member } from "@/lib/members";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
-// este módulo sem passar por members.ts (ex.: testes unitários); mesmo
-// pattern idempotente PRAGMA + ADD COLUMN
-if (
-  !(db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).some(
-    (c) => c.name === "avatarUrl",
-  )
-) {
-  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
-}
+// este módulo sem passar por members.ts (ex.: testes unitários)
+ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 
 // hackathonId = mural da edição (spec 028): NULL é post global do /feed —
 // ALTER guardado aqui mesmo, lib/db.ts continua intocado
-if (
-  !(db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]).some(
-    (c) => c.name === "hackathonId",
-  )
-) {
-  db.exec(
-    "ALTER TABLE posts ADD COLUMN hackathonId TEXT REFERENCES hackathons(id)",
-  );
-}
+ensureColumn(
+  "posts",
+  "hackathonId",
+  "hackathonId TEXT REFERENCES hackathons(id)",
+);
 
 export type Post = {
   id: number;

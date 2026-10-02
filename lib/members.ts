@@ -1,27 +1,17 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 import { toLikePattern } from "@/lib/search";
 
 // migração idempotente — avatarUrl vive aqui e não no schema principal de
-// lib/db.ts (trabalho paralelo naquele arquivo); mesmo pattern do bloco
-// memberCols no rodapé de lib/db.ts e do openTo em lib/talent.ts
-const memberCols = (
-  db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
-).map((c) => c.name);
-if (!memberCols.includes("avatarUrl")) {
-  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
-}
+// lib/db.ts (trabalho paralelo naquele arquivo)
+ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 // spec 032 — "campanhas" públicas contam só inscrições aprovadas (pedido
 // pendente não é campanha); guarda da coluna status — dona do schema é
 // lib/registrations, aqui garante pra quem importa members.ts direto
-if (
-  !(db.prepare("PRAGMA table_info(registrations)").all() as {
-    name: string;
-  }[]).some((c) => c.name === "status")
-) {
-  db.exec(
-    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
-  );
-}
+ensureColumn(
+  "registrations",
+  "status",
+  "status TEXT NOT NULL DEFAULT 'approved'",
+);
 
 export type Member = {
   id: number;

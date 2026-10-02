@@ -1,14 +1,8 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
-// este módulo sem passar por members.ts; pattern idempotente PRAGMA + ADD COLUMN
-if (
-  !(db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).some(
-    (c) => c.name === "avatarUrl",
-  )
-) {
-  db.exec("ALTER TABLE members ADD COLUMN avatarUrl TEXT");
-}
+// este módulo sem passar por members.ts
+ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 
 export type Comment = {
   id: number;

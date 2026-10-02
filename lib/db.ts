@@ -138,48 +138,47 @@ CREATE TABLE IF NOT EXISTS post_comments (
 );
 `);
 
-// migrações leves — ALTER TABLE idempotente pra bancos já existentes
+// migrações leves — ALTER TABLE idempotente pra bancos já existentes.
+// ensureColumn é race-safe: `next build` coleta page-data em workers
+// paralelos e libs irmãs guardam as mesmas colunas — dois workers podem
+// ler o PRAGMA antes do ALTER um do outro. "duplicate column" aqui é
+// idempotência, não erro (SQLite não tem ADD COLUMN IF NOT EXISTS).
+export function ensureColumn(table: string, column: string, ddl: string) {
+  const cols = (
+    db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  ).map((c) => c.name);
+  if (cols.includes(column)) return;
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  } catch (e) {
+    if (!(e instanceof Error && /duplicate column name/i.test(e.message))) {
+      throw e;
+    }
+  }
+}
+
 const memberCols = (
   db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
 ).map((c) => c.name);
 for (const col of ["linkedin", "twitter", "website", "headline", "persona"]) {
-  if (!memberCols.includes(col)) {
-    db.exec(`ALTER TABLE members ADD COLUMN ${col} TEXT`);
-  }
+  ensureColumn("members", col, `${col} TEXT`);
 }
 if (!memberCols.includes("role")) {
-  db.exec(`ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT 'member'`);
+  ensureColumn("members", "role", "role TEXT NOT NULL DEFAULT 'member'");
   // primeiro membro da plataforma é admin (bootstrap da operação)
   db.exec(`UPDATE members SET role = 'admin' WHERE id = 1`);
 }
-const hackCols = (
-  db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]
-).map((c) => c.name);
-if (!hackCols.includes("source")) {
-  db.exec(`ALTER TABLE hackathons ADD COLUMN source TEXT`);
-}
-if (!hackCols.includes("prize")) {
-  // display string da fonte/curadoria ("$138,000", "R$ 5 mil") — spec 024
-  db.exec(`ALTER TABLE hackathons ADD COLUMN prize TEXT`);
-}
+ensureColumn("hackathons", "source", "source TEXT");
+// display string da fonte/curadoria ("$138,000", "R$ 5 mil") — spec 024
+ensureColumn("hackathons", "prize", "prize TEXT");
 // first_seen/last_seen são gravados pelo scraper (spec 005), mas a coluna
 // precisa existir em banco que nunca rodou scrape — o momentum "+N · 30d"
 // da landing conta por first_seen (spec 027). Sem backfill aqui: NULL =
 // "não sabemos quando entrou", e o scraper preenche quando roda.
-for (const col of ["first_seen", "last_seen"]) {
-  if (!hackCols.includes(col)) {
-    db.exec(`ALTER TABLE hackathons ADD COLUMN ${col} TEXT`);
-  }
-}
-const postCols = (
-  db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
-).map((c) => c.name);
-if (!postCols.includes("link")) {
-  db.exec(`ALTER TABLE posts ADD COLUMN link TEXT`);
-}
-if (!memberCols.includes("xp")) {
-  db.exec(`ALTER TABLE members ADD COLUMN xp INTEGER NOT NULL DEFAULT 0`);
-}
+ensureColumn("hackathons", "first_seen", "first_seen TEXT");
+ensureColumn("hackathons", "last_seen", "last_seen TEXT");
+ensureColumn("posts", "link", "link TEXT");
+ensureColumn("members", "xp", "xp INTEGER NOT NULL DEFAULT 0");
 
 const insert = db.prepare(`
   INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)

@@ -1,19 +1,14 @@
-import db from "@/lib/db";
+import db, { ensureColumn } from "@/lib/db";
 import { BADGES, XP, type Badge, type Rarity } from "@/lib/game";
 
 // spec 032 — badges de inscrição (debut/veterano) contam só status
 // 'approved': pedido pendente não é campanha. Guarda própria do ALTER
-// (dona: lib/registrations) pra quem importa xp.ts direto — mesmo pattern
-// do avatarUrl em registrations.ts.
-if (
-  !(db.prepare("PRAGMA table_info(registrations)").all() as {
-    name: string;
-  }[]).some((c) => c.name === "status")
-) {
-  db.exec(
-    "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
-  );
-}
+// (dona: lib/registrations) pra quem importa xp.ts direto.
+ensureColumn(
+  "registrations",
+  "status",
+  "status TEXT NOT NULL DEFAULT 'approved'",
+);
 
 export function awardXp(memberId: number, amount: number): void {
   db.prepare("UPDATE members SET xp = xp + ? WHERE id = ?").run(
