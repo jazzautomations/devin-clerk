@@ -3,6 +3,7 @@ import { getMemberByClerkId } from "@/lib/members";
 import { toggleLike } from "@/lib/posts";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
+import { notify } from "@/lib/notifications";
 import db from "@/lib/db";
 
 export async function POST(
@@ -29,6 +30,12 @@ export async function POST(
       .get(postId) as { memberId: number };
     awardXp(author.memberId, XP.likeReceived);
     checkBadges(author.memberId);
+    notify(author.memberId, {
+      type: "like",
+      actorUsername: member.username,
+      text: `@${member.username} curtiu teu post`,
+      href: "/feed",
+    });
   }
   const likeCount = (
     db.prepare("SELECT COUNT(*) n FROM likes WHERE postId = ?").get(postId) as {

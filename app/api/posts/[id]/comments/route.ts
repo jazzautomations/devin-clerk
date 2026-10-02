@@ -3,6 +3,7 @@ import { getMemberByClerkId } from "@/lib/members";
 import { createComment, listComments } from "@/lib/comments";
 import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
+import { notify } from "@/lib/notifications";
 import db from "@/lib/db";
 
 function postExists(postId: number): boolean {
@@ -49,5 +50,14 @@ export async function POST(
   const comment = createComment(postId, member.id, text);
   awardXp(member.id, XP.comment);
   checkBadges(member.id);
+  const author = db
+    .prepare("SELECT memberId FROM posts WHERE id = ?")
+    .get(postId) as { memberId: number };
+  notify(author.memberId, {
+    type: "comment",
+    actorUsername: member.username,
+    text: `@${member.username} comentou no teu post`,
+    href: "/feed",
+  });
   return Response.json({ comment }, { status: 201 });
 }
