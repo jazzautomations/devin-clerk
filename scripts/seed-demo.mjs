@@ -197,9 +197,9 @@ db.transaction(() => {
   for (const [key, us] of likePairs) for (const u of us) insLike.run(pid(key), mid(u));
 
   // procuro time
-  insLft.run(mid("tais.data"), ALPHA, "python, ml, dados", "front + produto", "time quase fechado, falta quem desenhe a jornada");
-  insLft.run(mid("bruno.pm"), ALPHA, "produto, pitch, sql", "devs", "ideia validada com 2 hospitais, falta quem construa");
-  insLft.run(mid("caique.mobil"), ALPHA, "flutter, go", "ml", "app mobile pronto, preciso de modelo");
+  insLft.run(mid("tais.data"), ALPHA, JSON.stringify(["python", "ml", "dados"]), "front + produto", "time quase fechado, falta quem desenhe a jornada");
+  insLft.run(mid("bruno.pm"), ALPHA, JSON.stringify(["produto", "pitch", "sql"]), "devs", "ideia validada com 2 hospitais, falta quem construa");
+  insLft.run(mid("caique.mobil"), ALPHA, JSON.stringify(["flutter", "go"]), "ml", "app mobile pronto, preciso de modelo");
 
   // sponsors reais das edições + link nos challenges
   insSponsor.run("oracle", "Oracle", "https://www.oracle.com", "master");
