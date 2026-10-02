@@ -128,6 +128,14 @@ CREATE TABLE IF NOT EXISTS challenges (
   active INTEGER NOT NULL DEFAULT 1,
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS post_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  postId INTEGER NOT NULL REFERENCES posts(id),
+  memberId INTEGER NOT NULL REFERENCES members(id),
+  body TEXT NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // migrações leves — ALTER TABLE idempotente pra bancos já existentes

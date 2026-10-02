@@ -12,11 +12,13 @@ export type Post = {
   xp: number;
   likeCount: number;
   likedByMe: boolean;
+  commentCount: number;
 };
 
 const select = `SELECT p.id, p.body, p.link, p.createdAt,
        m.username, m.name, m.headline, m.persona, m.xp,
        (SELECT COUNT(*) FROM likes l WHERE l.postId = p.id) AS likeCount,
+       (SELECT COUNT(*) FROM post_comments c WHERE c.postId = p.id) AS commentCount,
        EXISTS(SELECT 1 FROM likes l WHERE l.postId = p.id AND l.memberId = @me) AS likedByMe
        FROM posts p JOIN members m ON m.id = p.memberId`;
 

@@ -2,6 +2,7 @@
 
 export const XP = {
   post: 10,
+  comment: 5,
   likeReceived: 5,
   register: 50,
   identidade: 25,

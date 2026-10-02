@@ -41,6 +41,14 @@ describe("rotas autenticadas respondem 401 deslogado", () => {
     expect(res.status).toBe(401);
   });
 
+  it("POST /api/posts/[id]/comments", async () => {
+    const { POST } = await import("@/app/api/posts/[id]/comments/route");
+    const res = await POST(req("POST", { body: "oi" }), {
+      params: Promise.resolve({ id: "1" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
   it("PATCH /api/members/me", async () => {
     const { PATCH } = await import("@/app/api/members/me/route");
     const res = await PATCH(req("PATCH", { bio: "x" }));
