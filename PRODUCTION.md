@@ -9,6 +9,10 @@ que funciona".
 - [ ] `npm run lint` — 0 erros, 0 warnings novos
 - [ ] `npm run typecheck` — `tsc --noEmit` limpo
 - [ ] `npm run build` — build de produção completa sem erros
+- [ ] **`npm run test` (Vitest) — verde.** Lógica nova em `lib/`/`api/` exige
+  teste unitário; testes escrevem-se ANTES da implementação (TDD)
+- [ ] **`npm run test:e2e` (Playwright) — verde.** Todo fluxo de usuário novo
+  tem spec BDD em `tests/e2e/`; fluxo existente quebrado = bug, não "detalhe"
 - [ ] Sem `any` novo, sem `console.log` de debug, sem código comentado morto
 
 ## 2. Auth & segurança (non-negotiable)

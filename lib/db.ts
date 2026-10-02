@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { hackathons as seed, pastHackathons as pastSeed } from "@/data/hackathons";
 
 const dir = join(process.cwd(), "data");
-mkdirSync(dir, { recursive: true });
+const dbPath = process.env.HACKAHUB_DB ?? join(dir, "hackahub.db");
+if (dbPath !== ":memory:") mkdirSync(dir, { recursive: true });
 
-const db = new Database(join(dir, "hackahub.db"));
+const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 
 db.exec(`

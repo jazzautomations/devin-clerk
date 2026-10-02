@@ -48,3 +48,5 @@ next-env.d.ts
 /.clerk/
 data/*.db
 .venv-scraper/
+test-results/
+playwright-report/
