@@ -13,6 +13,7 @@ export type Member = {
   twitter: string | null;
   website: string | null;
   headline: string | null;
+  persona: string | null;
   role: "member" | "admin";
   createdAt: string;
 };
@@ -94,6 +95,7 @@ export function updateMemberProfile(
     twitter?: string;
     website?: string;
     headline?: string;
+    persona?: string;
   },
 ): void {
   db.prepare(
@@ -105,7 +107,8 @@ export function updateMemberProfile(
        linkedin = COALESCE(@linkedin, linkedin),
        twitter = COALESCE(@twitter, twitter),
        website = COALESCE(@website, website),
-       headline = COALESCE(@headline, headline)
+       headline = COALESCE(@headline, headline),
+       persona = COALESCE(@persona, persona)
      WHERE clerkId = @clerkId`,
   ).run({
     clerkId,
@@ -117,5 +120,6 @@ export function updateMemberProfile(
     twitter: patch.twitter ?? null,
     website: patch.website ?? null,
     headline: patch.headline ?? null,
+    persona: patch.persona ?? null,
   });
 }

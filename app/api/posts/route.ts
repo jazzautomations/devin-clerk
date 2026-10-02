@@ -1,13 +1,12 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { getOrCreateMember } from "@/lib/members";
+import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
 
 export async function GET() {
+  // leitura pública — rede social é vitrine; postar exige conta
   const { userId } = await auth();
-  if (!userId) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return Response.json({ posts: listPosts() });
+  const me = userId ? getMemberByClerkId(userId) : null;
+  return Response.json({ posts: listPosts(50, me?.id ?? null) });
 }
 
 export async function POST(req: Request) {

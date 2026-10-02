@@ -16,6 +16,24 @@ export function Header() {
         </Link>
         <nav className="flex items-center gap-6 font-mono text-xs tracking-wide">
           <Link
+            href="/radar"
+            className="text-muted transition hover:text-accent"
+          >
+            radar
+          </Link>
+          <Link
+            href="/feed"
+            className="text-muted transition hover:text-accent"
+          >
+            feed
+          </Link>
+          <Link
+            href="/membros"
+            className="text-muted transition hover:text-accent"
+          >
+            membros
+          </Link>
+          <Link
             href="/dashboard"
             className="text-muted transition hover:text-accent"
           >

@@ -57,13 +57,19 @@ CREATE TABLE IF NOT EXISTS posts (
   link TEXT,
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS likes (
+  postId INTEGER NOT NULL REFERENCES posts(id),
+  memberId INTEGER NOT NULL REFERENCES members(id),
+  PRIMARY KEY (postId, memberId)
+);
 `);
 
 // migrações leves — ALTER TABLE idempotente pra bancos já existentes
 const memberCols = (
   db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
 ).map((c) => c.name);
-for (const col of ["linkedin", "twitter", "website", "headline"]) {
+for (const col of ["linkedin", "twitter", "website", "headline", "persona"]) {
   if (!memberCols.includes(col)) {
     db.exec(`ALTER TABLE members ADD COLUMN ${col} TEXT`);
   }

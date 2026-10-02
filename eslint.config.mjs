@@ -12,6 +12,15 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Project dirs that are not app source:
+    ".venv-scraper/**",
+    ".specify/**",
+    ".clerk/**",
+    "specs/**",
+    "data/**",
+    "scripts/**",
+    "workshop/**",
+    "docs/**",
   ]),
 ]);
 

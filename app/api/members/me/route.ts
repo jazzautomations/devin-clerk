@@ -21,6 +21,7 @@ export async function PATCH(req: Request) {
     twitter: typeof body.twitter === "string" ? body.twitter : undefined,
     website: typeof body.website === "string" ? body.website : undefined,
     headline: typeof body.headline === "string" ? body.headline : undefined,
+    persona: typeof body.persona === "string" ? body.persona : undefined,
   });
   return Response.json({ ok: true });
 }

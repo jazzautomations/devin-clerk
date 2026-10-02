@@ -12,6 +12,7 @@ export function ProfileForm({ member }: { member: Member }) {
   const [twitter, setTwitter] = useState(member.twitter ?? "");
   const [website, setWebsite] = useState(member.website ?? "");
   const [headline, setHeadline] = useState(member.headline ?? "");
+  const [persona, setPersona] = useState(member.persona ?? "");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
@@ -29,6 +30,7 @@ export function ProfileForm({ member }: { member: Member }) {
         twitter,
         website,
         headline,
+        persona,
         skills: skills
           .split(",")
           .map((s) => s.trim())
@@ -66,6 +68,26 @@ export function ProfileForm({ member }: { member: Member }) {
           onChange={(e) => setSkills(e.target.value)}
           placeholder="typescript, react, solidity"
         />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-xs text-muted">
+          quem tu é no ecossistema
+        </span>
+        <select
+          className={input}
+          value={persona}
+          onChange={(e) => setPersona(e.target.value)}
+        >
+          <option value="">escolhe…</option>
+          <option value="dev">dev</option>
+          <option value="empreendedor">empreendedor</option>
+          <option value="investidor">investidor</option>
+          <option value="professor">professor</option>
+          <option value="marca">marca / empresa</option>
+          <option value="mentor">mentor</option>
+          <option value="estudante">estudante</option>
+          <option value="organizador">organizador</option>
+        </select>
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">

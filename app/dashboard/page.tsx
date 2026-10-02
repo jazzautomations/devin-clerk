@@ -64,7 +64,7 @@ export default async function DashboardPage() {
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
           comunidade — o que a galera tá construindo
         </h2>
-        <FeedSection initialPosts={listPosts()} />
+        <FeedSection initialPosts={listPosts(50, member.id)} />
       </div>
 
       {sessoes.length > 0 && (

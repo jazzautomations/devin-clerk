@@ -3,49 +3,65 @@ import { appConfig } from "@/app.config";
 import { NewsletterForm } from "@/components/NewsletterForm";
 import { getPastHackathons, getUpcomingHackathons } from "@/lib/hackathons";
 import { listMembers } from "@/lib/members";
+import { listPosts } from "@/lib/posts";
 
-const educacao = [
+const pilares = [
   {
-    title: "Guia Oracle pra hackathon",
-    desc: "Do zero à VPS com agente: rede, máquina, OpenCode/Pi/Devin e os serviços OCI que valem a pena.",
-    href: "https://hackinova.vercel.app/oracle.html",
+    num: "01",
+    title: "Sessões Hack Inova",
+    desc: "Os eventos da comunidade com inscrição em 1 clique — sem Google Forms. Arquivo completo de todas as edições.",
+    href: "/radar",
+    cta: "ver sessões →",
   },
   {
-    title: "Terraform notas do César",
-    desc: "Infra declarativa pra subir o ambiente do time — o material que virou referência dos hackathons.",
-    href: "https://hackinova-anhembi.vercel.app/downloads/terraform-cesar-notas.md",
+    num: "02",
+    title: "Radar",
+    desc: "Hackathons abertos no Brasil e no mundo, raspados das fontes oficiais — Devpost, TAIKAI, MLH, Meetup, ETHGlobal.",
+    href: "/radar",
+    cta: "abrir radar →",
   },
   {
-    title: "Preparar equipe",
-    desc: "Plano do desafio, checklist do time e materiais do dia — como se chega pronto num hackathon nosso.",
-    href: "https://hackinova-anhembi.vercel.app",
+    num: "03",
+    title: "Feed",
+    desc: "Devs, empreendedores, investidores, professores e marcas postando demos e bastidores — a rede social do cenário.",
+    href: "/feed",
+    cta: "ver feed →",
+  },
+  {
+    num: "04",
+    title: "Comunidade",
+    desc: "Diretório de quem constrói: perfis públicos com skills, projetos e histórico de campanhas.",
+    href: "/membros",
+    cta: "ver membros →",
   },
 ];
-
-const fmt = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "short",
-});
 
 export default function Home() {
   const now = new Date();
   const upcoming = getUpcomingHackathons(now);
   const sessoes = upcoming.filter((h) => h.partner);
-  const radar = upcoming.filter((h) => !h.partner);
   const arquivo = getPastHackathons(now);
-  const members = listMembers(24);
+  const memberCount = listMembers(100).length;
+  const postCount = listPosts(100).length;
+
+  const stats = [
+    { n: memberCount, label: "membros" },
+    { n: upcoming.length, label: "hackathons abertos" },
+    { n: arquivo.length, label: "edições no arquivo" },
+    { n: postCount, label: "posts no feed" },
+  ];
 
   return (
     <div className="relative">
       <div className="grid-texture pointer-events-none absolute inset-0" aria-hidden />
-      <div className="relative mx-auto flex max-w-5xl flex-col px-6 pt-20 pb-24 sm:pt-28">
+      <div className="relative mx-auto flex max-w-6xl flex-col px-6 pt-20 pb-24 sm:pt-28">
 
         {/* hero */}
         <section className="flex flex-col">
           <p className="font-mono text-xs tracking-widest text-accent">
-            {"// hub brasileiro de hackathons"}
+            {"// a rede social dos hackathons"}
           </p>
-          <h1 className="mt-6 font-display text-[2.75rem] leading-[1.02] font-bold tracking-tight sm:text-7xl">
+          <h1 className="mt-6 max-w-4xl font-display text-[2.75rem] leading-[1.02] font-bold tracking-tight sm:text-7xl">
             Um perfil.
             <br />
             Todos os <span className="text-accent">hackathons</span>.
@@ -61,181 +77,110 @@ export default function Home() {
               {"entrar_pro_early_access →"}
             </Link>
             <Link
-              href="/sign-in"
+              href="/radar"
               className="border border-line px-6 py-3 font-mono text-sm text-muted transition hover:border-accent/50 hover:text-foreground"
             >
-              já tenho conta
+              explorar o radar
             </Link>
           </div>
-        </section>
 
-        {/* sessões hackinova */}
-        <section className="mt-24 flex flex-col gap-6">
-          <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
-            <h2 className="font-display text-2xl font-bold tracking-tight">
-              Sessões <span className="text-accent">Hack Inova</span>
-            </h2>
-            <span className="font-mono text-xs text-muted">
-              os eventos da comunidade
-            </span>
-          </div>
-          <ul className="divide-y divide-line">
-            {sessoes.map((h) => (
-              <li key={h.id}>
-                <Link
-                  href={`/h/${h.id}`}
-                  className="group flex items-center justify-between gap-4 py-4"
-                >
-                  <div className="flex flex-col gap-1">
-                    <span className="font-display text-lg font-semibold tracking-tight transition group-hover:text-accent">
-                      {h.name}
-                    </span>
-                    <span className="font-mono text-xs text-muted">
-                      {h.location ?? "online"} · {h.organizer}
-                    </span>
-                  </div>
-                  <span className="shrink-0 font-mono text-xs text-accent">
-                    {fmt.format(new Date(h.startsAt))} →
-                  </span>
-                </Link>
-              </li>
+          <dl className="mt-14 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
+            {stats.map((s) => (
+              <div key={s.label} className="bg-background px-5 py-4">
+                <dt className="font-mono text-[10px] tracking-widest text-muted uppercase">
+                  {s.label}
+                </dt>
+                <dd className="mt-1 font-display text-3xl font-bold text-accent">
+                  {s.n}
+                </dd>
+              </div>
             ))}
-            {sessoes.length === 0 && (
-              <li className="py-4 font-mono text-xs text-muted">
-                {"// próxima sessão sendo anunciada — assina a newsletter"}
-              </li>
-            )}
-          </ul>
-          {arquivo.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <span className="font-mono text-[10px] tracking-widest text-muted uppercase">
-                arquivo
-              </span>
-              <ul className="divide-y divide-line border-y border-line">
-                {arquivo.map((h) => (
-                  <li key={h.id}>
-                    <Link
-                      href={`/h/${h.id}`}
-                      className="flex items-center justify-between gap-4 py-3 transition hover:text-accent"
-                    >
-                      <span className="text-sm">{h.name}</span>
-                      <span className="font-mono text-xs text-muted">
-                        {fmt.format(new Date(h.startsAt))}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          </dl>
         </section>
 
-        {/* radar */}
-        <section className="mt-20 flex flex-col gap-6">
-          <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
-            <h2 className="font-display text-2xl font-bold tracking-tight">
-              Radar
-            </h2>
-            <span className="font-mono text-xs text-muted">
-              o que tá rolando BR + mundo
-            </span>
-          </div>
-          <ul className="divide-y divide-line">
-            {radar.map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-4 py-4">
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium">{h.name}</span>
-                  <span className="font-mono text-xs text-muted">
-                    {h.organizer} · {h.location ?? "online"}
-                  </span>
-                </div>
-                <a
-                  href={h.registrationUrl}
-                  target="_blank"
-                  rel="noopener"
-                  className="shrink-0 border border-line px-3 py-1.5 font-mono text-xs text-muted transition hover:border-accent/50 hover:text-accent"
-                >
-                  {fmt.format(new Date(h.startsAt))} ↗
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* educação */}
-        <section className="mt-20 flex flex-col gap-6">
-          <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
-            <h2 className="font-display text-2xl font-bold tracking-tight">
-              Conteúdo
-            </h2>
-            <span className="font-mono text-xs text-muted">
-              preparação pra ganhar hackathon
-            </span>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {educacao.map((c) => (
-              <a
-                key={c.title}
-                href={c.href}
-                target="_blank"
-                rel="noopener"
-                className="flex flex-col gap-2 border border-line bg-surface p-5 transition hover:border-accent/40"
-              >
-                <h3 className="font-display font-semibold tracking-tight">
-                  {c.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted">{c.desc}</p>
-                <span className="mt-auto font-mono text-xs text-accent">
-                  abrir →
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        {/* comunidade — member wall estilo AI Tinkerers */}
-        {members.length > 0 && (
-          <section className="mt-20 flex flex-col gap-6">
-            <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
+        {/* próxima sessão em destaque */}
+        {sessoes[0] && (
+          <section className="mt-20">
+            <div className="flex items-baseline gap-3 border-b border-line pb-4">
+              <span className="font-mono text-[10px] text-muted">[01]</span>
               <h2 className="font-display text-2xl font-bold tracking-tight">
-                Comunidade
+                Próxima <span className="text-accent">sessão</span>
               </h2>
-              <span className="font-mono text-xs text-muted">
-                quem constrói aqui
-              </span>
             </div>
-            <ul className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              {members.map((m) => (
-                <li key={m.username}>
-                  <Link
-                    href={`/u/${m.username}`}
-                    className="group flex flex-col gap-0.5"
-                  >
-                    <span className="font-medium transition group-hover:text-accent">
-                      {m.name ?? `@${m.username}`}
-                    </span>
-                    <span className="font-mono text-xs text-muted">
-                      {m.headline ?? m.skills.slice(0, 3).join(" · ") ?? ""}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <Link
+              href={`/h/${sessoes[0].id}`}
+              className="group flex flex-col gap-4 border border-line bg-surface p-6 transition hover:border-accent/40 sm:flex-row sm:items-center sm:gap-8 sm:p-8"
+            >
+              <div className="flex w-20 shrink-0 flex-col items-center justify-center border border-accent/30 bg-accent/10 py-4 font-mono">
+                <span className="text-3xl font-bold text-accent">
+                  {new Date(sessoes[0].startsAt).getDate()}
+                </span>
+                <span className="text-xs uppercase text-muted">
+                  {new Intl.DateTimeFormat("pt-BR", { month: "short" })
+                    .format(new Date(sessoes[0].startsAt))
+                    .replace(".", "")}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <h3 className="font-display text-2xl font-bold tracking-tight transition group-hover:text-accent">
+                  {sessoes[0].name}
+                </h3>
+                <p className="font-mono text-sm text-muted">
+                  {sessoes[0].location ?? "online"} · {sessoes[0].organizer}
+                </p>
+              </div>
+              <span className="font-mono text-sm text-accent sm:ml-auto">
+                inscrever em 1 clique →
+              </span>
+            </Link>
           </section>
         )}
 
-        {/* newsletter */}
-        <section className="mt-20 flex flex-col gap-6 border border-line bg-surface p-6 sm:p-8">
-          <div className="flex flex-col gap-2">
+        {/* pilares → rotas */}
+        <section className="mt-20 flex flex-col gap-6">
+          <div className="flex items-baseline gap-3 border-b border-line pb-4">
+            <span className="font-mono text-[10px] text-muted">[02]</span>
             <h2 className="font-display text-2xl font-bold tracking-tight">
-              Newsletter
+              O que tem aqui dentro
+            </h2>
+          </div>
+          <div className="grid gap-px border border-line bg-line sm:grid-cols-2">
+            {pilares.map((p) => (
+              <Link
+                key={p.title}
+                href={p.href}
+                className="group flex flex-col gap-3 bg-background p-6 transition hover:bg-surface"
+              >
+                <div className="flex items-baseline justify-between">
+                  <span className="font-mono text-xs text-accent">{p.num}</span>
+                  <span className="font-mono text-xs text-muted transition group-hover:text-accent">
+                    {p.cta}
+                  </span>
+                </div>
+                <h3 className="font-display text-xl font-semibold tracking-tight transition group-hover:text-accent">
+                  {p.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-muted">{p.desc}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* newsletter */}
+        <section className="mt-20 border border-accent/30 bg-accent/5 p-6 sm:p-10">
+          <div className="flex max-w-2xl flex-col gap-6">
+            <p className="font-mono text-xs tracking-widest text-accent">
+              {"// newsletter"}
+            </p>
+            <h2 className="font-display text-3xl font-bold tracking-tight">
+              Toda semana, o que tá aberto.
             </h2>
             <p className="text-muted">
-              Toda semana: hackathons abertos, deadlines e o que tá em alta.
-              Sem spam, curadoria de quem vive o cenário.
+              Hackathons abertos, deadlines e o que tá em alta no cenário —
+              curadoria de quem vive isso. Sem spam.
             </p>
+            <NewsletterForm />
           </div>
-          <NewsletterForm />
         </section>
       </div>
     </div>

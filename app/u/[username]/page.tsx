@@ -25,7 +25,14 @@ export default async function PublicProfilePage({
         <h1 className="font-display text-4xl font-bold tracking-tight">
           {member.name ?? `@${member.username}`}
         </h1>
-        <p className="font-mono text-sm text-muted">@{member.username}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-mono text-sm text-muted">@{member.username}</p>
+          {member.persona && (
+            <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">
+              {member.persona}
+            </span>
+          )}
+        </div>
         {member.headline && (
           <p className="font-mono text-sm text-foreground">{member.headline}</p>
         )}

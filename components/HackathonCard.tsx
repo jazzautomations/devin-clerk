@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Hackathon } from "@/lib/hackathons";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
@@ -19,6 +20,7 @@ export function HackathonCard({
   now: Date;
   registered: boolean;
 }) {
+  const router = useRouter();
   const [isRegistered, setIsRegistered] = useState(registered);
   const [loading, setLoading] = useState(false);
   const starts = new Date(hackathon.startsAt);
@@ -37,6 +39,10 @@ export function HackathonCard({
       const res = await fetch(`/api/hackathons/${hackathon.id}/register`, {
         method: isRegistered ? "DELETE" : "POST",
       });
+      if (res.status === 401) {
+        router.push("/sign-in");
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setIsRegistered(data.registered);
