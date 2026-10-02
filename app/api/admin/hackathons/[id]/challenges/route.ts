@@ -20,21 +20,20 @@ export async function POST(
     return Response.json({ error: "Edição não encontrada" }, { status: 404 });
   }
   const b = await req.json().catch(() => null);
-  if (
-    !b ||
-    typeof b.sponsor !== "string" ||
-    !b.sponsor.trim() ||
-    typeof b.title !== "string" ||
-    !b.title.trim()
-  ) {
+  // sponsor (texto livre) ou sponsorId (entidade) — pelo menos um dos dois
+  const hasSponsor =
+    (typeof b?.sponsor === "string" && !!b.sponsor.trim()) ||
+    (typeof b?.sponsorId === "string" && !!b.sponsorId.trim());
+  if (!b || typeof b.title !== "string" || !b.title.trim() || !hasSponsor) {
     return Response.json(
-      { error: "sponsor e title obrigatórios" },
+      { error: "title + sponsor (ou sponsorId) obrigatórios" },
       { status: 400 },
     );
   }
   try {
     const challenge = createChallenge(id, {
-      sponsor: b.sponsor,
+      sponsor: typeof b.sponsor === "string" ? b.sponsor : undefined,
+      sponsorId: typeof b.sponsorId === "string" ? b.sponsorId : undefined,
       title: b.title,
       description: typeof b.description === "string" ? b.description : null,
       prize: typeof b.prize === "string" ? b.prize : null,

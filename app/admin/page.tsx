@@ -5,11 +5,13 @@ import { getOrCreateMember } from "@/lib/members";
 import { listRegistrants } from "@/lib/registrations";
 import { listSubscribers } from "@/lib/admin";
 import { listChallenges } from "@/lib/challenges";
+import { listSponsors } from "@/lib/sponsors";
 import { listAllBoardEntries } from "@/lib/teamboard";
 import { getArchive } from "@/lib/archive";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { EditEventForm } from "@/components/EditEventForm";
 import { ChallengeForm, ChallengeToggle } from "@/components/ChallengeForm";
+import { SponsorForm, SponsorToggle } from "@/components/SponsorForm";
 import { TeamBoardToggle } from "@/components/TeamBoardPanel";
 import { AssetForm, TeamForm } from "@/components/ArchiveForms";
 
@@ -22,6 +24,7 @@ export default async function AdminPage() {
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
     email: user?.primaryEmailAddress?.emailAddress ?? "",
+    imageUrl: user?.imageUrl ?? null,
   });
   if (member.role !== "admin") notFound();
 
@@ -67,6 +70,9 @@ export default async function AdminPage() {
   const archiveByEvent = new Map(events.map((e) => [e.id, getArchive(e.id)]));
 
   const subscribers = listSubscribers();
+
+  // CRM de marcas (spec 019) — cadastro único, vínculo nos desafios via API
+  const sponsors = listSponsors();
 
   const members = db
     .prepare(
@@ -332,6 +338,47 @@ export default async function AdminPage() {
             );
           })}
         </ul>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+          {"// sponsors"} ({sponsors.length})
+        </h2>
+        {sponsors.length > 0 && (
+          <ul className="divide-y divide-line border-y border-line">
+            {sponsors.map((s) => (
+              <li
+                key={s.id}
+                className="flex items-baseline justify-between gap-4 py-2"
+              >
+                <span className={mono}>
+                  {s.url ? (
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="text-accent hover:underline"
+                    >
+                      {s.name}
+                    </a>
+                  ) : (
+                    <span className="text-accent">{s.name}</span>
+                  )}
+                  <span className="ml-2 text-muted uppercase">{s.tier}</span>
+                  <span className="ml-2 text-muted">
+                    {s.challengeCount}{" "}
+                    {s.challengeCount === 1 ? "desafio" : "desafios"}
+                  </span>
+                  {!s.active && (
+                    <span className="ml-2 text-muted">(inativo)</span>
+                  )}
+                </span>
+                <SponsorToggle id={s.id} active={s.active} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <SponsorForm />
       </div>
 
       <div className="grid gap-8 sm:grid-cols-2">

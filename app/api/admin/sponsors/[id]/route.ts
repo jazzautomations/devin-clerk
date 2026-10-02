@@ -1,16 +1,18 @@
 import { auth } from "@clerk/nextjs/server";
-import {
-  getChallenge,
-  updateChallenge,
-  type ChallengePatch,
-} from "@/lib/challenges";
 import { getMemberByClerkId } from "@/lib/members";
+import {
+  getSponsor,
+  SPONSOR_TIERS,
+  updateSponsor,
+  type SponsorPatch,
+  type SponsorTier,
+} from "@/lib/sponsors";
 
 const bad = (msg: string) => Response.json({ error: msg }, { status: 400 });
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ challengeId: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
   const member = userId ? getMemberByClerkId(userId) : null;
@@ -20,10 +22,10 @@ export async function PATCH(
   if (member.role !== "admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { challengeId } = await params;
-  if (!getChallenge(challengeId)) {
+  const { id } = await params;
+  if (!getSponsor(id)) {
     return Response.json(
-      { error: "Desafio não encontrado" },
+      { error: "Sponsor não encontrado" },
       { status: 404 },
     );
   }
@@ -32,30 +34,28 @@ export async function PATCH(
     return bad("Body JSON obrigatório");
   }
 
-  const patch: ChallengePatch = {};
+  const patch: SponsorPatch = {};
 
-  for (const k of ["sponsor", "title"] as const) {
-    if (k in b) {
-      if (typeof b[k] !== "string" || !b[k].trim()) {
-        return bad(`${k} inválido`);
-      }
-      patch[k] = b[k];
+  if ("name" in b) {
+    if (typeof b.name !== "string" || !b.name.trim()) {
+      return bad("name inválido");
     }
+    patch.name = b.name;
+  }
+  if ("tier" in b) {
+    if (!SPONSOR_TIERS.includes(b.tier as SponsorTier)) {
+      return bad("tier inválido");
+    }
+    patch.tier = b.tier;
   }
   // campos opcionais que aceitam null/vazio pra limpar
-  for (const k of ["description", "prize"] as const) {
+  for (const k of ["url", "contactEmail", "notes"] as const) {
     if (k in b) {
       if (b[k] !== null && typeof b[k] !== "string") {
         return bad(`${k} inválido`);
       }
       patch[k] = typeof b[k] === "string" && b[k] ? b[k] : null;
     }
-  }
-  if ("sponsorId" in b) {
-    if (b.sponsorId !== null && typeof b.sponsorId !== "string") {
-      return bad("sponsorId inválido");
-    }
-    patch.sponsorId = b.sponsorId;
   }
   if ("active" in b) {
     if (typeof b.active !== "boolean") {
@@ -69,8 +69,8 @@ export async function PATCH(
   }
 
   try {
-    const challenge = updateChallenge(challengeId, patch);
-    return Response.json({ challenge });
+    const sponsor = updateSponsor(id, patch);
+    return Response.json({ sponsor });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Erro");
   }

@@ -49,6 +49,24 @@ describe("rotas autenticadas respondem 401 deslogado", () => {
     expect(res.status).toBe(401);
   });
 
+  it("DELETE /api/posts/[id]", async () => {
+    const { DELETE } = await import("@/app/api/posts/[id]/route");
+    const res = await DELETE(req("DELETE"), {
+      params: Promise.resolve({ id: "1" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("DELETE /api/posts/[id]/comments/[commentId]", async () => {
+    const { DELETE } = await import(
+      "@/app/api/posts/[id]/comments/[commentId]/route"
+    );
+    const res = await DELETE(req("DELETE"), {
+      params: Promise.resolve({ id: "1", commentId: "1" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
   it("PATCH /api/members/me", async () => {
     const { PATCH } = await import("@/app/api/members/me/route");
     const res = await PATCH(req("PATCH", { bio: "x" }));
@@ -95,6 +113,20 @@ describe("rotas autenticadas respondem 401 deslogado", () => {
     );
     const res = await PATCH(req("PATCH", { active: false }), {
       params: Promise.resolve({ challengeId: "x" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("GET+POST /api/admin/sponsors", async () => {
+    const { GET, POST } = await import("@/app/api/admin/sponsors/route");
+    expect((await GET()).status).toBe(401);
+    expect((await POST(req("POST", { name: "X" }))).status).toBe(401);
+  });
+
+  it("PATCH /api/admin/sponsors/[id]", async () => {
+    const { PATCH } = await import("@/app/api/admin/sponsors/[id]/route");
+    const res = await PATCH(req("PATCH", { active: false }), {
+      params: Promise.resolve({ id: "x" }),
     });
     expect(res.status).toBe(401);
   });
