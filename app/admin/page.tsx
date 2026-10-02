@@ -8,6 +8,7 @@ import { listChallenges } from "@/lib/challenges";
 import { listSponsors } from "@/lib/sponsors";
 import { listAllBoardEntries } from "@/lib/teamboard";
 import { LEAD_INTEREST_LABELS, listLeads } from "@/lib/leads";
+import { listPendingSubmissions } from "@/lib/submissions";
 import { getArchive } from "@/lib/archive";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { EditEventForm } from "@/components/EditEventForm";
@@ -15,6 +16,7 @@ import { ChallengeForm, ChallengeToggle } from "@/components/ChallengeForm";
 import { SponsorForm, SponsorToggle } from "@/components/SponsorForm";
 import { TeamBoardToggle } from "@/components/TeamBoardPanel";
 import { AssetForm, TeamForm } from "@/components/ArchiveForms";
+import { SubmissionActions } from "@/components/SubmissionActions";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -77,6 +79,9 @@ export default async function AdminPage() {
 
   // fila de prospecção (spec 022) — leads do /empresas, mais recente primeiro
   const leads = listLeads();
+
+  // fila de curadoria (spec 026) — indicações do /radar, mais antiga primeiro
+  const submissions = listPendingSubmissions();
 
   const members = db
     .prepare(
@@ -480,6 +485,61 @@ export default async function AdminPage() {
             ))}
           </ul>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+          {"// indicações"} ({submissions.length})
+        </h2>
+        {submissions.length > 0 ? (
+          <ul className="divide-y divide-line border-y border-line">
+            {submissions.map((s) => (
+              <li
+                key={s.id}
+                className="flex items-baseline justify-between gap-4 py-2"
+              >
+                <span className={mono}>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent hover:underline"
+                  >
+                    {s.name}
+                  </a>
+                  <span className="ml-2 border border-line px-1.5 text-[10px] text-muted uppercase">
+                    {s.format}
+                  </span>
+                  {s.startsAt && (
+                    <span className="ml-2 text-muted">
+                      {new Intl.DateTimeFormat("pt-BR").format(
+                        new Date(s.startsAt),
+                      )}
+                    </span>
+                  )}
+                  {s.location && (
+                    <span className="ml-2 text-muted">{s.location}</span>
+                  )}
+                  {s.note && (
+                    <span className="mt-1 block text-muted">{s.note}</span>
+                  )}
+                  <span className="mt-1 block text-[10px] text-muted">
+                    indicado em{" "}
+                    {new Intl.DateTimeFormat("pt-BR", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    }).format(new Date(s.createdAt))}
+                  </span>
+                </span>
+                <SubmissionActions id={s.id} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="border border-dashed border-line px-4 py-4 font-mono text-xs text-muted">
+            {"// fila vazia — a porta é o fim do /radar"}
+          </p>
+        )}
       </div>
     </section>
   );

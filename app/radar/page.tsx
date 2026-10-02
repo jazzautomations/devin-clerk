@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { HackathonFeed } from "@/components/HackathonFeed";
+import { SubmitEventForm } from "@/components/SubmitEventForm";
 import {
   getTags,
   getUpcomingHackathons,
@@ -109,6 +110,27 @@ export default async function RadarPage({
           />
         </div>
       )}
+
+      {/* terceiro canal do radar (spec 026): a comunidade indica, a
+          curadoria decide — nada entra direto na listagem */}
+      <details className="group border border-dashed border-line">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="font-mono text-xs tracking-widest text-muted uppercase">
+            {"// indica um hackathon"}
+          </span>
+          <span className="font-mono text-xs text-muted">
+            <span className="group-open:hidden">▸</span>
+            <span className="hidden group-open:inline">▾</span>
+          </span>
+        </summary>
+        <div className="flex flex-col gap-4 border-t border-line/50 px-5 py-5">
+          <p className="max-w-xl text-sm text-muted">
+            Viu um hackathon que não tá no radar? Manda o link — a
+            curadoria revisa antes de publicar.
+          </p>
+          <SubmitEventForm />
+        </div>
+      </details>
     </section>
   );
 }
