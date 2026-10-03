@@ -190,7 +190,7 @@ export function FeedSection({
   return (
     <div className="flex flex-col gap-4">
       {canPost && (
-        <div className="flex flex-col gap-3 border border-line bg-surface p-4">
+        <div className="card flex flex-col gap-3 p-4">
           {hackathonId && (
             <p className="font-mono text-[10px] text-accent">
               {"// postando no mural: "}

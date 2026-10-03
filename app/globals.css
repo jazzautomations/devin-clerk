@@ -1,15 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b0d0e;
-  --foreground: #e7e5e0;
+  --background: #0a0c0d;
+  --foreground: #e9e7e3;
   --accent: #a3e635;
-  --surface: #121517;
-  --line: rgba(255, 255, 255, 0.09);
-  --muted: #8b8f94;
+  --surface: #131719;
+  --surface-hi: #1a1f22;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --muted: #92989e;
   --raro: #38bdf8;
   --epico: #a78bfa;
   --lendario: #f59e0b;
+  /* elevação — a sombra é o que separa card de retângulo */
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 36px rgba(0, 0, 0, 0.45);
+  --glow-accent: 0 0 0 1px rgba(163, 230, 53, 0.25), 0 8px 30px rgba(163, 230, 53, 0.08);
 }
 
 @theme inline {
@@ -17,7 +23,9 @@
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
   --color-surface: var(--surface);
+  --color-surface-hi: var(--surface-hi);
   --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
   --color-muted: var(--muted);
   --color-raro: var(--raro);
   --color-epico: var(--epico);
@@ -39,6 +47,50 @@ body {
     linear-gradient(to bottom, var(--line) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
+}
+
+/* card com elevacao real — borda + highlight interno + sombra.
+   hover sobe e acende a borda. E o que diferencia produto de wireframe. */
+.card {
+  background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface) 100%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(163, 230, 53, 0.35);
+  box-shadow: var(--shadow-lift), var(--glow-accent);
+}
+
+/* faixa de arte generativa no topo dos cards — CardArt ganha recorte
+   e um fade pra superficie pra texto por cima continuar legivel */
+.card-cover {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+.card-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(10, 12, 13, 0.55) 100%);
+  pointer-events: none;
+}
+
+/* selo de premio — barra dourada com cara de dinheiro, nao chip cinza */
+.prize-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.06));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--lendario);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  letter-spacing: 0.02em;
 }
 
 /* efeito holo das cartinhas — faixa de luz atravessa no hover */

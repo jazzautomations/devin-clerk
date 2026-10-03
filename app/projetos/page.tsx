@@ -153,10 +153,8 @@ export default async function ProjetosPage({
           {projects.map((c) => (
             <li
               key={c.teamId}
-              className={`flex flex-col gap-3 border p-5 ${
-                c.placement === 1
-                  ? "border-lendario/60 bg-lendario/5"
-                  : "border-line bg-surface"
+              className={`card flex flex-col gap-3 p-5 ${
+                c.placement === 1 ? "border-lendario/60 bg-lendario/5" : ""
               }`}
             >
               <div className="flex items-start justify-between gap-3">

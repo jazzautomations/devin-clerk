@@ -26,6 +26,7 @@ import { ArenaCountdown } from "@/components/ArenaCountdown";
 import { Avatar } from "@/components/Avatar";
 import { FeedSection } from "@/components/FeedSection";
 import { listPosts } from "@/lib/posts";
+import { CardArt } from "@/components/CardArt";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -138,6 +139,21 @@ export default async function HackathonPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd(eventJsonLd(h)) }}
       />
+      {/* banner de arte — a capa da edição, mesma arte da cartinha */}
+      <div className="card-cover relative -mx-6 -mt-16 h-36 border-b border-line sm:mx-0 sm:mt-0">
+        <CardArt seed={h.id} className="h-full w-full" />
+        <div className="absolute right-4 bottom-3 z-10 flex items-center gap-2 font-mono text-[10px] tracking-widest uppercase">
+          <span className="border border-line bg-background/80 px-2 py-0.5 text-muted backdrop-blur-sm">
+            {FORMAT_LABEL[h.format]}
+          </span>
+          {h.partner && (
+            <span className="border border-accent/50 bg-background/80 px-2 py-0.5 text-accent backdrop-blur-sm">
+              hack inova
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3">
         <p className="font-mono text-xs tracking-widest text-accent">
           {past ? "// arquivo" : "// hackathon"}

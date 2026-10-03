@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { appConfig } from "@/app.config";
 import { NewsletterForm } from "@/components/NewsletterForm";
+import { CollectibleCard } from "@/components/CollectibleCard";
+import { CardArt } from "@/components/CardArt";
+import { getCardRarity, getCardSupply } from "@/lib/xp";
 import { getOpenHackathons, getPastHackathons } from "@/lib/hackathons";
 import { listMembers } from "@/lib/members";
 import { getStatsMomentum } from "@/lib/momentum";
@@ -54,58 +57,87 @@ export default function Home() {
     { n: arquivo.length, label: "edições no arquivo", delta: 0 },
     { n: postCount, label: "posts no feed", delta: momentum.posts },
   ];
+  // leque do hero: as edições de verdade (arquivo + próximas), até 3
+  const heroCards = [...arquivo, ...sessoes].slice(0, 3);
 
   return (
-    <div className="relative">
+    <div className="relative overflow-x-clip">
       <div className="grid-texture pointer-events-none absolute inset-0" aria-hidden />
       <div className="relative mx-auto flex max-w-6xl flex-col px-6 pt-20 pb-24 sm:pt-28">
 
-        {/* hero */}
-        <section className="flex flex-col">
-          <p className="font-mono text-xs tracking-widest text-accent">
-            {"// a rede social dos hackathons"}
-          </p>
-          <h1 className="mt-6 max-w-4xl font-display text-[2.75rem] leading-[1.02] font-bold tracking-tight sm:text-7xl">
-            Um perfil.
-            <br />
-            Todos os <span className="text-accent">hackathons</span>.
-          </h1>
-          <p className="mt-6 max-w-xl text-lg text-muted">
-            {appConfig.description}
-          </p>
-          <div className="mt-10 flex flex-wrap items-center gap-4">
-            <Link
-              href="/dashboard"
-              className="bg-accent px-6 py-3 font-mono text-sm font-semibold text-black transition hover:brightness-110"
-            >
-              {"entrar_pro_early_access →"}
-            </Link>
-            <Link
-              href="/radar"
-              className="border border-line px-6 py-3 font-mono text-sm text-muted transition hover:border-accent/50 hover:text-foreground"
-            >
-              explorar o radar
-            </Link>
+        {/* hero — pitch + as cartinhas reais das edições em leque */}
+        <section className="grid items-center gap-12 lg:grid-cols-[1.2fr_1fr]">
+          <div className="flex flex-col">
+            <p className="font-mono text-xs tracking-widest text-accent">
+              {"// a rede social dos hackathons"}
+            </p>
+            <h1 className="mt-6 font-display text-5xl leading-[0.98] font-bold tracking-tight sm:text-7xl lg:text-[5.2rem]">
+              Um perfil.
+              <br />
+              Todos os{" "}
+              <span className="text-accent">hackathons</span>.
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
+              {appConfig.description}
+            </p>
+            <div className="mt-10 flex flex-wrap items-center gap-4">
+              <Link
+                href="/dashboard"
+                className="bg-accent px-6 py-3.5 font-mono text-sm font-semibold text-black transition hover:brightness-110"
+              >
+                {"entrar_pro_early_access →"}
+              </Link>
+              <Link
+                href="/radar"
+                className="border border-line px-6 py-3.5 font-mono text-sm text-muted transition hover:border-accent/50 hover:text-foreground"
+              >
+                explorar o radar
+              </Link>
+            </div>
           </div>
 
-          <dl className="mt-14 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label} className="bg-background px-5 py-4">
-                <dt className="font-mono text-[10px] tracking-widest text-muted uppercase">
-                  {s.label}
-                </dt>
-                <dd className="mt-1 font-display text-3xl font-bold text-accent">
-                  {s.n}
-                </dd>
-                {s.delta > 0 && (
-                  <dd className="mt-0.5 font-mono text-[10px] text-muted">
-                    {`+${s.delta} · 30d`}
-                  </dd>
-                )}
+          {/* leque de cartas — arte real gerada por edição, raridade real */}
+          <div className="relative hidden h-[420px] lg:block" aria-hidden>
+            {heroCards.map((h, i) => (
+              <div
+                key={h.id}
+                className="absolute top-1/2 w-56"
+                style={{
+                  left: `${i * 32}%`,
+                  transform: `translateY(-50%) rotate(${(i - 1) * 8}deg) translateY(${Math.abs(i - 1) * 14}px)`,
+                  zIndex: i === 1 ? 3 : 1,
+                }}
+              >
+                <CollectibleCard
+                  hackathonId={h.id}
+                  name={h.name}
+                  startsAt={h.startsAt}
+                  location={h.location}
+                  rarity={getCardRarity(h.id)}
+                  supply={getCardSupply(h.id)}
+                />
               </div>
             ))}
-          </dl>
+          </div>
         </section>
+
+        <dl className="mt-16 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
+          {stats.map((s) => (
+            <div key={s.label} className="bg-surface px-5 py-5">
+              <dt className="font-mono text-[10px] tracking-widest text-muted uppercase">
+                {s.label}
+              </dt>
+              <dd className="mt-1.5 font-display text-4xl font-bold tracking-tight text-accent">
+                {s.n}
+              </dd>
+              {s.delta > 0 && (
+                <dd className="mt-1 font-mono text-[10px] text-muted">
+                  {`+${s.delta} · 30d`}
+                </dd>
+              )}
+            </div>
+          ))}
+        </dl>
 
         {/* próxima sessão em destaque */}
         {sessoes[0] && (
@@ -118,9 +150,25 @@ export default function Home() {
             </div>
             <Link
               href={`/h/${sessoes[0].id}`}
-              className="group flex flex-col gap-4 border border-line bg-surface p-6 transition hover:border-accent/40 sm:flex-row sm:items-center sm:gap-8 sm:p-8"
+              className="card group relative flex flex-col gap-4 overflow-hidden p-6 sm:flex-row sm:items-center sm:gap-8 sm:p-8"
             >
-              <div className="flex w-20 shrink-0 flex-col items-center justify-center border border-accent/30 bg-accent/10 py-4 font-mono">
+              <div
+                className="absolute inset-y-0 left-0 w-40 opacity-70"
+                aria-hidden
+              >
+                <div className="absolute inset-0">
+                  {/* arte da edição sangrando na esquerda do destaque */}
+                  <CardArt seed={sessoes[0].id} className="h-full w-full" />
+                </div>
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, rgba(19,23,25,0.25) 0%, var(--surface) 100%)",
+                  }}
+                />
+              </div>
+              <div className="relative flex w-20 shrink-0 flex-col items-center justify-center border border-accent/40 bg-background/80 py-4 font-mono backdrop-blur-sm">
                 <span className="text-3xl font-bold text-accent">
                   {new Date(sessoes[0].startsAt).getDate()}
                 </span>
@@ -130,7 +178,7 @@ export default function Home() {
                     .replace(".", "")}
                 </span>
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="relative flex flex-col gap-1">
                 <h3 className="font-display text-2xl font-bold tracking-tight transition group-hover:text-accent">
                   {sessoes[0].name}
                 </h3>
@@ -138,7 +186,7 @@ export default function Home() {
                   {sessoes[0].location ?? "online"} · {sessoes[0].organizer}
                 </p>
               </div>
-              <span className="font-mono text-sm text-accent sm:ml-auto">
+              <span className="relative font-mono text-sm text-accent sm:ml-auto">
                 inscrever em 1 clique →
               </span>
             </Link>
@@ -158,7 +206,7 @@ export default function Home() {
               <Link
                 key={p.title}
                 href={p.href}
-                className="group flex flex-col gap-3 bg-background p-6 transition hover:bg-surface"
+                className="group flex flex-col gap-3 bg-surface p-6 transition hover:bg-surface-hi"
               >
                 <div className="flex items-baseline justify-between">
                   <span className="font-mono text-xs text-accent">{p.num}</span>

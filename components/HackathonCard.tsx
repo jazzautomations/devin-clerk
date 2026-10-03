@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Hackathon } from "@/lib/hackathons";
 import type { RegistrationStatus } from "@/lib/registrations";
+import { CardArt } from "@/components/CardArt";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
   online: "online",
@@ -96,11 +97,31 @@ export function HackathonCard({
   }
 
   return (
-    <article className="flex flex-col gap-4 border border-line bg-surface p-5 transition hover:border-accent/40">
-      <div className="flex items-start justify-between gap-3">
+    <article className="card group flex flex-col overflow-hidden">
+      {/* capa generativa — a arte da cartinha da edição vira a cara do card */}
+      <Link
+        href={`/h/${hackathon.id}`}
+        className="card-cover relative block h-24"
+        aria-hidden
+        tabIndex={-1}
+      >
+        <CardArt seed={hackathon.id} className="h-full w-full" />
+        <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+          <span className="border border-line bg-background/80 px-2 py-0.5 font-mono text-[10px] tracking-widest text-muted uppercase backdrop-blur-sm">
+            {FORMAT_LABEL[hackathon.format]}
+          </span>
+          {hackathon.partner && (
+            <span className="border border-accent/50 bg-background/80 px-2 py-0.5 font-mono text-[10px] tracking-widest text-accent uppercase backdrop-blur-sm">
+              parceiro
+            </span>
+          )}
+        </div>
+      </Link>
+
+      <div className="flex flex-1 flex-col gap-4 p-5">
         <div className="flex flex-col gap-1">
           <h3 className="font-display text-lg font-semibold tracking-tight">
-            <Link href={`/h/${hackathon.id}`} className="hover:text-accent">
+            <Link href={`/h/${hackathon.id}`} className="transition hover:text-accent">
               {hackathon.name}
             </Link>
           </h3>
@@ -108,17 +129,6 @@ export function HackathonCard({
             {hackathon.organizer}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className="border border-line px-2 py-1 font-mono text-[10px] tracking-widest text-muted uppercase">
-            {FORMAT_LABEL[hackathon.format]}
-          </span>
-          {hackathon.partner && (
-            <span className="border border-accent/40 bg-accent/10 px-2 py-1 font-mono text-[10px] tracking-widest text-accent uppercase">
-              parceiro
-            </span>
-          )}
-        </div>
-      </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
         <div>
@@ -137,10 +147,8 @@ export function HackathonCard({
         </div>
         {hackathon.prize && (
           <div className="col-span-2">
-            <dt className="text-muted">prêmio</dt>
-            <dd className="text-sm font-semibold text-lendario">
-              {hackathon.prize}
-            </dd>
+            <dt className="sr-only">prêmio</dt>
+            <dd><span className="prize-badge">{hackathon.prize}</span></dd>
           </div>
         )}
         <div className="col-span-2">
@@ -209,6 +217,7 @@ export function HackathonCard({
       {reward && (
         <p className="font-mono text-[10px] text-accent">{"// "}{reward}</p>
       )}
+      </div>
     </article>
   );
 }
