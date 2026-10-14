@@ -2,11 +2,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { CERT_KIND_LABEL, formatCertDate, type Certificate } from "@/lib/certificates";
+import { CERT_KIND_LABEL, certPeriod, certRoleLabel, formatCertDate, formatHours, type Certificate } from "@/lib/certificates";
 
 // PDF do certificado, gerado sob demanda (nada guardado em disco): A4
 // paisagem no sistema da Hack Inova — papel, tinta, verde de ação, fios
 // retos, Archivo nos títulos (assets/fonts, OFL), mono nos dados.
+// roadmap 037 #2 — frase com período, instituição promotora e carga horária
+// (congelados na emissão) e a carga horária também na ficha do rodapé.
 
 const PAPER = rgb(0xfe / 255, 0xfe / 255, 0xfe / 255);
 const INK = rgb(0x0c / 255, 0x0c / 255, 0x0c / 255);
@@ -73,7 +75,7 @@ function label(page: PDFPage, font: PDFFont, text: string, x: number, y: number,
 export async function certificatePdf(c: Certificate, baseUrl: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Certificado ${CERT_KIND_LABEL[c.kind]} — ${c.hackathonName}`);
-  pdf.setAuthor("Hack Inova · HackaHub");
+  pdf.setAuthor(`${c.institution} · HackaHub`);
   pdf.setSubject(`Verificação: ${baseUrl}/c/${c.code}`);
   pdf.setCreationDate(new Date());
 
@@ -129,22 +131,31 @@ export async function certificatePdf(c: Certificate, baseUrl: string): Promise<U
 
   y -= 30;
   const where = c.location ? `, em ${c.location}` : "";
-  const sentence = `${statement(c)} ${c.hackathonName}, realizada em ${formatCertDate(c.startsAt)}${where}.`;
-  for (const line of wrap(body, sentence, 17, width).slice(0, 3)) {
-    page.drawText(line, { x: left, y, size: 17, font: body, color: INK });
-    y -= 24;
+  const period = certPeriod(c);
+  const when = period.includes(" a ") ? `realizada de ${period}` : `realizada em ${period}`;
+  const promoter = c.institution ? `, promovida por ${c.institution}` : "";
+  const role = certRoleLabel(c);
+  const asRole = role && c.kind !== "premiacao" ? ` na condição de ${role}` : "";
+  const load = c.hours !== null ? `, com carga horária de ${formatHours(c.hours)}` : "";
+  const sentence = `${statement(c)} ${c.hackathonName}${asRole}, ${when}${where}${promoter}${load}.`;
+  const lines = wrap(body, sentence, 17, width);
+  const size = lines.length > 4 ? 14 : 17;
+  for (const line of wrap(body, sentence, size, width).slice(0, 5)) {
+    page.drawText(line, { x: left, y, size, font: body, color: INK });
+    y -= size + 7;
   }
 
   // rodapé: ficha técnica com código e link de verificação
   const fy = M + 26;
   const boxH = 62;
   page.drawRectangle({ x: left, y: fy, width, height: boxH, color: MINT, borderColor: INK, borderWidth: 1 });
-  const col = width / 3;
   const cells: [string, string, PDFFont, number][] = [
     ["código", c.code, monoBold, 15],
+    ...(c.hours !== null ? ([["carga horária", formatHours(c.hours), monoBold, 13]] as [string, string, PDFFont, number][]) : []),
     ["emitido em", formatCertDate(c.issuedAt), mono, 11],
     ["verifique em", `${baseUrl.replace(/^https?:\/\//, "")}/c/${c.code}`, mono, 9.5],
   ];
+  const col = width / cells.length;
   cells.forEach(([k, v, f, size], i) => {
     const x = left + col * i + 14;
     if (i > 0) {
