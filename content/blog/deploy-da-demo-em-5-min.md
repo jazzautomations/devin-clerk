@@ -1,51 +1,43 @@
 ---
 title: "Guia: deploy da demo em 5 min com o hackahub"
-description: Do repo público no GitHub pra uma URL ao vivo /demo/id — Dockerfile, package.json ou index.html, sem mexer em nginx, porta ou conta de cloud.
+description: Como publicar a demo do seu time a partir de um repositório público no GitHub, quando a edição liga essa ferramenta.
 date: 2026-10-05
 author: equipe hackahub
 tags: [guia, deploy, demo]
 ---
 
-O projeto do hackathon não pode morrer num `git push`. Com a ferramenta de deploy do HackaHub, qualquer repo público do GitHub vira uma URL funcionando `hackahub.dev/demo/<id>` — pra mostrar pro jurado, pro sponsor ou pro recrutador sem instalar nada.
+Algumas edições ligam a publicação de demos no HackaHub. Quando ela está ligada, um repositório público do GitHub vira um endereço `/demo/<id>` no próprio site, pra você mostrar o projeto pro júri ou pra quem patrocina sem instalar nada.
+
+A ferramenta é ligada edição por edição. Se o card do seu time não mostra o botão **publicar demo**, ela está desligada na sua edição.
 
 ## O que você precisa
 
-- Um **repo público no GitHub** com o projeto
-- Ser **membro do time** no arquivo da edição (o organizador vincula os usernames) ou admin
+- Um **repositório público no GitHub** com o projeto
+- Estar no **time** na página da edição
 - 5 minutos
 
 ## Passo a passo
 
-1. Abra a página da edição — ex.: [/h/hack-inova-unifacens-2026](/h/hack-inova-unifacens-2026)
-2. Ache o card do seu time na seção de resultado
-3. Se o projeto já tem `repo →` cadastrado, é só clicar em **deploy**; senão, cole a URL do repo no painel
-4. Aguarde o status subir: `queued → building → running`
-5. Quando `running`, a demo já responde em `/demo/<id>` — manda o link
+1. Abra a página da sua edição
+2. Ache o card do seu time
+3. Se o repositório já está cadastrado, clique em **publicar demo**. Se não estiver, cadastre o repositório primeiro
+4. Espere o status passar de **na fila** pra **publicando…** e depois pra **ao vivo**
+5. Com a demo ao vivo, o endereço `/demo/<id>` já funciona. É só mandar o link
 
-```txt
-POST /api/projects/[teamId]/deploy { "repoUrl": "https://github.com/time/projeto" }
-→ 202 { deployId }
-GET  /demo/<id>/  → sua app ao vivo
-```
+## O que funciona direto
 
-## Stacks que funcionam direto
+- **Dockerfile no repositório**: a gente usa ele. A aplicação deve ouvir na porta `8080` (a variável `PORT=8080` já vem definida)
+- **package.json** (Node ou Next): a gente roda `npm install`, `npm run build` e `npm start`
+- **Site estático** (só `index.html`): sobe um servidor simples sozinho
+- **Outra linguagem**: informe o comando de início na hora de publicar
 
-- **Dockerfile no repo** → build direto; a app deve ouvir na porta `8080` (a gente injeta `PORT=8080`)
-- **package.json** (Node/Next) → Dockerfile gerado: `npm install`, `npm run build`, `npm start`
-- **Site estático** (só `index.html`) → servidor `python -m http.server` automático
-- **Outra stack** → passe `startCommand` no deploy e a gente usa ele como CMD
+## Limites
 
-## Limites honestos
+- A demo fica no ar por **72 horas**. Depois disso a página mostra o link do repositório
+- Cada projeto tem **1 demo ativa**, e a plataforma roda no máximo 3 ao mesmo tempo
+- Aplicação de página única com caminhos absolutos (`/assets/app.js`) pode quebrar dentro de `/demo/<id>/`. Use caminhos relativos ou configure o caminho base
+- Repositório privado não funciona
 
-- **TTL de 72h** — demo é pra mostrar o projeto, não pra hospedar produto; expirada, vira tombstone com link pro repo
-- **1 deploy ativo por projeto**, máximo 3 rodando por membro — recurso da máquina é finito
-- **SPA com paths absolutos** (`/assets/app.js`) pode quebrar sob `/demo/<id>/` — use caminhos relativos ou configure o base path da app
-- **Repo privado falha** no clone — só GitHub público
+## Como funciona por dentro
 
-## Por baixo do capô
-
-Cada deploy é um container isolado (memória/CPU limitados, read-only, sem privilégios) publicado só em `127.0.0.1` — quem fala com a internet é o proxy do Next em `/demo/[id]`. Admin tem kill-switch e lista de inventário no `/admin`.
-
-## TL;DR
-
-Repo público → botão deploy no card do time → URL `/demo/id` em ~5 min. A próxima demo que um jurado vai abrir pode ser a sua.
+Cada demo roda num container isolado, com memória e CPU limitadas, sem privilégios e sem acesso à sua sessão no HackaHub. Quem fala com a internet é o próprio site, pelo endereço `/demo/<id>`.

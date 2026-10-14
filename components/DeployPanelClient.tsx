@@ -2,23 +2,25 @@
 
 import { useEffect, useState } from "react";
 
-type Deploy = {
+export type DeployPanelDeploy = {
   id: string;
   status: "queued" | "building" | "running" | "failed" | "stopped" | "expired";
   error: string | null;
 };
 
-const LABEL: Record<Deploy["status"], string> = {
+const LABEL: Record<DeployPanelDeploy["status"], string> = {
   queued: "na fila",
-  building: "buildando…",
+  building: "publicando…",
   running: "ao vivo",
   failed: "falhou",
   stopped: "parada",
   expired: "expirada",
 };
 
-/** painel do deploy tool — membro do time publica/para a demo do projeto */
-export function DeployPanel({
+/** painel do deploy tool — membro do time publica/para a demo do projeto.
+ * Só renderiza pelo DeployPanel (servidor), que esconde tudo quando a
+ * publicação de demos está desligada. */
+export function DeployPanelClient({
   teamId,
   canDeploy,
   hasRepo,
@@ -27,9 +29,9 @@ export function DeployPanel({
   teamId: number;
   canDeploy: boolean;
   hasRepo: boolean;
-  initialDeploy?: Deploy | null;
+  initialDeploy?: DeployPanelDeploy | null;
 }) {
-  const [deploy, setDeploy] = useState<Deploy | null>(initialDeploy);
+  const [deploy, setDeploy] = useState<DeployPanelDeploy | null>(initialDeploy);
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -75,7 +77,7 @@ export function DeployPanel({
   if (!deploy && !hasRepo)
     return (
       <span className="font-mono text-[12px] text-muted">
-        {"sem repo pra deployar"}
+        {"cadastre o repositório pra publicar a demo"}
       </span>
     );
 
@@ -106,7 +108,7 @@ export function DeployPanel({
           disabled={busy}
           className="border-[1.5px] border-line px-2 py-1 transition hover:border-line hover:text-accent disabled:opacity-40"
         >
-          {deploy ? "re-deploy" : "publicar demo"}
+          {deploy ? "publicar de novo" : "publicar demo"}
         </button>
       )}
       {canDeploy && ["queued", "building", "running"].includes(deploy?.status ?? "") && (

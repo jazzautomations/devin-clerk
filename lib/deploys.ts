@@ -40,7 +40,14 @@ export function validateRepoUrl(u: string): string | null {
 
 // trava de ambiente: o deploy tool roda código de terceiros, e a VPS de
 // produção divide máquina com outros serviços — sem HACKAHUB_DEPLOY_TOOL=on
-// ele fica desligado e o toggle do admin não religa (spec 033, Produção)
+// ele fica desligado e o toggle do admin não religa (spec 033, Produção).
+//
+// OBRIGATÓRIO antes de ligar HACKAHUB_DEPLOY_TOOL=on em stage ou prod:
+// servir /demo/* num domínio separado e sem cookie do app (ex.:
+// *.demo-<outro-dominio>). Na mesma origem, um <script> da demo chama /api/*
+// com a sessão de quem visita. O proxy já tira cookie/Authorization e manda
+// CSP sandbox (app/demo/[id]/[[...path]]/route.ts), mas isso é a segunda
+// camada, não a primeira.
 export function deployToolAllowed(): boolean {
   return process.env.HACKAHUB_DEPLOY_TOOL === "on";
 }
@@ -155,7 +162,7 @@ export async function queueDeploy(input: {
   startCommand?: string;
   byUsername: string;
 }): Promise<Deploy> {
-  if (!await deploysEnabled()) throw new Error("Deploys desativados pelo admin");
+  if (!await deploysEnabled()) throw new Error("A publicação de demos está desativada no momento");
   if (!await projectExists(input.teamId)) throw new Error("Projeto não encontrado");
   if (await getDeployForTeam(input.teamId))
     throw new Error("Já existe um deploy ativo pra esse projeto");
@@ -177,6 +184,20 @@ export async function queueDeploy(input: {
   return (await getDeploy(id))!;
 }
 
+/**
+ * O runner faz docker build de Dockerfile de terceiros: recebe só o que usa
+ * (banco, PATH, HOME do docker), nunca CLERK_SECRET_KEY nem segredos HMAC.
+ */
+export function runnerEnv(env: Record<string, string | undefined>): Record<string, string> {
+  const keep = ["PATH", "HOME", "DATABASE_URL", "DOCKER_HOST", "NODE_ENV", "TZ"] as const;
+  const out: Record<string, string> = {};
+  for (const k of keep) {
+    const v = env[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
 function spawnRunner(deployId: string, startCommand?: string) {
   fs.mkdirSync(path.join(DEPLOYS_DIR, deployId), { recursive: true });
   const logFd = fs.openSync(
@@ -193,7 +214,7 @@ function spawnRunner(deployId: string, startCommand?: string) {
     {
       detached: true,
       stdio: ["ignore", logFd, logFd],
-      env: process.env,
+      env: runnerEnv(process.env) as NodeJS.ProcessEnv,
     },
   );
   child.unref();

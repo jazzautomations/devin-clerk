@@ -129,3 +129,20 @@ describe("trava de ambiente (HACKAHUB_DEPLOY_TOOL)", () => {
     }
   });
 });
+
+describe("DeployPanel some quando a publicação de demos está desligada", () => {
+  it("sem HACKAHUB_DEPLOY_TOOL=on não renderiza nada", async () => {
+    const { DeployPanel } = await import("@/components/DeployPanel");
+    vi.stubEnv("HACKAHUB_DEPLOY_TOOL", "");
+    expect(await DeployPanel({ teamId: 1, canDeploy: true, hasRepo: true })).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it("ligado renderiza o painel", async () => {
+    const { DeployPanel } = await import("@/components/DeployPanel");
+    vi.stubEnv("HACKAHUB_DEPLOY_TOOL", "on");
+    await setDeploysEnabled(true);
+    expect(await DeployPanel({ teamId: 1, canDeploy: true, hasRepo: true })).not.toBeNull();
+    vi.unstubAllEnvs();
+  });
+});
