@@ -190,12 +190,16 @@ export default async function Home() {
       {/* faixa da próxima edição */}
       {proxima && (
         <Link href={`/h/${proxima.id}`} className="strip block hover:underline">
-          <span className="mx-auto flex max-w-6xl flex-wrap justify-between gap-x-6 gap-y-0.5 px-4 py-1.5 sm:px-6">
-            <span>
-              PRÓXIMA EDIÇÃO · {fmtDia.format(new Date(proxima.startsAt))} {mesCurto(new Date(proxima.startsAt))} ·{" "}
-              {proxima.name.toUpperCase()}
+          {/* uma linha só no celular: nome trunca, status fica curto */}
+          <span className="mx-auto flex max-w-6xl justify-between gap-x-4 px-4 py-1.5 sm:px-6">
+            <span className="min-w-0 truncate">
+              <span className="hidden sm:inline">PRÓXIMA EDIÇÃO · </span>
+              {fmtDia.format(new Date(proxima.startsAt))} {mesCurto(new Date(proxima.startsAt))} · {proxima.name.toUpperCase()}
             </span>
-            <span>{isRegistrationClosed(proxima, now) ? "INSCRIÇÕES ENCERRADAS ▸" : "INSCRIÇÕES ABERTAS ▸"}</span>
+            <span className="shrink-0">
+              <span className="hidden sm:inline">INSCRIÇÕES </span>
+              {isRegistrationClosed(proxima, now) ? "ENCERRADAS" : "ABERTAS"} ▸
+            </span>
           </span>
         </Link>
       )}
