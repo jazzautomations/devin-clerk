@@ -396,7 +396,7 @@ describe("lista pública de inscritos × consentimento (frente N #6)", () => {
     expect(consent).toContain("para organizar o evento");
     expect(consent).not.toMatch(/lista p[úu]blica|exibi/i);
     const m = await makeMember();
-    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null });
+    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     expect(await getRegistrationStatus(m, ED)).toBe("approved");
     expect(await getPublicListing(m, ED)).toBe(false);
     expect(await getRegistrationsByHackathon(ED)).toEqual([]);
@@ -405,7 +405,7 @@ describe("lista pública de inscritos × consentimento (frente N #6)", () => {
 
   it("opt-in explícito no formulário aparece; dá pra revogar e voltar", async () => {
     const m = await makeMember();
-    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, publicListing: true });
+    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, publicListing: true, terms: { birthDate: "2000-01-01", conduct: true } });
     expect((await getRegistrationsByHackathon(ED)).length).toBe(1);
     expect(await setPublicListing(m, ED, false)).toBe(true);
     expect(await getRegistrationsByHackathon(ED)).toEqual([]);
@@ -417,7 +417,7 @@ describe("lista pública de inscritos × consentimento (frente N #6)", () => {
 
   it("pendente com opt-in não aparece até ser aprovado", async () => {
     const m = await makeMember();
-    await submitRegistration({ memberId: m, hackathonId: CURATED, answers: {}, consent: true, ip: null, publicListing: true });
+    await submitRegistration({ memberId: m, hackathonId: CURATED, answers: {}, consent: true, ip: null, publicListing: true, terms: { birthDate: "2000-01-01", conduct: true } });
     expect(await getRegistrationsByHackathon(CURATED)).toEqual([]);
     await reviewRegistration(m, CURATED, "approve");
     expect((await getRegistrationsByHackathon(CURATED)).length).toBe(1);

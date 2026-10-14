@@ -96,7 +96,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
 
     await db.prepare("DELETE FROM registrations").run();
     await route.POST(
-      new Request("http://t", { method: "POST", body: JSON.stringify({ consent: true, publicListing: true }) }),
+      new Request("http://t", { method: "POST", body: JSON.stringify({ consent: true, publicListing: true, terms: { birthDate: "2000-01-01", conduct: true } }) }),
       { params },
     );
     expect(await listed()).toBe(1);
