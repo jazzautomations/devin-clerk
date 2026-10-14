@@ -18,7 +18,7 @@ de `caddy validate`.
 | Ops | `~/hackahub/ops/` (`deploy.sh`, `backup.sh`, `restore-drill.sh`, `scrape.sh`), logs em `~/hackahub/logs/` |
 | Backups | `~/hackahub-backups/<stamp>/` (14 dias) + bucket OCI `hackahub-backups` (prefixo `hackahub/`, expira em 60 dias) |
 | Scraper | venv `~/hackahub/scraper/.venv` (uv) |
-| Cron (usuário ubuntu) | 05:15 UTC radar (stage) · 06:00 UTC backup · dom 06:30 UTC restore drill |
+| Cron (usuário ubuntu) | 05:15/05:20 UTC radar (stage/prod) · 06:00 UTC backup · dom 06:30 UTC restore drill · */2 min fila de avisos |
 
 Portas de app não são públicas: security list da OCI só abre 22/80/443 e o
 iptables rejeita o resto (verificado de fora em 14/10/2026).
@@ -100,11 +100,17 @@ parser voltou 0 em 14/10 — revisar.
 | `NEXT_PUBLIC_SITE_URL` | canonical/OG/sitemap |
 | `HACKAHUB_ADMIN_EMAILS` | admins globais (lista separada por vírgula) |
 | `HACKAHUB_DEPLOY_TOOL` | só `on` liga o deploy tool — **nunca em prod nesta máquina** |
+| `HACKAHUB_TICKET_SECRET` | HMAC do QR do ingresso (trocar invalida os QRs emitidos) |
+| `HACKAHUB_CRON_SECRET` | bearer do `/api/cron/deliveries` (cron a cada 2 min, `ops/deliveries.sh`) |
+| `RESEND_API_KEY`, `HACKAHUB_EMAIL_FROM`, `RESEND_WEBHOOK_SECRET` | e-mail dos avisos; sem eles as entregas ficam `skipped` |
+| `EVOLUTION_URL`, `EVOLUTION_INSTANCE`, `EVOLUTION_API_KEY` | WhatsApp individual dos avisos (opt-in); sem eles `skipped` |
 
 ## Pendências que só o fundador resolve
 
-- Domínio definitivo + DNS (`hackahub.jazzautomations.com.br` → `64.181.217.112`).
-- Clerk: claim do app + instância de produção no domínio (DNS do Clerk).
+- ~~Domínio + DNS~~ feito 14/10: A `hackahub` → 64.181.217.112 e CNAMEs do Clerk na Vercel (time jazzautomations-projects).
+- ~~Clerk produção~~ feito 14/10: app `devin-clerk` (app_3KfPwFLzP7FbETFuvIOMfO8DmNb) na conta jazzautomations@gmail.com, instância prod no domínio, chaves live em `prod.env`. CLI linkado em `~/hackahub-clerk` na VPS (`npx clerk deploy status`). O CLI não roda no notebook (CPU sem AVX → SIGILL).
+- Login com Google em produção: desligado (`connection_oauth_google.enabled=false` na prod) até ter Client ID/Secret do Google Cloud; aí `clerk deploy` de novo e religar.
+- `HACKAHUB_ADMIN_EMAILS` em stage/prod: definir quem é admin.
 - Provedor de e-mail (Resend) + SPF/DKIM/DMARC no domínio.
 - Número de WhatsApp da Hack Inova na Evolution.
 - Monitor externo de uptime com alerta (ex.: Healthchecks/UptimeRobot em `/api/health` e no carimbo do backup).
