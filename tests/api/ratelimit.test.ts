@@ -38,7 +38,9 @@ const leadReq = (ip: string, n: number) =>
     }),
   });
 
-const post = () => new Request("http://t", { method: "POST" });
+// spec 033 — o aceite LGPD é obrigatório na inscrição
+const post = () =>
+  new Request("http://t", { method: "POST", body: JSON.stringify({ consent: true }) });
 const ctx = { params: Promise.resolve({ id: HID }) };
 
 beforeEach(async () => {

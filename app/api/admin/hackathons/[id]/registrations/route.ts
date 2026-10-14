@@ -1,23 +1,27 @@
-import { auth } from "@clerk/nextjs/server";
-import { getHackathon } from "@/lib/hackathons";
-import { getMemberByClerkId } from "@/lib/members";
+import { requireEditionManager } from "@/lib/editionAuth";
 import { listRegistrants } from "@/lib/registrations";
+import { listQuestions, listRegistrantsWithAnswers, registrantsCsv } from "@/lib/registrationForm";
 
+// inscritos da edição (admin global ou organizador da edição — spec 033).
+// ?format=csv exporta com uma coluna por pergunta do formulário (US1).
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { userId } = await auth();
-  const member = userId ? await getMemberByClerkId(userId) : null;
-  if (!member) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (member.role !== "admin") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
   const { id } = await params;
-  if (!await getHackathon(id)) {
-    return Response.json({ error: "Edição não encontrada" }, { status: 404 });
+  const g = await requireEditionManager(id);
+  if ("response" in g) return g.response;
+  if (new URL(req.url).searchParams.get("format") === "csv") {
+    const [questions, rows] = await Promise.all([
+      listQuestions(id, { includeArchived: true }),
+      listRegistrantsWithAnswers(id),
+    ]);
+    return new Response(registrantsCsv(questions, rows), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="inscritos-${id}.csv"`,
+      },
+    });
   }
   return Response.json({ registrations: await listRegistrants(id) });
 }

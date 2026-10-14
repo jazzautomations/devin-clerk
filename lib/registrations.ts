@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { XP, type Badge } from "@/lib/game";
 import { awardXp, checkBadges, mintCard } from "@/lib/xp";
+import { notify } from "@/lib/notifications";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
 // este módulo sem passar por members.ts
@@ -8,7 +9,7 @@ import { awardXp, checkBadges, mintCard } from "@/lib/xp";
 // inscrição como 'pending' e a recompensa só existe na aprovação do admin.
 // requiresApproval mora em hackathons; status/reviewedAt em registrations —
 // este arquivo é o dono do schema de inscrição (lib/db.ts não é tocado).
-export type RegistrationStatus = "pending" | "approved" | "rejected";
+export type RegistrationStatus = "pending" | "approved" | "rejected" | "waitlist";
 
 export async function editionRequiresApproval(hackathonId: string): Promise<boolean> {
   const row = await db
@@ -17,32 +18,193 @@ export async function editionRequiresApproval(hackathonId: string): Promise<bool
   return row?.requiresApproval === 1;
 }
 
+// ---------- vagas + fila de espera (spec 033 FR-009) ----------
+// capacity NULL = sem limite; só 'approved' ocupa vaga. Quem chega com a
+// edição cheia entra como 'waitlist' (sem carta/XP, fora dos gates — mesma
+// regra de 'pending'). Toda decisão que olha a contagem roda numa transação
+// com a linha da edição travada (SELECT … FOR UPDATE): duas inscrições
+// simultâneas não ocupam a mesma última vaga.
+
+export type Promoted = { memberId: number; username: string; email: string; promotedAt: string };
+
+async function lockEdition(hackathonId: string): Promise<{ capacity: number | null; requiresApproval: number } | undefined> {
+  return db
+    .prepare("SELECT capacity, requiresApproval FROM hackathons WHERE id = ? FOR UPDATE")
+    .get<{ capacity: number | null; requiresApproval: number }>(hackathonId);
+}
+
+async function countApproved(hackathonId: string): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS n FROM registrations WHERE hackathonId = ? AND status = 'approved'")
+    .get<{ n: number }>(hackathonId);
+  return row?.n ?? 0;
+}
+
+async function hasFreeSpot(hackathonId: string, capacity: number | null): Promise<boolean> {
+  return capacity === null || (await countApproved(hackathonId)) < capacity;
+}
+
+// promove a fila (ordem de chegada na fila) enquanto houver vaga. Chamar
+// SÓ dentro de transação com a edição travada. A promoção paga a recompensa
+// completa (mesma porta do register/aprovação) e deixa promotedAt marcado —
+// é o hook do aviso por e-mail (frente D lê listPromotions).
+async function fillFromWaitlist(hackathonId: string, capacity: number | null): Promise<Promoted[]> {
+  const promoted: Promoted[] = [];
+  while (await hasFreeSpot(hackathonId, capacity)) {
+    const next = await db
+      .prepare(
+        `SELECT r.id, r.memberId FROM registrations r
+         WHERE r.hackathonId = ? AND r.status = 'waitlist'
+         ORDER BY r.waitlistedAt, r.id LIMIT 1 FOR UPDATE`,
+      )
+      .get<{ id: number; memberId: number }>(hackathonId);
+    if (!next) break;
+    const row = await db
+      .prepare(
+        `UPDATE registrations SET status = 'approved', promotedAt = datetime('now')
+         WHERE id = ? RETURNING promotedAt`,
+      )
+      .get<{ promotedAt: string }>(next.id);
+    await completeRegistration(next.memberId, hackathonId);
+    const m = await db
+      .prepare("SELECT username, email FROM members WHERE id = ?")
+      .get<{ username: string; email: string }>(next.memberId);
+    await notify(next.memberId, {
+      type: "waitlist_promoted",
+      text: "abriu vaga: tua inscrição saiu da fila de espera e está confirmada",
+      href: `/h/${hackathonId}`,
+    });
+    promoted.push({
+      memberId: next.memberId,
+      username: m?.username ?? "",
+      email: m?.email ?? "",
+      promotedAt: row?.promotedAt ?? "",
+    });
+  }
+  return promoted;
+}
+
+export async function getEditionCapacity(hackathonId: string): Promise<{
+  capacity: number | null;
+  approved: number;
+  waitlist: number;
+  remaining: number | null;
+}> {
+  const row = await db
+    .prepare(
+      `SELECT h.capacity,
+         (SELECT COUNT(*) FROM registrations r WHERE r.hackathonId = h.id AND r.status = 'approved') AS approved,
+         (SELECT COUNT(*) FROM registrations r WHERE r.hackathonId = h.id AND r.status = 'waitlist') AS waitlist
+       FROM hackathons h WHERE h.id = ?`,
+    )
+    .get<{ capacity: number | null; approved: number; waitlist: number }>(hackathonId);
+  const capacity = row?.capacity ?? null;
+  const approved = row?.approved ?? 0;
+  return {
+    capacity,
+    approved,
+    waitlist: row?.waitlist ?? 0,
+    remaining: capacity === null ? null : Math.max(0, capacity - approved),
+  };
+}
+
+/** posição (1-based) na fila de espera, ou null se não está na fila */
+export async function getWaitlistPosition(memberId: number, hackathonId: string): Promise<number | null> {
+  const row = await db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM registrations o
+               WHERE o.hackathonId = r.hackathonId AND o.status = 'waitlist'
+                 AND (o.waitlistedAt < r.waitlistedAt
+                      OR (o.waitlistedAt = r.waitlistedAt AND o.id <= r.id))) AS pos
+       FROM registrations r
+       WHERE r.memberId = ? AND r.hackathonId = ? AND r.status = 'waitlist'`,
+    )
+    .get<{ pos: number }>(memberId, hackathonId);
+  return row ? row.pos : null;
+}
+
+/** organizador define a capacidade; aumentar (ou tirar o limite) promove a fila na hora */
+export async function setEditionCapacity(
+  hackathonId: string,
+  capacity: number | null,
+): Promise<{ promoted: Promoted[] }> {
+  return db.transaction(async () => {
+    const ed = await lockEdition(hackathonId);
+    if (!ed) return { promoted: [] };
+    await db.prepare("UPDATE hackathons SET capacity = ? WHERE id = ?").run(capacity, hackathonId);
+    return { promoted: await fillFromWaitlist(hackathonId, capacity) };
+  })();
+}
+
+/** hook da frente D (aviso por e-mail): quem saiu da fila, mais antigos primeiro */
+export async function listPromotions(hackathonId: string, since?: string): Promise<Promoted[]> {
+  return db
+    .prepare(
+      `SELECT r.memberId, m.username, m.email, r.promotedAt
+       FROM registrations r JOIN members m ON m.id = r.memberId
+       WHERE r.hackathonId = ? AND r.promotedAt IS NOT NULL
+         AND (?::text IS NULL OR to_ts(r.promotedAt) > to_ts(?::text))
+       ORDER BY r.promotedAt, r.id`,
+    )
+    .all<Promoted>(hackathonId, since ?? null, since ?? null);
+}
+
 // o pedido entra como 'pending' quando a edição é curada — a recompensa
 // NÃO acontece aqui: completeRegistration é a única porta (register
 // instantâneo em edição aberta, ou aprovação admin via reviewRegistration).
-// INSERT OR IGNORE preserva o status existente: re-pedido em 'pending' não
+// Inscrição existente preserva o status: re-pedido em 'pending' não
 // duplica, e em 'rejected' não reabre a fila — quem decide é o admin.
+// Edição aberta com capacidade cheia → 'waitlist' com posição.
 export async function register(
   memberId: number,
   hackathonId: string,
-): Promise<{ status: RegistrationStatus; created: boolean }> {
-  const wants: RegistrationStatus = await editionRequiresApproval(hackathonId)
-    ? "pending"
-    : "approved";
-  const res = await db
-    .prepare(
-      `INSERT OR IGNORE INTO registrations (memberId, hackathonId, status)
-       VALUES (?, ?, ?)`,
-    )
-    .run(memberId, hackathonId, wants);
-  const stored = await getRegistrationStatus(memberId, hackathonId) ?? wants;
-  return { status: stored, created: res.changes > 0 };
+): Promise<{ status: RegistrationStatus; created: boolean; position: number | null }> {
+  return db.transaction(async () => {
+    const ed = await lockEdition(hackathonId);
+    const existing = await getRegistrationStatus(memberId, hackathonId);
+    if (existing) {
+      return {
+        status: existing,
+        created: false,
+        position: existing === "waitlist" ? await getWaitlistPosition(memberId, hackathonId) : null,
+      };
+    }
+    const wants: RegistrationStatus =
+      ed?.requiresApproval === 1
+        ? "pending"
+        : (await hasFreeSpot(hackathonId, ed?.capacity ?? null))
+          ? "approved"
+          : "waitlist";
+    await db
+      .prepare(
+        `INSERT INTO registrations (memberId, hackathonId, status, waitlistedAt)
+         VALUES (?, ?, ?, CASE WHEN ?::text = 'waitlist' THEN datetime('now') END)`,
+      )
+      .run(memberId, hackathonId, wants, wants);
+    return {
+      status: wants,
+      created: true,
+      position: wants === "waitlist" ? await getWaitlistPosition(memberId, hackathonId) : null,
+    };
+  })();
 }
 
-export async function unregister(memberId: number, hackathonId: string): Promise<void> {
-  await db.prepare(
-    `DELETE FROM registrations WHERE memberId = ? AND hackathonId = ?`,
-  ).run(memberId, hackathonId);
+// cancelar libera a vaga: se quem saiu era aprovado, o 1º da fila sobe
+// na mesma transação. Respostas do formulário caem junto (CASCADE).
+export async function unregister(
+  memberId: number,
+  hackathonId: string,
+): Promise<{ promoted: Promoted[] }> {
+  return db.transaction(async () => {
+    const ed = await lockEdition(hackathonId);
+    const gone = await db
+      .prepare(
+        `DELETE FROM registrations WHERE memberId = ? AND hackathonId = ? RETURNING status`,
+      )
+      .get<{ status: RegistrationStatus }>(memberId, hackathonId);
+    if (!ed || gone?.status !== "approved") return { promoted: [] };
+    return { promoted: await fillFromWaitlist(hackathonId, ed.capacity) };
+  })();
 }
 
 export async function getRegistrationStatus(
@@ -119,45 +281,62 @@ export type ReviewResult =
       cardSerial: number | null;
       newBadges: Badge[];
     }
-  | { status: "rejected" };
+  | { status: "rejected"; promoted: Promoted[] }
+  | { status: "waitlist"; position: number | null };
 
 // decisão do admin sobre o pedido (spec 032). approve: a transição
 // não-aprovado → aprovado dispara completeRegistration UMA vez — re-approve
-// é no-op sem recompensa (awardXp não é idempotente). reject: marca
-// 'rejected' (inclusive revogação de quem já era aprovado — carta/XP pagos
-// NÃO são estornados); a linha fica como registro honesto da decisão.
+// é no-op sem recompensa (awardXp não é idempotente). Com a edição cheia
+// (spec 033 FR-009) o aprovado vai pra fila de espera e sobe sozinho quando
+// abrir vaga. reject: marca 'rejected' (inclusive revogação de quem já era
+// aprovado — carta/XP pagos NÃO são estornados, mas a vaga volta pra fila);
+// a linha fica como registro honesto da decisão.
 // null = não existe inscrição pro par memberId+edição → a rota mapeia 404.
 export async function reviewRegistration(
   memberId: number,
   hackathonId: string,
   action: "approve" | "reject",
 ): Promise<ReviewResult | null> {
-  const status = await getRegistrationStatus(memberId, hackathonId);
-  if (status === null) return null;
-  if (action === "reject") {
+  return db.transaction(async (): Promise<ReviewResult | null> => {
+    const ed = await lockEdition(hackathonId);
+    const status = await getRegistrationStatus(memberId, hackathonId);
+    if (status === null) return null;
+    if (action === "reject") {
+      await db.prepare(
+        `UPDATE registrations
+         SET status = 'rejected', reviewedAt = datetime('now')
+         WHERE memberId = ? AND hackathonId = ?`,
+      ).run(memberId, hackathonId);
+      const promoted =
+        status === "approved" && ed ? await fillFromWaitlist(hackathonId, ed.capacity) : [];
+      return { status: "rejected", promoted };
+    }
+    if (status === "approved") {
+      return {
+        status: "approved",
+        rewarded: false,
+        xp: "+0",
+        cardSerial: null,
+        newBadges: [],
+      };
+    }
+    if (!(await hasFreeSpot(hackathonId, ed?.capacity ?? null))) {
+      await db.prepare(
+        `UPDATE registrations
+         SET status = 'waitlist', reviewedAt = datetime('now'),
+             waitlistedAt = COALESCE(waitlistedAt, datetime('now'))
+         WHERE memberId = ? AND hackathonId = ?`,
+      ).run(memberId, hackathonId);
+      return { status: "waitlist", position: await getWaitlistPosition(memberId, hackathonId) };
+    }
     await db.prepare(
       `UPDATE registrations
-       SET status = 'rejected', reviewedAt = datetime('now')
+       SET status = 'approved', reviewedAt = datetime('now')
        WHERE memberId = ? AND hackathonId = ?`,
     ).run(memberId, hackathonId);
-    return { status: "rejected" };
-  }
-  if (status === "approved") {
-    return {
-      status: "approved",
-      rewarded: false,
-      xp: "+0",
-      cardSerial: null,
-      newBadges: [],
-    };
-  }
-  await db.prepare(
-    `UPDATE registrations
-     SET status = 'approved', reviewedAt = datetime('now')
-     WHERE memberId = ? AND hackathonId = ?`,
-  ).run(memberId, hackathonId);
-  const reward = await completeRegistration(memberId, hackathonId);
-  return { status: "approved", rewarded: true, ...reward };
+    const reward = await completeRegistration(memberId, hackathonId);
+    return { status: "approved", rewarded: true, ...reward };
+  })();
 }
 
 // versão operacional (admin): inclui e-mail + memberId + status da fila de
@@ -180,7 +359,8 @@ export async function listRegistrants(
               r.createdAt, r.reviewedAt
        FROM registrations r JOIN members m ON m.id = r.memberId
        WHERE r.hackathonId = ?
-       ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,
+       ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'waitlist' THEN 1 ELSE 2 END,
+                CASE WHEN r.status = 'waitlist' THEN r.waitlistedAt END,
                 r.createdAt, r.id`,
     )
     .all(hackathonId) as {

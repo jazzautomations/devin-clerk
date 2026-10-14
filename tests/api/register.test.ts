@@ -24,6 +24,9 @@ async function makeMember() {
 }
 
 const params = Promise.resolve({ id: HACK_ID });
+// spec 033 — o aceite LGPD é obrigatório na inscrição
+const consentReq = () =>
+  new Request("http://t", { method: "POST", body: JSON.stringify({ consent: true }) });
 
 describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
   beforeEach(async () => {
@@ -35,7 +38,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
 
   it("inscreve, paga +50xp, minta a carta №001 e concede badges", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/register/route");
-    const res = await POST(new Request("http://t", { method: "POST" }), {
+    const res = await POST(consentReq(), {
       params,
     });
     expect(res.status).toBe(200);
@@ -51,7 +54,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
     const { POST, DELETE } = await import(
       "@/app/api/hackathons/[id]/register/route"
     );
-    await POST(new Request("http://t", { method: "POST" }), { params });
+    await POST(consentReq(), { params });
     const res = await DELETE(new Request("http://t", { method: "DELETE" }), {
       params,
     });
@@ -62,7 +65,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
 
   it("404 num hackathon que não existe", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/register/route");
-    const res = await POST(new Request("http://t", { method: "POST" }), {
+    const res = await POST(consentReq(), {
       params: Promise.resolve({ id: "nao-existe" }),
     });
     expect(res.status).toBe(404);
