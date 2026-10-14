@@ -31,7 +31,7 @@ async function gate(params: Promise<{ id: string }>) {
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await gate(params);
-  if ("error" in g) return g.error;
+  if (g.error) return g.error;
   const team = await memberTeamFor(g.h.id, g.member.username);
   const [invites, pending] = await Promise.all([
     listMyInvites(g.member.id, g.h.id),
@@ -42,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await gate(params);
-  if ("error" in g) return g.error;
+  if (g.error) return g.error;
   const limited = limitOrNull(req, "team", g.member.id);
   if (limited) return limited;
   const b = await req.json().catch(() => null);
@@ -59,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await gate(params);
-  if ("error" in g) return g.error;
+  if (g.error) return g.error;
   const b = await req.json().catch(() => null);
   const inviteId = b && Number.isSafeInteger(b.inviteId) && b.inviteId > 0 ? (b.inviteId as number) : null;
   if (!inviteId || (b.action !== "accept" && b.action !== "decline")) {

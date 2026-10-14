@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getMemberByUsername } from "@/lib/members";
+import { getMemberByUsername, resolveUsernameRedirect } from "@/lib/members";
 import { absoluteUrl } from "@/lib/seo";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getHackathon } from "@/lib/hackathons";
@@ -77,7 +77,12 @@ export default async function PublicProfilePage({
 }) {
   const { username } = await params;
   const member = await getMemberByUsername(username);
-  if (!member) notFound();
+  if (!member) {
+    // frente N #8 — username trocado: o link antigo segue valendo (308)
+    const moved = await resolveUsernameRedirect(decodeURIComponent(username));
+    if (moved) permanentRedirect(`/u/${moved}`);
+    notFound();
+  }
 
   const history = (
     await Promise.all((await getRegistrationIds(member.id)).map((id) => getHackathon(id)))

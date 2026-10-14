@@ -74,3 +74,25 @@ test.describe("lista pública de inscritos — só quem optou", () => {
     expect(res.headers()["content-type"]).toContain("application/json");
   });
 });
+
+test.describe("username trocado — link antigo redireciona", () => {
+  test("/u/antigo responde 308 pro /u/novo e o perfil abre", async ({ page, request }) => {
+    await request.get("/radar");
+    const id = await member("trocou", "Tina Trocou");
+    await db.prepare("UPDATE members SET username = 'qa_tina', usernameChangedAt = datetime('now') WHERE id = ?").run(id);
+    await db
+      .prepare(
+        `INSERT INTO username_redirects (oldUsername, memberId) VALUES ('user_2qafeio', ?)
+         ON CONFLICT (oldUsername) DO UPDATE SET memberId = excluded.memberId`,
+      )
+      .run(id);
+    const res = await request.get("/u/user_2qafeio", { maxRedirects: 0 });
+    expect([301, 308]).toContain(res.status());
+    expect(res.headers()["location"]).toMatch(/\/u\/qa_tina$/);
+    await page.goto("/u/user_2qafeio");
+    await expect(page).toHaveURL(/\/u\/qa_tina$/);
+    await expect(page.getByRole("heading", { name: /Tina Trocou/ })).toBeVisible();
+    // quem nunca existiu segue 404
+    expect((await request.get("/u/ninguem_nunca_existiu_qa", { maxRedirects: 0 })).status()).toBe(404);
+  });
+});
