@@ -169,6 +169,15 @@ em `logs/.fail-<rota>-<env>`. O `backup.sh` corta log acima de 5 MB.
 
 Como conferir: `crontab -l | grep hackahub` e `tail ~/hackahub/logs/deliveries-prod.log`.
 
+Stage também roda avisos, entregas e RSVP. Era assim no crontab instalado
+em 14/10/2026 e continua: é no stage que se testa o fluxo inteiro antes de
+prod. Por isso o stage manda e-mail de verdade (o `stage.env` tem
+`RESEND_API_KEY`) e não manda zap (sem `EVOLUTION_*`). Quem recebe são as
+contas criadas no stage. O banco `hackahub_stage` nunca recebe cópia do de
+prod: o restore drill restaura num banco temporário e apaga no fim. Se um
+dia o stage for receber dados de prod, tire antes as três linhas de stage do
+`crontab.txt` ou apague `RESEND_API_KEY` do `stage.env`.
+
 ## Monitor e alerta
 
 - `/api/health` responde `ok` e `version`. `?deep=1` soma `backupAgeH`,

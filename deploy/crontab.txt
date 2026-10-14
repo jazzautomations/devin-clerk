@@ -24,6 +24,7 @@ H=/home/ubuntu/hackahub
 20 5 * * *    bash $H/ops/scrape.sh prod >> $H/logs/scrape-prod.log 2>&1
 
 # fila de avisos (e-mail/zap) e pesquisa pós-edição: a cada 2 min.
+# stage também roda e manda e-mail de verdade (docs/runbook.md, seção do cron)
 # prod e stage em minutos diferentes pra não disputar CPU
 */2 * * * *   bash $H/ops/deliveries.sh prod >> $H/logs/cron-stderr.log 2>&1
 1-59/2 * * * * bash $H/ops/deliveries.sh stage >> $H/logs/cron-stderr.log 2>&1

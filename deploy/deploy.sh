@@ -142,7 +142,7 @@ done
 # arquivo faltando no standalone ou escrita barrada pelo sandbox da unit
 echo "== smoke"
 case "$ENV_NAME" in prod) DBN=hackahub ;; *) DBN=hackahub_$ENV_NAME ;; esac
-bash "$OPS/smoke.sh" "http://127.0.0.1:$PORT" "$DBN" || rollback "smoke falhou"
+bash "$OPS/smoke.sh" "http://127.0.0.1:$PORT" "$DBN" "$ENV_NAME" || rollback "smoke falhou"
 if sudo journalctl -u "$SERVICE" --since "@$T0" --no-pager | grep -E 'EROFS|ENOENT|EACCES'; then
   rollback "erro de disco no journal (EROFS/ENOENT/EACCES)"
 fi
