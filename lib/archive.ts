@@ -37,36 +37,51 @@ export type EditionArchive = {
 
 const httpUrl = (u: string) => /^https?:\/\//i.test(u.trim());
 
+// 3 queries por edição, não 2 por time: times + projeto num JOIN, os
+// integrantes de todos os times de uma vez e os materiais
 export async function getArchive(hackathonId: string): Promise<EditionArchive> {
-  const teams = await db
-    .prepare(
-      `SELECT id, name, placement FROM teams
-       WHERE hackathonId = ?
-       ORDER BY CASE WHEN placement = 0 THEN 99 ELSE placement END, name`,
-    )
-    .all(hackathonId) as { id: number; name: string; placement: number }[];
-
-  const memberStmt = db.prepare(
-    "SELECT username FROM team_members WHERE teamId = ? ORDER BY username",
-  );
-  const projectStmt = db.prepare(
-    "SELECT title, description, repoUrl, demoUrl, videoUrl, logoUrl FROM team_projects WHERE teamId = ?",
-  );
-
-  const assets = await db
-    .prepare(
-      "SELECT id, type, url, caption FROM edition_assets WHERE hackathonId = ? ORDER BY id",
-    )
-    .all(hackathonId) as EditionAsset[];
-
-  return {
-    teams: await Promise.all(teams.map(async (t) => ({
-      ...t,
-      members: (await memberStmt.all(t.id) as { username: string }[]).map(
-        (m) => m.username,
+  const [teams, members, assets] = await Promise.all([
+    db
+      .prepare(
+        `SELECT t.id, t.name, t.placement, tp.title, tp.description, tp.repoUrl,
+                tp.demoUrl, tp.videoUrl, tp.logoUrl
+         FROM teams t LEFT JOIN team_projects tp ON tp.teamId = t.id
+         WHERE t.hackathonId = ?
+         ORDER BY CASE WHEN t.placement = 0 THEN 99 ELSE t.placement END, t.name`,
+      )
+      .all<{ id: number; name: string; placement: number; title: string | null } & Omit<TeamProject, "title">>(
+        hackathonId,
       ),
-      project: (await projectStmt.get(t.id) as TeamProject | undefined) ?? null,
-    }))),
+    db
+      .prepare(
+        `SELECT tm.teamId, tm.username FROM team_members tm JOIN teams t ON t.id = tm.teamId
+         WHERE t.hackathonId = ? ORDER BY tm.username`,
+      )
+      .all<{ teamId: number; username: string }>(hackathonId),
+    db
+      .prepare("SELECT id, type, url, caption FROM edition_assets WHERE hackathonId = ? ORDER BY id")
+      .all<EditionAsset>(hackathonId),
+  ]);
+  const byTeam = new Map<number, string[]>();
+  for (const m of members) byTeam.set(m.teamId, [...(byTeam.get(m.teamId) ?? []), m.username]);
+  return {
+    teams: teams.map((t) => ({
+      id: t.id,
+      name: t.name,
+      placement: t.placement,
+      members: byTeam.get(t.id) ?? [],
+      project:
+        t.title === null
+          ? null
+          : {
+              title: t.title,
+              description: t.description,
+              repoUrl: t.repoUrl,
+              demoUrl: t.demoUrl,
+              videoUrl: t.videoUrl,
+              logoUrl: t.logoUrl,
+            },
+    })),
     assets,
   };
 }

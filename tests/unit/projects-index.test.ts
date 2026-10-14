@@ -135,6 +135,17 @@ describe("listProjects — índice público de projetos", () => {
     expect(byId[stale.id].liveDeployId).toBeNull();
   });
 
+  it("paginação: limit/offset cortam a lista na mesma ordem (auditoria 041: n1-projetos-deploy-por-card)", async () => {
+    const ids: number[] = [];
+    for (const n of ["A", "B", "C"]) {
+      ids.push((await createTeam(UNIFACENS, { name: n, placement: 0, project: { title: `${n} app` } })).team.id);
+    }
+    const all = (await listProjects()).map((c) => c.teamId);
+    expect(all).toEqual(ids);
+    expect((await listProjects({ limit: 2 })).map((c) => c.teamId)).toEqual(all.slice(0, 2));
+    expect((await listProjects({ limit: 2, offset: 2 })).map((c) => c.teamId)).toEqual(all.slice(2));
+  });
+
   it("filtros combinam: hackathonId, liveOnly e os dois juntos", async () => {
     const u = (await createTeam(UNIFACENS, {
       name: "U",

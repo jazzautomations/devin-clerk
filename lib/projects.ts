@@ -1,5 +1,4 @@
 import db from "@/lib/db";
-import { getLatestDeployForTeam } from "@/lib/deploys";
 import { toLikePattern } from "@/lib/search";
 import type { TeamProject } from "@/lib/archive";
 // garante o ALTER de videoUrl/logoUrl em team_projects (spec 030) — o
@@ -36,6 +35,9 @@ export type ProjectFilter = {
   sort?: "jury" | "votes";
   /** memberId logado — alimenta votedByMe (pattern likedByMe de posts) */
   meId?: number | null;
+  /** paginação opcional (a vitrine é pública e cresce com o acervo) */
+  limit?: number;
+  offset?: number;
 };
 
 type Row = {
@@ -47,6 +49,7 @@ type Row = {
   memberCount: number;
   voteCount: number;
   votedByMe: number;
+  liveDeployId: string | null;
   title: string;
   description: string | null;
   repoUrl: string | null;
@@ -78,11 +81,18 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
               (SELECT COUNT(*) FROM votes v WHERE v.teamId = t.id)
                 AS voteCount,
               EXISTS(SELECT 1 FROM votes v
-                     WHERE v.teamId = t.id AND v.memberId = @me) AS votedByMe
+                     WHERE v.teamId = t.id AND v.memberId = @me) AS votedByMe,
+              CASE WHEN d.status = 'running' THEN d.id END AS liveDeployId
        FROM teams t
        JOIN team_projects tp ON tp.teamId = t.id
        JOIN hackathons h ON h.id = t.hackathonId
+       -- último deploy do time no mesmo SELECT (antes: 1 query por card)
+       LEFT JOIN LATERAL (
+         SELECT dd.id, dd.status FROM deploys dd
+         WHERE dd.teamId = t.id ORDER BY dd.createdAt DESC LIMIT 1
+       ) d ON TRUE
        WHERE (@h::text IS NULL OR t.hackathonId = @h)
+         AND (@live::int = 0 OR d.status = 'running')
          -- spec 034: edição com prazo só expõe projeto ENVIADO e depois da trava
          AND (h.submissionDeadline IS NULL
               OR (to_ts(h.submissionDeadline) + make_interval(mins => h.submissionGraceMinutes) < now()
@@ -91,16 +101,19 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
               OR tp.title LIKE @q ESCAPE '\\'
               OR tp.description LIKE @q ESCAPE '\\'
               OR t.name LIKE @q ESCAPE '\\')
-       ORDER BY ${orderBy}`,
+       ORDER BY ${orderBy}
+       LIMIT @limit OFFSET @offset`,
     )
     .all({
       h: filter.hackathonId ?? null,
       q: toLikePattern(filter.q),
       me: filter.meId ?? -1,
+      live: filter.liveOnly ? 1 : 0,
+      limit: filter.limit ?? null,
+      offset: filter.offset ?? 0,
     }) as Row[];
 
-  const cards = await Promise.all(rows.map(async (r) => {
-    const deploy = await getLatestDeployForTeam(r.teamId);
+  return rows.map((r) => {
     return {
       teamId: r.teamId,
       teamName: r.teamName,
@@ -110,7 +123,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
       memberCount: r.memberCount,
       voteCount: r.voteCount,
       votedByMe: Boolean(r.votedByMe),
-      liveDeployId: deploy?.status === "running" ? deploy.id : null,
+      liveDeployId: r.liveDeployId ?? null,
       project: {
         title: r.title,
         description: r.description,
@@ -120,9 +133,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
         logoUrl: r.logoUrl,
       },
     };
-  }));
-
-  return filter.liveOnly ? cards.filter((c) => c.liveDeployId) : cards;
+  });
 }
 
 /** edições que têm pelo menos um projeto — chips do filtro ?h= */
