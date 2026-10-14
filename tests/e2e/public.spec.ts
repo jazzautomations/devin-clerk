@@ -6,15 +6,12 @@ import { test } from "./auth";
 // (memberPage, sessão do global-setup).
 
 test.describe("landing — explica o produto pra quem não tem conta (spec 039)", () => {
-  test("hero, prova do banco, jornada, telas por dentro, conta e newsletter", async ({ page }) => {
+  test("hero que define, abertos agora, como funciona, portas e conta", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: /sua comunidade de hackathon/i })).toBeVisible();
-    // prova real: stats do banco com rótulo
-    await expect(page.getByText("membros", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /comunidade de hackathon do brasil/i })).toBeVisible();
+    await expect(page.getByTestId("landing-proximas")).toBeVisible();
     await expect(page.locator("#como-funciona")).toBeVisible();
-    await expect(page.getByTestId("landing-por-dentro").locator("img")).toHaveCount(4);
     await expect(page.getByTestId("landing-conta")).toBeVisible();
-    await expect(page.getByText(/newsletter/i)).toBeVisible();
   });
 });
 

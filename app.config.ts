@@ -6,7 +6,7 @@ export type Feature = {
 export const appConfig = {
   name: "HackaHub",
   description:
-    "A comunidade de hackathon da Hack Inova: inscrição, time, entrega e certificado de cada edição, os hackathons abertos no Brasil e no mundo e o portfólio de quem constrói.",
+    "A comunidade de hackathon do Brasil: quem constrói, quem organiza e quem apoia num lugar só. Hackathons abertos por cidade, equipes, projetos e certificado.",
   emoji: "⚡",
   accent: "#047a43",
   upcomingFeatures: [

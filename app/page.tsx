@@ -1,739 +1,175 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Show, SignUpButton } from "@clerk/nextjs";
-import imgEdicao from "@/assets/landing/edicao.webp";
-import imgPainel from "@/assets/landing/painel.webp";
-import imgPerfil from "@/assets/landing/perfil.webp";
-import imgHackathons from "@/assets/landing/hackathons.webp";
-import { NewsletterForm } from "@/components/NewsletterForm";
 import { EditionRows } from "@/components/EditionRows";
-import { getOpenHackathons, getPastHackathons, isRegistrationClosed, type Hackathon } from "@/lib/hackathons";
-import { getEditionCapacity } from "@/lib/registrations";
+import { getOpenHackathons } from "@/lib/hackathons";
 import { landingList } from "@/lib/radar";
-import { getStatsMomentum } from "@/lib/momentum";
-import { getChampions, getCommunityProof } from "@/lib/landing";
-import { radarRegion } from "@/lib/radar";
 
-// spec 039 — landing por público: quem participa decide no hero (próxima
-// edição ou hackathons abertos), quem organiza tem a faixa escura e
-// /organizar, quem patrocina tem a seção própria e /empresas. Todo número
-// vem do banco; item zerado some.
+// Landing curta (escolha do dono, 14/10/2026), posicionada como comunidade:
+// rede de quem constrói, cada cidade/comunidade com sua edição e todo mundo
+// no mesmo mapa. O que está aberto logo na primeira dobra, três linhas do que
+// a rede faz, as portas de quem organiza e de quem patrocina, as dúvidas.
+// Só promete o que existe (perfis, procuro-equipe, mural, feed, radar).
 
-const fmtDia = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "America/Sao_Paulo" });
-const fmtMes = new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: "America/Sao_Paulo" });
-const fmtSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" });
-const fmtLongo = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", timeZone: "America/Sao_Paulo" });
-const fmtAno = new Intl.DateTimeFormat("pt-BR", { year: "numeric", timeZone: "America/Sao_Paulo" });
-const mesCurto = (d: Date) => fmtMes.format(d).replace(".", "").toUpperCase();
-const FORMAT_LABEL: Record<string, string> = { online: "online", presencial: "presencial", hibrido: "híbrido" };
-
-// jornada de quem participa — cada passo existe hoje na plataforma
 const passos = [
-  {
-    title: "Escolha a edição",
-    desc: "Data, local, desafios e quantas vagas ainda sobram.",
-  },
-  {
-    title: "Faça a inscrição",
-    desc: "Seu perfil já leva nome, GitHub e LinkedIn. Se lotar, você entra na fila e acompanha sua posição.",
-  },
-  {
-    title: "Confirme presença",
-    desc: "Uma semana antes a organização pergunta se você vai. Confirmou, o QR de entrada chega no seu e-mail.",
-  },
-  {
-    title: "Monte a equipe e entregue",
-    desc: "Quem está sem equipe aparece no quadro da edição. A entrega fecha no horário marcado.",
-  },
-  {
-    title: "Leve o que construiu",
-    desc: "Certificado com código de verificação, os comentários do júri e o projeto no seu perfil.",
-  },
+  { k: "01", title: "Encontre sua turma", desc: "Perfis de quem constrói, o quadro de quem procura equipe e o mural de cada edição." },
+  { k: "02", title: "Construa junto", desc: "Hackathons abertos no Brasil inteiro. Inscrição, equipe e entrega pelo HackaHub." },
+  { k: "03", title: "Mostre o que fez", desc: "Projetos, prêmios e certificado com carga horária no seu perfil, num link que é seu." },
 ] as const;
-
-// ciclo da edição pro organizador — só o que roda no painel hoje
-const ciclo = [
-  {
-    k: "inscrição",
-    title: "Formulário da edição",
-    items: ["perguntas da sua edição, com aprovação manual se quiser", "limite de vagas e fila de espera", "consentimento LGPD e de uso de imagem"],
-  },
-  {
-    k: "confirmação",
-    title: "Presença e avisos",
-    items: ["confirmação de presença com lembrete", "vaga de quem não confirma vai pra fila", "avisos por e-mail e WhatsApp"],
-  },
-  {
-    k: "dia do evento",
-    title: "Credenciamento",
-    items: ["check-in por QR que funciona sem internet", "crachás prontos pra imprimir", "programação no calendário de cada um"],
-  },
-  {
-    k: "entrega",
-    title: "Entrega",
-    items: ["prazo com trava automática", "desafios de patrocinador", "inscrição de mentores, jurados e voluntários"],
-  },
-  {
-    k: "avaliação",
-    title: "Júri e final",
-    items: ["notas por critério e comentário pra equipe", "voto do público no telão", "pódio guardado no arquivo"],
-  },
-  {
-    k: "depois",
-    title: "Depois do evento",
-    items: ["certificado com carga horária", "pesquisa de satisfação", "relatório pro patrocinador"],
-  },
-] as const;
-
-const patrocinio = [
-  { title: "Desafio da sua empresa", desc: "Você define o problema, o prêmio e o que a equipe precisa entregar." },
-  { title: "Relatório no fim", desc: "Quantos se inscreveram, quantos apareceram, quem pegou seu desafio, que stack usou e quem ganhou." },
-  { title: "Contato com consentimento", desc: "No estande tem um QR. Quem quiser conversar com a sua empresa escaneia e libera o contato." },
-  { title: "Avaliação da edição", desc: "Depois do evento, quem esteve lá dá uma nota. Você vê o resultado." },
-] as const;
-
-// por dentro — prints reais das telas logadas (assets/landing)
-const telas = [
-  {
-    bar: "edição / seu próximo passo",
-    title: "Página da edição",
-    desc: "No topo, o que falta você fazer: confirmar presença, abrir o ingresso, entregar o projeto.",
-    img: imgEdicao,
-    alt: "Página de uma edição logada: ficha da edição e o painel 'seu próximo passo' com o trilho da jornada",
-  },
-  {
-    bar: "meu painel",
-    title: "Meu painel",
-    desc: "Uma linha por edição em que você está, com o próximo passo de cada uma.",
-    img: imgPainel,
-    alt: "Meu painel: saudação, lembrete de perfil e cards de próximo passo por edição",
-  },
-  {
-    bar: "hackathons abertos",
-    title: "Hackathons abertos",
-    desc: "As edições da Hack Inova e outros hackathons abertos no Brasil, com filtro por cidade e formato.",
-    img: imgHackathons,
-    alt: "Lista de hackathons abertos com filtros por formato e região",
-  },
-  {
-    bar: "perfil público",
-    title: "Seu perfil vira portfólio",
-    desc: "Edições, projetos e pódios num link só. É o que você manda pra recrutador.",
-    img: imgPerfil,
-    alt: "Perfil público de uma pessoa: nível, badges, carta da edição e trajetória",
-  },
-];
-
-// o que vem com a conta — tudo existe hoje
-const beneficios = [
-  { title: "Inscrição rápida", desc: "Cada edição só pergunta o que é dela. O resto vem do seu perfil." },
-  { title: "Você sabe o que falta", desc: "Confirmar presença, abrir o ingresso, entregar. Aparece no seu painel." },
-  { title: "Equipe", desc: "Quem está sem equipe se encontra no quadro da edição." },
-  { title: "Certificado que se confere", desc: "Qualquer pessoa confere pelo código. Com carga horária quando a edição define." },
-  { title: "Portfólio", desc: "Seus projetos e pódios ficam no seu perfil." },
-  { title: "Avisos", desc: "Pelo app e pelo e-mail. No WhatsApp, só se você quiser." },
-];
 
 const faq = [
   {
-    q: "Quanto custa participar?",
+    q: "O que é um hackathon?",
+    a: "Uma maratona de um ou dois dias. Você forma uma equipe, escolhe um desafio, constrói um protótipo e apresenta pra um júri no fim.",
+  },
+  {
+    q: "Preciso saber programar ou ter equipe?",
+    a: "Não. Equipe boa mistura código, design, negócio e dados, e muita equipe se forma no próprio dia.",
+  },
+  {
+    q: "Quanto custa?",
     a: "Nada. Quem participa não paga. A edição é bancada pela organização e pelos patrocinadores.",
   },
   {
-    q: "Preciso ter equipe pra me inscrever?",
-    a: "Não. Depois da inscrição você pode aparecer no quadro de quem procura equipe. Muita equipe se forma ali ou no próprio dia.",
-  },
-  {
-    q: "Como funciona a inscrição?",
-    a: "Você cria a conta uma vez e, em cada edição, preenche um formulário curto. Algumas edições aprovam uma inscrição de cada vez. Quando lota, abre fila de espera.",
-  },
-  {
     q: "O que eu levo do evento?",
-    a: "Certificado com código de verificação, os comentários do júri, a carta da edição e o projeto no seu perfil.",
+    a: "Certificado com carga horária, que dá pra usar como hora complementar, os comentários do júri e o projeto no seu perfil.",
   },
   {
-    q: "Por que preciso de conta pra ver a plataforma?",
-    a: "Porque lá dentro tem gente de verdade: inscritos, equipes, perfis. Fica aberto só esta página, o resumo de cada edição, o cartão de perfil e a verificação de certificado.",
-  },
-  {
-    q: "Quero levar um hackathon pra minha faculdade ou comunidade.",
-    a: "Fale com a gente na página de organizar. A Hack Inova responde e a edição roda inteira aqui.",
+    q: "Por que preciso de conta?",
+    a: "Porque lá dentro tem gente de verdade: perfis, equipes, o mural de cada edição. A conta é de graça e vale pra todas as edições.",
   },
 ] as const;
 
 export default async function Home() {
   const now = new Date();
-  const [upcoming, past, proof, momentum, champions] = await Promise.all([
-    getOpenHackathons(now),
-    getPastHackathons(now),
-    getCommunityProof(now),
-    getStatsMomentum(now),
-    getChampions(6, now),
-  ]);
-  const editions = upcoming.filter((h) => h.partner);
-  const proxima = editions[0] ?? null;
-  const proximaCap = proxima ? await getEditionCapacity(proxima.id) : null;
-  const ultima = past.find((h) => h.partner) ?? null;
-  // próximas: Hack Inova primeiro, depois hackathons do Brasil por data
-  // (sem gringo online, sem o que fecha em menos de 48h — lib/radar.ts)
-  const proximas = landingList(upcoming, now, 6);
-  // "pra que serve": quantos hackathons do Brasil estão abertos agora (radar)
-  const abertosBrasil = upcoming.filter((h) => !h.partner && ["br", "online-br"].includes(radarRegion(h))).length;
-  // por onde a Hack Inova já passou — edições reais encerradas
-  const passadas = past.filter((h) => h.partner).slice(0, 6);
-
-  const stats = [
-    { n: proof.editions, label: "edições realizadas", delta: 0 },
-    { n: proof.registrations, label: "inscrições confirmadas", delta: 0 },
-    { n: proof.projects, label: "projetos entregues", delta: 0 },
-    { n: proof.members, label: "membros", delta: momentum.members },
-  ].filter((s) => s.n > 0);
-
+  const upcoming = await getOpenHackathons(now);
+  const proxima = upcoming.find((h) => h.partner) ?? null;
+  // Hack Inova primeiro, depois hackathons do Brasil por data (sem gringo
+  // online e sem o que fecha em menos de 48h — lib/radar.ts)
+  const abertos = landingList(upcoming, now, 8);
   const primaryHref = proxima ? `/h/${proxima.id}` : "/radar";
   const primaryLabel = proxima ? "Quero participar" : "Ver hackathons abertos";
 
   return (
     <div className="-mb-24 overflow-x-clip">
-      {/* faixa da próxima edição */}
-      {proxima && (
-        <Link href={`/h/${proxima.id}`} className="strip block hover:underline">
-          {/* uma linha só no celular: nome trunca, status fica curto */}
-          <span className="mx-auto flex max-w-6xl justify-between gap-x-4 px-4 py-1.5 sm:px-6">
-            <span className="min-w-0 truncate">
-              <span className="hidden sm:inline">PRÓXIMA EDIÇÃO · </span>
-              {fmtDia.format(new Date(proxima.startsAt))} {mesCurto(new Date(proxima.startsAt))} · {proxima.name.toUpperCase()}
-            </span>
-            <span className="shrink-0">
-              <span className="hidden sm:inline">INSCRIÇÕES </span>
-              {isRegistrationClosed(proxima, now) ? "ENCERRADAS" : "ABERTAS"} ▸
-            </span>
-          </span>
-        </Link>
-      )}
-
-      {/* hero */}
       <div className="relative">
         <div className="grid-texture pointer-events-none absolute inset-0" aria-hidden />
         <section
           aria-labelledby="hero-title"
-          className="relative mx-auto grid max-w-6xl gap-10 px-4 pt-10 pb-14 sm:px-6 sm:pt-16 lg:grid-cols-[1.3fr_1fr] lg:items-end lg:gap-14 lg:pt-20 lg:pb-20"
+          className="relative mx-auto max-w-6xl px-4 pt-12 pb-14 sm:px-6 sm:pt-20 lg:pt-24 lg:pb-20"
         >
-          <div className="rise min-w-0">
-            <p className="tag">HACKAHUB · A PLATAFORMA DA HACK INOVA</p>
-            <h1
-              id="hero-title"
-              className="mt-6 text-[clamp(2.9rem,9vw,6.4rem)] leading-[0.88] font-extrabold tracking-[-0.05em]"
+          <p className="tag">HACKAHUB</p>
+          <h1
+            id="hero-title"
+            className="rise mt-6 max-w-[16ch] text-[clamp(2.6rem,7.4vw,5.6rem)] leading-[0.92] font-extrabold tracking-[-0.045em]"
+          >
+            A comunidade de hackathon <span className="text-accent">do Brasil.</span>
+          </h1>
+          <p className="mt-6 max-w-[46ch] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-relaxed text-[#1e1e1e]">
+            Quem constrói, quem organiza e quem apoia, num lugar só. Cada cidade com os seus hackathons,
+            todo mundo no mesmo mapa.
+          </p>
+          <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
+            <Link href={primaryHref} className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
+              {primaryLabel} →
+            </Link>
+            <Link
+              href="/organizar"
+              className="cta-link go self-start text-[clamp(1.1rem,2vw,1.3rem)] sm:self-auto"
+              data-testid="hero-cta-organizar"
             >
-              Sua comunidade
-              <br />
-              <span className="text-accent">de hackathon.</span>
-            </h1>
-            <p className="mt-7 max-w-[50ch] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-relaxed text-[#1e1e1e]">
-              O HackaHub é onde você acha hackathons abertos no Brasil, se inscreve, monta a equipe, entrega
-              o projeto e sai com certificado e portfólio. É também onde a Hack Inova organiza as edições dela,
-              do formulário ao resultado.
-            </p>
-            <div className="mt-9 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
-              <Link href={primaryHref} className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
-                {primaryLabel} →
-              </Link>
-              <Link href="/organizar" className="cta-link go self-start text-[clamp(1.1rem,2vw,1.35rem)] sm:self-auto" data-testid="hero-cta-organizar">
-                Organizo hackathon
-              </Link>
-            </div>
+              Organizo hackathon
+            </Link>
           </div>
-
-          {/* ficha da próxima edição (ou da última, se nada abriu ainda) */}
-          {(proxima ?? ultima) && (
-            <EditionTicket
-              h={(proxima ?? ultima)!}
-              mode={proxima ? "proxima" : "ultima"}
-              approved={proximaCap?.approved ?? null}
-              remaining={proximaCap?.remaining ?? null}
-              capacity={proximaCap?.capacity ?? null}
-              closed={proxima ? isRegistrationClosed(proxima, now) : true}
-            />
-          )}
         </section>
       </div>
 
-      {/* prova — número real do banco; item zerado some */}
-      {stats.length > 0 && (
-        <section aria-label="A comunidade em números" className="mx-auto max-w-6xl px-4 sm:px-6">
-          <dl className={`ink-grid grid-cols-2 ${stats.length >= 4 ? "sm:grid-cols-4" : stats.length === 3 ? "sm:grid-cols-3" : ""}`}>
-            {stats.map((s) => (
-              <div key={s.label} className="flex flex-col px-4 py-4 sm:px-5">
-                <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">{s.label}</dt>
-                <dd className="pix mt-1 text-[clamp(2.6rem,6vw,3.6rem)] leading-[0.85]">{s.n}</dd>
-                {s.delta > 0 && (
-                  <dd className="mt-2 self-start bg-mint px-1.5 font-mono text-[12px] text-accent">{`+${s.delta} · 30d`}</dd>
-                )}
-              </div>
-            ))}
-          </dl>
+      {abertos.length > 0 && (
+        <section id="abertos" aria-labelledby="abertos-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 sm:px-6">
+          <div className="flex items-end justify-between gap-4 border-b-2 border-line pb-3">
+            <h2 id="abertos-title" className="font-mono text-[13px] tracking-[0.08em] uppercase">
+              abertos agora
+            </h2>
+            <Link href="/radar" className="font-mono text-[13px] text-accent underline-offset-4 hover:underline">
+              ver todos →
+            </Link>
+          </div>
+          <EditionRows hackathons={abertos} testId="landing-proximas" now={now} />
         </section>
       )}
 
-      {/* o que é — responde "que porra é essa" antes de qualquer detalhe */}
-      <section id="o-que-e" aria-labelledby="oque-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-28" data-testid="landing-o-que-e">
-        <p className="eyebrow">
-          <b>[00]</b> o que é
-        </p>
-        <h2 id="oque-title" className="mt-4 max-w-[18ch] text-[clamp(2.1rem,4.6vw,3.4rem)] leading-[0.95] font-extrabold tracking-[-0.04em]">
-          Pra que serve o HackaHub.
+      <section id="como-funciona" aria-labelledby="como-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-24">
+        <h2 id="como-title" className="sr-only">
+          Como funciona
         </h2>
-        <ol className="ink-grid mt-10 lg:grid-cols-3">
-          <li className="flex flex-col gap-3 p-6">
-            <span className="pix text-[28px] leading-none text-accent">01</span>
-            <h3 className="text-[1.45rem] leading-tight font-extrabold tracking-[-0.025em]">Achar hackathon</h3>
-            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
-              Um calendário com os hackathons de inscrição aberta no Brasil, separado por estado e atualizado
-              todo dia.
-              {abertosBrasil > 0 && (
-                <>
-                  {" "}
-                  Agora tem <b>{abertosBrasil}</b> {abertosBrasil === 1 ? "aberto" : "abertos"}.
-                </>
-              )}
-            </p>
-          </li>
-          <li className="flex flex-col gap-3 p-6">
-            <span className="pix text-[28px] leading-none text-accent">02</span>
-            <h3 className="text-[1.45rem] leading-tight font-extrabold tracking-[-0.025em]">Participar das edições da Hack Inova</h3>
-            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
-              A inscrição, o ingresso, a equipe, a entrega e o resultado ficam aqui. No dia, você mostra o QR na
-              entrada e passa o resto do tempo construindo.
-            </p>
-          </li>
-          <li className="flex flex-col gap-3 p-6">
-            <span className="pix text-[28px] leading-none text-accent">03</span>
-            <h3 className="text-[1.45rem] leading-tight font-extrabold tracking-[-0.025em]">Guardar o que você fez</h3>
-            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
-              Cada edição vira um registro no seu perfil: projeto, equipe, prêmio e certificado com carga
-              horária, que você pode apresentar na faculdade como hora complementar.
-            </p>
-          </li>
+        <ol className="ink-grid md:grid-cols-3">
+          {passos.map((p) => (
+            <li key={p.k} className="flex flex-col gap-2 p-6">
+              <span className="pix text-[26px] leading-none text-accent">{p.k}</span>
+              <h3 className="text-[1.6rem] leading-tight font-extrabold tracking-[-0.03em]">{p.title}</h3>
+              <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">{p.desc}</p>
+            </li>
+          ))}
         </ol>
-
-        <div className="mt-8 grid gap-8 border-2 border-line bg-mint p-6 sm:p-8 lg:grid-cols-[1fr_1.4fr] lg:items-start" data-testid="landing-primeira-vez">
-          <h3 className="text-[clamp(1.6rem,3vw,2.2rem)] leading-[1] font-extrabold tracking-[-0.03em]">
-            Nunca foi a um hackathon?
-          </h3>
-          <div className="flex flex-col gap-3 text-[16px] leading-relaxed text-[#1e1e1e]">
-            <p>
-              É uma maratona de um ou dois dias. Você forma uma equipe com gente de áreas diferentes, escolhe
-              um desafio, constrói um protótipo e apresenta pra um júri no fim.
-            </p>
-            <p>
-              Não precisa chegar com equipe nem com ideia pronta, e não precisa ser programador: equipe boa
-              mistura código, design, negócio e dados. Participar é de graça.
-            </p>
-          </div>
-        </div>
-
-        {passadas.length > 0 && (
-          <div className="mt-8" data-testid="landing-passadas">
-            <p className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">por onde a Hack Inova já passou</p>
-            <ul className="mt-3 border-b border-line">
-              {passadas.map((h) => (
-                <li key={h.id} className="flex flex-col gap-0.5 border-t border-line py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-                  <span className="text-[16px] font-bold">{h.name}</span>
-                  <span className="font-mono text-[12.5px] text-muted">
-                    {h.location ?? "online"} · {fmtMes.format(new Date(h.startsAt)).replace(".", "")} {fmtAno.format(new Date(h.startsAt))}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </section>
 
-      {/* quem participa: a jornada inteira antes de pedir conta */}
-      <section id="como-funciona" aria-labelledby="participar-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-28">
-        <div className="grid gap-10 lg:grid-cols-[1fr_1.35fr] lg:gap-16">
-          <div className="flex flex-col gap-5 lg:sticky lg:top-28 lg:self-start">
-            <p className="eyebrow">
-              <b>[01]</b> pra quem participa
-            </p>
-            <h2
-              id="participar-title"
-              className="text-[clamp(2.1rem,4.6vw,3.4rem)] leading-[0.95] font-extrabold tracking-[-0.04em]"
-            >
-              Você traz o notebook. O resto está aqui.
-            </h2>
-            <p className="max-w-[42ch] text-[16px] leading-relaxed text-muted">
-              Inscrição, presença, ingresso, equipe e entrega ficam no mesmo lugar, e a página da edição
-              sempre mostra o que falta você fazer.
-            </p>
-            <Link href="/radar" className="cta-link go self-start text-[18px]">
-              Ver hackathons abertos
-            </Link>
-          </div>
-          <ol className="steps border-b border-line">
-            {passos.map((p) => (
-              <li key={p.title} className="grid grid-cols-[40px_1fr] items-baseline gap-x-4 border-t border-line py-6 sm:grid-cols-[56px_1fr]">
-                <div className="col-start-2 flex flex-col gap-1.5">
-                  <h3 className="text-[clamp(1.25rem,2.2vw,1.55rem)] leading-tight font-extrabold tracking-[-0.025em]">
-                    {p.title}
-                  </h3>
-                  <p className="max-w-[52ch] text-[15.5px] leading-relaxed text-[#2b2b2b]">{p.desc}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* por dentro: a plataforma é logada, então a landing mostra as telas */}
-      <section id="por-dentro" aria-labelledby="dentro-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-28" data-testid="landing-por-dentro">
-        <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div className="flex flex-col gap-4">
-            <p className="eyebrow">
-              <b>[02]</b> por dentro
-            </p>
-            <h2 id="dentro-title" className="max-w-[20ch] text-[clamp(2rem,4.2vw,3rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Por dentro da plataforma.
-            </h2>
-          </div>
-          <p className="max-w-[44ch] text-[15.5px] leading-relaxed text-muted">
-            Inscritos, equipes e perfis são pessoas de verdade, então ficam só pra quem tem conta. Estas são as
-            telas, com dados de demonstração.
+      <section aria-label="Pra quem organiza e pra quem patrocina" className="mx-auto mt-20 grid max-w-6xl gap-px px-4 sm:mt-24 sm:px-6 md:grid-cols-2">
+        <div className="flex flex-col gap-3 bg-foreground p-7 text-background sm:p-9" data-testid="landing-organizar">
+          <h2 className="text-[clamp(1.7rem,3vw,2.3rem)] leading-[1] font-extrabold tracking-[-0.035em]">Organiza na sua cidade?</h2>
+          <p className="max-w-[40ch] text-[15.5px] leading-relaxed text-[#b8cdc0]">
+            Faculdade, coletivo ou empresa: sua comunidade roda a edição dela aqui, com as mesmas ferramentas da
+            Hack Inova, e quem participa já chega com perfil.
           </p>
+          <Link href="/organizar" className="mt-2 self-start font-mono text-[14px] text-band underline-offset-4 hover:underline">
+            Como funciona pra organizar →
+          </Link>
         </div>
-        <div className="grid gap-x-8 gap-y-12 lg:grid-cols-2">
-          {telas.map((t, i) => (
-            <figure key={t.title} className="flex min-w-0 flex-col gap-4">
-              <div className="border-2 border-line">
-                <p className="tbar">
-                  <span className="title">{t.bar}</span>
-                  <span className="dots" aria-hidden>
-                    <b />
-                    <b />
-                  </span>
-                </p>
-                <Image src={t.img} alt={t.alt} sizes="(min-width: 1024px) 560px, 100vw" placeholder="blur" className="block aspect-[1152/580] w-full object-cover object-top" />
-              </div>
-              <figcaption className="grid grid-cols-[36px_1fr] gap-x-3">
-                <span className="font-mono text-[13px] font-medium text-accent">{String(i + 1).padStart(2, "0")}</span>
-                <span>
-                  <span className="block text-[19px] font-extrabold tracking-[-0.02em]">{t.title}</span>
-                  <span className="mt-1 block text-[14.5px] leading-snug text-[#2b2b2b]">{t.desc}</span>
-                </span>
-              </figcaption>
-            </figure>
+        <div className="flex flex-col gap-3 border-2 border-line p-7 sm:p-9" data-testid="landing-patrocinar">
+          <h2 className="text-[clamp(1.7rem,3vw,2.3rem)] leading-[1] font-extrabold tracking-[-0.035em]">Quer patrocinar?</h2>
+          <p className="max-w-[40ch] text-[15.5px] leading-relaxed text-[#2b2b2b]">
+            Sua empresa propõe um desafio, as equipes constroem em cima dele e você recebe o relatório do que aconteceu.
+          </p>
+          <Link href="/empresas" className="mt-2 self-start font-mono text-[14px] text-accent underline-offset-4 hover:underline">
+            Quero patrocinar um desafio →
+          </Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="faq-title" className="mx-auto grid max-w-6xl gap-8 px-4 pt-20 sm:px-6 sm:pt-24 lg:grid-cols-[1fr_1.6fr]">
+        <h2 id="faq-title" className="text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1] font-extrabold tracking-[-0.035em]">
+          Dúvidas
+        </h2>
+        <div className="border-b-2 border-line" data-testid="landing-faq">
+          {faq.map((f) => (
+            <details key={f.q} className="group border-t-2 border-line">
+              <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-4 py-3 text-[16.5px] font-bold">
+                {f.q}
+                <span aria-hidden className="font-mono text-accent group-open:rotate-45">+</span>
+              </summary>
+              <p className="max-w-[60ch] pb-5 text-[15.5px] leading-relaxed text-[#2b2b2b]">{f.a}</p>
+            </details>
           ))}
         </div>
-        <p className="mt-4 font-mono text-[12px] text-muted">telas reais da plataforma · dados de demonstração</p>
       </section>
 
-      {/* próximas edições */}
-      {proximas.length > 0 && (
-        <section aria-labelledby="proximas-title" className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 sm:pt-28">
-          <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div className="flex flex-col gap-4">
-              <p className="eyebrow">
-                <b>[03]</b> inscrições abertas
-              </p>
-              <h2 id="proximas-title" className="text-[clamp(2rem,4.2vw,3rem)] leading-none font-extrabold tracking-[-0.04em]">
-                Próximas edições
-              </h2>
-            </div>
-            <Link href="/radar" className="font-mono text-[13px] font-medium text-accent underline-offset-4 hover:underline">
-              ver todos os hackathons →
+      <section aria-labelledby="conta-title" className="mx-auto max-w-6xl px-4 pt-20 pb-24 sm:px-6 sm:pt-24 sm:pb-28" data-testid="landing-conta">
+        <div className="flex flex-col items-start justify-between gap-6 border-2 border-line bg-mint p-7 sm:flex-row sm:items-center sm:p-9">
+          <h2 id="conta-title" className="text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] font-extrabold tracking-[-0.03em]">
+            Entre pra comunidade.
+          </h2>
+          <Show when="signed-out">
+            <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+              <button className="btn min-h-[52px]! shrink-0 px-6!" data-testid="landing-signup">
+                criar conta, é de graça →
+              </button>
+            </SignUpButton>
+          </Show>
+          <Show when="signed-in">
+            <Link href="/dashboard" className="btn min-h-[52px]! shrink-0 px-6!">
+              ir pro meu painel →
             </Link>
-          </div>
-          <EditionRows hackathons={proximas} testId="landing-proximas" now={now} />
-        </section>
-      )}
-
-      {/* vitrine: o que saiu das edições */}
-      {champions.length > 0 && (
-        <section aria-labelledby="vitrine-title" className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 sm:pt-28">
-          <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div className="flex flex-col gap-4">
-              <p className="eyebrow">
-                <b>[04]</b> do arquivo
-              </p>
-              <h2 id="vitrine-title" className="max-w-[18ch] text-[clamp(2rem,4.2vw,3rem)] leading-none font-extrabold tracking-[-0.04em]">
-                Quem já subiu no pódio.
-              </h2>
-            </div>
-            <Link href="/projetos" className="font-mono text-[13px] font-medium text-accent underline-offset-4 hover:underline">
-              ver todos os projetos →
-            </Link>
-          </div>
-          <ul className="ink-grid sm:grid-cols-2 lg:grid-cols-3" data-testid="landing-vitrine">
-            {champions.map((c) => (
-              <li key={c.teamId} className={`flex flex-col gap-3 p-5 ${c.placement === 1 ? "bg-mint!" : ""}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <span
-                    className={`pix px-2 text-[24px] leading-[1.15] ${
-                      c.placement === 1 ? "bg-foreground text-band" : "border-[1.5px] border-line"
-                    }`}
-                  >
-                    {c.placement}º
-                  </span>
-                  <span className="truncate font-mono text-[11.5px] text-muted">
-                    {mesCurto(new Date(c.startsAt))} {fmtAno.format(new Date(c.startsAt))}
-                  </span>
-                </div>
-                <Link
-                  href={`/p/${c.teamId}`}
-                  className="text-[20px] leading-tight font-extrabold tracking-[-0.025em] underline-offset-4 hover:text-accent hover:underline"
-                >
-                  {c.title}
-                </Link>
-                {c.description && <p className="line-clamp-3 text-[14px] leading-snug text-[#2b2b2b]">{c.description}</p>}
-                <p className="mt-auto border-t border-line-soft pt-3 font-mono text-[12px] leading-relaxed text-muted">
-                  <span className="text-foreground">{c.teamName}</span> · {c.hackathonName}
-                  {c.members.length > 0 && (
-                    <>
-                      <br />
-                      {c.members.map((u) => `@${u}`).join(" ")}
-                    </>
-                  )}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* quem organiza: faixa escura com o ciclo da edição */}
-      <section aria-labelledby="organizar-title" className="mt-20 bg-foreground text-background sm:mt-28" data-testid="landing-organizar">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-          <div className="mb-10 grid gap-6 lg:grid-cols-[1.2fr_1fr] lg:items-end">
-            <div className="flex flex-col gap-4">
-              <p className="font-mono text-[13px] font-medium text-[#b8cdc0]">
-                <span className="text-band">[05]</span> pra quem organiza
-              </p>
-              <h2
-                id="organizar-title"
-                className="max-w-[20ch] text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.98] font-extrabold tracking-[-0.04em]"
-              >
-                Seu hackathon, do formulário ao certificado.
-              </h2>
-            </div>
-            <div className="flex flex-col gap-5 lg:items-end lg:text-right">
-              <p className="max-w-[44ch] text-[15px] leading-relaxed text-[#b8cdc0]">
-                Faculdade, comunidade ou empresa. A Hack Inova monta a edição com você, e cada etapa tem uma
-                tela no painel da organização.
-              </p>
-              <Link href="/organizar" className="btn-go self-start lg:self-end">
-                Como funciona pra organizar →
-              </Link>
-            </div>
-          </div>
-          <ol className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-            {ciclo.map((c, i) => (
-              <li key={c.k} className="border-t border-[#5e7869] pt-4">
-                <p className="font-mono text-[12px] font-medium tracking-[0.04em] text-band uppercase">
-                  {String(i + 1).padStart(2, "0")} · {c.k}
-                </p>
-                <h3 className="mt-2 mb-2 text-[20px] font-bold tracking-[-0.015em]">{c.title}</h3>
-                <ul className="flex flex-col gap-1 text-[14px] leading-snug text-[#b8cdc0]">
-                  {c.items.map((it) => (
-                    <li key={it} className="flex gap-2">
-                      <span aria-hidden className="text-band">
-                        +
-                      </span>
-                      {it}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* patrocinador */}
-      <section aria-labelledby="patrocinar-title" className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 sm:pt-28" data-testid="landing-patrocinar">
-        <div className="grid gap-10 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
-          <div className="flex flex-col gap-5">
-            <p className="eyebrow">
-              <b>[06]</b> pra patrocinador
-            </p>
-            <h2 id="patrocinar-title" className="text-[clamp(2rem,4.2vw,3rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Patrocine um problema.
-            </h2>
-            <p className="max-w-[42ch] text-[16px] leading-relaxed text-muted">
-              Sua empresa propõe o desafio, as equipes constroem em cima dele e você recebe um relatório do que aconteceu.
-            </p>
-            <Link href="/empresas" className="cta-link go self-start text-[18px]">
-              Quero patrocinar um desafio
-            </Link>
-          </div>
-          <dl className="grid border-t-2 border-line sm:grid-cols-2">
-            {patrocinio.map((p) => (
-              <div key={p.title} className="border-b border-line py-5 sm:odd:pr-6 sm:even:border-l sm:even:pl-6">
-                <dt className="text-[19px] font-extrabold tracking-[-0.02em]">{p.title}</dt>
-                <dd className="mt-1.5 text-[14.5px] leading-relaxed text-[#2b2b2b]">{p.desc}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
-
-      {/* por que criar conta */}
-      <section aria-labelledby="conta-title" className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 sm:pt-28" data-testid="landing-conta">
-        <div className="grid gap-8 border-2 border-line lg:grid-cols-[1fr_1.4fr]">
-          <div className="flex flex-col gap-5 border-b-2 border-line bg-mint p-6 sm:p-8 lg:border-r-2 lg:border-b-0">
-            <p className="eyebrow">
-              <b>[07]</b> sua conta
-            </p>
-            <h2 id="conta-title" className="text-[clamp(1.9rem,4vw,2.8rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Uma conta, todas as edições.
-            </h2>
-            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
-              É de graça. Depois do cadastro são três telas rápidas sobre você, e dá pra pular.
-            </p>
-            <Show when="signed-out">
-              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-                <button className="btn self-start" data-testid="landing-signup">
-                  criar minha conta →
-                </button>
-              </SignUpButton>
-            </Show>
-            <Show when="signed-in">
-              <Link href="/dashboard" className="btn self-start">
-                ir pro meu painel →
-              </Link>
-            </Show>
-          </div>
-          <ul className="grid content-start gap-x-8 p-6 sm:grid-cols-2 sm:p-8">
-            {beneficios.map((b) => (
-              <li key={b.title} className="border-t border-line py-4 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
-                <p className="text-[17px] font-extrabold tracking-[-0.015em]">{b.title}</p>
-                <p className="mt-1 text-[14.5px] leading-snug text-muted">{b.desc}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section aria-labelledby="faq-title" className="mx-auto max-w-6xl px-4 pt-20 pb-20 sm:px-6 sm:pt-28 sm:pb-28">
-        <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
-          <div className="flex flex-col gap-4">
-            <p className="eyebrow">
-              <b>[08]</b> dúvidas
-            </p>
-            <h2 id="faq-title" className="text-[clamp(2rem,4.2vw,3rem)] leading-none font-extrabold tracking-[-0.04em]">
-              Perguntas frequentes.
-            </h2>
-          </div>
-          <div className="border-b-2 border-line" data-testid="landing-faq">
-            {faq.map((f) => (
-              <details key={f.q} className="group border-t-2 border-line">
-                <summary className="flex cursor-pointer list-none items-baseline justify-between gap-4 py-4 text-[17px] font-bold tracking-[-0.01em] [&::-webkit-details-marker]:hidden">
-                  {f.q}
-                  <span aria-hidden className="font-mono text-[18px] text-accent group-open:rotate-45 motion-safe:transition-transform">
-                    +
-                  </span>
-                </summary>
-                <p className="max-w-[60ch] pb-5 text-[15.5px] leading-relaxed text-[#2b2b2b]">
-                  {f.a}
-                  {f.q.startsWith("Quero levar") && (
-                    <>
-                      {" "}
-                      <Link href="/organizar" className="text-accent underline underline-offset-4">
-                        Organizar uma edição →
-                      </Link>
-                    </>
-                  )}
-                </p>
-              </details>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* newsletter */}
-      <section aria-labelledby="news-title" className="border-t-2 border-line bg-mint">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-[1fr_1.1fr] md:items-end">
-          <div>
-            <p className="tag">NEWSLETTER</p>
-            <h2 id="news-title" className="mt-4 text-[clamp(2rem,4vw,2.75rem)] leading-none font-extrabold tracking-[-0.04em]">
-              Um e-mail por semana.
-            </h2>
-            <p className="mt-3 max-w-[46ch] text-[15px] text-[#2b2b2b]">
-              Hackathons com inscrição aberta, prazos e as próximas edições da Hack Inova.
-            </p>
-          </div>
-          <NewsletterForm />
+          </Show>
         </div>
       </section>
     </div>
-  );
-}
-
-// ficha/ingresso da edição no hero — o "event-facts" do site da Hack Inova
-function EditionTicket({
-  h,
-  mode,
-  approved,
-  remaining,
-  capacity,
-  closed,
-}: {
-  h: Hackathon;
-  mode: "proxima" | "ultima";
-  approved: number | null;
-  remaining: number | null;
-  capacity: number | null;
-  closed: boolean;
-}) {
-  const d = new Date(h.startsAt);
-  const rows: [string, string][] = [
-    ["local", h.location ?? "Online"],
-    ["formato", FORMAT_LABEL[h.format]],
-  ];
-  if (mode === "proxima") {
-    if (approved !== null && approved > 0) rows.push(["inscritos", String(approved)]);
-    if (capacity !== null && remaining !== null) {
-      rows.push(["vagas", remaining === 0 ? "esgotadas · fila aberta" : `${remaining} de ${capacity} livres`]);
-    }
-    rows.push([
-      "inscrições",
-      closed ? "encerradas" : h.registrationDeadline ? `até ${fmtLongo.format(new Date(h.registrationDeadline))}` : "abertas",
-    ]);
-  }
-  return (
-    <article
-      aria-label={mode === "proxima" ? "Próxima edição" : "Última edição"}
-      className="rise rise-2 border-2 border-line bg-background"
-      data-testid="hero-ticket"
-    >
-      <div className="flex items-center justify-between border-b-2 border-line bg-foreground px-4 py-1.5">
-        <span className="pix text-[19px] leading-none text-band">{mode === "proxima" ? "PRÓXIMA EDIÇÃO" : "ÚLTIMA EDIÇÃO"}</span>
-        <span className="pix text-[19px] leading-none text-background">{fmtAno.format(d)}</span>
-      </div>
-      <div className="px-5 pt-5 pb-4">
-        <p className="flex items-baseline gap-2 text-[clamp(3.6rem,8vw,5rem)] leading-[0.85] font-extrabold tracking-[-0.05em] tabular-nums">
-          {fmtDia.format(d)}
-          <span className="text-[0.48em] text-accent">{mesCurto(d)}</span>
-        </p>
-        <p className="mt-2 font-mono text-[12.5px] text-muted first-letter:uppercase">
-          {fmtSemana.format(d)} · {fmtLongo.format(d)}
-        </p>
-        <p className="mt-4 text-[22px] leading-tight font-extrabold tracking-[-0.025em]">{h.name}</p>
-        <p className="mt-1 text-[14px] text-muted">Realização {h.organizer}</p>
-      </div>
-      <dl className="border-t border-line text-[14px]">
-        {rows.map(([k, v]) => (
-          <div key={k} className="grid grid-cols-[96px_1fr] gap-3 border-b border-line-soft px-5 py-2.5 last:border-b-0">
-            <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">{k}</dt>
-            <dd className="font-semibold">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <Link
-        href={mode === "proxima" ? `/h/${h.id}` : `/h/${h.id}#resultado`}
-        className="pix block border-t-2 border-line bg-band py-2 text-center text-[22px] leading-none hover:bg-foreground hover:text-band"
-      >
-        {mode === "proxima" ? (closed ? "VER EDIÇÃO ▸" : "VER EDIÇÃO E SE INSCREVER ▸") : "VER RESULTADO ▸"}
-      </Link>
-    </article>
   );
 }

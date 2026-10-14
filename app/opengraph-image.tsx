@@ -3,10 +3,10 @@ import { appConfig } from "@/app.config";
 import { OG_CACHE_HEADERS } from "@/lib/ogCache";
 
 // OG image padrão do site (spec 009, redesenhada na 039): mesma hierarquia
-// da landing — selo, "Sua comunidade de hackathon." e a jornada em mono.
+// da landing — selo, "A comunidade de hackathon do Brasil." e a jornada em mono.
 // Papel, tinta, verde; fio de tinta, sem sombra nem gradiente.
 
-export const alt = `${appConfig.name} — sua comunidade de hackathon, da Hack Inova`;
+export const alt = `${appConfig.name} — a comunidade de hackathon do Brasil`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -37,15 +37,15 @@ export default function Image() {
             borderBottom: "4px solid #3ecf8e",
           }}
         >
-          <span>HACKAHUB · HACK INOVA</span>
+          <span>HACKAHUB</span>
           <span>COMUNIDADE DE HACKATHON</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, justifyContent: "center", padding: "0 72px" }}>
-          <div style={{ display: "flex", fontSize: 104, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 0.92, color: "#0c0c0c" }}>
-            Sua comunidade
+          <div style={{ display: "flex", fontSize: 92, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 0.92, color: "#0c0c0c" }}>
+            A comunidade de hackathon
           </div>
-          <div style={{ display: "flex", fontSize: 104, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 0.92, color: appConfig.accent }}>
-            de hackathon.
+          <div style={{ display: "flex", fontSize: 92, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 0.92, color: appConfig.accent }}>
+            do Brasil.
           </div>
         </div>
         <div style={{ display: "flex", borderTop: "3px solid #0c0c0c" }}>

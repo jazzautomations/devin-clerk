@@ -19,8 +19,8 @@ const NAV_IN: NavLink[] = [
 // sem conta (spec 039): a plataforma é logada, então o header leva pro que
 // explica o produto — landing por seção, /organizar e /empresas
 const NAV_OUT: NavLink[] = [
-  { href: "/#o-que-e", label: "como funciona", match: [] },
-  { href: "/#por-dentro", label: "por dentro", match: [] },
+  { href: "/#abertos", label: "abertos agora", match: [] },
+  { href: "/#como-funciona", label: "como funciona", match: [] },
   { href: "/organizar", label: "organizar", match: ["/organizar"] },
   { href: "/empresas", label: "patrocinar", match: ["/empresas"] },
 ];

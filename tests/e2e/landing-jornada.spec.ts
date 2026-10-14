@@ -18,12 +18,13 @@ test.describe("landing pública", () => {
     // a próxima edição Hack Inova aberta (outros specs semeiam edições futuras)
     await expect(page.getByTestId("hero-cta-primary")).toHaveAttribute("href", /^\/h\/[^/]+$/);
     await expect(page.getByTestId("hero-cta-organizar")).toHaveAttribute("href", "/organizar");
-    await expect(page.getByTestId("hero-ticket")).toContainText(/próxima edição/i);
+    // o que está aberto aparece já na primeira dobra, Hack Inova primeiro
+    await expect(page.getByTestId("landing-proximas")).toContainText(/hack inova/i);
   });
 
   test("seções por público: participar, por dentro, edições, organizar, patrocinar, conta e FAQ", async ({ page }) => {
     await page.goto("/");
-    for (const id of ["landing-por-dentro", "landing-proximas", "landing-organizar", "landing-patrocinar", "landing-conta", "landing-faq"]) {
+    for (const id of ["landing-proximas", "landing-organizar", "landing-patrocinar", "landing-conta", "landing-faq"]) {
       await expect(page.getByTestId(id)).toBeVisible();
     }
     await expect(page.locator("#como-funciona")).toBeVisible();
@@ -38,7 +39,7 @@ test.describe("landing pública", () => {
   test("header de quem não tem conta: o que explica o produto, sem link pra área logada", async ({ page }) => {
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Navegação principal" });
-    await expect(nav.getByRole("link", { name: "como funciona" })).toHaveAttribute("href", "/#o-que-e");
+    await expect(nav.getByRole("link", { name: "como funciona" })).toHaveAttribute("href", "/#como-funciona");
     await expect(nav.getByRole("link", { name: "organizar" })).toHaveAttribute("href", "/organizar");
     await expect(nav.getByRole("link", { name: "patrocinar" })).toHaveAttribute("href", "/empresas");
     await expect(nav.getByRole("link", { name: "hackathons" })).toHaveCount(0);

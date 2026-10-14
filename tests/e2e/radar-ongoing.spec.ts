@@ -74,19 +74,4 @@ test.describe("radar mostra eventos em andamento — spec 027", () => {
       page.getByText(/nada no radar pra "over jam"/i),
     ).toBeVisible();
   });
-
-  test("landing mostra '+N · 30d' quando há atividade na janela", async ({
-    page,
-    request,
-  }) => {
-    // first_seen=agora do evento ongoing garante ≥1 no delta de eventos
-    await ensureOngoingEvents(request);
-    await page.goto("/");
-    await expect(page.getByText(/^\+\d+ · 30d$/).first()).toBeVisible();
-    // "edições realizadas" não tem timestamp real de entrada → sem momentum
-    const arquivo = page
-      .locator("dl > div")
-      .filter({ hasText: "edições realizadas" });
-    await expect(arquivo.getByText(/· 30d/)).toHaveCount(0);
-  });
 });
