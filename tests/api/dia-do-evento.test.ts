@@ -187,8 +187,10 @@ describe("sync em lote", () => {
       null,
       now,
     );
-    expect(a).toMatchObject({ ok: true, at: "2026-11-06 00:00:00" });
-    expect(b).toMatchObject({ ok: true, at: "2026-11-07 20:00:00" });
+    // a janela começa na véspera às 09:00 de Brasília (data pura = 09:00 BRT);
+    // os dois horários foram ajustados e vêm marcados
+    expect(a).toMatchObject({ ok: true, at: "2026-11-06 12:00:00", clamped: true });
+    expect(b).toMatchObject({ ok: true, at: "2026-11-07 20:00:00", clamped: true });
   });
 
   it("recusa: status mudou, ingresso de outra edição, lixo — e não grava nada", async () => {
@@ -230,6 +232,12 @@ describe("sync em lote", () => {
 // ---------------------------------------------------------------- walk-in
 
 describe("walk-in", () => {
+  // walk-in só no dia do evento: a edição acontece hoje nesses testes
+  beforeEach(async () => {
+    const today = new Date().toISOString();
+    await db.prepare("UPDATE hackathons SET startsAt = ?, endsAt = ? WHERE id = ?").run(today, today, H);
+  });
+
   it("aprova + check-in quem está na fila, com recompensa e e-mail na fila", async () => {
     const rw = await reg("clerk_a", "waitlist");
     const r = await walkIn(H, rw, await idOf("clerk_staff"));
@@ -277,6 +285,35 @@ describe("walk-in", () => {
     expect(await walkIn(H, ro, null)).toMatchObject({ ok: false, reason: "not_found" });
   });
 
+  it("pedido pendente não entra pela porta: quem decide é o organizador (409)", async () => {
+    const rp = await reg("clerk_a", "pending");
+    expect(await walkIn(H, rp, await idOf("clerk_staff"))).toMatchObject({ ok: false, reason: "pending" });
+    expect(await db.prepare("SELECT status FROM registrations WHERE id = ?").get(rp)).toEqual({ status: "pending" });
+    const { POST } = await import("@/app/api/admin/hackathons/[id]/checkin/walkin/route");
+    asUser("clerk_staff");
+    const res = await POST(req("POST", { registrationId: rp }), params(H));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/inscritos/);
+    // e a lista da porta só mostra a fila de espera
+    const { GET } = await import("@/app/api/admin/hackathons/[id]/checkin/walkin/route");
+    expect((await (await GET(req("GET"), params(H))).json()).results).toEqual([]);
+  });
+
+  it("fora da janela do evento (véspera até 2 dias depois do fim) é 409", async () => {
+    const rw = await reg("clerk_a", "waitlist");
+    await db.prepare("UPDATE hackathons SET startsAt = '2026-11-07', endsAt = '2026-11-08' WHERE id = ?").run(H);
+    expect(await walkIn(H, rw, null, new Date("2026-11-01T12:00:00Z"))).toMatchObject({
+      ok: false,
+      reason: "outside_window",
+    });
+    expect(await walkIn(H, rw, null, new Date("2026-11-11T12:00:00Z"))).toMatchObject({
+      ok: false,
+      reason: "outside_window",
+    });
+    expect(await db.prepare("SELECT status FROM registrations WHERE id = ?").get(rw)).toEqual({ status: "waitlist" });
+    expect(await walkIn(H, rw, null, new Date("2026-11-07T13:00:00Z"))).toMatchObject({ ok: true });
+  });
+
   it("API walk-in: 401/403; GET lista a fila sem e-mail; POST 200 e 409 sala cheia", async () => {
     const { GET, POST } = await import("@/app/api/admin/hackathons/[id]/checkin/walkin/route");
     const rw = await reg("clerk_a", "waitlist");
@@ -293,7 +330,7 @@ describe("walk-in", () => {
     expect(JSON.stringify(lj)).not.toContain("@segredo.dev");
     const ok = await POST(req("POST", { registrationId: rw }), params(H));
     expect(ok.status).toBe(200);
-    expect((await ok.json()).message).toMatch(/walk-in/i);
+    expect((await ok.json()).message).toMatch(/fila de espera/i);
     await db.prepare("UPDATE hackathons SET capacity = 1 WHERE id = ?").run(H);
     expect((await POST(req("POST", { registrationId: rw2 }), params(H))).status).toBe(409);
   });

@@ -55,6 +55,9 @@ beforeEach(async () => {
   await db.prepare("DELETE FROM registrations").run();
   await db.prepare("DELETE FROM edition_roles").run();
   await db.prepare("DELETE FROM edition_role_invites").run();
+  // check-in só vale na janela do evento: a edição acontece hoje
+  const today = new Date().toISOString();
+  await db.prepare("UPDATE hackathons SET startsAt = ?, endsAt = ? WHERE id = ?").run(today, today, H);
   await grantEditionRole(H, await idOf("clerk_org"), "organizador", null);
   await grantEditionRole(H, await idOf("clerk_staff"), "staff", null);
   await grantEditionRole(H, await idOf("clerk_mentor"), "mentor", null);

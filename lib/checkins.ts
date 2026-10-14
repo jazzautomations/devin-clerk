@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import db from "@/lib/db";
+import { checkinWindow } from "@/lib/offlineCheckin";
 import type { RegistrationStatus } from "@/lib/registrations";
 
 // Check-in no dia (spec 033 US4). O QR do ingresso carrega um token
@@ -70,16 +71,35 @@ export type CheckInResult =
       name: string | null;
     }
   | { ok: false; reason: "invalid" | "not_found" }
-  | { ok: false; reason: "pending" | "rejected" | "waitlist"; username: string; name: string | null };
+  | { ok: false; reason: "pending" | "rejected" | "waitlist"; username: string; name: string | null }
+  | { ok: false; reason: "outside_window"; window: { start: Date; end: Date } };
+
+/** agora está dentro da janela de check-in da edição? (null = edição não existe) */
+export async function editionCheckinWindow(
+  hackathonId: string,
+  now: Date = new Date(),
+): Promise<{ inside: boolean; window: { start: Date; end: Date } } | null> {
+  const h = await db
+    .prepare("SELECT startsAt, endsAt FROM hackathons WHERE id = ?")
+    .get<{ startsAt: string; endsAt: string | null }>(hackathonId);
+  if (!h) return null;
+  const window = checkinWindow(h);
+  const t = now.getTime();
+  return { inside: t >= window.start.getTime() && t <= window.end.getTime(), window };
+}
 
 /**
  * Marca presença. Idempotente: a segunda leitura devolve already=true com
- * o horário da primeira. Só inscrição aprovada da própria edição entra.
+ * o horário da primeira. Só inscrição aprovada da própria edição entra, e só
+ * dentro da janela do evento (véspera até 2 dias depois do fim) — presença
+ * gera certificado e voto. force (só admin global, decidido na rota) marca
+ * fora da janela e fica registrado em checkins.outsideWindow.
  */
 export async function checkIn(
   hackathonId: string,
   by: { token: string } | { registrationId: number },
   byMemberId: number | null,
+  opts: { now?: Date; force?: boolean } = {},
 ): Promise<CheckInResult> {
   let reg: RegRow | null;
   if ("token" in by) {
@@ -98,12 +118,21 @@ export async function checkIn(
   if (reg.status !== "approved") {
     return { ok: false, reason: reg.status, username: reg.username, name: reg.name };
   }
+  const win = await editionCheckinWindow(hackathonId, opts.now);
+  const outside = !!win && !win.inside;
+  if (outside && !opts.force) {
+    // quem já tem presença registrada continua vendo o horário dela
+    const prev = await db
+      .prepare("SELECT at FROM checkins WHERE registrationId = ?")
+      .get<{ at: string }>(reg.id);
+    if (!prev) return { ok: false, reason: "outside_window", window: win.window };
+  }
   const res = await db
     .prepare(
-      `INSERT OR IGNORE INTO checkins (registrationId, byMemberId, via, syncedAt)
-       VALUES (?, ?, 'online', datetime('now'))`,
+      `INSERT OR IGNORE INTO checkins (registrationId, byMemberId, via, syncedAt, outsideWindow)
+       VALUES (?, ?, 'online', datetime('now'), ?)`,
     )
-    .run(reg.id, byMemberId);
+    .run(reg.id, byMemberId, outside ? 1 : 0);
   const row = await db
     .prepare("SELECT at FROM checkins WHERE registrationId = ?")
     .get<{ at: string }>(reg.id);

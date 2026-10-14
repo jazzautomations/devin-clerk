@@ -39,6 +39,31 @@ async function registration(memberId: number, hackathonId: string, status: strin
 beforeEach(async () => {
   await db.prepare("DELETE FROM checkins").run();
   await db.prepare("DELETE FROM registrations").run();
+  // check-in só vale na janela do evento: a edição acontece hoje
+  const today = new Date().toISOString();
+  await db.prepare("UPDATE hackathons SET startsAt = ?, endsAt = ? WHERE id IN (?, ?)").run(today, today, H, OTHER);
+});
+
+describe("janela do check-in (auditoria 041)", () => {
+  it("fora da janela é recusado; admin forçando marca e fica registrado", async () => {
+    const m = await member("clerk_win", "win@t.dev", "Wil");
+    const rid = await registration(m.id, H, "approved");
+    await db.prepare("UPDATE hackathons SET startsAt = '2026-11-07', endsAt = '2026-11-08' WHERE id = ?").run(H);
+    const early = new Date("2026-10-20T12:00:00Z");
+    const r = await checkIn(H, { registrationId: rid }, null, { now: early });
+    expect(r).toMatchObject({ ok: false, reason: "outside_window" });
+    expect(await isCheckedIn(rid)).toBe(false);
+    // véspera às 09:00 de Brasília (12:00Z) já abre
+    expect(await checkIn(H, { registrationId: rid }, null, { now: new Date("2026-11-06T12:30:00Z") })).toMatchObject({
+      ok: true,
+    });
+    await db.prepare("DELETE FROM checkins").run();
+    const forced = await checkIn(H, { registrationId: rid }, null, { now: early, force: true });
+    expect(forced).toMatchObject({ ok: true });
+    expect(await db.prepare("SELECT \"outsideWindow\" AS o FROM checkins WHERE registrationId = ?").get(rid)).toEqual({ o: 1 });
+    // quem já tem presença continua vendo o horário, mesmo fora da janela
+    expect(await checkIn(H, { registrationId: rid }, null, { now: early })).toMatchObject({ ok: true, already: true });
+  });
 });
 
 describe("token do ingresso", () => {

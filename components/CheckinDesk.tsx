@@ -11,6 +11,8 @@ import {
   isOfflinePack,
   localCheckedInAt,
   mergeIntoPack,
+  packAgeMs,
+  PACK_STALE_MS,
   type LocalResult,
   type OfflinePack,
   type PackEntry,
@@ -24,7 +26,9 @@ import { readLocal, useLocalStore, useOnline, writeLocal } from "@/components/us
 // só quando precisa) e tem busca manual pra quando a câmera não ajuda.
 // Modo offline (roadmap 037 #5): com o pacote baixado, sem rede a leitura
 // valida no aparelho (lib/offlineCheckin), vai pra uma fila local e sobe em
-// lote quando a rede volta. Walk-in puxa alguém da fila de espera na hora.
+// lote quando a rede volta. "Chegou sem vaga" puxa alguém da fila de espera
+// na hora. Depois de cada check-in pela busca, o campo limpa e o foco volta
+// pra ele (próxima pessoa da fila); o aviso aparece logo abaixo da busca.
 
 type Feedback = { kind: "ok" | "already" | "error"; text: string };
 
@@ -54,11 +58,21 @@ const SYNC_BATCH = 200;
 function localMessage(r: LocalResult): Feedback {
   switch (r.kind) {
     case "ok":
-      return { kind: "ok", text: `Check-in offline: ${r.entry.name} às ${hhmm(r.at)} (sobe quando a rede voltar).` };
+      return r.forced
+        ? {
+            kind: "already",
+            text: `${r.entry.name} foi pra fila de sincronização às ${hhmm(r.at)}. O servidor confirma quando a rede voltar.`,
+          }
+        : { kind: "ok", text: `Check-in offline: ${r.entry.name} às ${hhmm(r.at)} (sobe quando a rede voltar).` };
     case "already":
       return { kind: "already", text: `${r.entry.name} já fez check-in às ${hhmm(r.at)}.` };
     case "blocked":
-      return { kind: "error", text: `${r.entry.name}: ${STATUS_LABEL[r.entry.status]} — entrada não liberada.` };
+      return {
+        kind: "error",
+        text: r.canForce
+          ? `${r.entry.name}: ${STATUS_LABEL[r.entry.status]} no pacote. A lista pode ter mudado depois do download: use "enfileirar mesmo assim" e o servidor confere quando a rede voltar.`
+          : `${r.entry.name}: ${STATUS_LABEL[r.entry.status]}. Entrada não liberada.`,
+      };
     case "unknown":
       return {
         kind: "error",
@@ -104,6 +118,10 @@ export function CheckinDesk({
   const [packBusy, setPackBusy] = useState(false);
   const [walkQ, setWalkQ] = useState("");
   const [walkList, setWalkList] = useState<WaitlistHit[] | null>(null);
+  // offline: quem o pacote diz "fila"/"pendente" pode ter sido aprovado depois
+  const [forceRid, setForceRid] = useState<number | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -115,28 +133,45 @@ export function CheckinDesk({
   // lê pacote e fila do storage NA HORA (não do render): duas leituras
   // seguidas do mesmo QR nunca veem a fila velha
   const submitLocal = useCallback(
-    async (body: { token: string } | { registrationId: number }): Promise<boolean> => {
+    async (body: { token: string } | { registrationId: number }, force = false): Promise<LocalResult | null> => {
       const pk = readLocal<OfflinePack>(packKey);
-      if (!isOfflinePack(pk)) return false;
+      if (!isOfflinePack(pk)) return null;
       const cur = readLocal<QueuedCheckin[]>(queueKey) ?? [];
       const by = "token" in body ? { token: body.token } : { rid: body.registrationId };
-      const { result, queue: next } = await checkInOffline(pk, cur, by);
+      const { result, queue: next } = await checkInOffline(pk, cur, by, new Date(), { force });
       if (next !== cur) writeLocal(queueKey, next);
       setFeedback(localMessage(result));
+      setForceRid(result.kind === "blocked" && result.canForce ? result.entry.rid : null);
       if (result.kind === "ok") navigator.vibrate?.(80);
       else if (result.kind !== "already") navigator.vibrate?.([60, 60, 60]);
-      return true;
+      return result;
     },
     [packKey, queueKey],
   );
 
+  // check-in feito pela busca: limpa o campo e devolve o foco pra ele
+  const resetSearch = useCallback(() => {
+    setQ("");
+    setResults([]);
+    searchRef.current?.focus();
+  }, []);
+
   const submit = useCallback(
-    async (body: { token: string } | { registrationId: number }) => {
+    async (body: { token: string } | { registrationId: number }, opts: { fromSearch?: boolean; force?: boolean } = {}) => {
       if (inFlight.current) return;
       inFlight.current = true;
       setBusy(true);
+      const done = (ok: boolean) => {
+        if (ok && opts.fromSearch) resetSearch();
+      };
       try {
-        if (!navigator.onLine && (await submitLocal(body))) return;
+        if (opts.force || !navigator.onLine) {
+          const local = await submitLocal(body, opts.force);
+          if (local) {
+            done(local.kind === "ok" || local.kind === "already");
+            return;
+          }
+        }
         const res = await fetch(api, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -144,10 +179,12 @@ export function CheckinDesk({
         });
         setNetDown(false);
         const data = await res.json().catch(() => null);
+        setForceRid(null);
         if (res.ok) {
           setFeedback({ kind: data.already ? "already" : "ok", text: data.message });
           if (data.counts) setCounts(data.counts);
           if (!data.already) navigator.vibrate?.(80);
+          done(true);
           router.refresh();
         } else {
           setFeedback({ kind: "error", text: data?.error ?? "não deu certo, tente de novo" });
@@ -155,16 +192,24 @@ export function CheckinDesk({
         }
       } catch {
         setNetDown(true);
-        if (!(await submitLocal(body))) {
-          setFeedback({ kind: "error", text: "sem conexão — baixe o pacote offline enquanto houver rede" });
+        const local = await submitLocal(body);
+        if (!local) {
+          setFeedback({ kind: "error", text: "Sem conexão. Baixe o pacote offline enquanto houver rede." });
+        } else {
+          done(local.kind === "ok" || local.kind === "already");
         }
       } finally {
         inFlight.current = false;
         setBusy(false);
       }
     },
-    [api, router, submitLocal],
+    [api, router, submitLocal, resetSearch],
   );
+
+  // o aviso fica perto da busca; se a tela rolou, traz ele de volta pra vista
+  useEffect(() => {
+    if (feedback) feedbackRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [feedback]);
 
   const syncNow = useCallback(async () => {
     const pending = readLocal<QueuedCheckin[]>(queueKey) ?? [];
@@ -187,10 +232,16 @@ export function CheckinDesk({
       if (isOfflinePack(pk)) writeLocal(packKey, mergeIntoPack(pk, data.results));
       setCounts(data.counts);
       const refused = data.results.filter((r) => !r.ok).length;
+      const clamped = data.results.filter((r) => r.ok && r.clamped).length;
       if (refused > 0) {
         setFeedback({
           kind: "error",
-          text: `${refused} check-in(s) offline recusado(s) pelo servidor (inscrição mudou ou ingresso inválido).`,
+          text: `O servidor recusou ${refused} ${refused === 1 ? "check-in" : "check-ins"} offline (inscrição mudou ou ingresso inválido).`,
+        });
+      } else if (clamped > 0) {
+        setFeedback({
+          kind: "already",
+          text: `${clamped} ${clamped === 1 ? "check-in veio" : "check-ins vieram"} com o relógio do aparelho fora do horário do evento. O horário foi ajustado.`,
         });
       }
       router.refresh();
@@ -211,11 +262,11 @@ export function CheckinDesk({
         setPack(data);
         setFeedback({ kind: "ok", text: `Pacote offline baixado: ${data.entries.length} inscrições.` });
       } else {
-        setFeedback({ kind: "error", text: "não consegui baixar o pacote — tente de novo" });
+        setFeedback({ kind: "error", text: "Não consegui baixar o pacote. Tente de novo." });
       }
     } catch {
       setNetDown(true);
-      setFeedback({ kind: "error", text: "sem conexão — o pacote precisa de rede pra baixar" });
+      setFeedback({ kind: "error", text: "Sem conexão. O pacote precisa de rede pra baixar." });
     } finally {
       setPackBusy(false);
     }
@@ -247,7 +298,7 @@ export function CheckinDesk({
         setFeedback({ kind: "error", text: data?.error ?? "não deu certo, tente de novo" });
       }
     } catch {
-      setFeedback({ kind: "error", text: "walk-in precisa de rede (a aprovação é no servidor)" });
+      setFeedback({ kind: "error", text: "Isso precisa de rede: a aprovação é feita no servidor." });
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -292,7 +343,7 @@ export function CheckinDesk({
   async function start() {
     setCameraError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("este navegador não libera câmera aqui — use a busca manual");
+      setCameraError("Este navegador não libera a câmera aqui. Use a busca manual.");
       return;
     }
     try {
@@ -349,7 +400,7 @@ export function CheckinDesk({
       tick();
     } catch {
       stop();
-      setCameraError("não consegui abrir a câmera — confira a permissão ou use a busca manual");
+      setCameraError("Não consegui abrir a câmera. Confira a permissão ou use a busca manual.");
     }
   }
 
@@ -396,6 +447,11 @@ export function CheckinDesk({
       : [];
   const noHits = term.length >= 2 && (offline ? offlineHits.length === 0 : results.length === 0);
 
+  const packAge = pack ? packAgeMs(pack) : 0;
+  const packStale = !!pack && packAge > PACK_STALE_MS;
+  const packAgeLabel =
+    packAge < 3_600_000 ? `${Math.max(1, Math.round(packAge / 60_000))} min` : `${Math.round(packAge / 3_600_000)} h`;
+
   const stats = [
     ["inscritos", counts.inscritos],
     ["aprovados", counts.aprovados],
@@ -428,10 +484,12 @@ export function CheckinDesk({
               {offline ? "offline" : "online"}
             </span>
           </p>
-          <p className="font-mono text-[12px] text-muted">
+          <p className={`font-mono text-[12px] ${packStale ? "text-orange" : "text-muted"}`} data-testid="pack-age">
             {pack
-              ? `pacote offline de ${hhmm(pack.issuedAt)} · ${pack.entries.length} inscrições`
-              : "sem pacote offline — baixe antes do Wi-Fi cair"}
+              ? `pacote offline de ${hhmm(pack.issuedAt)} (há ${packAgeLabel}) · ${pack.entries.length} inscrições${
+                  packStale ? " · atualize enquanto houver rede: a lista pode ter mudado" : ""
+                }`
+              : "sem pacote offline: baixe antes do Wi-Fi cair"}
           </p>
           <p
             className={`font-mono text-[12px] ${queue.length ? "font-bold text-orange" : "text-muted"}`}
@@ -460,24 +518,6 @@ export function CheckinDesk({
             </button>
           )}
         </div>
-      </div>
-
-      <div
-        aria-live="polite"
-        role="status"
-        className={
-          feedback
-            ? `border-[1.5px] px-4 py-3 text-[16px] font-semibold ${
-                feedback.kind === "ok"
-                  ? "border-accent bg-mint text-accent-hi"
-                  : feedback.kind === "already"
-                    ? "border-line bg-chrome text-foreground"
-                    : "border-orange text-orange"
-              }`
-            : "sr-only"
-        }
-      >
-        {feedback?.text ?? ""}
       </div>
 
       <div className="flex flex-col gap-3">
@@ -509,9 +549,10 @@ export function CheckinDesk({
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="font-mono text-[12px] tracking-widest text-muted uppercase">
-            busca manual — nome, e-mail ou username
+            busca manual: nome, e-mail ou username
           </span>
           <input
+            ref={searchRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className={input}
@@ -520,6 +561,35 @@ export function CheckinDesk({
             inputMode="search"
           />
         </label>
+        <div
+          ref={feedbackRef}
+          aria-live="polite"
+          role="status"
+          data-testid="checkin-feedback"
+          className={
+            feedback
+              ? `border-[1.5px] px-4 py-3 text-[16px] font-semibold ${
+                  feedback.kind === "ok"
+                    ? "border-accent bg-mint text-accent-hi"
+                    : feedback.kind === "already"
+                      ? "border-line bg-chrome text-foreground"
+                      : "border-orange text-orange"
+                }`
+              : "sr-only"
+          }
+        >
+          {feedback?.text ?? ""}
+        </div>
+        {forceRid !== null && offline && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void submit({ registrationId: forceRid }, { force: true, fromSearch: true })}
+            className="btn-ghost self-start rounded-[6px] disabled:opacity-60"
+          >
+            enfileirar mesmo assim
+          </button>
+        )}
         {offlineHits.length > 0 && (
           <ul className="border-b border-line" data-testid="checkin-results-offline">
             {offlineHits.map((e) => {
@@ -539,13 +609,25 @@ export function CheckinDesk({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => submit({ registrationId: e.rid })}
+                      onClick={() => submit({ registrationId: e.rid }, { fromSearch: true })}
                       className="btn rounded-[6px] disabled:opacity-60"
                     >
                       marcar presença
                     </button>
-                  ) : (
+                  ) : e.status === "rejected" ? (
                     <span className="chip bare text-orange">{STATUS_LABEL[e.status]}</span>
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="chip bare text-orange">{STATUS_LABEL[e.status]} no pacote</span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => submit({ registrationId: e.rid }, { force: true, fromSearch: true })}
+                        className="btn-ghost rounded-[6px] disabled:opacity-60"
+                      >
+                        enfileirar mesmo assim
+                      </button>
+                    </span>
                   )}
                 </li>
               );
@@ -565,29 +647,30 @@ export function CheckinDesk({
                     @{r.username} · {r.email}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {canManage && r.status === "approved" && (
-                    <button
-                      type="button"
-                      onClick={() => void resendTicket(r.registrationId)}
-                      className="btn-ghost rounded-[6px]"
-                    >
-                      reenviar ingresso
-                    </button>
-                  )}
+                {/* ação principal primeiro: Tab + Enter na busca marca presença */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {r.checkedInAt ? (
                     <span className="font-mono text-[13px] text-accent">entrou às {hhmm(r.checkedInAt)}</span>
                   ) : r.status === "approved" ? (
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => submit({ registrationId: r.registrationId })}
+                      onClick={() => submit({ registrationId: r.registrationId }, { fromSearch: true })}
                       className="btn rounded-[6px] disabled:opacity-60"
                     >
                       marcar presença
                     </button>
                   ) : (
                     <span className="chip bare text-orange">{STATUS_LABEL[r.status]}</span>
+                  )}
+                  {canManage && r.status === "approved" && (
+                    <button
+                      type="button"
+                      onClick={() => void resendTicket(r.registrationId)}
+                      className="min-h-11 font-mono text-[12px] text-muted underline underline-offset-4 hover:text-accent"
+                    >
+                      reenviar ingresso
+                    </button>
                   )}
                 </div>
               </li>
@@ -596,15 +679,16 @@ export function CheckinDesk({
         )}
         {noHits && (
           <p className="font-mono text-[13px] text-muted">
-            {offline && !pack ? "sem rede e sem pacote offline" : "ninguém inscrito com esse termo"}
+            {offline && !pack ? "sem rede e sem pacote offline" : "ninguém inscrito com esse nome"}
           </p>
         )}
       </div>
 
       <div className="flex flex-col gap-3" data-testid="walkin">
-        <h3 className="font-mono text-[12px] tracking-widest text-muted uppercase">walk-in — fila de espera na porta</h3>
+        <h3 className="font-mono text-[12px] tracking-widest text-muted uppercase">chegou sem vaga: fila de espera</h3>
         <p className="text-[14px] text-muted">
-          Aprova e faz o check-in na hora se a sala ainda tem lugar (presentes abaixo da capacidade). Precisa de rede.
+          Quem está na fila de espera e veio mesmo assim entra na hora se a sala ainda tem lugar (presentes abaixo da
+          capacidade). Precisa de rede.
         </p>
         <form
           className="flex flex-col gap-2 sm:flex-row"
@@ -648,7 +732,7 @@ export function CheckinDesk({
                   onClick={() => void doWalkIn(w.registrationId)}
                   className="btn rounded-[6px] disabled:opacity-60"
                 >
-                  aprovar + check-in
+                  liberar entrada
                 </button>
               </li>
             ))}

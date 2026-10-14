@@ -8,7 +8,32 @@
 // no pacote. Check-in local vai pra uma fila (uma entrada por inscrição, o
 // horário mais cedo vence) e sobe em lote quando a rede volta.
 
+import { parseEventTime } from "@/lib/eventTime";
+
 export type PackStatus = "approved" | "pending" | "rejected" | "waitlist";
+
+/**
+ * Janela em que um check-in pode acontecer: da véspera (credenciamento
+ * antecipado) até 2 dias depois do fim. Vale pro check-in online, pro
+ * walk-in e pro sync offline. Datas pelo parser único (sem fuso = Brasília;
+ * só a data = 09:00).
+ */
+export function checkinWindow(h: { startsAt: string; endsAt: string | null }): { start: Date; end: Date } {
+  const s = parseEventTime(h.startsAt) ?? new Date(0);
+  const e = parseEventTime(h.endsAt ?? h.startsAt) ?? s;
+  return {
+    start: new Date(s.getTime() - 24 * 3_600_000),
+    end: new Date(Math.max(e.getTime(), s.getTime()) + 48 * 3_600_000),
+  };
+}
+
+/** pacote com mais de 1h: a fila e as aprovações podem ter mudado */
+export const PACK_STALE_MS = 3_600_000;
+
+export function packAgeMs(pack: Pick<OfflinePack, "issuedAt">, now = Date.now()): number {
+  const t = new Date(pack.issuedAt).getTime();
+  return Number.isNaN(t) ? Infinity : Math.max(0, now - t);
+}
 
 export type PackEntry = {
   /** SHA-256 base64url do token do QR */
@@ -72,9 +97,9 @@ export function isOfflinePack(v: unknown): v is OfflinePack {
 }
 
 export type LocalResult =
-  | { kind: "ok"; entry: PackEntry; at: string }
+  | { kind: "ok"; entry: PackEntry; at: string; forced?: boolean }
   | { kind: "already"; entry: PackEntry; at: string }
-  | { kind: "blocked"; entry: PackEntry }
+  | { kind: "blocked"; entry: PackEntry; canForce: boolean }
   | { kind: "unknown" }
   | { kind: "invalid" };
 
@@ -104,6 +129,7 @@ export async function checkInOffline(
   queue: QueuedCheckin[],
   by: { token: string } | { rid: number },
   now: Date = new Date(),
+  opts: { force?: boolean } = {},
 ): Promise<{ result: LocalResult; queue: QueuedCheckin[] }> {
   let entry: PackEntry | undefined;
   let token: string | undefined;
@@ -116,18 +142,32 @@ export async function checkInOffline(
     entry = pack.entries.find((e) => e.rid === by.rid);
   }
   if (!entry) return { result: { kind: "unknown" }, queue };
-  if (entry.status !== "approved") return { result: { kind: "blocked", entry }, queue };
+  // o status do pacote pode estar velho (a fila anda até o início): quem
+  // estava na fila ou pendente pode ter sido aprovado depois do download.
+  // Com "enfileirar mesmo assim", o check-in vai pra fila e o servidor
+  // decide no sync. Recusado nunca entra.
+  const pendingLike = entry.status === "waitlist" || entry.status === "pending";
+  if (entry.status !== "approved" && !(opts.force && pendingLike)) {
+    return { result: { kind: "blocked", entry, canForce: pendingLike }, queue };
+  }
   const already = localCheckedInAt(entry, queue);
   if (already) return { result: { kind: "already", entry, at: already }, queue };
   const at = now.toISOString();
   return {
-    result: { kind: "ok", entry, at },
+    result: { kind: "ok", entry, at, ...(entry.status !== "approved" ? { forced: true } : {}) },
     queue: enqueue(queue, token ? { rid: entry.rid, token, at } : { rid: entry.rid, at }),
   };
 }
 
 export type SyncItemResult =
-  | { rid: number; ok: true; outcome: "created" | "earlier" | "already"; at: string }
+  | {
+      rid: number;
+      ok: true;
+      outcome: "created" | "earlier" | "already";
+      at: string;
+      /** o horário do aparelho estava fora da janela (ou ilegível) e foi ajustado */
+      clamped?: boolean;
+    }
   | { rid: number | null; ok: false; reason: string };
 
 /**

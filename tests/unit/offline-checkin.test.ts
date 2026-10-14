@@ -6,10 +6,12 @@ import {
   hashToken,
   localCheckedInAt,
   mergeIntoPack,
+  packAgeMs,
+  PACK_STALE_MS,
   type OfflinePack,
   type QueuedCheckin,
 } from "@/lib/offlineCheckin";
-import { checkinWindow, clampCheckinAt, tokenHash } from "@/lib/checkinPack";
+import { checkinWindow, clampCheckinAt, clampWithFlag, tokenHash } from "@/lib/checkinPack";
 import { ticketToken } from "@/lib/checkins";
 
 // Check-in offline — lógica do aparelho (roadmap 037 #5): valida o QR
@@ -70,6 +72,29 @@ describe("checkInOffline", () => {
     expect((await checkInOffline(pack(), [], { token: forged }, t1)).result.kind).toBe("unknown");
   });
 
+  it("fila de espera no pacote velho: 'enfileirar mesmo assim' põe na fila e o servidor decide (auditoria 041)", async () => {
+    const blocked = await checkInOffline(pack(), [], { token: ticketToken(2) }, t1);
+    expect(blocked.result).toMatchObject({ kind: "blocked", canForce: true });
+    const forced = await checkInOffline(pack(), [], { token: ticketToken(2) }, t1, { force: true });
+    expect(forced.result).toMatchObject({ kind: "ok", forced: true });
+    expect(forced.queue).toEqual([{ rid: 2, token: ticketToken(2), at: t1.toISOString() }]);
+  });
+
+  it("recusado nunca entra, nem forçando", async () => {
+    const p = pack();
+    p.entries[1] = { ...p.entries[1], status: "rejected" };
+    const r = await checkInOffline(p, [], { rid: 2 }, t1, { force: true });
+    expect(r.result).toMatchObject({ kind: "blocked", canForce: false });
+    expect(r.queue).toHaveLength(0);
+  });
+
+  it("idade do pacote: passa de 1h vira 'desatualizado'", () => {
+    const issued = new Date(pack().issuedAt).getTime();
+    expect(packAgeMs(pack(), issued + 30 * 60_000)).toBe(30 * 60_000);
+    expect(packAgeMs(pack(), issued + PACK_STALE_MS + 1)).toBeGreaterThan(PACK_STALE_MS);
+    expect(packAgeMs({ issuedAt: "lixo" })).toBe(Infinity);
+  });
+
   it("busca manual offline (por inscrição) entra na fila sem token", async () => {
     const { result, queue } = await checkInOffline(pack(), [], { rid: 1 }, t1);
     expect(result.kind).toBe("ok");
@@ -115,9 +140,9 @@ describe("janela da edição", () => {
   const w = checkinWindow({ startsAt: "2026-11-07", endsAt: "2026-11-08" });
   const now = new Date("2026-11-20T00:00:00Z");
 
-  it("da véspera até 2 dias depois do fim", () => {
-    expect(w.start.toISOString()).toBe("2026-11-06T00:00:00.000Z");
-    expect(w.end.toISOString()).toBe("2026-11-10T00:00:00.000Z");
+  it("da véspera até 2 dias depois do fim (data pura = 09:00 em Brasília)", () => {
+    expect(w.start.toISOString()).toBe("2026-11-06T12:00:00.000Z");
+    expect(w.end.toISOString()).toBe("2026-11-10T12:00:00.000Z");
   });
 
   it("horário do aparelho fora da janela é puxado pra borda; futuro vira agora; lixo vira agora", () => {
@@ -127,5 +152,11 @@ describe("janela da edição", () => {
     const early = new Date("2026-11-07T10:00:00Z");
     expect(clampCheckinAt("2026-11-07T14:00:00Z", w, early).toISOString()).toBe(early.toISOString());
     expect(clampCheckinAt("ontem", w, early).toISOString()).toBe(early.toISOString());
+  });
+
+  it("marca quando o horário precisou ser ajustado (relógio do aparelho errado)", () => {
+    expect(clampWithFlag("1970-01-01T00:00:00Z", w, now)).toMatchObject({ clamped: true });
+    expect(clampWithFlag("2026-11-07T14:00:00Z", w, now)).toMatchObject({ clamped: false });
+    expect(clampWithFlag(undefined, w, now)).toMatchObject({ clamped: true });
   });
 });

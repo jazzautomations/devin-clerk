@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId, type Member } from "@/lib/members";
 import { hasEditionRole } from "@/lib/roles";
+import { formatSp } from "@/lib/rsvp";
 import {
   checkIn,
   checkinCounts,
@@ -53,9 +54,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json({ error: "mande {token} do QR ou {registrationId}" }, { status: 400 });
   }
 
-  const r = await checkIn(id, by, g.member.id);
+  // fora da janela do evento só o admin global passa, pedindo explicitamente
+  // (force: true); o check-in fica marcado como fora da janela
+  const force = b?.force === true && g.member.role === "admin";
+  const r = await checkIn(id, by, g.member.id, { force });
   if (!r.ok) {
     switch (r.reason) {
+      case "outside_window":
+        return Response.json(
+          {
+            error: `Fora do horário do evento: o check-in abre na véspera (${formatSp(r.window.start)}) e fecha 2 dias depois do fim (${formatSp(r.window.end)}).`,
+          },
+          { status: 409 },
+        );
       case "invalid":
         return Response.json({ error: "Isso não é um ingresso do HackaHub." }, { status: 400 });
       case "not_found":

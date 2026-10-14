@@ -1,11 +1,13 @@
 import { checkinCounts, formatCheckinTime } from "@/lib/checkins";
 import { limitOrNull } from "@/lib/ratelimit";
+import { formatSp } from "@/lib/rsvp";
 import { requireEditionStaff } from "@/lib/staffAuth";
 import { listWalkInCandidates, walkIn } from "@/lib/walkin";
 
-// Walk-in (035 #6): GET ?q= lista fila de espera + pendentes (sem e-mail);
-// POST {registrationId} aprova e faz o check-in na hora, se a sala ainda
-// tem lugar (presentes < capacidade — ver lib/walkin.ts).
+// Quem chegou sem vaga (035 #6): GET ?q= lista a fila de espera (sem
+// e-mail); POST {registrationId} aprova e faz o check-in na hora, se a sala
+// ainda tem lugar (presentes < capacidade) e se é o dia do evento — ver
+// lib/walkin.ts. Pedido pendente fica com o organizador.
 const HOUR = 3_600_000;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -32,10 +34,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       case "not_found":
         return Response.json({ error: "Inscrição não encontrada nesta edição." }, { status: 404 });
       case "rejected":
-        return Response.json({ error: "Inscrição recusada — walk-in não liberado." }, { status: 409 });
+        return Response.json({ error: "Inscrição recusada: a entrada não está liberada." }, { status: 409 });
+      case "pending":
+        return Response.json(
+          { error: "Pedido ainda não aprovado. Quem decide é a organização, na aba inscritos." },
+          { status: 409 },
+        );
+      case "outside_window":
+        return Response.json(
+          {
+            error: `Fora do horário do evento: a entrada abre na véspera (${formatSp(r.window.start)}) e fecha 2 dias depois do fim (${formatSp(r.window.end)}).`,
+          },
+          { status: 409 },
+        );
       case "already_approved":
         return Response.json(
-          { error: "Já está aprovado — use o check-in normal (QR ou busca)." },
+          { error: "Já está aprovado. Use o check-in normal (QR ou busca)." },
           { status: 409 },
         );
       case "full":
@@ -51,7 +65,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     username: r.username,
     name: r.name,
     at: r.at,
-    message: `Walk-in: ${label} aprovado e com check-in às ${formatCheckinTime(r.at)}.`,
+    message: `${label} saiu da fila de espera e entrou às ${formatCheckinTime(r.at)}.`,
     counts: await checkinCounts(id),
   });
 }

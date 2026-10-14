@@ -1,7 +1,13 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import db from "@/lib/db";
 import { isTicketTokenShape, ticketSecret, ticketToken } from "@/lib/checkins";
-import type { OfflinePack, PackEntry, PackStatus, SyncItemResult } from "@/lib/offlineCheckin";
+import {
+  checkinWindow,
+  type OfflinePack,
+  type PackEntry,
+  type PackStatus,
+  type SyncItemResult,
+} from "@/lib/offlineCheckin";
 
 // Check-in offline — lado do servidor (roadmap 037 Onda 1 #5, 035 #6).
 //
@@ -42,31 +48,30 @@ export function verifyOfflinePack(p: OfflinePack): boolean {
 
 type EditionDates = { startsAt: string; endsAt: string | null };
 
-/**
- * Janela em que um check-in pode ter acontecido: da véspera (credenciamento
- * antecipado) até 2 dias depois do fim — endsAt/startsAt costumam ser só
- * data, então a folga cobre o último dia inteiro em qualquer fuso do BR.
- */
-export function checkinWindow(h: EditionDates): { start: Date; end: Date } {
-  const start = new Date(h.startsAt);
-  const endBase = new Date(h.endsAt ?? h.startsAt);
-  const s = Number.isNaN(start.getTime()) ? new Date(0) : start;
-  const e = Number.isNaN(endBase.getTime()) ? s : endBase;
-  return {
-    start: new Date(s.getTime() - 24 * 3_600_000),
-    end: new Date(Math.max(e.getTime(), s.getTime()) + 48 * 3_600_000),
-  };
-}
+// a janela mora em lib/offlineCheckin (sem banco): o check-in online
+// (lib/checkins, walk-in) usa a mesma regra
+export { checkinWindow };
 
 const sqlTime = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
 
 /** horário do aparelho → dentro da janela e nunca no futuro do servidor */
 export function clampCheckinAt(at: unknown, window: { start: Date; end: Date }, now: Date): Date {
+  return clampWithFlag(at, window, now).at;
+}
+
+/** idem, dizendo se o horário precisou ser ajustado (relógio errado, lixo) */
+export function clampWithFlag(
+  at: unknown,
+  window: { start: Date; end: Date },
+  now: Date,
+): { at: Date; clamped: boolean } {
   const parsed = typeof at === "string" ? new Date(at) : new Date(NaN);
-  let t = Number.isNaN(parsed.getTime()) ? now.getTime() : parsed.getTime();
+  const raw = Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  let t = raw ?? now.getTime();
   t = Math.max(t, window.start.getTime());
   t = Math.min(t, window.end.getTime(), now.getTime());
-  return new Date(t);
+  // folga de 1s: o mesmo instante serializado e lido de novo não é "ajuste"
+  return { at: new Date(t), clamped: raw === null || Math.abs(raw - t) > 1000 };
 }
 
 type RegRow = { id: number; status: PackStatus; username: string; name: string | null; at: string | null };
@@ -161,7 +166,8 @@ export async function syncCheckins(
       out.push({ rid: reg.id, ok: false, reason: reg.status });
       continue;
     }
-    const at = sqlTime(clampCheckinAt(item.at, w, now));
+    const adj = clampWithFlag(item.at, w, now);
+    const at = sqlTime(adj.at);
     const row = await db
       .prepare(
         `INSERT INTO checkins (registrationId, at, byMemberId, via, syncedAt)
@@ -174,7 +180,13 @@ export async function syncCheckins(
       )
       .get<{ at: string; inserted: boolean }>({ rid: reg.id, at, by: byMemberId, synced: sqlTime(now) });
     if (row) {
-      out.push({ rid: reg.id, ok: true, outcome: row.inserted ? "created" : "earlier", at: row.at });
+      out.push({
+        rid: reg.id,
+        ok: true,
+        outcome: row.inserted ? "created" : "earlier",
+        at: row.at,
+        ...(adj.clamped ? { clamped: true } : {}),
+      });
     } else {
       const cur = await db
         .prepare("SELECT at FROM checkins WHERE registrationId = ?")
