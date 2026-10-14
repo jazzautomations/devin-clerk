@@ -57,7 +57,7 @@ export default function Image() {
             marginTop: 32,
           }}
         >
-          A edição inteira num lugar só.
+          Sua comunidade de hackathon.
         </div>
       </div>
     ),

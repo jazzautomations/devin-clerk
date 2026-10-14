@@ -152,9 +152,9 @@ export default async function Home() {
           <div className="min-w-0">
             <p className="tag">HACKAHUB · HACK INOVA</p>
             <h1 className="mt-6 text-[clamp(2.6rem,8.4vw,6.3rem)] leading-[0.9] font-extrabold tracking-[-0.045em]">
-              A edição inteira
+              Sua comunidade
               <br />
-              <span className="text-accent">num lugar só.</span>
+              <span className="text-accent">de hackathon.</span>
             </h1>
             <p className="mt-7 max-w-[54ch] text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
               <strong className="font-bold">A plataforma da Hack Inova.</strong>{" "}
