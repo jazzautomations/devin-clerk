@@ -25,13 +25,23 @@ iptables rejeita o resto (verificado de fora em 14/10/2026).
 
 ## Deploy
 
+Primeira vez numa máquina (ou se `~/hackahub/tmp` sumiu):
+
+```bash
+ssh ubuntu@64.181.217.112 'mkdir -p ~/hackahub/tmp ~/hackahub/ops ~/hackahub/logs'
+```
+
+Cada deploy:
+
 ```bash
 # no notebook, a partir de um commit limpo
 git archive --format=tar.gz -o /tmp/hh.tar.gz HEAD
 scp /tmp/hh.tar.gz ubuntu@64.181.217.112:~/hackahub/tmp/hh-release.tar.gz
-ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh stage ~/hackahub/tmp/hh-release.tar.gz'
+# roda o deploy.sh que está DENTRO do tarball, não o de ~/hackahub/ops: a
+# cópia em ops é a do deploy anterior e pode ser mais velha que o release
+ssh ubuntu@64.181.217.112 'cd ~/hackahub/tmp && tar -xzf hh-release.tar.gz deploy && bash deploy/deploy.sh stage ~/hackahub/tmp/hh-release.tar.gz'
 # conferiu no stage → mesmo tarball pra prod (o deploy de prod apaga o tarball no fim)
-ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh prod ~/hackahub/tmp/hh-release.tar.gz'
+ssh ubuntu@64.181.217.112 'cd ~/hackahub/tmp && tar -xzf hh-release.tar.gz deploy && bash deploy/deploy.sh prod ~/hackahub/tmp/hh-release.tar.gz'
 ```
 
 O tarball fica em `~/hackahub/tmp`, nunca em `~/hackahub-secrets`.
@@ -40,23 +50,34 @@ O tarball fica em `~/hackahub/tmp`, nunca em `~/hackahub-secrets`.
 
 1. Aborta se o disco tiver menos de 2 GB livres.
 2. Faz `npm ci` + `next build` numa pasta temporária, com o env do ambiente.
-3. Monta o release só com a saída standalone do Next (`server.js` e o
-   `node_modules` que o servidor usa), `.next/static` e as pastas lidas em
-   runtime (`migrations`, `content`, `assets`, `scripts`, `deploy`). Fica
-   perto de 150 MB, contra 1,1 GB antes.
+3. Monta o release com `assemble-release.sh`: só a saída standalone do Next
+   (`server.js` e o `node_modules` que o servidor usa), `.next/static` e as
+   pastas lidas em runtime (`migrations`, `content`, `assets`, `scripts`,
+   `deploy`). Fica perto de 150 MB, contra 1,1 GB antes.
 4. Grava `VERSION` (commit + data), que o `/api/health` mostra.
 5. Atualiza `~/hackahub/ops` com os scripts de `deploy/` e reescreve a unit
    do systemd (hardening, `wait-pg.sh` antes de subir).
 6. **Em prod, roda o `backup.sh` antes de trocar o release.** Se o backup
    falhar, o deploy para ali.
 7. Troca o symlink `current`, reinicia o serviço e espera `/api/health`
-   (app + banco). Se o health não responder em 40 s, **volta sozinho** pro
-   release anterior.
-8. Mantém os **2** últimos releases por ambiente.
+   (app + banco) por até 40 s.
+8. Roda o `smoke.sh`: home, páginas públicas, sitemap, imagem de
+   compartilhamento, uma edição (`/h/<id>` e a imagem dela), um time (`/p/<id>`) e o PDF de um
+   certificado, com ids tirados do banco do ambiente. Depois procura
+   `EROFS`, `ENOENT` e `EACCES` no journal desde o restart. O health só
+   testa o banco; o smoke pega arquivo que o standalone deixou de fora e
+   escrita barrada pelo sandbox da unit.
+9. Se o health ou o smoke falharem, **volta sozinho** pro release anterior.
+10. Mantém os **2** últimos releases por ambiente.
 
 Migrations rodam no boot do app (em ordem, com lock). Hoje são 18 (`ls
 migrations | wc -l`). Deploy de migration destrutiva precisa de plano
 expand/contract, e ainda não existe nenhuma.
+
+Pra testar o modo standalone antes de subir (o e2e roda `next start`, não
+`server.js`): `next build` e depois `bash deploy/standalone-smoke.sh <porta>
+[banco]`, com o env do app carregado. Ele monta o release igual ao deploy,
+sobe `node server.js` e roda o mesmo `smoke.sh`.
 
 Como conferir:
 
@@ -85,8 +106,10 @@ incompatível com a antiga, restaurar backup (abaixo).
   `~/hackahub-backups/LAST_OK`.
 - `ops/restore-drill.sh [dir] [banco]`: confere checksum, restaura num banco
   descartável, conta as linhas de **todas** as tabelas, compara com a origem
-  (só leitura) e apaga. No sucesso grava `~/hackahub-backups/LAST_DRILL_OK`.
-  Roda no cron: prod no domingo, stage na quarta.
+  (só leitura) e apaga. No sucesso grava `~/hackahub-backups/LAST_DRILL_OK-<banco>`.
+  Roda no cron: prod no domingo, stage na quarta. O `/api/health?deep=1` e o
+  monitor olham só o carimbo de prod (`LAST_DRILL_OK-hackahub`), então um
+  drill de stage que passa não esconde um drill de prod que falha.
 - Segredos no backup (opcional): com `age` instalado e a chave pública em
   `~/hackahub-secrets/backup-age.pub`, o `backup.sh` cifra `prod.env`,
   `stage.env`, `pg.env` e `backup-par.url` em `secrets.tar.age` e manda junto

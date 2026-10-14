@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Smoke do release depois do health: o /api/health só faz SELECT 1, e quem
+# quebra no standalone (arquivo que o rastreamento deixou de fora, escrita
+# barrada pelo sandbox da unit) é página SSR, imagem de compartilhamento e
+# PDF, que leem fontes e conteúdo do disco.
+#   bash smoke.sh <url-base> [banco]
+# Com o banco (nome dentro do container hackahub-pg), pega uma edição, um
+# time e um certificado de verdade pra testar /h, /p e o PDF.
+set -uo pipefail
+BASE="${1:?url base, ex.: http://127.0.0.1:3410}"
+DBN="${2:-}"
+fail=0
+
+# check <caminho> <códigos aceitos, ex.: 200 ou 200|404> [prefixo do content-type]
+check() {
+  local out code ctype
+  out=$(curl -sS -m 30 -o /dev/null -w '%{http_code} %{content_type}' "$BASE$1" 2>&1) || out="000 $out"
+  code=${out%% *}; ctype=${out#* }
+  if [[ "|$2|" != *"|$code|"* ]] || { [ "$code" = 200 ] && [ -n "${3:-}" ] && [[ "$ctype" != "$3"* ]]; }; then
+    echo "smoke FALHOU: $1 -> $out" >&2; fail=1
+  else
+    echo "smoke ok: $1 ($code)"
+  fi
+}
+
+q() { docker exec hackahub-pg psql -U hackahub -d "$DBN" -qtAc "$1" 2>/dev/null | head -1; }
+
+check / 200 text/html
+check /organizar 200 text/html
+check /legal/termos 200 text/html
+# /blog é só pra quem tem conta (redireciona pro cadastro), fica de fora
+check /sitemap.xml 200
+check /opengraph-image 200 image/png
+check /robots.txt 200
+check /p/2147483648 404
+
+if [ -n "$DBN" ]; then
+  h=$(q 'SELECT id FROM hackathons ORDER BY "startsAt" DESC NULLS LAST LIMIT 1')
+  if [ -n "$h" ]; then
+    check "/h/$h" 200 text/html
+    check "/h/$h/opengraph-image" 200 image/png
+  fi
+  t=$(q 'SELECT id FROM teams ORDER BY id DESC LIMIT 1')
+  if [ -n "$t" ]; then
+    check "/p/$t" "200|404" text/html
+    check "/p/$t/opengraph-image" "200|404" image/png
+  fi
+  c=$(q 'SELECT code FROM certificates ORDER BY "issuedAt" DESC LIMIT 1')
+  [ -n "$c" ] && check "/c/$c/pdf" 200 application/pdf
+fi
+
+exit "$fail"

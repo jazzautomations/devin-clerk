@@ -51,15 +51,7 @@ nice -n 10 npm ci --no-audit --no-fund --loglevel=error
 nice -n 10 npx next build > "$BUILD/build.log" 2>&1 || { tail -40 "$BUILD/build.log"; exit 1; }
 
 echo "== release ($REL)"
-mkdir -p "$REL/.next"
-cp -a .next/standalone/. "$REL/"
-cp -a .next/static "$REL/.next/static"
-# o que o app lê do disco em runtime (migrations no boot, blog, fontes do
-# certificado/crachá, runner do deploy tool, scraper do radar, scripts de ops)
-for d in migrations content assets scripts deploy public; do
-  [ -d "$d" ] && cp -a "$d" "$REL/"
-done
-mkdir -p "$REL/data"
+bash "$BUILD/deploy/assemble-release.sh" "$BUILD" "$REL"
 echo "$VERSION $(date -u +%FT%TZ)" > "$REL/VERSION"
 cp "$BUILD/build.log" "$REL/build.log"
 echo "release: $(du -sh "$REL" | cut -f1)"
@@ -126,7 +118,16 @@ if [ "$ENV_NAME" = prod ]; then
 fi
 
 PREV=$(readlink -f "$BASE/current" 2>/dev/null || true)
+rollback() {
+  echo "$1 — rollback" >&2
+  sudo journalctl -u "$SERVICE" -n 30 --no-pager >&2 || true
+  if [ -n "$PREV" ] && [ -d "$PREV" ]; then
+    ln -sfn "$PREV" "$BASE/current"; sudo systemctl restart "$SERVICE"
+  fi
+  exit 1
+}
 ln -sfn "$REL" "$BASE/current"
+T0=$(date +%s)
 sudo systemctl restart "$SERVICE"
 
 echo "== health"
@@ -135,13 +136,15 @@ for i in $(seq 1 40); do
   if curl -fsS -m 5 "http://127.0.0.1:$PORT/api/health" | grep -q '"ok":true'; then ok=1; break; fi
   sleep 1
 done
-if [ "$ok" != 1 ]; then
-  echo "health falhou — rollback" >&2
-  sudo journalctl -u "$SERVICE" -n 30 --no-pager >&2 || true
-  if [ -n "$PREV" ] && [ -d "$PREV" ]; then
-    ln -sfn "$PREV" "$BASE/current"; sudo systemctl restart "$SERVICE"
-  fi
-  exit 1
+[ "$ok" = 1 ] || rollback "health falhou"
+
+# health só testa o banco: páginas SSR, OG e PDF leem do disco e pegam
+# arquivo faltando no standalone ou escrita barrada pelo sandbox da unit
+echo "== smoke"
+case "$ENV_NAME" in prod) DBN=hackahub ;; *) DBN=hackahub_$ENV_NAME ;; esac
+bash "$OPS/smoke.sh" "http://127.0.0.1:$PORT" "$DBN" || rollback "smoke falhou"
+if sudo journalctl -u "$SERVICE" --since "@$T0" --no-pager | grep -E 'EROFS|ENOENT|EACCES'; then
+  rollback "erro de disco no journal (EROFS/ENOENT/EACCES)"
 fi
 
 echo "== caddy"
