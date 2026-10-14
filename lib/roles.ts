@@ -1,4 +1,7 @@
 import db from "@/lib/db";
+import { notify } from "@/lib/notifications";
+import { emailDriver } from "@/lib/notify/email";
+import { absoluteUrl } from "@/lib/seo";
 
 // Papéis por edição (spec 033 US7). Admin global (members.role = 'admin')
 // pode tudo em qualquer edição; organizador da edição pode tudo nela,
@@ -64,30 +67,76 @@ export async function canManageEdition(actor: Actor | null, hackathonId: string)
   return hasEditionRole(actor, hackathonId, "organizador");
 }
 
+// aba que cada papel usa primeiro no painel (o link do convite leva direto)
+const ROLE_TAB: Record<EditionRole, string> = {
+  organizador: "",
+  staff: "/checkin",
+  mentor: "/duvidas",
+  jurado: "/juri",
+};
+const ROLE_LABEL: Record<EditionRole, string> = {
+  organizador: "organização",
+  staff: "staff",
+  mentor: "mentoria",
+  jurado: "júri",
+};
+
+export const editionRoleHref = (hackathonId: string, role: EditionRole) =>
+  `/admin/h/${hackathonId}${ROLE_TAB[role]}`;
+
+async function editionName(hackathonId: string): Promise<string> {
+  const h = await db.prepare("SELECT name FROM hackathons WHERE id = ?").get<{ name: string }>(hackathonId);
+  return h?.name ?? "a edição";
+}
+
+/**
+ * Dá o papel. Quando o papel é novo, a pessoa recebe uma notificação no site
+ * com o link da aba dela no painel (antes ninguém avisava e o link do painel
+ * não aparecia em lugar nenhum pra quem não é admin).
+ */
 export async function grantEditionRole(
   hackathonId: string,
   memberId: number,
   role: EditionRole,
   grantedBy: number | null,
 ) {
-  await db
+  const res = await db
     .prepare(
       `INSERT OR IGNORE INTO edition_roles (hackathonId, memberId, role, grantedBy)
        VALUES (?, ?, ?, ?)`,
     )
     .run(hackathonId, memberId, role, grantedBy);
+  if (res.changes > 0 && memberId !== grantedBy) {
+    await notify(memberId, {
+      type: "edition_role",
+      text: `Você entrou na equipe de ${await editionName(hackathonId)} (${ROLE_LABEL[role]}). Abra o painel da edição.`,
+      href: editionRoleHref(hackathonId, role),
+    });
+  }
 }
 
+/**
+ * Tira o papel. Jurado revogado perde também os projetos atribuídos, na
+ * mesma transação: sem isso a atribuição continuava valendo e a pessoa
+ * seguia mandando nota pela API.
+ */
 export async function revokeEditionRole(
   hackathonId: string,
   memberId: number,
   role: EditionRole,
 ) {
-  await db
-    .prepare(
-      "DELETE FROM edition_roles WHERE hackathonId = ? AND memberId = ? AND role = ?",
-    )
-    .run(hackathonId, memberId, role);
+  await db.transaction(async () => {
+    await db
+      .prepare(
+        "DELETE FROM edition_roles WHERE hackathonId = ? AND memberId = ? AND role = ?",
+      )
+      .run(hackathonId, memberId, role);
+    if (role === "jurado") {
+      await db
+        .prepare("DELETE FROM judge_assignments WHERE hackathonId = ? AND judgeMemberId = ?")
+        .run(hackathonId, memberId);
+    }
+  })();
 }
 
 export type EditionTeamEntry = {
@@ -134,7 +183,32 @@ export async function inviteToEdition(
        VALUES (?, ?, ?, ?)`,
     )
     .run(hackathonId, normalized, role, invitedBy);
+  await sendInviteEmail(hackathonId, normalized, role);
   return "pending";
+}
+
+/**
+ * Convite pra quem ainda não tem conta: só existe por e-mail. Sem e-mail
+ * configurado (driver "log") nada sai e o painel continua mostrando o convite
+ * como pendente. Nunca derruba o convite: falha de envio fica no log.
+ */
+async function sendInviteEmail(hackathonId: string, email: string, role: EditionRole) {
+  const driver = emailDriver();
+  if (driver.name === "log") return;
+  const name = await editionName(hackathonId);
+  const url = absoluteUrl(editionRoleHref(hackathonId, role));
+  const text = `Você foi convidado pra equipe de ${name} (${ROLE_LABEL[role]}) no HackaHub.\n\nEntre com este e-mail pra ativar o convite: ${url}`;
+  const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  const outcome = await driver
+    .send({
+      to: email,
+      subject: `Convite pra equipe de ${name}`,
+      text,
+      html: `<p>Você foi convidado pra equipe de <strong>${esc(name)}</strong> (${ROLE_LABEL[role]}) no HackaHub.</p><p><a href="${esc(url)}">Entre com este e-mail pra ativar o convite</a>.</p>`,
+      idempotencyKey: `edition-invite:${hackathonId}:${role}:${email}`,
+    })
+    .catch((e: unknown) => ({ status: "failed" as const, error: String(e) }));
+  if (outcome.status !== "sent") console.warn(`[roles] convite por e-mail não saiu: ${outcome.status}`);
 }
 
 export async function listPendingInvites(hackathonId: string) {

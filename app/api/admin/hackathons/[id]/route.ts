@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
-import { updateHackathon, type HackathonPatch } from "@/lib/admin";
+import { isSafeLink, updateHackathon, type HackathonPatch } from "@/lib/admin";
 import db from "@/lib/db";
-import { getHackathon } from "@/lib/hackathons";
-import { getMemberByClerkId } from "@/lib/members";
-import { shiftSchedule, wallClockDelta } from "@/lib/schedule";
+import { requireEditionManager } from "@/lib/editionAuth";
+import { getPublishBlockers } from "@/lib/editionChecklist";
+import { EventTimeError, normalizeEventTime, parseEventTime } from "@/lib/eventTime";
+import { shiftSchedule } from "@/lib/schedule";
 
 const FORMATS = ["online", "presencial", "hibrido"];
 
@@ -13,47 +13,41 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { userId } = await auth();
-  const member = userId ? await getMemberByClerkId(userId) : null;
-  if (!member) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (member.role !== "admin") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // organizador da edição edita a própria edição (admin global vale);
+  // arquivar e o endereço (id) continuam só com o admin global
   const { id } = await params;
-  const before = await getHackathon(id);
-  if (!before) {
-    return Response.json({ error: "Edição não encontrada" }, { status: 404 });
-  }
+  const g = await requireEditionManager(id);
+  if ("response" in g) return g.response;
+  const { member, hackathon: before } = g;
+  const isAdmin = member.role === "admin";
   const b = await req.json().catch(() => null);
   if (!b || typeof b !== "object") {
-    return bad("Body JSON obrigatório");
+    return bad("corpo da requisição inválido");
   }
 
   const patch: HackathonPatch = {};
 
   if ("name" in b) {
     if (typeof b.name !== "string" || !b.name.trim()) {
-      return bad("name inválido");
+      return bad("informe o nome da edição");
     }
     patch.name = b.name;
   }
   if ("startsAt" in b) {
     if (typeof b.startsAt !== "string" || !b.startsAt) {
-      return bad("startsAt inválido");
+      return bad("informe a data de início");
     }
     patch.startsAt = b.startsAt;
   }
   if ("format" in b) {
     if (!FORMATS.includes(b.format)) {
-      return bad("format inválido");
+      return bad("formato deve ser presencial, online ou híbrido");
     }
     patch.format = b.format;
   }
   if ("registrationUrl" in b) {
-    if (typeof b.registrationUrl !== "string" || !b.registrationUrl.trim()) {
-      return bad("registrationUrl inválido");
+    if (typeof b.registrationUrl !== "string" || !isSafeLink(b.registrationUrl.trim())) {
+      return bad("link de inscrição inválido: use um endereço http(s) ou um caminho do site");
     }
     patch.registrationUrl = b.registrationUrl.trim();
   }
@@ -66,7 +60,7 @@ export async function PATCH(
   ] as const) {
     if (k in b) {
       if (b[k] !== null && typeof b[k] !== "string") {
-        return bad(`${k} inválido`);
+        return bad("valor inválido");
       }
       patch[k] = typeof b[k] === "string" && b[k] ? b[k] : null;
     }
@@ -76,7 +70,7 @@ export async function PATCH(
       !Array.isArray(b.tags) ||
       b.tags.some((t: unknown) => typeof t !== "string")
     ) {
-      return bad("tags deve ser array de strings");
+      return bad("tags inválidas");
     }
     patch.tags = b.tags;
   }
@@ -84,7 +78,23 @@ export async function PATCH(
     if (typeof b.active !== "boolean") {
       return bad("active deve ser booleano");
     }
-    patch.active = b.active;
+    // publicar (rascunho → no ar) é do organizador, com o mínimo pronto;
+    // arquivar uma edição que está no ar fica com o admin global
+    if (b.active !== before.active) {
+      if (!b.active && !isAdmin) {
+        return Response.json({ error: "Só a administração do HackaHub arquiva uma edição." }, { status: 403 });
+      }
+      if (b.active && !isAdmin) {
+        const missing = await getPublishBlockers(id);
+        if (missing.length > 0) {
+          return Response.json(
+            { error: `Antes de publicar, falta: ${missing.join("; ")}.`, missing },
+            { status: 409 },
+          );
+        }
+      }
+      patch.active = b.active;
+    }
   }
   // spec 032 — edição curada: inscrição vira pedido pendente
   if ("requiresApproval" in b) {
@@ -100,11 +110,26 @@ export async function PATCH(
     return bad("shiftSchedule deve ser booleano");
   }
 
-  if (Object.keys(patch).length === 0) {
-    return bad("Nenhum campo editável enviado");
+  if (Object.keys(patch).length === 0 && !("active" in b)) {
+    return bad("nada pra salvar");
   }
 
-  const delta = patch.startsAt !== undefined ? wallClockDelta(before.startsAt, patch.startsAt) : null;
+  // datas: sem fuso = horário de Brasília; formato desconhecido é 400
+  try {
+    for (const k of ["startsAt", "endsAt", "registrationDeadline"] as const) {
+      const v = patch[k];
+      if (typeof v === "string") patch[k] = normalizeEventTime(v);
+    }
+  } catch (e) {
+    if (e instanceof EventTimeError) return bad(e.message);
+    throw e;
+  }
+
+  // deslocamento real entre os dois instantes (o texto antigo pode estar em
+  // outro formato: com Z, sem fuso, só a data)
+  const oldStart = parseEventTime(before.startsAt);
+  const newStart = patch.startsAt !== undefined ? parseEventTime(patch.startsAt) : null;
+  const delta = oldStart && newStart ? newStart.getTime() - oldStart.getTime() : null;
   if (b.shiftSchedule === true && delta === null) {
     return bad("não deu pra calcular o deslocamento da programação — confira o início");
   }

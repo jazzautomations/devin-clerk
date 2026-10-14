@@ -116,7 +116,7 @@ export function ScheduleEditor({
       text: isNew
         ? "item criado como rascunho"
         : data.announcementId
-          ? "salvo — aviso de mudança enviado pra quem é afetado"
+          ? "salvo. Quem é afetado recebe o aviso da mudança."
           : "salvo",
     });
   }
@@ -125,7 +125,7 @@ export function ScheduleEditor({
     const data = await call(base, "POST", { duplicateOf: i.id });
     if (!data) return;
     setItems((prev) => [...prev, data.item as Item]);
-    setMsg({ kind: "ok", text: "cópia criada como rascunho — ajusta o dia/sala e publica" });
+    setMsg({ kind: "ok", text: "cópia criada como rascunho. Ajuste o dia e a sala e publique." });
   }
 
   async function remove(i: Item) {
@@ -254,15 +254,17 @@ export function ScheduleEditor({
           ver página pública ↗
         </a>
       </div>
-      {msg && (
-        <p role="status" className={`font-mono text-[13px] ${msg.kind === "error" ? "text-orange" : "text-accent"}`}>
-          {msg.text}
-        </p>
-      )}
+      {/* região viva sempre no DOM: leitor de tela só anuncia mudança em região que já existia */}
+      <p
+        role="status"
+        className={msg ? `font-mono text-[13px] ${msg.kind === "error" ? "text-orange" : "text-accent"}` : "sr-only"}
+      >
+        {msg?.text ?? ""}
+      </p>
       {editing === "new" && editor}
       {days.length === 0 && editing !== "new" ? (
         <p className="border-[1.5px] border-line px-5 py-5 font-mono text-[13px] text-muted">
-          nenhum item ainda — começa pela abertura, almoço e pitch
+          nenhum item ainda. Comece pela abertura, o almoço e o pitch.
         </p>
       ) : (
         days.map((d) => (

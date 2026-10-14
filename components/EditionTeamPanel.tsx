@@ -11,7 +11,8 @@ const input =
 type Invite = { email: string; role: EditionRole; createdAt: string };
 
 // spec 033 US7 — o organizador convida por e-mail e tira papel. Depois de
-// cada ação o server component recarrega a lista (router.refresh).
+// cada ação o server component recarrega a lista (router.refresh). Quem
+// ganha o papel recebe um aviso no site com o link da aba dele (lib/roles).
 export function EditionTeamPanel({
   hackathonId,
   meId,
@@ -37,11 +38,11 @@ export function EditionTeamPanel({
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
+    }).catch(() => null);
+    const data = await res?.json().catch(() => null);
     setBusy(false);
-    if (!res.ok) {
-      setMsg({ kind: "error", text: data?.error ?? "não deu certo, tente de novo" });
+    if (!res?.ok) {
+      setMsg({ kind: "error", text: typeof data?.error === "string" ? data.error : "Não deu certo. Tente de novo." });
       return null;
     }
     router.refresh();
@@ -60,8 +61,8 @@ export function EditionTeamPanel({
         kind: "ok",
         text:
           data.result === "granted"
-            ? `${email} já tinha conta — o papel vale agora.`
-            : `Convite pendente pra ${email}: vale quando a pessoa entrar com esse e-mail.`,
+            ? `${email} já tinha conta: o papel vale agora e a pessoa recebeu um aviso no site com o link do painel.`
+            : `Convite pendente pra ${email}. Vale quando a pessoa entrar no HackaHub com esse e-mail.`,
       });
     }
   }
@@ -89,14 +90,14 @@ export function EditionTeamPanel({
         <button type="submit" disabled={busy} className="btn rounded-[6px] disabled:opacity-60">
           convidar
         </button>
-        {msg && (
-          <p
-            role="status"
-            className={`font-mono text-[13px] sm:col-span-3 ${msg.kind === "ok" ? "text-accent" : "text-orange"}`}
-          >
-            {msg.text}
-          </p>
-        )}
+        <p
+          role="status"
+          className={
+            msg ? `font-mono text-[13px] sm:col-span-3 ${msg.kind === "ok" ? "text-accent" : "text-orange"}` : "sr-only"
+          }
+        >
+          {msg?.text ?? ""}
+        </p>
       </form>
 
       <div className="flex flex-col gap-3">
@@ -124,7 +125,8 @@ export function EditionTeamPanel({
                     type="button"
                     disabled={busy}
                     onClick={() => call("DELETE", { memberId: t.memberId, role: t.role })}
-                    className="font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
+                    aria-label={`remover ${t.name ?? `@${t.username}`} de ${t.role}`}
+                    className="min-h-11 font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
                   >
                     remover {t.role}
                   </button>
@@ -156,7 +158,7 @@ export function EditionTeamPanel({
                   type="button"
                   disabled={busy}
                   onClick={() => call("DELETE", { email: i.email, role: i.role })}
-                  className="font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
+                  className="min-h-11 font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
                 >
                   cancelar convite
                 </button>

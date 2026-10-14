@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import db from "@/lib/db";
 import { getOrCreateMember } from "@/lib/members";
-import { listRegistrants } from "@/lib/registrations";
 import { listSubscribers } from "@/lib/admin";
 import { listChallenges } from "@/lib/challenges";
 import { listSponsors } from "@/lib/sponsors";
@@ -18,9 +17,9 @@ import { SponsorForm, SponsorToggle } from "@/components/SponsorForm";
 import { TeamBoardToggle } from "@/components/TeamBoardPanel";
 import { AssetForm, TeamForm } from "@/components/ArchiveForms";
 import { SubmissionActions } from "@/components/SubmissionActions";
-import { RegistrationActions } from "@/components/RegistrationActions";
+import { EditionList, RADAR_PAGE, type AdminEdition } from "@/components/AdminEditionList";
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const { userId } = await auth();
   if (!userId) return null;
   const user = await currentUser();
@@ -33,59 +32,39 @@ export default async function AdminPage() {
   });
   if (member.role !== "admin") notFound();
 
+  // Edições: separa as que a casa organiza (Hack Inova, criadas pelo painel
+  // ou com equipe) do catálogo raspado pelo radar. Um SELECT só com os
+  // contadores; o detalhe (desafios, quadro, arquivo, editar) só carrega da
+  // edição aberta (?h=), em vez de ~4 consultas por edição a cada visita.
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 80) : "";
+  const openId = typeof sp.h === "string" ? sp.h : "";
+  const like = `%${q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const events = await db
     .prepare(
-      `SELECT h.*, COUNT(r.id) AS inscritos,
-              (SELECT COUNT(*) FROM schedule_items si WHERE si.hackathonId = h.id) AS "scheduleItems"
+      `SELECT h.id, h.name, h.organizer, h.startsAt, h.endsAt, h.format, h.location, h.registrationUrl,
+              h.registrationDeadline, h.tags, h.active, h.requiresApproval,
+              (SELECT COUNT(*)::int FROM registrations r WHERE r.hackathonId = h.id) AS inscritos,
+              (SELECT COUNT(*)::int FROM registrations r
+                WHERE r.hackathonId = h.id AND r.status = 'pending') AS pendentes,
+              (SELECT COUNT(*)::int FROM schedule_items si WHERE si.hackathonId = h.id) AS "scheduleItems",
+              (h.organizer ILIKE 'hack inova%' OR h.source IN ('admin', 'seed')
+                OR EXISTS (SELECT 1 FROM edition_roles er WHERE er.hackathonId = h.id)) AS "ours"
        FROM hackathons h
-       LEFT JOIN registrations r ON r.hackathonId = h.id
-       GROUP BY h.id
-       ORDER BY h.startsAt DESC`,
+       WHERE (@q = '' OR lower(h.name) LIKE @like ESCAPE '\\' OR h.id LIKE @like ESCAPE '\\')
+       ORDER BY to_ts(h.startsAt) DESC NULLS LAST`,
     )
-    .all() as {
-    id: string;
-    name: string;
-    organizer: string;
-    startsAt: string;
-    endsAt: string | null;
-    format: string;
-    location: string | null;
-    registrationUrl: string;
-    registrationDeadline: string | null;
-    tags: string;
-    active: number;
-    requiresApproval: number;
-    inscritos: number;
-    scheduleItems: number;
-  }[];
-
-  // inscritos por edição — server-side direto na lib (com e-mail, é tela admin)
-  const registrantsByEvent = new Map(
-    await Promise.all(
-      events.map(async (e) => [e.id, await listRegistrants(e.id)] as const),
-    ),
-  );
-
-  // desafios por edição — inclui inativos (o admin gere o inventário)
-  const challengesByEvent = new Map(
-    await Promise.all(
-      events.map(async (e) => [e.id, await listChallenges(e.id)] as const),
-    ),
-  );
-
-  // board "procuro time" por edição — inclui inativos (moderação)
-  const boardByEvent = new Map(
-    await Promise.all(
-      events.map(async (e) => [e.id, await listAllBoardEntries(e.id)] as const),
-    ),
-  );
-
-  // arquivo da edição (times + materiais) — cadastro pós-evento, spec 015
-  const archiveByEvent = new Map(
-    await Promise.all(
-      events.map(async (e) => [e.id, await getArchive(e.id)] as const),
-    ),
-  );
+    .all<AdminEdition>({ q, like });
+  const ours = events.filter((e) => e.ours);
+  const radar = events.filter((e) => !e.ours);
+  const radarShown = q ? radar : radar.slice(0, RADAR_PAGE);
+  const opened = openId ? (events.find((e) => e.id === openId) ?? null) : null;
+  const detail = opened
+    ? await Promise.all([listChallenges(opened.id), listAllBoardEntries(opened.id), getArchive(opened.id)])
+    : null;
+  const challenges = detail?.[0] ?? [];
+  const board = detail?.[1] ?? [];
+  const archive = detail?.[2] ?? { teams: [], assets: [] };
 
   const subscribers = await listSubscribers();
 
@@ -111,8 +90,6 @@ export default async function AdminPage() {
   }[];
 
   const mono = "font-mono text-xs";
-  const th = `${mono} text-left text-muted uppercase tracking-widest pb-2`;
-  const td = `${mono} py-2 pr-4 align-top`;
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6">
@@ -131,280 +108,143 @@ export default async function AdminPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-          edições ({events.length})
-        </h2>
-        <ul className="divide-y divide-line border-y border-line">
-          {events.map((e) => {
-            const registrants = registrantsByEvent.get(e.id) ?? [];
-            const archive = archiveByEvent.get(e.id) ?? {
-              teams: [],
-              assets: [],
-            };
-            return (
-              <li key={e.id}>
-                <details className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 [&::-webkit-details-marker]:hidden">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+            edições que você organiza ({ours.length})
+          </h2>
+          <form action="/admin" className="flex w-full gap-2 sm:w-auto" role="search">
+            <input
+              name="q"
+              defaultValue={q}
+              aria-label="buscar edição por nome ou endereço"
+              placeholder="buscar por nome ou endereço"
+              className="w-full min-w-0 rounded-[6px] border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm sm:w-72"
+            />
+            <button type="submit" className="btn-ghost shrink-0 rounded-[6px]">
+              buscar
+            </button>
+          </form>
+        </div>
+        {q && (
+          <p className={`${mono} text-muted`}>
+            resultado pra “{q}” ·{" "}
+            <Link href="/admin" className="text-accent underline underline-offset-4">
+              limpar busca
+            </Link>
+          </p>
+        )}
+        <EditionList events={ours} openId={openId} q={q} empty="nenhuma edição com esse nome" />
+      </div>
+
+      {opened && (
+        <div id="edicao-aberta" className="flex scroll-mt-24 flex-col gap-5 border-[1.5px] border-line p-4 sm:p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-[1.4rem] leading-none font-extrabold tracking-[-0.02em]">{opened.name}</h2>
+            <Link href={q ? `/admin?q=${encodeURIComponent(q)}` : "/admin"} className={`${mono} text-accent hover:underline`}>
+              fechar
+            </Link>
+          </div>
+          <p className={`${mono} text-muted`}>
+            inscrições, aprovação e o resto da operação ficam no{" "}
+            <Link href={`/admin/h/${opened.id}`} className="text-accent underline underline-offset-4">
+              painel da edição
+            </Link>
+            .
+          </p>
+          <div className="flex flex-col gap-3">
+            <h3 className={`${mono} tracking-widest text-muted uppercase`}>
+              desafios patrocinados ({challenges.length})
+            </h3>
+            {challenges.length > 0 && (
+              <ul className="divide-y divide-line border-y border-line">
+                {challenges.map((c) => (
+                  <li key={c.id} className="flex items-baseline justify-between gap-4 py-2">
                     <span className={mono}>
-                      {e.name}
-                      <span className="block text-muted">{e.organizer}</span>
-                      <Link
-                        href={`/admin/h/${e.id}`}
-                        className="mt-1 block text-accent underline-offset-4 hover:underline"
-                      >
-                        painel da edição →
-                      </Link>
+                      <span className="text-accent uppercase">{c.sponsor}</span> · {c.title}
+                      {c.prize && <span className="ml-2 text-lendario">{c.prize}</span>}
+                      {!c.active && <span className="ml-2 text-muted">(inativo)</span>}
                     </span>
-                    <span className={`${mono} shrink-0 text-right text-muted`}>
-                      {new Intl.DateTimeFormat("pt-BR").format(
-                        new Date(e.startsAt),
-                      )}{" "}
-                      ·{" "}
-                      <span className="text-accent">
-                        {registrants.length} inscritos
-                      </span>{" "}
-                      · {e.active ? "ativo" : "arquivado"}{" "}
-                      <span className="group-open:hidden">▸</span>
-                      <span className="hidden group-open:inline">▾</span>
+                    <ChallengeToggle id={c.id} active={c.active} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <ChallengeForm hackathonId={opened.id} />
+          </div>
+          <div className="flex flex-col gap-3">
+            <h3 className={`${mono} tracking-widest text-muted uppercase`}>procurando time ({board.length})</h3>
+            {board.length > 0 && (
+              <ul className="divide-y divide-line border-y border-line">
+                {board.map((b) => (
+                  <li key={b.id} className="flex items-baseline justify-between gap-4 py-2">
+                    <span className={mono}>
+                      @{b.username} · {b.need}
+                      {!b.active && <span className="ml-2 text-muted">(inativo)</span>}
                     </span>
-                  </summary>
-                  <div className="flex flex-col gap-5 border-t border-line/50 py-4">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-baseline justify-between">
-                        <h3
-                          className={`${mono} tracking-widest text-muted uppercase`}
-                        >
-                          inscritos ({registrants.length})
-                          {/* spec 032 — fila de curadoria da edição */}
-                          {registrants.filter((r) => r.status === "pending")
-                            .length > 0 &&
-                            ` · ${registrants.filter((r) => r.status === "pending").length} aguardando`}
-                        </h3>
-                        <a
-                          href={`/h/${e.id}`}
-                          className={`${mono} text-accent hover:underline`}
-                        >
-                          ver página pública →
-                        </a>
-                      </div>
-                      {registrants.length > 0 ? (
-                        <div className="overflow-x-auto border border-line">
-                          <table className="w-full min-w-[480px] border-collapse">
-                            <thead>
-                              <tr className="border-b border-line">
-                                <th className={`${th} pl-4`}>hacker</th>
-                                <th className={th}>e-mail</th>
-                                <th className={th}>inscreveu em</th>
-                                <th className={th}>status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {registrants.map((r) => (
-                                <tr
-                                  key={r.username}
-                                  className="border-b border-line/50"
-                                >
-                                  <td className={`${td} pl-4`}>
-                                    {r.name ?? `@${r.username}`}
-                                    <span className="ml-2 text-muted">
-                                      @{r.username}
-                                    </span>
-                                  </td>
-                                  <td className={td}>{r.email}</td>
-                                  <td className={`${td} text-muted`}>
-                                    {new Intl.DateTimeFormat("pt-BR").format(
-                                      new Date(r.createdAt + "Z"),
-                                    )}
-                                  </td>
-                                  <td className={td}>
-                                    {/* spec 032 — pendente mostra a fila de
-                                        decisão; recusado pode re-aprovar */}
-                                    {r.status === "approved" ? (
-                                      <span className="text-accent">
-                                        aprovado
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-3">
-                                        <span
-                                          className={
-                                            r.status === "pending"
-                                              ? "border-[1.5px] border-lendario bg-lendario/10 px-1.5 py-0.5 text-[12px] text-lendario uppercase"
-                                              : "border-[1.5px] border-line px-1.5 py-0.5 text-[12px] text-muted uppercase"
-                                          }
-                                        >
-                                          {r.status === "pending"
-                                            ? "pendente"
-                                            : r.status === "waitlist"
-                                              ? "fila de espera"
-                                              : "recusado"}
-                                        </span>
-                                        <RegistrationActions
-                                          hackathonId={e.id}
-                                          memberId={r.memberId}
-                                          status={r.status}
-                                        />
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="border-[1.5px] border-line px-4 py-4 font-mono text-xs text-muted">
-                          {"nenhuma inscrição ainda"}
-                        </p>
+                    <TeamBoardToggle entryId={b.id} hackathonId={opened.id} active={b.active} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="flex flex-col gap-3">
+            <h3 className={`${mono} tracking-widest text-muted uppercase`}>editar edição</h3>
+            <EditEventForm
+              isAdmin
+              event={{
+                id: opened.id,
+                name: opened.name,
+                startsAt: opened.startsAt,
+                endsAt: opened.endsAt,
+                format: opened.format,
+                location: opened.location,
+                registrationUrl: opened.registrationUrl,
+                registrationDeadline: opened.registrationDeadline,
+                tags: JSON.parse(opened.tags) as string[],
+                active: opened.active === 1,
+                requiresApproval: opened.requiresApproval === 1,
+                scheduleItems: Number(opened.scheduleItems),
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-3">
+            <h3 className={`${mono} tracking-widest text-muted uppercase`}>
+              arquivo ({archive.teams.length} {archive.teams.length === 1 ? "time" : "times"} ·{" "}
+              {archive.assets.length} {archive.assets.length === 1 ? "material" : "materiais"})
+            </h3>
+            {archive.teams.length > 0 && (
+              <ul className="divide-y divide-line border-y border-line">
+                {archive.teams.map((t) => (
+                  <li key={t.id} className="flex items-baseline justify-between gap-4 py-2">
+                    <span className={mono}>
+                      {t.placement > 0 && (
+                        <span className={t.placement === 1 ? "text-lendario" : "text-muted"}>{t.placement}º </span>
                       )}
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <h3
-                        className={`${mono} tracking-widest text-muted uppercase`}
-                      >
-                        {"desafios patrocinados"} (
-                        {challengesByEvent.get(e.id)?.length ?? 0})
-                      </h3>
-                      {(challengesByEvent.get(e.id) ?? []).length > 0 && (
-                        <ul className="divide-y divide-line border-y border-line">
-                          {(challengesByEvent.get(e.id) ?? []).map((c) => (
-                            <li
-                              key={c.id}
-                              className="flex items-baseline justify-between gap-4 py-2"
-                            >
-                              <span className={mono}>
-                                <span className="text-accent uppercase">
-                                  {c.sponsor}
-                                </span>{" "}
-                                — {c.title}
-                                {c.prize && (
-                                  <span className="ml-2 text-lendario">
-                                    {c.prize}
-                                  </span>
-                                )}
-                                {!c.active && (
-                                  <span className="ml-2 text-muted">
-                                    (inativo)
-                                  </span>
-                                )}
-                              </span>
-                              <ChallengeToggle id={c.id} active={c.active} />
-                            </li>
-                          ))}
-                        </ul>
+                      {t.name}
+                      {t.project && <span className="text-muted"> · {t.project.title}</span>}
+                      {t.members.length > 0 && (
+                        <span className="ml-2 text-muted">{t.members.map((u) => `@${u}`).join(" ")}</span>
                       )}
-                      <ChallengeForm hackathonId={e.id} />
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <h3
-                        className={`${mono} tracking-widest text-muted uppercase`}
-                      >
-                        {"procurando time"} (
-                        {boardByEvent.get(e.id)?.length ?? 0})
-                      </h3>
-                      {(boardByEvent.get(e.id) ?? []).length > 0 && (
-                        <ul className="divide-y divide-line border-y border-line">
-                          {(boardByEvent.get(e.id) ?? []).map((b) => (
-                            <li
-                              key={b.id}
-                              className="flex items-baseline justify-between gap-4 py-2"
-                            >
-                              <span className={mono}>
-                                @{b.username} — {b.need}
-                                {!b.active && (
-                                  <span className="ml-2 text-muted">
-                                    (inativo)
-                                  </span>
-                                )}
-                              </span>
-                              <TeamBoardToggle
-                                entryId={b.id}
-                                hackathonId={e.id}
-                                active={b.active}
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <h3
-                        className={`${mono} tracking-widest text-muted uppercase`}
-                      >
-                        editar edição
-                      </h3>
-                      <EditEventForm
-                        event={{
-                          id: e.id,
-                          name: e.name,
-                          startsAt: e.startsAt,
-                          endsAt: e.endsAt,
-                          format: e.format,
-                          location: e.location,
-                          registrationUrl: e.registrationUrl,
-                          registrationDeadline: e.registrationDeadline,
-                          tags: JSON.parse(e.tags) as string[],
-                          active: e.active === 1,
-                          requiresApproval: e.requiresApproval === 1,
-                          scheduleItems: Number(e.scheduleItems),
-                        }}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <h3
-                        className={`${mono} tracking-widest text-muted uppercase`}
-                      >
-                        {"arquivo"} ({archive.teams.length}{" "}
-                        {archive.teams.length === 1 ? "time" : "times"} ·{" "}
-                        {archive.assets.length}{" "}
-                        {archive.assets.length === 1 ? "material" : "materiais"})
-                      </h3>
-                      {archive.teams.length > 0 && (
-                        <ul className="divide-y divide-line border-y border-line">
-                          {archive.teams.map((t) => (
-                            <li
-                              key={t.id}
-                              className="flex items-baseline justify-between gap-4 py-2"
-                            >
-                              <span className={mono}>
-                                {t.placement > 0 && (
-                                  <span
-                                    className={
-                                      t.placement === 1
-                                        ? "text-lendario"
-                                        : "text-muted"
-                                    }
-                                  >
-                                    {t.placement}º{" "}
-                                  </span>
-                                )}
-                                {t.name}
-                                {t.project && (
-                                  <span className="text-muted">
-                                    {" "}
-                                    — {t.project.title}
-                                  </span>
-                                )}
-                                {t.members.length > 0 && (
-                                  <span className="ml-2 text-muted">
-                                    {t.members
-                                      .map((u) => `@${u}`)
-                                      .join(" ")}
-                                  </span>
-                                )}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <TeamForm hackathonId={e.id} />
-                      <AssetForm hackathonId={e.id} />
-                    </div>
-                  </div>
-                </details>
-              </li>
-            );
-          })}
-        </ul>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <TeamForm hackathonId={opened.id} />
+            <AssetForm hackathonId={opened.id} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-4">
+        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+          catálogo do radar ({radar.length})
+        </h2>
+        <p className="text-[14px] text-muted">
+          Hackathons de outros organizadores que aparecem no radar.
+          {!q && radar.length > radarShown.length && ` Mostrando os ${radarShown.length} mais recentes; use a busca pra achar os outros.`}
+        </p>
+        <EditionList events={radarShown} openId={openId} q={q} empty="nada no radar com esse nome" />
       </div>
 
       <div className="flex flex-col gap-4">
@@ -495,7 +335,7 @@ export default async function AdminPage() {
               href="/api/admin/subscribers?format=csv"
               className={`${mono} text-accent hover:underline`}
             >
-              exportar csv ↓
+              baixar planilha ↓
             </a>
           </div>
           <ul className="divide-y divide-line border-y border-line">

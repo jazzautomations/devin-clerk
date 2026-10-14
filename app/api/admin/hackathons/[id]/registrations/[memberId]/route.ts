@@ -1,6 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
-import { getHackathon } from "@/lib/hackathons";
-import { getMemberByClerkId } from "@/lib/members";
+import { requireEditionManager } from "@/lib/editionAuth";
 import { reviewRegistration } from "@/lib/registrations";
 
 // spec 032 — curadoria da fila "pedir lugar": action=approve efetiva a
@@ -8,49 +6,29 @@ import { reviewRegistration } from "@/lib/registrations";
 // caminho do register instantâneo); action=reject marca 'rejected'. A
 // decisão é reversível (rejected→approved paga a recompensa na hora);
 // approve em quem já estava aprovado é no-op sem XP duplo.
+// Quem decide é o organizador da edição (admin global vale) — a mesma guarda
+// do resto do painel. Staff não aprova.
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
-  const { userId } = await auth();
-  const member = userId ? await getMemberByClerkId(userId) : null;
-  if (!member) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (member.role !== "admin") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { id, memberId } = await params;
-  if (!await getHackathon(id)) {
-    return Response.json({ error: "Edição não encontrada" }, { status: 404 });
-  }
+  const g = await requireEditionManager(id);
+  if ("response" in g) return g.response;
   const targetId = Number(memberId);
-  if (!Number.isInteger(targetId) || targetId <= 0) {
-    return Response.json(
-      { error: "Inscrição não encontrada" },
-      { status: 404 },
-    );
+  if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+    return Response.json({ error: "Inscrição não encontrada" }, { status: 404 });
   }
 
-  const b = (await req.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null;
+  const b = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const action = b?.action;
   if (action !== "approve" && action !== "reject") {
-    return Response.json(
-      { error: "action deve ser 'approve' ou 'reject'" },
-      { status: 400 },
-    );
+    return Response.json({ error: "ação deve ser aprovar ou recusar" }, { status: 400 });
   }
 
   const res = await reviewRegistration(targetId, id, action);
   if (!res) {
-    return Response.json(
-      { error: "Inscrição não encontrada" },
-      { status: 404 },
-    );
+    return Response.json({ error: "Inscrição não encontrada" }, { status: 404 });
   }
   if (res.status === "rejected") {
     return Response.json({ status: "rejected", promoted: res.promoted.length });
@@ -64,6 +42,7 @@ export async function PATCH(
     rewarded: res.rewarded,
     xp: res.xp,
     cardSerial: res.cardSerial,
-    newBadges: res.newBadges.map((badge) => badge.id),
+    // nome legível da conquista (o id é interno)
+    newBadges: res.newBadges.map((badge) => badge.name),
   });
 }

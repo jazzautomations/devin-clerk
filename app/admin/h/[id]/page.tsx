@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { getEditionChecklist, PHASE_LABEL } from "@/lib/editionChecklist";
 import { getEditionOverview } from "@/lib/editionOverview";
 import { mySponsorships } from "@/lib/editionSponsors";
-import { getEditionRoles } from "@/lib/roles";
+import { getHackathon } from "@/lib/hackathons";
+import { canManageEdition, getEditionRoles } from "@/lib/roles";
+import { formatSp, parseEventStart } from "@/lib/rsvp";
 import { currentMember } from "@/lib/session";
+import { PublishEditionButton } from "@/components/PublishEditionButton";
 
-type Stat = { label: string; n: number; testId: string; note?: string };
+type Stat = { label: string; n: number; testId: string; href?: string };
 
+// Visão geral do painel: em que fase a edição está, o que falta pra essa
+// fase (cada item leva pra aba que resolve) e os números da inscrição. O
+// funil de confirmação de presença mora na aba presença; aqui só o resumo.
 export default async function EditionPanelHome({ params }: PageProps<"/admin/h/[id]">) {
   const { id } = await params;
   // quem só é de patrocinador (migration 017) não vê a visão geral da
@@ -18,46 +25,91 @@ export default async function EditionPanelHome({ params }: PageProps<"/admin/h/[
     if (mine.length === 0) notFound();
     redirect(`/admin/h/${id}/patrocinador/${mine[0].sponsorId}`);
   }
-  const o = await getEditionOverview(id);
+  const [o, h, manage, checklist] = await Promise.all([
+    getEditionOverview(id),
+    getHackathon(id),
+    canManageEdition(member, id),
+    getEditionChecklist(id),
+  ]);
+  if (!h || !checklist) notFound();
+  const start = parseEventStart(h.startsAt);
+  const end = parseEventStart(h.endsAt);
+  const when = start ? `${formatSp(start)}${end ? ` até ${formatSp(end)}` : ""}` : "data de início inválida";
+  const done = checklist.items.filter((i) => i.done).length;
+
   const intake: Stat[] = [
     { label: "inscrições", n: o.total, testId: "ov-total" },
     { label: "aprovados", n: o.approved, testId: "ov-approved" },
-    { label: "pedidos pendentes", n: o.pending, testId: "ov-pending" },
-  ];
-  // funil do RSVP (migration 012) + fila de espera (FR-009)
-  const funnel: Stat[] = [
-    { label: "confirmados", n: o.confirmed, testId: "ov-confirmed" },
-    { label: "recusados", n: o.declined, testId: "ov-declined" },
     {
-      label: "sem resposta",
-      n: o.noResponse,
-      testId: "ov-noresponse",
-      note: o.expired > 0 ? `+ ${o.expired} perderam o prazo` : undefined,
+      label: "pedidos pendentes",
+      n: o.pending,
+      testId: "ov-pending",
+      href: manage && o.pending > 0 ? `/admin/h/${id}/inscritos?status=pending` : undefined,
     },
-    { label: "na fila", n: o.waitlist, testId: "ov-waitlist" },
-    { label: "promovidos da fila", n: o.promoted, testId: "ov-promoted" },
+    { label: "na fila de espera", n: o.waitlist, testId: "ov-waitlist" },
   ];
+
   return (
-    <div className="flex flex-col gap-6">
-      <StatGrid stats={intake} cols="sm:grid-cols-3" />
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+    <div className="flex flex-col gap-8">
+      <section className="flex flex-col gap-2 border-[1.5px] border-line p-4 sm:p-5" data-testid="ov-status">
+        <p className="font-mono text-[12px] tracking-widest text-muted uppercase">fase</p>
+        <p className="text-[1.3rem] leading-tight font-extrabold tracking-[-0.02em]" data-testid="ov-phase">
+          {PHASE_LABEL[checklist.phase]}
+        </p>
+        <p className="font-mono text-[13px] text-muted">
+          {when} · horário de Brasília
+          {h.location ? ` · ${h.location}` : ""}
+          {` · ${checklist.capacity === null ? "vagas sem limite" : `${checklist.capacity} vagas`}`}
+        </p>
+        {manage && checklist.phase === "rascunho" && (
+          <div className="pt-2">
+            <PublishEditionButton hackathonId={id} blockers={checklist.blockers} />
+          </div>
+        )}
+      </section>
+
+      {manage && (
+        <section className="flex flex-col gap-3" data-testid="ov-checklist">
           <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">
-            funil de presença{o.rsvpEnabled ? "" : " · RSVP desligado"}
+            próximos passos · {done} de {checklist.items.length} feitos
           </h2>
-          <span className="flex flex-wrap gap-x-4 font-mono text-[12px]">
+          <ul className="border-b border-line">
+            {checklist.items.map((i) => (
+              <li key={i.key} className="border-t border-line">
+                <Link
+                  href={i.href}
+                  className="flex min-h-11 items-center gap-3 py-2 hover:text-accent"
+                  data-done={i.done ? "1" : "0"}
+                >
+                  <span
+                    aria-hidden
+                    className={`inline-flex size-5 shrink-0 items-center justify-center border-[1.5px] font-mono text-[12px] ${
+                      i.done ? "border-accent bg-mint text-accent" : "border-line"
+                    }`}
+                  >
+                    {i.done ? "✓" : ""}
+                  </span>
+                  <span className={i.done ? "text-muted line-through decoration-1" : "font-semibold"}>{i.label}</span>
+                  <span className="sr-only">{i.done ? "(feito)" : "(falta)"}</span>
+                  {i.optional && !i.done && <span className="font-mono text-[12px] text-muted">opcional</span>}
+                  <span aria-hidden className="ml-auto font-mono text-[13px] text-accent">
+                    →
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">inscrição</h2>
+        <StatGrid stats={intake} />
+        {manage && (
+          <p className="font-mono text-[13px]">
             <Link href={`/admin/h/${id}/presenca`} className="text-accent underline-offset-4 hover:underline">
-              presença →
+              confirmação de presença{o.rsvpEnabled ? `: ${o.confirmed} de ${o.approved} confirmaram` : " desligada"} →
             </Link>
-            <Link href={`/admin/h/${id}/inscritos`} className="text-accent underline-offset-4 hover:underline">
-              fila por posição →
-            </Link>
-          </span>
-        </div>
-        <StatGrid stats={funnel} cols="sm:grid-cols-5" />
-        {o.rsvpEnabled && o.notInvited > 0 && (
-          <p className="font-mono text-[12px] text-muted">
-            {o.notInvited} aprovado{o.notInvited === 1 ? "" : "s"} ainda sem convite de confirmação
           </p>
         )}
       </section>
@@ -65,19 +117,25 @@ export default async function EditionPanelHome({ params }: PageProps<"/admin/h/[
   );
 }
 
-function StatGrid({ stats, cols }: { stats: Stat[]; cols: string }) {
+function StatGrid({ stats }: { stats: Stat[] }) {
   return (
-    <dl className={`grid grid-cols-2 overflow-hidden border-[1.5px] border-line ${cols}`}>
+    <dl className="grid grid-cols-2 overflow-hidden border-[1.5px] border-line sm:grid-cols-4">
       {stats.map((s) => (
         <div
           key={s.label}
           className="-mt-[1.5px] -ml-[1.5px] flex min-w-0 flex-col gap-1 border-t-[1.5px] border-l-[1.5px] border-line p-4 sm:p-5"
         >
           <dt className="font-mono text-[11px] tracking-widest text-muted uppercase sm:text-[12px]">{s.label}</dt>
-          <dd className="pix text-4xl" data-testid={s.testId}>
-            {s.n}
+          <dd className="text-[1.8rem] leading-none font-extrabold tracking-[-0.03em]" data-testid={s.testId}>
+            {s.href ? (
+              <Link href={s.href} className="text-accent underline-offset-4 hover:underline">
+                {s.n}
+                <span className="sr-only"> pedidos pendentes, ver na aba inscritos</span>
+              </Link>
+            ) : (
+              s.n
+            )}
           </dd>
-          {s.note && <dd className="font-mono text-[11px] text-muted">{s.note}</dd>}
         </div>
       ))}
     </dl>

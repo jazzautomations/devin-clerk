@@ -5,6 +5,16 @@ import {
   type RegistrantWithAnswers,
 } from "@/lib/registrationForm";
 import { summaryText, type AttendanceSummary } from "@/lib/rsvp";
+import { RegistrationActions } from "@/components/RegistrationActions";
+
+export const REGISTRANT_FILTERS = ["pending", "approved", "waitlist", "rejected"] as const;
+export type RegistrantFilter = (typeof REGISTRANT_FILTERS)[number];
+const FILTER_LABEL: Record<RegistrantFilter, string> = {
+  pending: "pendentes",
+  approved: "aprovados",
+  waitlist: "fila",
+  rejected: "recusados",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   approved: "aprovado",
@@ -20,20 +30,40 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 // lista de inscritos com respostas e aceite — server component puro (sem
-// busca de dado), a página da aba faz a guarda e carrega
+// busca de dado), a página da aba faz a guarda e carrega. Filtro por status
+// (?status=) e aprovar/recusar em cada linha: a curadoria acontece aqui.
 export function RegistrantsTable({
   hackathonId: id,
   questions,
-  rows,
+  rows: all,
   attendance = {},
+  filter = null,
 }: {
   hackathonId: string;
   questions: EditionQuestion[];
   rows: RegistrantWithAnswers[];
   /** histórico de presença em outras edições (lib/rsvp) — só informa */
   attendance?: Record<number, AttendanceSummary>;
+  filter?: RegistrantFilter | null;
 }) {
-  const count = (s: string) => rows.filter((r) => r.status === s).length;
+  const count = (s: string) => all.filter((r) => r.status === s).length;
+  const rows = filter ? all.filter((r) => r.status === filter) : all;
+  const chip = (f: RegistrantFilter | null, label: string, n: number) => {
+    const on = f === filter;
+    return (
+      <li key={f ?? "all"}>
+        <Link
+          href={`/admin/h/${id}/inscritos${f ? `?status=${f}` : ""}`}
+          aria-current={on ? "page" : undefined}
+          className={`inline-flex min-h-11 items-center rounded-[6px] border-[1.5px] border-line px-3 font-mono text-[13px] ${
+            on ? "bg-foreground text-background" : "hover:border-accent hover:text-accent"
+          }`}
+        >
+          {label} · {n}
+        </Link>
+      </li>
+    );
+  };
   const fmt = (d: string | null) =>
     d
       ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(
@@ -45,25 +75,34 @@ export function RegistrantsTable({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <p className="font-mono text-[13px] text-muted">
-          {rows.length} {rows.length === 1 ? "inscrição" : "inscrições"} · {count("approved")} aprovados ·{" "}
-          {count("pending")} pendentes · {count("waitlist")} na fila ·{" "}
-          <span data-testid="no-photo-count">{rows.filter((r) => !r.imageConsent).length} sem uso de imagem</span>
+          {all.length} {all.length === 1 ? "inscrição" : "inscrições"} ·{" "}
+          <span data-testid="no-photo-count">{all.filter((r) => !r.imageConsent).length} sem uso de imagem</span>
         </p>
         <a href={`/api/admin/hackathons/${id}/registrations?format=csv`} className="btn rounded-[6px]">
-          exportar csv ↓
+          baixar planilha ↓
         </a>
       </div>
-      {rows.length === 0 ? (
+      <nav aria-label="filtrar por status">
+        <ul className="flex flex-wrap gap-2" data-testid="registrant-filters">
+          {chip(null, "todos", all.length)}
+          {REGISTRANT_FILTERS.map((f) => chip(f, FILTER_LABEL[f], count(f)))}
+        </ul>
+      </nav>
+      {all.length === 0 ? (
         <p className="border-[1.5px] border-dashed border-line p-5 font-mono text-[13px] text-muted">
           ninguém inscrito ainda.{" "}
           <Link href={`/admin/h/${id}/formulario`} className="text-accent underline">
             montar o formulário
           </Link>
         </p>
+      ) : rows.length === 0 ? (
+        <p className="border-[1.5px] border-dashed border-line p-5 font-mono text-[13px] text-muted">
+          ninguém com esse status.
+        </p>
       ) : (
         <ul className="border-b border-line">
           {rows.map((r) => (
-            <li key={r.memberId} className="border-t border-line">
+            <li key={r.memberId} className="border-t border-line" data-testid="registrant-row">
               <details className="group">
                 <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
                   <span className="flex min-w-0 items-baseline gap-2">
@@ -135,6 +174,16 @@ export function RegistrantsTable({
                   </p>
                 </div>
               </details>
+              {r.status !== "approved" && (
+                <div className="pb-3">
+                  <RegistrationActions
+                    hackathonId={id}
+                    memberId={r.memberId}
+                    status={r.status}
+                    name={r.name ?? `@${r.username}`}
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ul>

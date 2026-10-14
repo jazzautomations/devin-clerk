@@ -59,7 +59,10 @@ export default async function FormularioPage({ params, searchParams }: PageProps
           <p className="font-mono text-[13px] text-muted">
             {cap.approved} {cap.approved === 1 ? "aprovado" : "aprovados"}
             {cap.capacity !== null && ` de ${cap.capacity} vagas`}
-            {cap.waitlist > 0 && ` · ${cap.waitlist} na fila`}
+            {cap.waitlist > 0 && ` · ${cap.waitlist} na fila`} ·{" "}
+            <Link href={`/admin/h/${id}/edicao`} className="text-accent underline-offset-4 hover:underline">
+              vagas em configurar →
+            </Link>
           </p>
         ) : (
           <p className="font-mono text-[13px] text-muted">
@@ -87,7 +90,6 @@ export default async function FormularioPage({ params, searchParams }: PageProps
         hackathonId={id}
         questions={questions}
         answered={answered}
-        capacity={cap.capacity}
         audience={audience}
       />
       {participant && (

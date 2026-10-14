@@ -29,19 +29,17 @@ const toPayload = (d: Draft) => ({
 });
 
 // spec 033 US1 — o organizador monta o formulário da edição: cria, edita,
-// reordena e arquiva perguntas, e define as vagas. Editar uma pergunta que
+// reordena e arquiva perguntas. As vagas ficam na aba configurar. Editar uma pergunta que
 // já tem resposta cria versão nova (o servidor decide; a tela avisa).
 export function QuestionEditor({
   hackathonId,
   questions,
   answered,
-  capacity,
   audience = "participante",
 }: {
   hackathonId: string;
   questions: EditionQuestion[];
   answered: Record<number, number>;
-  capacity: number | null;
   audience?: Audience;
 }) {
   const router = useRouter();
@@ -50,8 +48,6 @@ export function QuestionEditor({
   const [editDraft, setEditDraft] = useState<Draft>(empty);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cap, setCap] = useState(capacity === null ? "" : String(capacity));
-  const [capMsg, setCapMsg] = useState<string | null>(null);
 
   async function call(url: string, method: string, body: unknown): Promise<Record<string, unknown> | null> {
     setBusy(true);
@@ -85,18 +81,6 @@ export function QuestionEditor({
     if (await call(`${base}/${id}`, "PATCH", toPayload(editDraft))) setEditing(null);
   }
 
-  async function saveCapacity(e: React.FormEvent) {
-    e.preventDefault();
-    const value = cap.trim() === "" ? null : Number(cap);
-    const data = await call(`/api/admin/hackathons/${hackathonId}/capacity`, "PUT", { capacity: value });
-    if (data) {
-      const promoted = Array.isArray(data.promoted) ? data.promoted.length : 0;
-      setCapMsg(
-        `salvo${promoted ? ` · ${promoted} ${promoted === 1 ? "pessoa saiu" : "pessoas saíram"} da fila` : ""}`,
-      );
-    }
-  }
-
   const active = questions.filter((q) => !q.archived);
   const archived = questions.filter((q) => q.archived);
 
@@ -104,32 +88,6 @@ export function QuestionEditor({
 
   return (
     <div className="flex flex-col gap-10">
-      {participant && (
-      <form onSubmit={saveCapacity} className="flex flex-col gap-2 border-[1.5px] border-line p-4">
-        <label htmlFor="capacity" className="font-mono text-[12px] tracking-widest text-muted uppercase">
-          vagas da edição
-        </label>
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            id="capacity"
-            inputMode="numeric"
-            placeholder="sem limite"
-            className={`${field} w-36`}
-            value={cap}
-            onChange={(e) => setCap(e.target.value.replace(/\D/g, ""))}
-          />
-          <button type="submit" disabled={busy} className="btn rounded-[6px]">
-            salvar vagas
-          </button>
-          {capMsg && <span className="font-mono text-[13px] text-accent">{capMsg}</span>}
-        </div>
-        <p className="text-[13px] text-muted">
-          Vazio = sem limite. Com a edição cheia, quem chega entra na fila de espera; quando alguém cancela, o
-          primeiro da fila sobe sozinho.
-        </p>
-      </form>
-      )}
-
       <section className="flex flex-col gap-4">
         <h2 className="text-[22px] font-extrabold tracking-[-0.02em]">Perguntas ({active.length})</h2>
         <p className="text-[14px] text-muted">

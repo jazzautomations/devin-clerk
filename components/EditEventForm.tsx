@@ -1,6 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { parseEventTime, toBrtInput } from "@/lib/eventTime";
 
 export type EditableEvent = {
   id: string;
@@ -18,15 +20,12 @@ export type EditableEvent = {
   scheduleItems?: number;
 };
 
-// mesma conta do servidor (lib/schedule wallClockDelta): parede do relógio
-function wallDelta(a: string, b: string): number | null {
-  const wall = (v: string) => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(v.trim());
-    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], m[4] === undefined ? 9 : +m[4], m[5] === undefined ? 0 : +m[5]) : null;
-  };
-  const x = wall(a);
-  const y = wall(b);
-  return x === null || y === null ? null : y - x;
+// mesma conta do servidor: diferença entre os dois instantes (o input é
+// horário de Brasília; o valor salvo pode ter fuso, Z ou ser só a data)
+function startDelta(saved: string, input: string): number | null {
+  const a = parseEventTime(saved);
+  const b = parseEventTime(input);
+  return a && b ? b.getTime() - a.getTime() : null;
 }
 
 function shiftLabel(ms: number): string {
@@ -39,17 +38,20 @@ function shiftLabel(ms: number): string {
   return sign + [d ? `${d}d` : "", h ? `${h}h` : "", mins ? `${mins}min` : ""].filter(Boolean).join(" ");
 }
 
-// "2026-12-01T09:00:00-03:00" → "2026-12-01T09:00" (datetime-local)
-const toInput = (v: string | null) => (v ? v.slice(0, 16) : "");
+// valor salvo → datetime-local no horário de Brasília. Nunca cortar o texto
+// (slice): "…T09:00:00-03:00" virava "…T09:00" e, sem fuso, o servidor lia
+// como outro horário.
+const toInput = (v: string | null) => toBrtInput(v);
 
-export function EditEventForm({ event }: { event: EditableEvent }) {
+export function EditEventForm({ event, isAdmin = false }: { event: EditableEvent; isAdmin?: boolean }) {
+  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
     "idle",
   );
   const [error, setError] = useState("");
   const [startInput, setStartInput] = useState(toInput(event.startsAt));
   const [shift, setShift] = useState(false);
-  const delta = wallDelta(event.startsAt, startInput);
+  const delta = startDelta(event.startsAt, startInput);
   const offerShift = (event.scheduleItems ?? 0) > 0 && delta !== null && delta !== 0;
   const input =
     "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
@@ -72,22 +74,23 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
         format: f.get("format"),
         location: opt("location"),
         registrationDeadline: opt("registrationDeadline"),
-        ...(opt("registrationUrl") ? { registrationUrl: opt("registrationUrl") } : {}),
+        ...(isAdmin && opt("registrationUrl") ? { registrationUrl: opt("registrationUrl") } : {}),
         tags: String(f.get("tags") ?? "")
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
-        active: f.get("active") === "on",
+        ...(isAdmin ? { active: f.get("active") === "on" } : {}),
         requiresApproval: f.get("requiresApproval") === "on",
         ...(offerShift && shift ? { shiftSchedule: true } : {}),
       }),
     });
     if (res.ok) {
       setStatus("done");
-      window.location.reload();
+      setShift(false);
+      router.refresh();
     } else {
       const data = await res.json().catch(() => null);
-      setError(data?.error ?? "erro ao salvar");
+      setError(typeof data?.error === "string" ? data.error : "Não deu pra salvar. Tente de novo.");
       setStatus("error");
     }
   }
@@ -115,7 +118,7 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
         </select>
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="font-mono text-xs text-muted">início</span>
+        <span className="font-mono text-xs text-muted">início (horário de Brasília)</span>
         <input
           name="startsAt"
           required
@@ -145,7 +148,7 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
         </label>
       )}
       <label className="flex flex-col gap-1.5">
-        <span className="font-mono text-xs text-muted">fim (opcional)</span>
+        <span className="font-mono text-xs text-muted">fim (opcional, horário de Brasília)</span>
         <input
           name="endsAt"
           type="datetime-local"
@@ -162,7 +165,7 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
         />
       </label>
       <label className="flex flex-col gap-1.5">
-        <span className="font-mono text-xs text-muted">deadline inscrição</span>
+        <span className="font-mono text-xs text-muted">prazo de inscrição (opcional)</span>
         <input
           name="registrationDeadline"
           type="datetime-local"
@@ -170,16 +173,18 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
           className={input}
         />
       </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="font-mono text-xs text-muted">
-          url de inscrição externa
-        </span>
-        <input
-          name="registrationUrl"
-          defaultValue={event.registrationUrl}
-          className={input}
-        />
-      </label>
+      {isAdmin && (
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">
+            link de inscrição, se for em outro site
+          </span>
+          <input
+            name="registrationUrl"
+            defaultValue={event.registrationUrl}
+            className={input}
+          />
+        </label>
+      )}
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
           tags (separadas por vírgula)
@@ -190,34 +195,36 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
           className={input}
         />
       </label>
-      <div className="flex items-end justify-between gap-4 sm:col-span-2">
+      <div className="flex flex-wrap items-end justify-between gap-4 sm:col-span-2">
         <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 font-mono text-xs text-muted">
-            <input
-              type="checkbox"
-              name="active"
-              defaultChecked={event.active}
-              className="accent-(--color-accent)"
-            />
-            ativa no radar (desmarcar arquiva)
-          </label>
-          <label className="flex items-center gap-2 font-mono text-xs text-muted">
+          {isAdmin && (
+            <label className="flex min-h-11 items-center gap-2 font-mono text-xs text-muted">
+              <input
+                type="checkbox"
+                name="active"
+                defaultChecked={event.active}
+                className="size-4 accent-(--color-accent)"
+              />
+              no ar (desmarcar arquiva a edição)
+            </label>
+          )}
+          <label className="flex min-h-11 items-center gap-2 font-mono text-xs text-muted">
             <input
               type="checkbox"
               name="requiresApproval"
               defaultChecked={event.requiresApproval}
-              className="accent-(--color-accent)"
+              className="size-4 accent-(--color-accent)"
             />
-            curadoria — vaga só com aprovação (&quot;pedir lugar&quot;)
+            aprovar cada inscrição antes de liberar a vaga
           </label>
         </div>
-        <div className="flex items-center gap-4">
-          {status === "error" && (
-            <span className="font-mono text-xs text-orange">
-              {""}
-              {error}
-            </span>
-          )}
+        <div className="flex flex-wrap items-center gap-4">
+          <span
+            role="status"
+            className={status === "error" ? "font-mono text-xs text-orange" : status === "done" ? "font-mono text-xs text-accent" : "sr-only"}
+          >
+            {status === "error" ? error : status === "done" ? "salvo" : ""}
+          </span>
           <button
             type="submit"
             disabled={status === "saving"}
