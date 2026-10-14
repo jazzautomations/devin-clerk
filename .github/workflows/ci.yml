@@ -1,0 +1,53 @@
+# CI do HackaHub (achado sem-ci-build-na-vps). Só passa a rodar quando o
+# código estiver no repositório privado (F3). Hoje o build ainda sai na VPS
+# pelo deploy.sh; o passo seguinte (onda 2) é o deploy baixar o artefato
+# standalone daqui em vez de buildar na máquina compartilhada.
+# Actions fixadas por SHA (tag no comentário). Antes de ligar, conferir
+# cada SHA contra a tag: gh api repos/actions/<nome>/commits/<tag> -q .sha
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: dependências de produção sem falha alta ou crítica
+        run: npm audit --omit=dev --audit-level=high
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: build standalone (sem DATABASE_URL, como no deploy limpo)
+        run: npx next build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: monta o artefato do release
+        run: |
+          mkdir -p release/.next
+          cp -a .next/standalone/. release/
+          cp -a .next/static release/.next/static
+          for d in migrations content assets scripts deploy public; do [ -d "$d" ] && cp -a "$d" release/; done
+          echo "$GITHUB_SHA $(date -u +%FT%TZ)" > release/VERSION
+          if find release/.next/static -name 'pglite*.wasm' | grep -q .; then
+            echo "pglite vazou pro static público" >&2; exit 1
+          fi
+          tar -czf hackahub-release.tar.gz -C release .
+          du -sh release hackahub-release.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hackahub-release-${{ github.sha }}
+          path: hackahub-release.tar.gz
+          retention-days: 14

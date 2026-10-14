@@ -15,10 +15,10 @@ de `caddy validate`.
 | Postgres | container `hackahub-pg` (postgres:17-alpine, `127.0.0.1:5434`, 1 GB, volume `hackahub-pgdata`); bancos `hackahub` (prod), `hackahub_stage`, `hackahub_e2e*`, `hackahub_dev` |
 | Caddy | blocos marcados `# hackahub-stage` / `# hackahub-prod` no fim de `/etc/caddy/Caddyfile` |
 | Segredos | `~/hackahub-secrets/` (700): `pg.env`, `url.<banco>`, `stage.env`, `prod.env`, `backup-par.url`, estado do Clerk dev |
-| Ops | `~/hackahub/ops/` (`deploy.sh`, `backup.sh`, `restore-drill.sh`, `scrape.sh`), logs em `~/hackahub/logs/` |
+| Ops | `~/hackahub/ops/`: cópia de `deploy/` do repo, atualizada a cada deploy (`deploy.sh`, `backup.sh`, `restore-drill.sh`, `cron-call.sh`, `scrape.sh`, `wait-pg.sh`, `crontab.txt`…). Logs em `~/hackahub/logs/` |
 | Backups | `~/hackahub-backups/<stamp>/` (14 dias) + bucket OCI `hackahub-backups` (prefixo `hackahub/`, expira em 60 dias) |
 | Scraper | venv `~/hackahub/scraper/.venv` (uv) |
-| Cron (usuário ubuntu) | 05:15/05:20 UTC radar (stage/prod) · 06:00 UTC backup · dom 06:30 UTC restore drill · */2 min fila de avisos · */5 min entregas (lembretes/trava) · */15 min RSVP · */10 min guarda de disco |
+| Cron (usuário ubuntu) | fonte da verdade: `deploy/crontab.txt` (seção Cron abaixo) |
 
 Portas de app não são públicas: security list da OCI só abre 22/80/443 e o
 iptables rejeita o resto (verificado de fora em 14/10/2026).
@@ -28,19 +28,43 @@ iptables rejeita o resto (verificado de fora em 14/10/2026).
 ```bash
 # no notebook, a partir de um commit limpo
 git archive --format=tar.gz -o /tmp/hh.tar.gz HEAD
-scp /tmp/hh.tar.gz ubuntu@64.181.217.112:~/hackahub-secrets/hh-release.tar.gz
-ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh stage ~/hackahub-secrets/hh-release.tar.gz'
-# conferiu no stage → mesmo tarball pra prod
-ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh prod ~/hackahub-secrets/hh-release.tar.gz'
+scp /tmp/hh.tar.gz ubuntu@64.181.217.112:~/hackahub/tmp/hh-release.tar.gz
+ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh stage ~/hackahub/tmp/hh-release.tar.gz'
+# conferiu no stage → mesmo tarball pra prod (o deploy de prod apaga o tarball no fim)
+ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh prod ~/hackahub/tmp/hh-release.tar.gz'
 ```
 
-`deploy.sh` cria um release novo, `npm ci` + `next build` com o env do
-ambiente, troca o symlink `current`, reinicia o serviço e espera
-`/api/health` (app + banco). Se o health não responder em 40 s, **volta
-sozinho** pro release anterior. Mantém os 3 últimos releases.
+O tarball fica em `~/hackahub/tmp`, nunca em `~/hackahub-secrets`.
 
-Migrations rodam no boot do app (em ordem, com lock); deploy de migration
-destrutiva precisa de plano expand/contract — não existe nenhuma hoje.
+`deploy.sh`:
+
+1. Aborta se o disco tiver menos de 2 GB livres.
+2. Faz `npm ci` + `next build` numa pasta temporária, com o env do ambiente.
+3. Monta o release só com a saída standalone do Next (`server.js` e o
+   `node_modules` que o servidor usa), `.next/static` e as pastas lidas em
+   runtime (`migrations`, `content`, `assets`, `scripts`, `deploy`). Fica
+   perto de 150 MB, contra 1,1 GB antes.
+4. Grava `VERSION` (commit + data), que o `/api/health` mostra.
+5. Atualiza `~/hackahub/ops` com os scripts de `deploy/` e reescreve a unit
+   do systemd (hardening, `wait-pg.sh` antes de subir).
+6. **Em prod, roda o `backup.sh` antes de trocar o release.** Se o backup
+   falhar, o deploy para ali.
+7. Troca o symlink `current`, reinicia o serviço e espera `/api/health`
+   (app + banco). Se o health não responder em 40 s, **volta sozinho** pro
+   release anterior.
+8. Mantém os **2** últimos releases por ambiente.
+
+Migrations rodam no boot do app (em ordem, com lock). Hoje são 18 (`ls
+migrations | wc -l`). Deploy de migration destrutiva precisa de plano
+expand/contract, e ainda não existe nenhuma.
+
+Como conferir:
+
+```bash
+curl -s https://hackahub.jazzautomations.com.br/api/health      # {"ok":true,"version":"<commit> <data>"}
+ls -1dt ~/hackahub/*/releases/*                                  # 2 por ambiente
+systemctl cat hackahub-prod | grep -E 'NoNewPrivileges|ExecStartPre'
+```
 
 ### Rollback manual
 
@@ -60,7 +84,19 @@ incompatível com a antiga, restaurar backup (abaixo).
   apaga o bucket), rotação local de 14 dias, carimbo em
   `~/hackahub-backups/LAST_OK`.
 - `ops/restore-drill.sh [dir] [banco]`: confere checksum, restaura num banco
-  descartável, compara contagens com a origem e apaga.
+  descartável, conta as linhas de **todas** as tabelas, compara com a origem
+  (só leitura) e apaga. No sucesso grava `~/hackahub-backups/LAST_DRILL_OK`.
+  Roda no cron: prod no domingo, stage na quarta.
+- Segredos no backup (opcional): com `age` instalado e a chave pública em
+  `~/hackahub-secrets/backup-age.pub`, o `backup.sh` cifra `prod.env`,
+  `stage.env`, `pg.env` e `backup-par.url` em `secrets.tar.age` e manda junto
+  pro bucket. A chave privada fica só com o Jazz, fora da VPS.
+
+**RPO 24 h / RTO 1 h.** O backup é diário (06:00 UTC) e não há arquivamento
+contínuo do Postgres (`archive_mode=off`), então dá pra perder até um dia.
+Perto de edição ao vivo, descomente a linha de backup de hora em hora no
+`deploy/crontab.txt` e reinstale o cron. O RTO de 1 h é o procedimento
+"Restaurar de verdade" abaixo, com o dump local.
 - O link de escrita expira em **14/10/2027** — renovar antes
   (`oci os preauth-request create --bucket-name hackahub-backups --access-type AnyObjectWrite ...`).
 
@@ -84,6 +120,89 @@ Backup que só está no bucket: baixar pelo console da OCI ou
 |---|---|---|---|
 | 2026-10-14 | 20261014T031838Z | hackahub_stage | ok — contagens iguais à origem (hackathons=4, migrations=1), checksum ok, offsite conferido no bucket |
 
+O registro acima é do stage antes das migrations 002–018 e o drill da época contava só 5 tabelas. A partir de agora o `drill.log` traz a contagem de todas as tabelas.
+
+## Cron
+
+Fonte da verdade: `deploy/crontab.txt`, instalado com
+`crontab ~/hackahub/ops/crontab.txt` (substitui o crontab do ubuntu; guarde
+o anterior com `crontab -l > ~/hackahub/tmp/crontab.antes` e junte linhas de
+outros produtos, se houver).
+
+| Quando (UTC) | Script | Rota |
+|---|---|---|
+| 06:00 diário | `backup.sh` | — |
+| dom 06:30 / qua 06:30 | `restore-drill.sh` prod / stage | — |
+| 05:15 / 05:20 | `scrape.sh` stage / prod | — |
+| a cada 2 min | `deliveries.sh` | `/api/cron/deliveries` (fila de avisos por e-mail/zap + pesquisa pós-edição) |
+| a cada 5 min | `submissions.sh` | `/api/cron/submissions` (lembretes e trava da entrega) |
+| a cada 15 min | `rsvp.sh` | `/api/cron/rsvp` |
+| a cada 10 min | `disk-guard.sh` | — |
+
+As rotas `/api/cron/*` passam pelo `cron-call.sh`, que grava uma linha por
+chamada em `~/hackahub/logs/<rota>-<env>.log` (horário, código HTTP,
+duração e o começo do corpo quando falha) e o contador de falhas seguidas
+em `logs/.fail-<rota>-<env>`. O `backup.sh` corta log acima de 5 MB.
+
+Como conferir: `crontab -l | grep hackahub` e `tail ~/hackahub/logs/deliveries-prod.log`.
+
+## Monitor e alerta
+
+- `/api/health` responde `ok` e `version`. `?deep=1` soma `backupAgeH`,
+  `drillAgeH`, `oldestQueuedDeliveryMin`, `oldestQueuedTicketMin`,
+  `diskPct` e `cronFails`.
+- O monitor roda fora da VPS, no imac-server (`deploy/monitor/`, instalação
+  no README de lá). A cada 2 min ele lê o `?deep=1` e manda zap pelo
+  Evolution quando o site cai, o backup passa de 26 h, o drill passa de 8
+  dias, a fila para por mais de 15 min, o disco chega a 85% ou um cron falha
+  3 vezes seguidas.
+- Erro de servidor sai no journal como uma linha JSON com rota e digest. O
+  digest é o "código de referência" que a tela de erro mostra:
+  `journalctl -u hackahub-prod -o cat | grep request_error | jq`.
+- Query acima de 500 ms aparece em `docker logs hackahub-pg` (o `pg-up.sh`
+  liga `log_min_duration_statement`).
+
+## Admins
+
+`HACKAHUB_ADMIN_EMAILS` só **promove**: quem entra na lista vira admin no
+próximo acesso. Tirar alguém da lista não rebaixa, porque admin também é dado
+por SQL. Revogar é manual:
+
+```bash
+docker exec hackahub-pg psql -U hackahub -d hackahub -c "UPDATE members SET role = 'member' WHERE email = '<email>'"
+```
+
+## Roles do Postgres
+
+Hoje todos os ambientes usam o superusuário `hackahub`. Pra separar
+(`deploy/pg-roles.sql`, um role por ambiente, sem superusuário):
+
+```bash
+bash ~/hackahub/ops/pg-roles.sh       # cria hh_prod/hh_stage/hh_dev e grava url.hh_<env> (não imprime)
+# trocar DATABASE_URL de prod.env/stage.env pelo conteúdo de url.hh_prod / url.hh_stage
+sudo systemctl restart hackahub-stage && curl -s 127.0.0.1:3410/api/health
+sudo systemctl restart hackahub-prod && curl -s 127.0.0.1:3411/api/health
+```
+
+Teste do isolamento: com o usuário de stage, conectar no banco `hackahub` tem
+que falhar com `permission denied for database`. O `hackahub` continua
+existindo pro backup e pra manutenção.
+
+## Reconstrução do zero (VPS perdida)
+
+1. VM nova com Docker, Caddy, Node 22, git e `age`. Usuário `ubuntu`.
+2. Recuperar `prod.env`, `stage.env`, `pg.env` e `backup-par.url` do
+   gerenciador de senhas ou do `secrets.tar.age` do bucket
+   (`age -d -i <chave-privada> secrets.tar.age | tar -x -C ~/hackahub-secrets`).
+   O `HACKAHUB_TICKET_SECRET` precisa ser o mesmo, senão os QRs emitidos
+   param de valer.
+3. `bash deploy/pg-up.sh` sobe o container e cria os bancos.
+4. Baixar o último `hackahub.dump` do bucket e restaurar (seção acima).
+5. `deploy.sh stage` e `deploy.sh prod` com um tarball do commit atual. O
+   deploy recria a unit do systemd e o bloco do Caddy.
+6. `crontab ~/hackahub/ops/crontab.txt`.
+7. DNS: A `hackahub` → IP novo (Vercel DNS).
+
 ## Disco (VPS compartilhada)
 
 Incidente 14/10/2026 04:33 UTC: builds paralelas de várias worktrees de
@@ -93,8 +212,12 @@ Outros serviços não registraram erro. Recuperação: apagar pastas de
 desenvolvimento já mergeadas + `npm cache clean`, `docker restart hackahub-pg`,
 reiniciar `hackahub-prod`/`hackahub-stage`. Dados íntegros.
 
-Prevenção: `ops/disk-guard.sh` no cron (10 min) limpa sobras do HackaHub acima
-de 90%; deploy mantém 2 releases; pasta de desenvolvimento sem `node_modules`
+Prevenção: `ops/disk-guard.sh` no cron (10 min) registra alerta a partir de
+85% (o monitor externo vê o mesmo número no `diskPct`) e limpa sobras do
+HackaHub a partir de 90%: releases fora de uso, build de dev/e2e, o cache npm
+próprio do HackaHub e tarballs de release antigos. Nunca limpa o `~/.npm`,
+que os outros produtos usam. O deploy aborta com menos de 2 GB livres e
+mantém 2 releases enxutos; pasta de desenvolvimento sem `node_modules`
 depois de mergeada; nunca mais de 3 builds simultâneas.
 
 ## Radar (scraper)
@@ -111,12 +234,13 @@ parser voltou 0 em 14/10 — revisar.
 | `DATABASE_URL` | Postgres do ambiente |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_*_URL` | auth (stage usa instância dev; prod precisa de instância de produção) |
 | `NEXT_PUBLIC_SITE_URL` | canonical/OG/sitemap |
-| `HACKAHUB_ADMIN_EMAILS` | admins globais (lista separada por vírgula) |
+| `HACKAHUB_ADMIN_EMAILS` | admins globais (lista separada por vírgula; só promove, ver Admins) |
 | `HACKAHUB_DEPLOY_TOOL` | só `on` liga o deploy tool — **nunca em prod nesta máquina** |
 | `HACKAHUB_TICKET_SECRET` | HMAC do QR do ingresso (trocar invalida os QRs emitidos) |
-| `HACKAHUB_CRON_SECRET` | bearer do `/api/cron/deliveries` (cron a cada 2 min, `ops/deliveries.sh`; a mesma passada dispara a pesquisa NPS pós-edição — idempotente, sem crontab novo) e do `/api/cron/submissions` (lembretes da entrega, cron a cada 5 min, `deploy/submissions.sh` — ainda não instalado no crontab) |
+| `HACKAHUB_CRON_SECRET` | bearer do `/api/cron/deliveries` (cron a cada 2 min, `ops/deliveries.sh`; a mesma passada dispara a pesquisa NPS pós-edição — idempotente, sem crontab novo) e do `/api/cron/submissions` (lembretes da entrega, cron a cada 5 min, `ops/submissions.sh`) e `/api/cron/rsvp` |
 | `RESEND_API_KEY`, `HACKAHUB_EMAIL_FROM`, `RESEND_WEBHOOK_SECRET` | e-mail dos avisos; sem eles as entregas ficam `skipped` |
 | `EVOLUTION_URL`, `EVOLUTION_INSTANCE`, `EVOLUTION_API_KEY` | WhatsApp individual dos avisos (opt-in); sem eles `skipped` |
+| `HACKAHUB_SECURITY_CONTACT` | opcional: contato do `/.well-known/security.txt` (padrão `mailto:seguranca@jazzautomations.com.br`). O `Expires` vence em 14/10/2027 |
 
 ## Pendências que só o fundador resolve
 
@@ -126,5 +250,7 @@ parser voltou 0 em 14/10 — revisar.
 - `HACKAHUB_ADMIN_EMAILS` em stage/prod: definir quem é admin.
 - Provedor de e-mail (Resend) + SPF/DKIM/DMARC no domínio.
 - Número de WhatsApp da Hack Inova na Evolution.
-- Monitor externo de uptime com alerta (ex.: Healthchecks/UptimeRobot em `/api/health` e no carimbo do backup).
+- Instalar o monitor externo no imac-server (`deploy/monitor/README.md`).
+- Guardar os segredos fora da VPS (gerenciador de senhas ou chave `age` do `secrets.tar.age`).
+- Aplicar `deploy/crontab.txt` e rodar `pg-roles.sh` (seções Cron e Roles do Postgres).
 - Encarregado (DPO) e texto jurídico de termos/privacidade.

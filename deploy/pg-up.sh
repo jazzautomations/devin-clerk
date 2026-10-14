@@ -20,4 +20,7 @@ for db in hackahub_stage hackahub_e2e hackahub_dev; do
   docker exec hackahub-pg psql -U hackahub -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 \
     || docker exec hackahub-pg createdb -U hackahub "$db"
 done
+# query lenta (> 500 ms) aparece no log do container: docker logs hackahub-pg
+docker exec hackahub-pg psql -U hackahub -qtAc "ALTER SYSTEM SET log_min_duration_statement = 500" >/dev/null
+docker exec hackahub-pg psql -U hackahub -qtAc "SELECT pg_reload_conf()" >/dev/null
 docker exec hackahub-pg psql -U hackahub -tAc "SELECT datname FROM pg_database WHERE datname LIKE 'hackahub%' ORDER BY 1"
