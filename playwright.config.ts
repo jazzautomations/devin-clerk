@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 
 // specs e server falam com o mesmo banco dedicado do e2e
 process.env.DATABASE_URL = process.env.E2E_DATABASE_URL;
+// porta própria por worktree quando vários e2e rodam na mesma máquina
+const PORT = Number(process.env.E2E_PORT ?? 3100);
 
 // E2e roda em produção buildada: `pretest:e2e` zera o banco do e2e
 // (E2E_DATABASE_URL) e faz `next build` em .next-e2e; o webServer aqui sobe
@@ -13,11 +15,11 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 30_000,
-  use: { baseURL: "http://localhost:3100" },
+  use: { baseURL: `http://localhost:${PORT}` },
   webServer: {
     command:
-      "HACKAHUB_DEPLOY_TOOL=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p 3100",
-    port: 3100,
+      `HACKAHUB_DEPLOY_TOOL=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p ${PORT}`,
+    port: PORT,
     reuseExistingServer: false,
     timeout: 120_000,
   },

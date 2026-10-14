@@ -1,4 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import db from "@/lib/db";
 import { getOrCreateMember } from "@/lib/members";
@@ -145,6 +146,12 @@ export default async function AdminPage() {
                     <span className={mono}>
                       {e.name}
                       <span className="block text-muted">{e.organizer}</span>
+                      <Link
+                        href={`/admin/h/${e.id}`}
+                        className="mt-1 block text-accent underline-offset-4 hover:underline"
+                      >
+                        painel da edição →
+                      </Link>
                     </span>
                     <span className={`${mono} shrink-0 text-right text-muted`}>
                       {new Intl.DateTimeFormat("pt-BR").format(

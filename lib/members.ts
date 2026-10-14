@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { claimEditionInvites } from "@/lib/roles";
 import { toLikePattern } from "@/lib/search";
 
 // migração idempotente — avatarUrl vive aqui e não no schema principal de
@@ -35,6 +36,13 @@ function toMember(row: MemberRow): Member {
   return { ...row, skills: JSON.parse(row.skills) };
 }
 
+export function adminEmails(): string[] {
+  return (process.env.HACKAHUB_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export async function getOrCreateMember(clerkUser: {
   id: string;
   firstName: string | null;
@@ -55,6 +63,11 @@ export async function getOrCreateMember(clerkUser: {
       );
       existing.avatarUrl = clerkUser.imageUrl;
     }
+    // e-mail entrou na lista de admins depois do cadastro → promove
+    if (existing.role !== "admin" && adminEmails().includes(existing.email.toLowerCase())) {
+      await db.prepare("UPDATE members SET role = 'admin' WHERE id = ?").run(existing.id);
+      existing.role = "admin";
+    }
     return toMember(existing);
   }
 
@@ -65,9 +78,10 @@ export async function getOrCreateMember(clerkUser: {
     username = `${base}${i++}`;
   }
 
-  const isFirst =
-    (await db.prepare("SELECT COUNT(*) AS n FROM members").get() as { n: number })
-      .n === 0;
+  // admin global vem de lista explícita (e-mail verificado no Clerk) — o
+  // antigo "primeiro cadastro vira admin" entregava o painel a quem chegasse
+  // primeiro num site público
+  const isAdmin = adminEmails().includes(clerkUser.email.toLowerCase());
 
   await db.prepare(
     `INSERT INTO members (clerkId, username, name, email, role, avatarUrl)
@@ -77,12 +91,14 @@ export async function getOrCreateMember(clerkUser: {
     username,
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null,
     clerkUser.email,
-    isFirst ? "admin" : "member",
+    isAdmin ? "admin" : "member",
     clerkUser.imageUrl ?? null,
   );
-  return toMember(
-    await db.prepare("SELECT * FROM members WHERE clerkId = ?").get(clerkUser.id) as MemberRow,
-  );
+  const created = await db
+    .prepare("SELECT * FROM members WHERE clerkId = ?")
+    .get(clerkUser.id) as MemberRow;
+  await claimEditionInvites(created.id, created.email);
+  return toMember(created);
 }
 
 export async function getMemberByUsername(username: string): Promise<Member | null> {
