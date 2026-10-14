@@ -7,7 +7,9 @@ import {
   calendarTokenFor,
   canSeeAudience,
   changeNoticeText,
+  countScheduleItems,
   createScheduleItem,
+  formatShift,
   groupByDay,
   listScheduleItems,
   listVisibleScheduleItems,
@@ -19,10 +21,13 @@ import {
   rotateCalendarToken,
   scheduleRecipients,
   scheduleViewerFor,
+  shiftSchedule,
   spLocalToUtc,
+  toIcsEvent,
   updateScheduleItem,
   utcToSp,
   validateScheduleInput,
+  wallClockDelta,
   type ScheduleInput,
   type ScheduleItem,
   type ScheduleViewer,
@@ -279,5 +284,69 @@ describe("token do feed pessoal", () => {
     expect(t2).not.toBe(t1);
     expect(await resolveCalendarToken(t1)).toBeNull();
     expect(await resolveCalendarToken(t2)).toEqual({ memberId: m.id, hackathonId: H });
+  });
+});
+
+describe("edição mudou de data → deslocar a programação (frente N #7)", () => {
+  const DAY = 86_400_000;
+
+  it("formatShift e wallClockDelta (parede do relógio, ignora fuso)", () => {
+    expect(formatShift(2 * DAY)).toBe("+2 dias");
+    expect(formatShift(-3 * 3_600_000)).toBe("−3 h");
+    expect(formatShift(DAY + 2 * 3_600_000 + 30 * 60_000)).toBe("+1 dia, 2 h e 30 min");
+    // o form devolve sem fuso; o antigo pode ter -03:00 — só o relógio conta
+    expect(wallClockDelta("2026-11-14T09:00:00-03:00", "2026-11-16T09:00")).toBe(2 * DAY);
+    expect(wallClockDelta("2026-11-14T09:00:00-03:00", "2026-11-14T09:00")).toBe(0);
+    expect(wallClockDelta("2027-01-01", "2027-01-01T10:00")).toBe(3_600_000);
+    expect(wallClockDelta("lixo", "2026-11-14T09:00")).toBeNull();
+  });
+
+  it("desloca todos os itens, sobe revision (SEQUENCE do .ics) e avisa os inscritos UMA vez", async () => {
+    const ok = await member({ status: "approved" });
+    const pend = await member({ status: "pending" });
+    const mentor = await member({ role: "mentor" });
+    const a = await createScheduleItem(H, validateScheduleInput(form({ title: "Abertura", start: "09:00", end: "10:00" }), ED), null);
+    const b = await createScheduleItem(H, validateScheduleInput(form({ title: "Almoço" }), ED), null);
+    const draft = await createScheduleItem(H, validateScheduleInput(form({ title: "Rascunho" }), ED), null);
+    await publishSchedule(H, [a.id, b.id]);
+    expect(await countScheduleItems(H)).toEqual({ total: 3, published: 2 });
+    const before = await db.prepare("SELECT COUNT(*) AS n FROM announcements WHERE hackathonId = ?").get<{ n: number }>(H);
+
+    const r = await shiftSchedule(H, 2 * DAY, null);
+    expect(r.moved).toBe(3);
+    const items = await listScheduleItems(H, { includeDrafts: true });
+    const byId = new Map(items.map((i) => [i.id, i]));
+    expect(byId.get(a.id)).toMatchObject({ startsAt: "2026-11-16 12:00:00", endsAt: "2026-11-16 13:00:00", revision: 1 });
+    expect(byId.get(b.id)).toMatchObject({ startsAt: "2026-11-16 15:00:00", revision: 1 });
+    expect(byId.get(draft.id)!.startsAt).toBe("2026-11-16 15:00:00");
+    // .ics: mesmo UID, SEQUENCE maior → o calendário de quem assinou atualiza
+    const ics = toIcsEvent(byId.get(a.id)!, { name: "Prog Unit", location: "Alphaville" });
+    expect(ics.sequence).toBe(1);
+    expect(ics.uid).toBe(toIcsEvent(a, { name: "Prog Unit", location: "Alphaville" }).uid);
+
+    const after = await db.prepare("SELECT COUNT(*) AS n FROM announcements WHERE hackathonId = ?").get<{ n: number }>(H);
+    expect(Number(after!.n) - Number(before!.n)).toBe(1);
+    const ann = await db
+      .prepare("SELECT title, body FROM announcements WHERE id = ?")
+      .get<{ title: string; body: string }>(r.announcementId);
+    expect(ann!.title).toContain("a agenda mudou");
+    expect(ann!.title).toContain("+2 dias");
+    expect(ann!.body).toContain("(.ics)");
+    const to = await db
+      .prepare("SELECT memberId FROM deliveries WHERE announcementId = ? AND channel = 'inapp' ORDER BY memberId")
+      .all<{ memberId: number }>(r.announcementId);
+    expect(to.map((x) => x.memberId)).toEqual([ok.id, pend.id, mentor.id].sort((x, y) => x - y));
+
+    // o aviso por item da mesma revision não dispara de novo
+    expect(await notifyScheduleChange(byId.get(a.id)!, a, null)).toBeNull();
+  });
+
+  it("delta 0 é no-op; programação só de rascunho desloca sem avisar ninguém", async () => {
+    await member({ status: "approved" });
+    await createScheduleItem(H, validateScheduleInput(form(), ED), null);
+    expect(await shiftSchedule(H, 0, null)).toEqual({ moved: 0, announcementId: null });
+    const r = await shiftSchedule(H, -3_600_000, null);
+    expect(r).toEqual({ moved: 1, announcementId: null });
+    expect((await listScheduleItems(H, { includeDrafts: true }))[0].startsAt).toBe("2026-11-14 14:00:00");
   });
 });

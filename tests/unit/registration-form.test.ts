@@ -20,11 +20,13 @@ import {
   getRegistrationIds,
   getRegistrationStatus,
   getRegistrationsByHackathon,
+  getPublicListing,
   getWaitlistPosition,
   listPromotions,
   register,
   reviewRegistration,
   setEditionCapacity,
+  setPublicListing,
   unregister,
 } from "@/lib/registrations";
 import { getMemberCard } from "@/lib/xp";
@@ -275,8 +277,9 @@ describe("vagas + fila de espera", () => {
     expect(await getWaitlistPosition(c, ED)).toBe(2);
     expect(await xpOf(b)).toBe(0);
     expect(await getMemberCard(b, ED)).toBeNull();
-    // waitlist não conta como inscrito em gate nem na lista pública
+    // waitlist não conta como inscrito em gate nem na lista pública (mesmo com opt-in)
     expect(await getRegistrationIds(b)).not.toContain(ED);
+    await db.prepare("UPDATE registrations SET publicListing = 1 WHERE hackathonId = ?").run(ED);
     expect((await getRegistrationsByHackathon(ED)).length).toBe(1);
     expect(await getEditionCapacity(ED)).toMatchObject({ capacity: 1, approved: 1, waitlist: 2, remaining: 0 });
   });
@@ -384,5 +387,39 @@ describe("admin: inscritos com respostas + CSV", () => {
     expect(header).toContain('"Stack, preferida"');
     expect(line).toContain(`"'=HYPERLINK(""x"")"`);
     expect(line).toContain("js; py");
+  });
+});
+
+describe("lista pública de inscritos × consentimento (frente N #6)", () => {
+  it("o aceite da inscrição não cobre exibição: padrão é NÃO aparecer", async () => {
+    const consent = (await consentPurpose(ED)).text;
+    expect(consent).toContain("para organizar o evento");
+    expect(consent).not.toMatch(/lista p[úu]blica|exibi/i);
+    const m = await makeMember();
+    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null });
+    expect(await getRegistrationStatus(m, ED)).toBe("approved");
+    expect(await getPublicListing(m, ED)).toBe(false);
+    expect(await getRegistrationsByHackathon(ED)).toEqual([]);
+    expect((await getEditionCapacity(ED)).approved).toBe(1); // contagem agregada segue
+  });
+
+  it("opt-in explícito no formulário aparece; dá pra revogar e voltar", async () => {
+    const m = await makeMember();
+    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, publicListing: true });
+    expect((await getRegistrationsByHackathon(ED)).length).toBe(1);
+    expect(await setPublicListing(m, ED, false)).toBe(true);
+    expect(await getRegistrationsByHackathon(ED)).toEqual([]);
+    expect(await setPublicListing(m, ED, true)).toBe(true);
+    expect((await getRegistrationsByHackathon(ED)).length).toBe(1);
+    // sem inscrição não há o que ligar
+    expect(await setPublicListing(await makeMember(), ED, true)).toBe(false);
+  });
+
+  it("pendente com opt-in não aparece até ser aprovado", async () => {
+    const m = await makeMember();
+    await submitRegistration({ memberId: m, hackathonId: CURATED, answers: {}, consent: true, ip: null, publicListing: true });
+    expect(await getRegistrationsByHackathon(CURATED)).toEqual([]);
+    await reviewRegistration(m, CURATED, "approve");
+    expect((await getRegistrationsByHackathon(CURATED)).length).toBe(1);
   });
 });

@@ -26,6 +26,7 @@ export type Member = {
   campaigns?: number;
   cards?: number;
   createdAt: string;
+  usernameChangedAt?: string | null;
 };
 
 type MemberRow = Omit<Member, "skills" | "personas"> & { skills: string; personas: string };
@@ -69,12 +70,7 @@ export async function getOrCreateMember(clerkUser: {
     return toMember(existing);
   }
 
-  const base = clerkUser.email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase() || "hacker";
-  let username = base;
-  let i = 1;
-  while (await db.prepare("SELECT 1 FROM members WHERE username = ?").get(username)) {
-    username = `${base}${i++}`;
-  }
+  const username = await generateUsername(clerkUser.firstName, clerkUser.lastName, clerkUser.email);
 
   // admin global vem de lista explícita (e-mail verificado no Clerk) — o
   // antigo "primeiro cadastro vira admin" entregava o painel a quem chegasse
@@ -97,6 +93,138 @@ export async function getOrCreateMember(clerkUser: {
     .get(clerkUser.id) as MemberRow;
   await claimEditionInvites(created.id, created.email);
   return toMember(created);
+}
+
+// ---------- username (frente N #8) ----------
+// O automático antigo era o e-mail sem pontuação ("joaosilva92", "hacker3")
+// e, no pior caso, nada legível. Agora nasce do nome (ou do e-mail): slug
+// pt-BR sem acento, sem partícula (da/de/dos…), sem número; sufixo curto
+// (2, 3…) só quando colide. Quem quiser troca UMA vez no perfil — o antigo
+// fica reservado e /u/antigo redireciona (308) pro novo.
+
+export const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+const USERNAME_MAX = 20;
+const PARTICLES = new Set(["da", "de", "do", "das", "dos", "e", "di", "du", "del", "van", "von"]);
+const RESERVED = new Set([
+  "admin", "administrador", "api", "hackahub", "hackinova", "hack_inova", "suporte", "staff",
+  "organizacao", "organizador", "root", "null", "undefined", "me", "eu", "perfil", "sistema",
+]);
+
+/** "João" → "joao"; só [a-z0-9] */
+export function slugPart(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+export function isReservedUsername(u: string): boolean {
+  return RESERVED.has(u) || u.startsWith("removido") || u.startsWith("deleted");
+}
+
+/** candidatos em ordem de preferência: nome+sobrenome, nome, e-mail */
+export function usernameCandidates(first: string | null, last: string | null, email: string): string[] {
+  const words = `${first ?? ""} ${last ?? ""}`
+    .split(/\s+/)
+    .map(slugPart)
+    .map((w) => w.replace(/[0-9]/g, ""))
+    .filter((w) => w && !PARTICLES.has(w));
+  const local = email.split("@")[0].split("+")[0];
+  const fromEmail = local
+    .split(/[._\-]+/)
+    .map(slugPart)
+    .map((w) => w.replace(/[0-9]/g, ""))
+    .filter(Boolean)
+    .join("");
+  const out: string[] = [];
+  const push = (c: string) => {
+    const v = c.slice(0, USERNAME_MAX);
+    if (v.length >= 3 && !isReservedUsername(v) && !out.includes(v)) out.push(v);
+  };
+  if (words.length >= 2) push(words[0] + words[words.length - 1]);
+  if (words.length >= 1) push(words[0]);
+  push(fromEmail);
+  if (out.length === 0) out.push("hacker");
+  return out;
+}
+
+async function usernameTaken(u: string, exceptMemberId: number | null = null): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 FROM members WHERE username = ? AND (?::int IS NULL OR id <> ?::int)
+       UNION ALL
+       SELECT 1 FROM username_redirects WHERE oldUsername = ? AND (?::int IS NULL OR memberId <> ?::int)
+       LIMIT 1`,
+    )
+    .get(u, exceptMemberId, exceptMemberId, u, exceptMemberId, exceptMemberId);
+  return Boolean(row);
+}
+
+export async function generateUsername(first: string | null, last: string | null, email: string): Promise<string> {
+  const candidates = usernameCandidates(first, last, email);
+  for (const c of candidates) if (!(await usernameTaken(c))) return c;
+  const base = candidates[0].slice(0, USERNAME_MAX - 2);
+  for (let i = 2; i < 100; i++) {
+    const c = `${base}${i}`;
+    if (!(await usernameTaken(c))) return c;
+  }
+  // 98 homônimos: sufixo aleatório curto
+  for (;;) {
+    const c = `${candidates[0].slice(0, USERNAME_MAX - 4)}${Math.random().toString(36).slice(2, 6)}`;
+    if (!(await usernameTaken(c))) return c;
+  }
+}
+
+export class UsernameError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * Troca única do username. team_members guarda o username como texto
+ * (vínculo do time) e muda junto; o antigo vai pra username_redirects
+ * (reservado + redirect de /u/antigo). Certificados usam código próprio e
+ * memberId — não mudam. Voltar pro próprio @ antigo não é permitido
+ * (é a segunda troca).
+ */
+export async function changeUsername(memberId: number, raw: unknown): Promise<{ username: string; old: string }> {
+  const next = String(raw ?? "").trim().replace(/^@/, "").toLowerCase();
+  if (!USERNAME_RE.test(next)) {
+    throw new UsernameError("username: 3 a 20 caracteres, só letras sem acento, números e _");
+  }
+  if (isReservedUsername(next)) throw new UsernameError("esse username é reservado");
+  return db.transaction(async () => {
+    const m = await db
+      .prepare(`SELECT username, usernameChangedAt FROM members WHERE id = ? FOR UPDATE`)
+      .get<{ username: string; usernameChangedAt: string | null }>(memberId);
+    if (!m) throw new UsernameError("membro não encontrado", 404);
+    if (m.usernameChangedAt) throw new UsernameError("o username só pode ser trocado uma vez", 409);
+    if (m.username === next) throw new UsernameError("esse já é o teu username");
+    if (await usernameTaken(next)) throw new UsernameError("username em uso", 409);
+    await db
+      .prepare(`UPDATE members SET username = ?, usernameChangedAt = datetime('now') WHERE id = ?`)
+      .run(next, memberId);
+    await db.prepare("UPDATE team_members SET username = ? WHERE username = ?").run(next, m.username);
+    await db
+      .prepare("INSERT INTO username_redirects (oldUsername, memberId) VALUES (?, ?)")
+      .run(m.username, memberId);
+    return { username: next, old: m.username };
+  })();
+}
+
+/** /u/antigo → username atual (null se não há redirect) */
+export async function resolveUsernameRedirect(old: string): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT m.username FROM username_redirects r JOIN members m ON m.id = r.memberId
+       WHERE r.oldUsername = ?`,
+    )
+    .get<{ username: string }>(old.toLowerCase());
+  return row?.username ?? null;
 }
 
 export async function getMemberByUsername(username: string): Promise<Member | null> {

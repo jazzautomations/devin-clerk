@@ -65,7 +65,7 @@ describe("submitTeam", () => {
     expect(team.project?.title).toBe("App");
   });
 
-  it("colegas só entram se inscritos na edição — resto vira ignoredUsernames", async () => {
+  it("colegas inscritos recebem CONVITE (não entram direto) — resto vira ignoredUsernames", async () => {
     const autor = await makeMember("capitao");
     const colegaInscrito = await makeMember("colega_in");
     await makeMember("colega_out");
@@ -73,7 +73,7 @@ describe("submitTeam", () => {
     await register(colegaInscrito.id);
     // colega_out existe como membro mas NÃO se inscreveu na edição
 
-    const { team, ignoredUsernames } = await submitTeam(HID, autor, {
+    const { team, ignoredUsernames, invitedUsernames } = await submitTeam(HID, autor, {
       name: "Time do Bem",
       memberUsernames: [
         "colega_in",
@@ -87,9 +87,9 @@ describe("submitTeam", () => {
       expect.arrayContaining(["colega_out", "fantasma_404"]),
     );
     expect(ignoredUsernames).not.toContain("capitao");
-    expect(team.members).toEqual(
-      expect.arrayContaining(["capitao", "colega_in"]),
-    );
+    // frente N #4 — sem aceite ninguém entra: só o autor está no time
+    expect(team.members).toEqual(["capitao"]);
+    expect(invitedUsernames).toEqual(["colega_in"]);
     expect(team.members).not.toContain("colega_out");
   });
 

@@ -82,8 +82,10 @@ export type StageSnapshot = {
   };
   votingOpen: boolean;
   tally: Tally | null;
-  /** só aparece com a final encerrada — o suspense do resultado é parte do show */
+  /** só aparece com a final encerrada E com quórum — o suspense do resultado é parte do show */
   ranking: RankingEntry[] | null;
+  /** frente N #5 — mínimo de votos da edição pro ranking/prêmio do público valer */
+  quorum: Quorum;
   serverNow: string;
 };
 
@@ -419,6 +421,36 @@ export async function getMyLiveVote(
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// ---------- quórum (frente N #5, migration 016) ----------
+// Com 3 votos, "escolha do público" é sorteio: abaixo do mínimo da edição
+// (default 10 votos no total da final) o ranking e o selo na ficha do
+// projeto não aparecem — telão e tela de voto dizem "votação sem quórum".
+
+export type Quorum = { min: number; total: number; met: boolean };
+
+export async function audienceQuorum(hackathonId: string): Promise<Quorum> {
+  const row = await db
+    .prepare(
+      `SELECT COALESCE((SELECT h.audienceMinVotes FROM hackathons h WHERE h.id = ?), 10) AS min,
+              (SELECT COUNT(*)::int FROM live_votes v WHERE v.hackathonId = ?) AS total`,
+    )
+    .get<{ min: number; total: number }>(hackathonId, hackathonId);
+  const min = Number(row?.min ?? 10);
+  const total = Number(row?.total ?? 0);
+  return { min, total, met: total >= min };
+}
+
+export const AUDIENCE_MIN_VOTES_MAX = 100_000;
+
+export async function setAudienceMinVotes(hackathonId: string, raw: unknown): Promise<Quorum> {
+  const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
+  if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 0 || n > AUDIENCE_MIN_VOTES_MAX) {
+    throw new StageError(`mínimo de votos inválido (0 a ${AUDIENCE_MIN_VOTES_MAX})`, 400);
+  }
+  await db.prepare("UPDATE hackathons SET audienceMinVotes = ? WHERE id = ?").run(n, hackathonId);
+  return audienceQuorum(hackathonId);
+}
+
 export async function tallyFor(hackathonId: string, teamId: number): Promise<Tally> {
   const rows = await db
     .prepare(
@@ -490,6 +522,7 @@ export async function getAudienceResult(
     )
     .get<{ hackathonId: string }>(teamId);
   if (!team) return null;
+  if (!(await audienceQuorum(team.hackathonId)).met) return null;
   const ranking = await liveRanking(team.hackathonId);
   const me = ranking.find((r) => r.teamId === teamId);
   if (!me || me.avg === null) return null;
@@ -509,10 +542,11 @@ export async function getStageSnapshot(hackathonId: string, now = new Date()): P
   const idx = s.currentTeamId === null ? -1 : queue.findIndex((t) => t.teamId === s.currentTeamId);
   const cur = idx >= 0 ? queue[idx] : null;
   const elapsed = elapsedMs(s, now);
-  const [tally, ranking] = await Promise.all([
+  const [tally, quorum] = await Promise.all([
     cur ? tallyFor(hackathonId, cur.teamId) : Promise.resolve(null),
-    s.status === "ended" ? liveRanking(hackathonId) : Promise.resolve(null),
+    audienceQuorum(hackathonId),
   ]);
+  const ranking = s.status === "ended" && quorum.met ? await liveRanking(hackathonId) : null;
   return {
     hackathonId,
     status: s.status,
@@ -531,6 +565,7 @@ export async function getStageSnapshot(hackathonId: string, now = new Date()): P
     votingOpen: s.votingOpen,
     tally,
     ranking,
+    quorum,
     serverNow: now.toISOString(),
   };
 }
@@ -573,6 +608,7 @@ export const STAGE_ACTIONS = [
   "voting-close",
   "end",
   "reopen",
+  "min-votes",
 ] as const;
 export type StageAction = (typeof STAGE_ACTIONS)[number];
 
@@ -625,6 +661,9 @@ export async function runStageAction(hackathonId: string, body: Record<string, u
       return;
     case "reopen":
       await reopenStage(hackathonId);
+      return;
+    case "min-votes":
+      await setAudienceMinVotes(hackathonId, body.value);
       return;
   }
 }

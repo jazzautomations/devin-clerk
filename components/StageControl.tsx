@@ -249,6 +249,37 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
         </div>
       </div>
 
+      {/* frente N #5 — quórum do voto do público */}
+      <form
+        data-testid="stage-quorum"
+        className="flex flex-wrap items-center gap-2 border-[1.5px] border-line p-3 text-[14px]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const v = new FormData(e.currentTarget).get("minVotes");
+          void act("min-votes", { value: Number(v) });
+        }}
+      >
+        <span className={`basis-full font-mono text-[12px] ${snap.quorum.met ? "text-accent" : "text-orange"}`}>
+          quórum: {snap.quorum.total} de {snap.quorum.min} votos
+          {snap.quorum.met ? " · ranking vale" : " · sem quórum, o público não vê ranking"}
+        </span>
+        <label className="flex items-center gap-2 font-mono text-[12px] text-muted">
+          mínimo
+          <input
+            key={snap.quorum.min}
+            name="minVotes"
+            type="number"
+            min={0}
+            max={100000}
+            defaultValue={snap.quorum.min}
+            className="w-20 rounded-[6px] border-[1.5px] border-line bg-background px-2 py-1 text-foreground"
+          />
+        </label>
+        <button type="submit" disabled={!!busy} className="btn-ghost text-[13px]!">
+          salvar
+        </button>
+      </form>
+
       {/* ranking parcial — só aqui; o público vê no fim */}
       {state.ranking.some((r) => r.votes > 0) && (
         <div className="flex flex-col gap-2">

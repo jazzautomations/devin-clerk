@@ -252,6 +252,16 @@ export function StageScreen({
               </div>
             </Win>
           </div>
+        ) : snap.status === "ended" && !snap.quorum.met ? (
+          <Win title="ESCOLHA_DO_PUBLICO.exe" className="flex-1" testId="stage-no-quorum">
+            <div className="flex flex-1 flex-col justify-center gap-[1.2vw]">
+              <p className="pix text-[4.4vw] leading-none text-orange">VOTAÇÃO SEM QUÓRUM</p>
+              <p className="font-mono text-[1.6vw]">
+                {snap.quorum.total} de {snap.quorum.min} votos mínimos — a escolha do público não vale nesta final
+              </p>
+              <p className="font-mono text-[1.1vw] text-muted">o pódio oficial é do júri</p>
+            </div>
+          </Win>
         ) : cur ? (
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-[1.6vw]">
             <div className="flex min-h-0 flex-col gap-[1.6vw]">

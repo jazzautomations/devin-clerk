@@ -479,6 +479,8 @@ export async function submitRegistration(input: {
   answers: unknown;
   consent: boolean;
   ip: string | null;
+  /** frente N #6 — opt-in de aparecer na lista pública da edição (padrão não) */
+  publicListing?: boolean;
 }): Promise<SubmitResult> {
   const { memberId, hackathonId } = input;
   const existing = await getRegistrationStatus(memberId, hackathonId);
@@ -520,6 +522,9 @@ export async function submitRegistration(input: {
     const regId = await db
       .prepare("SELECT id FROM registrations WHERE memberId = ? AND hackathonId = ?")
       .get<{ id: number }>(memberId, hackathonId);
+    if (input.publicListing === true) {
+      await db.prepare("UPDATE registrations SET publicListing = 1 WHERE id = ?").run(regId!.id);
+    }
     for (const a of valid.answers) {
       await db
         .prepare(

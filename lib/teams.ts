@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { createInvites } from "@/lib/teamInvites";
 import { getArchive, type ArchiveTeam } from "@/lib/archive";
 import {
   assertEvaluatedEditable,
@@ -98,10 +99,23 @@ function validateProject(input: unknown): {
   };
 }
 
+// spec 034 — prazo de formação de times (e entrega já travada) fecham a
+// porta: criar time e aceitar convite passam por aqui
+export async function assertFormationOpen(hackathonId: string): Promise<void> {
+  const settings = await getSubmissionSettings(hackathonId);
+  const formation = parseDbTime(settings?.teamFormationDeadline);
+  if (formation && Date.now() > formation.getTime()) {
+    throw new TeamError(`formação de times encerrada em ${formatBrt(settings!.teamFormationDeadline)}`, 409);
+  }
+  if (deadlinePassed(settings)) throw new TeamError("prazo de entrega encerrado", 409);
+}
+
 // o inscrito cria o time da edição — placement é SEMPRE 0: pódio é
 // condecoração do organizador (admin), nunca autoatribuição. O autor
 // entra automaticamente; colegas só entram se forem membros INSCRITOS
 // na edição e ainda sem time — o resto volta em ignoredUsernames.
+// Frente N #4: colega não entra direto — recebe convite (notificação
+// in-app) e só vira integrante quando aceita (lib/teamInvites).
 export async function submitTeam(
   hackathonId: string,
   member: { username: string },
@@ -110,18 +124,12 @@ export async function submitTeam(
     memberUsernames?: string[];
     project?: ProjectInput | null;
   },
-): Promise<{ team: ArchiveTeam; ignoredUsernames: string[] }> {
+): Promise<{ team: ArchiveTeam; ignoredUsernames: string[]; invitedUsernames: string[] }> {
   const name = String(input.name ?? "").trim();
   if (!name) throw new TeamError("nome do time obrigatório", 400);
   const project = validateProject(input.project);
 
-  // spec 034 — prazo de formação de times (e entrega já travada) fecham a porta
-  const settings = await getSubmissionSettings(hackathonId);
-  const formation = parseDbTime(settings?.teamFormationDeadline);
-  if (formation && Date.now() > formation.getTime()) {
-    throw new TeamError(`formação de times encerrada em ${formatBrt(settings!.teamFormationDeadline)}`, 409);
-  }
-  if (deadlinePassed(settings)) throw new TeamError("prazo de entrega encerrado", 409);
+  await assertFormationOpen(hackathonId);
 
   if (await memberTeamFor(hackathonId, member.username)) {
     throw new TeamError("tu já tens time nesta edição", 409);
@@ -166,7 +174,6 @@ export async function submitTeam(
       "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
     );
     await link.run(teamId, member.username);
-    for (const u of colegas) await link.run(teamId, u);
     if (project) {
       await db.prepare(
         `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl, videoUrl, logoUrl)
@@ -184,10 +191,11 @@ export async function submitTeam(
     return teamId;
   });
   const teamId = await tx();
+  const invitedUsernames = await createInvites(hackathonId, teamId, member.username, name, colegas);
 
   const team = (await getArchive(hackathonId)).teams.find((t) => t.id === teamId);
   if (!team) throw new TeamError("falha ao criar time", 500);
-  return { team, ignoredUsernames };
+  return { team, ignoredUsernames, invitedUsernames };
 }
 
 export type ProjectPatch = {

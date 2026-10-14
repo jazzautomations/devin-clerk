@@ -9,6 +9,7 @@ import { openE2eDb } from "./db";
 
 const LIVE = "e2e-palco-live";
 const ENDED = "e2e-palco-fim";
+const NOQUORUM = "e2e-palco-sem-quorum";
 const SHOTS = process.env.SHOTS_DIR ?? "test-results/stage";
 
 const db = openE2eDb();
@@ -19,7 +20,7 @@ async function edition(id: string, name: string) {
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, format, registrationUrl, tags, active, source)
        VALUES (?, ?, 'Hack Inova E2E', ?, 'presencial', 'https://e2e.dev/palco', '[]', 1, 'e2e')
-       ON CONFLICT(id) DO UPDATE SET active = 1`,
+       ON CONFLICT(id) DO UPDATE SET active = 1, "audienceMinVotes" = DEFAULT`,
     )
     .run(id, name, new Date(Date.now() - 3600_000).toISOString());
   for (const t of ["live_votes", "stage_queue", "stage_sessions"]) {
@@ -87,7 +88,14 @@ async function seed(request: APIRequestContext) {
   await db.prepare("INSERT INTO stage_sessions (hackathonId, status) VALUES (?, 'ended')").run(ENDED);
   await votes(ENDED, endedA, [5, 4, 5, 4]); // 4.5
   await votes(ENDED, eb, [5, 4], 10); // 4.5 → empate com Norte
-  await votes(ENDED, ec, [3, 4, 3], 20); // 3.33
+  await votes(ENDED, ec, [3, 4, 3, 3], 20); // 3.25 — total 10 = quórum default exato
+
+  // frente N #5 — final encerrada com 3 votos e mínimo 10: sem quórum
+  await edition(NOQUORUM, "E2E Final Sem Quórum");
+  const qa = await team(NOQUORUM, "Time Poucos", "Projeto Pouco Votado");
+  await db.prepare("INSERT INTO stage_queue (hackathonId, teamId, position) VALUES (?, ?, 1)").run(NOQUORUM, qa);
+  await db.prepare("INSERT INTO stage_sessions (hackathonId, status) VALUES (?, 'ended')").run(NOQUORUM);
+  await votes(NOQUORUM, qa, [5, 5, 4], 40);
 }
 
 const noHorizontalScroll = async (page: import("@playwright/test").Page) =>
@@ -143,6 +151,18 @@ test.describe("modo palco — final ao vivo", () => {
     await expect(rows.nth(2)).toContainText("Bilhete Único Escolar");
     await page.waitForTimeout(3500); // revelação animada termina
     await page.screenshot({ path: `${SHOTS}/telao-resultado-1920.png` });
+  });
+
+  test("final sem quórum: telão diz 'votação sem quórum' e não revela ranking", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto(`/h/${NOQUORUM}/telao`);
+    await expect(page.getByTestId("stage-screen")).toHaveAttribute("data-status", "ended");
+    await expect(page.getByTestId("stage-no-quorum")).toContainText("VOTAÇÃO SEM QUÓRUM");
+    await expect(page.getByTestId("stage-no-quorum")).toContainText("3 de 10");
+    await expect(page.getByTestId("stage-ranking")).toHaveCount(0);
+    const snap = await (await request.get(`/api/hackathons/${NOQUORUM}/stage`)).json();
+    expect(snap).toMatchObject({ status: "ended", ranking: null, quorum: { min: 10, total: 3, met: false } });
+    await page.screenshot({ path: `${SHOTS}/telao-sem-quorum-1920.png` });
   });
 
   test("telão em 390px não estoura horizontal", async ({ page }) => {

@@ -1,7 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { updateHackathon, type HackathonPatch } from "@/lib/admin";
+import db from "@/lib/db";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
+import { shiftSchedule, wallClockDelta } from "@/lib/schedule";
 
 const FORMATS = ["online", "presencial", "hibrido"];
 
@@ -20,7 +22,8 @@ export async function PATCH(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  if (!await getHackathon(id)) {
+  const before = await getHackathon(id);
+  if (!before) {
     return Response.json({ error: "Edição não encontrada" }, { status: 404 });
   }
   const b = await req.json().catch(() => null);
@@ -91,10 +94,24 @@ export async function PATCH(
     patch.requiresApproval = b.requiresApproval;
   }
 
+  // frente N #7 — mudou o início: deslocar a programação junto só com
+  // confirmação explícita (shiftSchedule: true); sem ela os itens ficam
+  if ("shiftSchedule" in b && typeof b.shiftSchedule !== "boolean") {
+    return bad("shiftSchedule deve ser booleano");
+  }
+
   if (Object.keys(patch).length === 0) {
     return bad("Nenhum campo editável enviado");
   }
 
-  const hackathon = await updateHackathon(id, patch);
-  return Response.json({ hackathon });
+  const delta = patch.startsAt !== undefined ? wallClockDelta(before.startsAt, patch.startsAt) : null;
+  if (b.shiftSchedule === true && delta === null) {
+    return bad("não deu pra calcular o deslocamento da programação — confira o início");
+  }
+  // data da edição e programação andam juntas ou nenhuma anda
+  const { hackathon, schedule } = await db.transaction(async () => ({
+    hackathon: await updateHackathon(id, patch),
+    schedule: b.shiftSchedule === true && delta ? await shiftSchedule(id, delta, member.id) : null,
+  }))();
+  return Response.json({ hackathon, schedule });
 }

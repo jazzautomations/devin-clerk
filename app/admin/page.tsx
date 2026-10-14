@@ -35,7 +35,8 @@ export default async function AdminPage() {
 
   const events = await db
     .prepare(
-      `SELECT h.*, COUNT(r.id) AS inscritos
+      `SELECT h.*, COUNT(r.id) AS inscritos,
+              (SELECT COUNT(*) FROM schedule_items si WHERE si.hackathonId = h.id) AS "scheduleItems"
        FROM hackathons h
        LEFT JOIN registrations r ON r.hackathonId = h.id
        GROUP BY h.id
@@ -55,6 +56,7 @@ export default async function AdminPage() {
     active: number;
     requiresApproval: number;
     inscritos: number;
+    scheduleItems: number;
   }[];
 
   // inscritos por edição — server-side direto na lib (com e-mail, é tela admin)
@@ -343,6 +345,7 @@ export default async function AdminPage() {
                           tags: JSON.parse(e.tags) as string[],
                           active: e.active === 1,
                           requiresApproval: e.requiresApproval === 1,
+                          scheduleItems: Number(e.scheduleItems),
                         }}
                       />
                     </div>

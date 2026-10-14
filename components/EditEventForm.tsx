@@ -14,7 +14,30 @@ export type EditableEvent = {
   tags: string[];
   active: boolean;
   requiresApproval: boolean;
+  /** frente N #7 — itens na programação (oferece deslocar junto) */
+  scheduleItems?: number;
 };
+
+// mesma conta do servidor (lib/schedule wallClockDelta): parede do relógio
+function wallDelta(a: string, b: string): number | null {
+  const wall = (v: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(v.trim());
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], m[4] === undefined ? 9 : +m[4], m[5] === undefined ? 0 : +m[5]) : null;
+  };
+  const x = wall(a);
+  const y = wall(b);
+  return x === null || y === null ? null : y - x;
+}
+
+function shiftLabel(ms: number): string {
+  const sign = ms < 0 ? "−" : "+";
+  let mins = Math.round(Math.abs(ms) / 60_000);
+  const d = Math.floor(mins / 1440);
+  mins -= d * 1440;
+  const h = Math.floor(mins / 60);
+  mins -= h * 60;
+  return sign + [d ? `${d}d` : "", h ? `${h}h` : "", mins ? `${mins}min` : ""].filter(Boolean).join(" ");
+}
 
 // "2026-12-01T09:00:00-03:00" → "2026-12-01T09:00" (datetime-local)
 const toInput = (v: string | null) => (v ? v.slice(0, 16) : "");
@@ -24,6 +47,10 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
     "idle",
   );
   const [error, setError] = useState("");
+  const [startInput, setStartInput] = useState(toInput(event.startsAt));
+  const [shift, setShift] = useState(false);
+  const delta = wallDelta(event.startsAt, startInput);
+  const offerShift = (event.scheduleItems ?? 0) > 0 && delta !== null && delta !== 0;
   const input =
     "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
@@ -52,6 +79,7 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
           .filter(Boolean),
         active: f.get("active") === "on",
         requiresApproval: f.get("requiresApproval") === "on",
+        ...(offerShift && shift ? { shiftSchedule: true } : {}),
       }),
     });
     if (res.ok) {
@@ -92,10 +120,30 @@ export function EditEventForm({ event }: { event: EditableEvent }) {
           name="startsAt"
           required
           type="datetime-local"
-          defaultValue={toInput(event.startsAt)}
+          value={startInput}
+          onChange={(e) => setStartInput(e.target.value)}
           className={input}
         />
       </label>
+      {offerShift && (
+        <label
+          data-testid="shift-schedule"
+          className="flex cursor-pointer items-start gap-2 border-[1.5px] border-accent bg-mint p-3 text-[13px] leading-snug sm:col-span-2"
+        >
+          <input
+            type="checkbox"
+            name="shiftSchedule"
+            checked={shift}
+            onChange={(e) => setShift(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-[#047a43]"
+          />
+          <span>
+            O início mudou ({shiftLabel(delta!)}). Deslocar também os {event.scheduleItems} itens da programação pelo
+            mesmo intervalo e avisar os inscritos que a agenda mudou? O calendário (.ics) de quem assinou se atualiza
+            sozinho.
+          </span>
+        </label>
+      )}
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">fim (opcional)</span>
         <input

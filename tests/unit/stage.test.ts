@@ -4,6 +4,7 @@ import { createTeam } from "@/lib/archive";
 import { getOrCreateMember } from "@/lib/members";
 import {
   advanceStage,
+  audienceQuorum,
   castLiveVote,
   elapsedMs,
   endStage,
@@ -18,6 +19,7 @@ import {
   reopenStage,
   resetTimer,
   runStageAction,
+  setAudienceMinVotes,
   setPitchSeconds,
   setQueue,
   setVoting,
@@ -295,6 +297,7 @@ describe("ranking — escolha do público", () => {
   });
 
   it("snapshot público só mostra o ranking depois de encerrar; ficha do projeto idem", async () => {
+    await setAudienceMinVotes(H, 1); // quórum testado à parte
     await setQueue(H, [a, b]);
     await votes(a, [5]);
     expect((await getStageSnapshot(H)).ranking).toBeNull();
@@ -305,6 +308,32 @@ describe("ranking — escolha do público", () => {
     expect(snap.ranking?.[0]).toMatchObject({ teamId: a, position: 1 });
     expect(await getAudienceResult(a)).toEqual({ position: 1, avg: 5, votes: 1, tied: false, total: 1 });
     expect(await getAudienceResult(b)).toBeNull(); // sem voto, sem selo
+  });
+
+  it("quórum (frente N #5): abaixo do mínimo o ranking não sai nem pro selo; no mínimo exato sai", async () => {
+    await db.prepare("UPDATE hackathons SET audienceMinVotes = DEFAULT WHERE id = ?").run(H);
+    expect(await audienceQuorum(H)).toEqual({ min: 10, total: 0, met: false }); // default 10
+    await setAudienceMinVotes(H, 3);
+    await setQueue(H, [a, b]);
+    await votes(a, [5, 4]);
+    await endStage(H);
+    const snap = await getStageSnapshot(H);
+    expect(snap.quorum).toEqual({ min: 3, total: 2, met: false });
+    expect(snap.ranking).toBeNull();
+    expect(await getAudienceResult(a)).toBeNull();
+
+    await setAudienceMinVotes(H, "2"); // vem de form: string numérica vale
+    const ok = await getStageSnapshot(H);
+    expect(ok.quorum).toEqual({ min: 2, total: 2, met: true });
+    expect(ok.ranking?.[0]).toMatchObject({ teamId: a, position: 1 });
+    expect(await getAudienceResult(a)).toMatchObject({ position: 1, votes: 2 });
+
+    for (const bad of [-1, 1.5, "x", null, 100_001]) {
+      await expect(setAudienceMinVotes(H, bad)).rejects.toMatchObject({ status: 400 });
+    }
+    await runStageAction(H, { action: "min-votes", value: 0 });
+    expect((await audienceQuorum(H)).min).toBe(0);
+    await setAudienceMinVotes(H, 10);
   });
 
   it("encerrar é idempotente; reabrir volta ao vivo sem ninguém no palco", async () => {

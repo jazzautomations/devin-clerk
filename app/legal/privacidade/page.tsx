@@ -73,7 +73,10 @@ export default function PrivacidadePage() {
         <p className="text-sm leading-relaxed text-muted">
           Perfil, posts, projetos de time e resultados de edições (pódio,
           arquivo) são públicos por desenho — é o propósito da plataforma. Seu
-          e-mail nunca é exibido publicamente.
+          e-mail nunca é exibido publicamente. Estar inscrito numa edição não
+          te coloca na lista pública de inscritos: a página da edição mostra só
+          o total, e seu @ aparece na lista apenas se você marcar essa opção
+          (dá pra desmarcar quando quiser).
         </p>
       </div>
 

@@ -235,3 +235,49 @@ describe("gatilhos — like e comentário geram notificação", () => {
     expect(n.href).toBe("/feed");
   });
 });
+
+describe("GET /api/notifications/[id]/open — abrir marca como lida (frente N #3)", () => {
+  const openCtx = (id: number | string) => ({ params: Promise.resolve({ id: String(id) }) });
+
+  it("marca a do membro como lida e redireciona pro destino interno", async () => {
+    const { GET } = await import("@/app/api/notifications/[id]/open/route");
+    const a = await memberId("clerk_na");
+    await notify(a, { type: "team_invite", text: "convite", href: "/h/x#meu-time" });
+    const [n] = await listNotifications(a);
+    expect(await unreadCount(a)).toBe(1);
+    const res = await GET(new Request("http://t/api/notifications/1/open"), openCtx(n.id));
+    expect(res.status).toBe(303);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/h/x");
+    expect(await unreadCount(a)).toBe(0);
+  });
+
+  it("404 pra notificação de outro membro — e ela continua não lida", async () => {
+    const { GET } = await import("@/app/api/notifications/[id]/open/route");
+    await memberId("clerk_na");
+    const b = await memberId();
+    await notify(b, { type: "like", text: "do b", href: "/feed" });
+    const [n] = await listNotifications(b);
+    const res = await GET(new Request("http://t/x"), openCtx(n.id));
+    expect(res.status).toBe(404);
+    expect(await unreadCount(b)).toBe(1);
+    expect((await GET(new Request("http://t/x"), openCtx("abc"))).status).toBe(404);
+  });
+
+  it("href externo/protocol-relative nunca vira redirect aberto", async () => {
+    const { GET } = await import("@/app/api/notifications/[id]/open/route");
+    const a = await memberId("clerk_na");
+    await notify(a, { type: "x", text: "malandro", href: "//evil.example/phish" });
+    const [n] = await listNotifications(a);
+    const res = await GET(new Request("http://t/x"), openCtx(n.id));
+    const loc = new URL(res.headers.get("location")!);
+    expect(loc.host).toBe("t");
+    expect(loc.pathname).toBe("/notificacoes");
+  });
+
+  it("401 deslogado", async () => {
+    const { GET } = await import("@/app/api/notifications/[id]/open/route");
+    clerk.uid = null;
+    const res = await GET(new Request("http://t/x"), openCtx(1));
+    expect(res.status).toBe(401);
+  });
+});

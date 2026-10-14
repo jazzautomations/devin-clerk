@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
-import { getRegistrationStatus, unregister } from "@/lib/registrations";
+import { getPublicListing, getRegistrationStatus, setPublicListing, unregister } from "@/lib/registrations";
 import { submitRegistration } from "@/lib/registrationForm";
 import { limitOrNull } from "@/lib/ratelimit";
 
@@ -35,9 +35,12 @@ export async function POST(
   // spec 033 US1 — corpo { consent, answers }: formulário da edição +
   // consentimento LGPD; inscrição, respostas e aceite numa transação só.
   // Corpo vazio/ausente vale como {} (quem já está inscrito recebe o status).
+  // frente N #6 — publicListing: true = opt-in explícito de aparecer na
+  // lista pública de inscritos (ausente/qualquer outra coisa = não aparece)
   const body = (await req.json().catch(() => null)) as {
     consent?: unknown;
     answers?: unknown;
+    publicListing?: unknown;
   } | null;
   const result = await submitRegistration({
     memberId: member.id,
@@ -45,6 +48,7 @@ export async function POST(
     answers: body?.answers,
     consent: body?.consent === true,
     ip: clientIp(req),
+    publicListing: body?.publicListing === true,
   });
   if (!result.ok) {
     // frente E — candidato a voluntário/mentor/jurado não compete na mesma edição
@@ -94,7 +98,33 @@ export async function GET(
   }
   const member = await getMemberByClerkId(userId);
   const status = member ? await getRegistrationStatus(member.id, id) : null;
-  return Response.json({ status });
+  const publicListing = member && status ? await getPublicListing(member.id, id) : false;
+  return Response.json({ status, publicListing });
+}
+
+// frente N #6 — liga/desliga a exibição na lista pública de inscritos
+// (dar e revogar o consentimento a qualquer momento: LGPD art. 8º §5º)
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const member = await getMemberByClerkId(userId);
+  if (!member) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id } = await params;
+  const body = (await req.json().catch(() => null)) as { publicListing?: unknown } | null;
+  if (typeof body?.publicListing !== "boolean") {
+    return Response.json({ error: "publicListing deve ser booleano" }, { status: 400 });
+  }
+  if (!(await setPublicListing(member.id, id, body.publicListing))) {
+    return Response.json({ error: "sem inscrição nesta edição" }, { status: 404 });
+  }
+  return Response.json({ publicListing: body.publicListing });
 }
 
 export async function DELETE(

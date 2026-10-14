@@ -119,9 +119,9 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.team.placement).toBe(0);
-    expect(data.team.members).toEqual(
-      expect.arrayContaining(["capitao", "colega_reg"]),
-    );
+    // frente N #4 — colega inscrito é convidado; entra só quando aceitar
+    expect(data.team.members).toEqual(["capitao"]);
+    expect(data.invitedUsernames).toEqual(["colega_reg"]);
     expect(data.ignoredUsernames).toEqual(
       expect.arrayContaining(["sem_inscricao", "nao_existe"]),
     );
@@ -362,5 +362,46 @@ describe("PATCH /api/hackathons/[id]/team — editar projeto do próprio time", 
     const d2 = await cleared.json();
     expect(d2.team.project.videoUrl).toBeNull();
     expect(d2.team.project.logoUrl).toBeNull();
+  });
+});
+
+describe("/api/hackathons/[id]/team/invites — aceite de time (frente N #4)", () => {
+  it("401 deslogado; convidado vê o convite, aceita e entra; 400 action inválida", async () => {
+    const { POST } = await import("@/app/api/hackathons/[id]/team/route");
+    const inv = await import("@/app/api/hackathons/[id]/team/invites/route");
+    const cap = await memberId("clerk_capitao", "capitao");
+    await registerMember(cap);
+    const mate = await memberId("clerk_mate_inv", "mate_inv");
+    await registerMember(mate);
+    const created = await POST(req("POST", { name: "Com Aceite", memberUsernames: ["mate_inv"] }), ctx());
+    expect((await created.json()).invitedUsernames).toEqual(["mate_inv"]);
+
+    clerk.uid = null;
+    expect((await inv.GET(req("GET"), ctx())).status).toBe(401);
+    expect((await inv.PATCH(req("PATCH", { inviteId: 1, action: "accept" }), ctx())).status).toBe(401);
+
+    clerk.uid = "clerk_mate_inv";
+    const list = await (await inv.GET(req("GET"), ctx())).json();
+    expect(list.invites).toHaveLength(1);
+    expect(list.invites[0].teamName).toBe("Com Aceite");
+    expect((await inv.PATCH(req("PATCH", { inviteId: list.invites[0].id, action: "talvez" }), ctx())).status).toBe(400);
+    // escopo da rota: convite desta edição não se responde por outra
+    expect(
+      (await inv.PATCH(req("PATCH", { inviteId: list.invites[0].id, action: "accept" }), ctx("hack-inova-unifacens-2026"))).status,
+    ).toBe(404);
+    const ok = await inv.PATCH(req("PATCH", { inviteId: list.invites[0].id, action: "accept" }), ctx());
+    expect(ok.status).toBe(200);
+    const body = await ok.json();
+    expect(body.status).toBe("accepted");
+    expect(body.team.members).toEqual(expect.arrayContaining(["capitao", "mate_inv"]));
+
+    // capitão vê a lista de pendentes vazia e convida mais um
+    clerk.uid = "clerk_capitao";
+    const third = await memberId("clerk_third_inv", "third_inv");
+    await registerMember(third);
+    const more = await inv.POST(req("POST", { usernames: ["@third_inv", "nao_existe"] }), ctx());
+    expect(more.status).toBe(200);
+    expect(await more.json()).toMatchObject({ invited: ["third_inv"], ignored: ["nao_existe"], pending: ["third_inv"] });
+    expect((await inv.POST(req("POST", { usernames: "x" }), ctx())).status).toBe(400);
   });
 });

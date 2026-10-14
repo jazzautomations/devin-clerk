@@ -4,6 +4,7 @@ import { getOrCreateMember } from "@/lib/members";
 import { getOpenTo } from "@/lib/talent";
 import { ProfileForm } from "@/components/ProfileForm";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
+import { UsernameChange } from "@/components/UsernameChange";
 import { getContactPrefs } from "@/lib/contact";
 
 export default async function PerfilPage() {
@@ -43,6 +44,7 @@ export default async function PerfilPage() {
             /u/{member.username} →
           </Link>
         </p>
+        <UsernameChange username={member.username} changedAt={member.usernameChangedAt ?? null} />
       </div>
       <ProfileForm member={member} openTo={openTo} contact={contact} />
       <PrivacyPanel />
