@@ -14,7 +14,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   // organizador da edição edita a própria edição (admin global vale);
-  // arquivar e o endereço (id) continuam só com o admin global
+  // arquivar, o endereço (id) e o link de inscrição continuam só com o admin
+  // global
   const { id } = await params;
   const g = await requireEditionManager(id);
   if ("response" in g) return g.response;
@@ -46,6 +47,14 @@ export async function PATCH(
     patch.format = b.format;
   }
   if ("registrationUrl" in b) {
+    // o botão de inscrição da página pública só aponta pra fora do HackaHub
+    // por decisão do admin global (a aba configurar nem mostra o campo)
+    if (!isAdmin) {
+      return Response.json(
+        { error: "Só a administração do HackaHub muda o link de inscrição." },
+        { status: 403 },
+      );
+    }
     if (typeof b.registrationUrl !== "string" || !isSafeLink(b.registrationUrl.trim())) {
       return bad("link de inscrição inválido: use um endereço http(s) ou um caminho do site");
     }

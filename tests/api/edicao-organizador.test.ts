@@ -143,6 +143,10 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
     expect((await getHackathon(H))!.location).toBe("Sorocaba, SP");
     expect((await PATCH(req("PATCH", { active: false }), ctx())).status).toBe(403);
     expect((await getHackathon(H))!.active).toBe(true);
+    // link de inscrição só com o admin, mesmo https válido
+    const link = (await getHackathon(H))!.registrationUrl;
+    expect((await PATCH(req("PATCH", { registrationUrl: "https://fora.example/inscricao" }), ctx())).status).toBe(403);
+    expect((await getHackathon(H))!.registrationUrl).toBe(link);
   });
 
   it("organizador publica o rascunho só com o mínimo pronto (início e local)", async () => {
