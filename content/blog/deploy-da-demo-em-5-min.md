@@ -1,14 +1,14 @@
 ---
 title: "Guia: deploy da demo em 5 min com o hackahub"
-description: Como publicar a demo do seu time a partir de um repositório público no GitHub, quando a edição liga essa ferramenta.
+description: Como publicar a demo do seu time a partir de um repositório público no GitHub, quando a publicação de demos estiver ligada no HackaHub.
 date: 2026-10-05
 author: equipe hackahub
 tags: [guia, deploy, demo]
 ---
 
-Algumas edições ligam a publicação de demos no HackaHub. Quando ela está ligada, um repositório público do GitHub vira um endereço `/demo/<id>` no próprio site, pra você mostrar o projeto pro júri ou pra quem patrocina sem instalar nada.
+Este guia vale quando a publicação de demos estiver ligada no HackaHub. Com ela ligada, um repositório público do GitHub vira um endereço `/demo/<id>` no próprio site, pra você mostrar o projeto pro júri ou pra quem patrocina sem instalar nada.
 
-A ferramenta é ligada edição por edição. Se o card do seu time não mostra o botão **publicar demo**, ela está desligada na sua edição.
+A publicação de demos ainda está desligada. Quando ela for ligada, o card do seu time vai mostrar o botão **publicar demo**. Enquanto o botão não aparecer, mande o link do repositório.
 
 ## O que você precisa
 

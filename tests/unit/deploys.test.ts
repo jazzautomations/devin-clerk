@@ -146,3 +146,14 @@ describe("DeployPanel some quando a publicação de demos está desligada", () =
     vi.unstubAllEnvs();
   });
 });
+
+describe("guia do blog não promete a publicação de demos", () => {
+  it("não diz que a edição liga a ferramenta (a trava é global) e avisa que está desligada", async () => {
+    const { getPost } = await import("@/lib/blog");
+    const post = getPost("deploy-da-demo-em-5-min");
+    expect(post).not.toBeNull();
+    const text = `${post!.description} ${post!.html}`;
+    expect(text).not.toMatch(/edi(ç|c)(ão|ões)\s+(liga|ligam)|edição por edição|na sua edição|hackahub\.dev/i);
+    expect(text).toMatch(/ainda está desligada/);
+  });
+});
