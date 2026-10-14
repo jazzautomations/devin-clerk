@@ -1,5 +1,6 @@
 import db from "@/lib/db";
 import { claimEditionInvites } from "@/lib/roles";
+import { claimSponsorInvites } from "@/lib/editionSponsors";
 import { toLikePattern } from "@/lib/search";
 
 // spec 032 — "campanhas" públicas contam só inscrições aprovadas (pedido
@@ -92,6 +93,7 @@ export async function getOrCreateMember(clerkUser: {
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkUser.id) as MemberRow;
   await claimEditionInvites(created.id, created.email);
+  await claimSponsorInvites(created.id, created.email);
   return toMember(created);
 }
 
