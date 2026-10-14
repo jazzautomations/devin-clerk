@@ -4,6 +4,7 @@ import {
   type EditionQuestion,
   type RegistrantWithAnswers,
 } from "@/lib/registrationForm";
+import { summaryText, type AttendanceSummary } from "@/lib/rsvp";
 
 const STATUS_LABEL: Record<string, string> = {
   approved: "aprovado",
@@ -24,10 +25,13 @@ export function RegistrantsTable({
   hackathonId: id,
   questions,
   rows,
+  attendance = {},
 }: {
   hackathonId: string;
   questions: EditionQuestion[];
   rows: RegistrantWithAnswers[];
+  /** histórico de presença em outras edições (lib/rsvp) — só informa */
+  attendance?: Record<number, AttendanceSummary>;
 }) {
   const count = (s: string) => rows.filter((r) => r.status === s).length;
   const fmt = (d: string | null) =>
@@ -78,6 +82,10 @@ export function RegistrantsTable({
                   <p className="font-mono text-[12px] break-all text-muted">
                     {r.email}
                     {r.github && ` · github ${r.github}`}
+                  </p>
+                  <p className="font-mono text-[12px]" data-testid="attendance-summary">
+                    <span className="text-muted">presença em outras edições:</span> {summaryText(attendance[r.memberId])}
+                    <span className="text-muted"> — só informativo; a pessoa vê o mesmo no painel dela e pode contestar</span>
                   </p>
                   <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
                     {questions

@@ -27,10 +27,33 @@ export async function editionRequiresApproval(hackathonId: string): Promise<bool
 
 export type Promoted = { memberId: number; username: string; email: string; promotedAt: string };
 
-async function lockEdition(hackathonId: string): Promise<{ capacity: number | null; requiresApproval: number } | undefined> {
-  return db
-    .prepare("SELECT capacity, requiresApproval FROM hackathons WHERE id = ? FOR UPDATE")
-    .get<{ capacity: number | null; requiresApproval: number }>(hackathonId);
+type EditionLock = {
+  capacity: number | null;
+  requiresApproval: number;
+  rsvpEnabled: number;
+  overbookPercent: number;
+};
+
+/**
+ * Sobrevenda (spec 037 Onda 1 #1, migration 012): com RSVP ligado, a
+ * decisão de aprovação usa capacidade × (1 + overbook%), arredondada pra
+ * baixo — quem recusa/expira no RSVP devolve vaga pra fila. A capacidade
+ * pública (getEditionCapacity) continua a real.
+ */
+export function effectiveCapacity(e: Pick<EditionLock, "capacity" | "rsvpEnabled" | "overbookPercent">): number | null {
+  if (e.capacity === null) return null;
+  if (e.rsvpEnabled !== 1 || !(e.overbookPercent > 0)) return e.capacity;
+  return Math.floor((e.capacity * (100 + e.overbookPercent)) / 100);
+}
+
+// capacity devolvida já é a efetiva (com sobrevenda quando houver)
+async function lockEdition(hackathonId: string): Promise<EditionLock | undefined> {
+  const row = await db
+    .prepare(
+      "SELECT capacity, requiresApproval, rsvpEnabled, overbookPercent FROM hackathons WHERE id = ? FOR UPDATE",
+    )
+    .get<EditionLock>(hackathonId);
+  return row && { ...row, capacity: effectiveCapacity(row) };
 }
 
 async function countApproved(hackathonId: string): Promise<number> {
@@ -132,7 +155,15 @@ export async function setEditionCapacity(
     const ed = await lockEdition(hackathonId);
     if (!ed) return { promoted: [] };
     await db.prepare("UPDATE hackathons SET capacity = ? WHERE id = ?").run(capacity, hackathonId);
-    return { promoted: await fillFromWaitlist(hackathonId, capacity) };
+    return { promoted: await fillFromWaitlist(hackathonId, effectiveCapacity({ ...ed, capacity })) };
+  })();
+}
+
+/** promove a fila até a capacidade efetiva — usado quando a sobrevenda do RSVP aumenta */
+export async function refillFromWaitlist(hackathonId: string): Promise<Promoted[]> {
+  return db.transaction(async () => {
+    const ed = await lockEdition(hackathonId);
+    return ed ? fillFromWaitlist(hackathonId, ed.capacity) : [];
   })();
 }
 

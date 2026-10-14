@@ -17,6 +17,8 @@ import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
 import { Avatar } from "@/components/Avatar";
 import { CERT_KIND_LABEL, listMemberCertificates } from "@/lib/certificates";
+import { getAttendanceHistory, listPendingRsvpForMember } from "@/lib/rsvp";
+import { AttendanceHistory } from "@/components/AttendanceHistory";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -43,6 +45,10 @@ export default async function DashboardPage() {
   const badges = await getMemberBadges(member.id);
   const cards = await getMemberCards(member.id);
   const certificates = await listMemberCertificates(member.id);
+  const [attendance, pendingRsvp] = await Promise.all([
+    getAttendanceHistory(member.id, now),
+    listPendingRsvpForMember(member.id, now),
+  ]);
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
@@ -94,6 +100,8 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      <AttendanceHistory entries={attendance.entries} summary={attendance.summary} pending={pendingRsvp} />
 
       {certificates.length > 0 && (
         <div className="flex flex-col gap-3">
