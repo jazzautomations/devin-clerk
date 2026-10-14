@@ -54,6 +54,19 @@ export function adminEmails(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * E-mail entrou na lista de admins depois do cadastro → promove. A lista só
+ * promove: tirar alguém de HACKAHUB_ADMIN_EMAILS NÃO rebaixa, porque admin
+ * também é dado por SQL (runbook) e um rebaixamento automático derrubaria
+ * esses. Revogar é manual: `UPDATE members SET role = 'member' WHERE
+ * email = '...'` (docs/runbook.md, "Admins").
+ */
+export async function promoteListedAdmin(member: Member): Promise<Member> {
+  if (member.role === "admin" || !adminEmails().includes(member.email.toLowerCase())) return member;
+  await db.prepare("UPDATE members SET role = 'admin' WHERE id = ?").run(member.id);
+  return { ...member, role: "admin" };
+}
+
 export async function getOrCreateMember(clerkUser: {
   id: string;
   firstName: string | null;
@@ -74,12 +87,7 @@ export async function getOrCreateMember(clerkUser: {
       );
       existing.avatarUrl = clerkUser.imageUrl;
     }
-    // e-mail entrou na lista de admins depois do cadastro → promove
-    if (existing.role !== "admin" && adminEmails().includes(existing.email.toLowerCase())) {
-      await db.prepare("UPDATE members SET role = 'admin' WHERE id = ?").run(existing.id);
-      existing.role = "admin";
-    }
-    return toMember(existing);
+    return promoteListedAdmin(toMember(existing));
   }
 
   const username = await generateUsername(clerkUser.firstName, clerkUser.lastName, clerkUser.email);
@@ -216,7 +224,7 @@ export async function changeUsername(memberId: number, raw: unknown): Promise<{ 
       .get<{ username: string; usernameChangedAt: string | null }>(memberId);
     if (!m) throw new UsernameError("membro não encontrado", 404);
     if (m.usernameChangedAt) throw new UsernameError("o username só pode ser trocado uma vez", 409);
-    if (m.username === next) throw new UsernameError("esse já é o teu username");
+    if (m.username === next) throw new UsernameError("esse já é o seu username");
     if (await usernameTaken(next)) throw new UsernameError("username em uso", 409);
     await db
       .prepare(`UPDATE members SET username = ?, usernameChangedAt = datetime('now') WHERE id = ?`)
