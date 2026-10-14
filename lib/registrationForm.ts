@@ -16,6 +16,16 @@ import {
 export const QUESTION_KINDS = ["short_text", "long_text", "single", "multi", "yes_no"] as const;
 export type QuestionKind = (typeof QUESTION_KINDS)[number];
 
+// público do formulário (frente E): participante é a inscrição; os outros
+// são os tipos de candidatura (lib/roleApplications). Cada público tem o
+// próprio formulário na mesma tabela de perguntas.
+export const AUDIENCES = ["participante", "voluntario", "mentor", "jurado"] as const;
+export type Audience = (typeof AUDIENCES)[number];
+
+export function isAudience(v: unknown): v is Audience {
+  return typeof v === "string" && (AUDIENCES as readonly string[]).includes(v);
+}
+
 export const KIND_LABEL: Record<QuestionKind, string> = {
   short_text: "texto curto",
   long_text: "texto longo",
@@ -36,6 +46,7 @@ const MAX_LONG = 2000;
 export type EditionQuestion = {
   id: number;
   hackathonId: string;
+  audience: Audience;
   version: number;
   kind: QuestionKind;
   label: string;
@@ -95,55 +106,75 @@ export function validateQuestionInput(
   };
 }
 
+const QUESTION_COLS = "id, hackathonId, audience, version, kind, label, options, required, position, archived";
+
+/** perguntas de UM público (default participante = formulário de inscrição) */
 export async function listQuestions(
   hackathonId: string,
-  opts: { includeArchived?: boolean } = {},
+  opts: { includeArchived?: boolean; audience?: Audience } = {},
 ): Promise<EditionQuestion[]> {
   const rows = await db
     .prepare(
-      `SELECT id, hackathonId, version, kind, label, options, required, position, archived
+      `SELECT ${QUESTION_COLS}
        FROM edition_questions
-       WHERE hackathonId = ? ${opts.includeArchived ? "" : "AND archived = 0"}
+       WHERE hackathonId = ? AND audience = ? ${opts.includeArchived ? "" : "AND archived = 0"}
        ORDER BY archived, position, id`,
     )
-    .all<QuestionRow>(hackathonId);
+    .all<QuestionRow>(hackathonId, opts.audience ?? "participante");
   return rows.map(toQuestion);
 }
 
 async function getQuestion(hackathonId: string, questionId: number): Promise<EditionQuestion | null> {
   const row = await db
     .prepare(
-      `SELECT id, hackathonId, version, kind, label, options, required, position, archived
+      `SELECT ${QUESTION_COLS}
        FROM edition_questions WHERE id = ? AND hackathonId = ?`,
     )
     .get<QuestionRow>(questionId, hackathonId);
   return row ? toQuestion(row) : null;
 }
 
-export async function hasActiveQuestions(hackathonId: string): Promise<boolean> {
+export async function hasActiveQuestions(
+  hackathonId: string,
+  audience: Audience = "participante",
+): Promise<boolean> {
   const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM edition_questions WHERE hackathonId = ? AND archived = 0")
-    .get<{ n: number }>(hackathonId);
+    .prepare(
+      "SELECT COUNT(*) AS n FROM edition_questions WHERE hackathonId = ? AND audience = ? AND archived = 0",
+    )
+    .get<{ n: number }>(hackathonId, audience);
   return (row?.n ?? 0) > 0;
 }
 
 export async function createQuestion(
   hackathonId: string,
-  input: { kind: QuestionKind; label: string; options?: string[]; required?: boolean },
+  input: { kind: QuestionKind; label: string; options?: string[]; required?: boolean; audience?: Audience },
 ): Promise<EditionQuestion> {
   const v = validateQuestionInput(input);
   if (!v.ok) throw new Error(v.error);
   const q = v.value;
+  const audience = input.audience ?? "participante";
+  if (!isAudience(audience)) throw new Error("público inválido");
   return db.transaction(async () => {
     const pos = await db
-      .prepare("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM edition_questions WHERE hackathonId = ?")
-      .get<{ p: number }>(hackathonId);
+      .prepare(
+        "SELECT COALESCE(MAX(position), 0) + 1 AS p FROM edition_questions WHERE hackathonId = ? AND audience = ?",
+      )
+      .get<{ p: number }>(hackathonId, audience);
     const row = await db
       .prepare(
-        `INSERT INTO edition_questions (hackathonId, kind, label, options, required, position)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO edition_questions (hackathonId, audience, kind, label, options, required, position)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .get<{ id: number }>(hackathonId, q.kind, q.label, JSON.stringify(q.options), q.required ? 1 : 0, pos?.p ?? 1);
+      .get<{ id: number }>(
+        hackathonId,
+        audience,
+        q.kind,
+        q.label,
+        JSON.stringify(q.options),
+        q.required ? 1 : 0,
+        pos?.p ?? 1,
+      );
     await db
       .prepare(
         `INSERT INTO edition_question_versions (questionId, version, kind, label, options, required)
@@ -180,11 +211,13 @@ export async function updateQuestion(
       next.kind !== cur.kind ||
       next.label !== cur.label ||
       JSON.stringify(next.options) !== JSON.stringify(cur.options);
+    // resposta de inscrição OU de candidatura congela a versão
     const answered = await db
       .prepare(
-        "SELECT COUNT(*) AS n FROM registration_answers WHERE questionId = ? AND questionVersion = ?",
+        `SELECT (SELECT COUNT(*) FROM registration_answers WHERE questionId = ? AND questionVersion = ?)
+              + (SELECT COUNT(*) FROM role_application_answers WHERE questionId = ? AND questionVersion = ?) AS n`,
       )
-      .get<{ n: number }>(questionId, cur.version);
+      .get<{ n: number }>(questionId, cur.version, questionId, cur.version);
     const version = contentChanged && (answered?.n ?? 0) > 0 ? cur.version + 1 : cur.version;
     const opts = JSON.stringify(next.options);
     const req = next.required ? 1 : 0;
@@ -215,16 +248,23 @@ export async function updateQuestion(
 }
 
 /** respostas por pergunta na versão ATUAL (as que uma edição congelaria) */
-export async function countCurrentAnswers(hackathonId: string): Promise<Record<number, number>> {
+export async function countCurrentAnswers(
+  hackathonId: string,
+  audience: Audience = "participante",
+): Promise<Record<number, number>> {
   const rows = await db
     .prepare(
-      `SELECT q.id, COUNT(a.registrationId) AS n
+      `SELECT q.id, COUNT(*) AS n
        FROM edition_questions q
-       JOIN registration_answers a ON a.questionId = q.id AND a.questionVersion = q.version
-       WHERE q.hackathonId = ?
+       JOIN (
+         SELECT questionId, questionVersion FROM registration_answers
+         UNION ALL
+         SELECT questionId, questionVersion FROM role_application_answers
+       ) a ON a.questionId = q.id AND a.questionVersion = q.version
+       WHERE q.hackathonId = ? AND q.audience = ?
        GROUP BY q.id`,
     )
-    .all<{ id: number; n: number }>(hackathonId);
+    .all<{ id: number; n: number }>(hackathonId, audience);
   return Object.fromEntries(rows.map((r) => [r.id, r.n]));
 }
 
@@ -250,8 +290,10 @@ export async function moveQuestion(
   dir: "up" | "down",
 ): Promise<boolean> {
   return db.transaction(async () => {
-    const list = await listQuestions(hackathonId);
-    const i = list.findIndex((q) => q.id === questionId);
+    const q = await getQuestion(hackathonId, questionId);
+    if (!q) return false;
+    const list = await listQuestions(hackathonId, { audience: q.audience });
+    const i = list.findIndex((x) => x.id === questionId);
     const j = dir === "up" ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= list.length) return false;
     // renumera 1..n na nova ordem (posições antigas podem ter buracos/empates)
@@ -352,8 +394,26 @@ export async function getAnswersForRegistration(memberId: number, hackathonId: s
 
 // ---------- consentimento ----------
 
-/** finalidade exibida e gravada: organização + parceiros nomeados da edição */
-export async function consentPurpose(hackathonId: string): Promise<{
+const SCOPE_PURPOSE: Record<Audience, string> = {
+  participante:
+    "as respostas desta inscrição para organizar o evento: seleção, comunicação, credenciamento e certificados",
+  voluntario:
+    "as respostas desta candidatura a voluntário para avaliá-la e, se aprovada, organizar minha atuação na edição: escala, comunicação, credenciamento e certificado",
+  mentor:
+    "as respostas desta candidatura a mentor para avaliá-la e, se aprovada, organizar minha atuação na edição: agenda com os times, comunicação, credenciamento e certificado",
+  jurado:
+    "as respostas desta candidatura a jurado para avaliá-la e, se aprovada, organizar minha atuação na edição: atribuição de projetos, comunicação, credenciamento e certificado",
+};
+
+/**
+ * finalidade exibida e gravada: organização + parceiros nomeados da edição.
+ * scope = pra quê (inscrição de participante ou candidatura de um tipo) —
+ * o aceite de um não vale pelo outro.
+ */
+export async function consentPurpose(
+  hackathonId: string,
+  scope: Audience = "participante",
+): Promise<{
   organizer: string;
   partners: string[];
   text: string;
@@ -375,18 +435,22 @@ export async function consentPurpose(hackathonId: string): Promise<{
     ? `${organizer} e os parceiros desta edição (${partners.join(", ")})`
     : `${organizer}`;
   const text =
-    `Autorizo ${quem} a tratar meus dados de perfil e as respostas desta inscrição ` +
-    `para organizar o evento: seleção, comunicação, credenciamento e certificados. ` +
+    `Autorizo ${quem} a tratar meus dados de perfil e ${SCOPE_PURPOSE[scope]}. ` +
     `Li os termos de uso e a política de privacidade (versão ${TERMS_VERSION}).`;
   return { organizer, partners, text };
 }
 
-async function hasCurrentConsent(memberId: number, hackathonId: string): Promise<boolean> {
+export async function hasCurrentConsent(
+  memberId: number,
+  hackathonId: string,
+  scope: Audience = "participante",
+): Promise<boolean> {
   const row = await db
     .prepare(
-      "SELECT 1 AS ok FROM consents WHERE memberId = ? AND hackathonId = ? AND termsVersion = ? LIMIT 1",
+      `SELECT 1 AS ok FROM consents
+       WHERE memberId = ? AND hackathonId = ? AND termsVersion = ? AND scope = ? LIMIT 1`,
     )
-    .get(memberId, hackathonId, TERMS_VERSION);
+    .get(memberId, hackathonId, TERMS_VERSION, scope);
   return Boolean(row);
 }
 
@@ -422,6 +486,18 @@ export async function submitRegistration(input: {
     const r = await register(memberId, hackathonId);
     return { ok: true, status: r.status, created: false, position: r.position };
   }
+  // frente E — quem se candidatou pra ajudar (pendente ou aprovado) não
+  // compete na mesma edição; jurado (por candidatura ou convite) nunca.
+  const helper = await db
+    .prepare(
+      `SELECT kind FROM role_applications
+       WHERE memberId = ? AND hackathonId = ? AND status IN ('pending', 'approved')
+       UNION ALL
+       SELECT 'jurado' FROM edition_roles WHERE memberId = ? AND hackathonId = ? AND role = 'jurado'
+       LIMIT 1`,
+    )
+    .get<{ kind: string }>(memberId, hackathonId, memberId, hackathonId);
+  if (helper) return { ok: false, error: `conflict_role:${helper.kind}` };
   const questions = await listQuestions(hackathonId);
   const valid = validateAnswers(questions, input.answers);
   if (!valid.ok) return { ok: false, error: valid.error, questionId: valid.questionId };
@@ -490,7 +566,7 @@ export async function listRegistrantsWithAnswers(hackathonId: string): Promise<R
        JOIN members m ON m.id = r.memberId
        LEFT JOIN LATERAL (
          SELECT termsVersion, acceptedAt FROM consents
-         WHERE memberId = r.memberId AND hackathonId = r.hackathonId
+         WHERE memberId = r.memberId AND hackathonId = r.hackathonId AND scope = 'participante'
          ORDER BY id DESC LIMIT 1
        ) c ON true
        WHERE r.hackathonId = ?

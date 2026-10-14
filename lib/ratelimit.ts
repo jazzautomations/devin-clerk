@@ -22,6 +22,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   register: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/register
   team: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/team
   "team-board": { limit: 10, windowMs: HOUR }, // POST …/[id]/team-board
+  applications: { limit: 10, windowMs: HOUR }, // POST/DELETE …/[id]/applications/[kind]
+  "application-review": { limit: 300, windowMs: HOUR }, // organizador decide/abre tipos
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
