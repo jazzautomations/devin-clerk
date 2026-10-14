@@ -16,6 +16,7 @@ import { FeedSection } from "@/components/FeedSection";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
 import { Avatar } from "@/components/Avatar";
+import { CERT_KIND_LABEL, listMemberCertificates } from "@/lib/certificates";
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -41,6 +42,7 @@ export default async function DashboardPage() {
   const past = await getPastHackathons(now);
   const badges = await getMemberBadges(member.id);
   const cards = await getMemberCards(member.id);
+  const certificates = await listMemberCertificates(member.id);
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
@@ -92,6 +94,27 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {certificates.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
+            teus certificados
+          </h2>
+          <ul className="divide-y divide-line border-y border-line">
+            {certificates.map((c) => (
+              <li key={c.code} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
+                <Link href={`/c/${c.code}`} className="min-w-0 transition hover:text-accent">
+                  <span className="font-display font-extrabold tracking-[-0.02em]">{c.hackathonName}</span>{" "}
+                  <span className="font-mono text-xs text-muted">· {CERT_KIND_LABEL[c.kind]}</span>
+                </Link>
+                <a href={`/c/${c.code}/pdf`} className="font-mono text-xs text-accent hover:underline">
+                  baixar PDF
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4">
         <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
