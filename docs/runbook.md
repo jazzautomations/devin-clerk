@@ -18,7 +18,7 @@ de `caddy validate`.
 | Ops | `~/hackahub/ops/` (`deploy.sh`, `backup.sh`, `restore-drill.sh`, `scrape.sh`), logs em `~/hackahub/logs/` |
 | Backups | `~/hackahub-backups/<stamp>/` (14 dias) + bucket OCI `hackahub-backups` (prefixo `hackahub/`, expira em 60 dias) |
 | Scraper | venv `~/hackahub/scraper/.venv` (uv) |
-| Cron (usuário ubuntu) | 05:15/05:20 UTC radar (stage/prod) · 06:00 UTC backup · dom 06:30 UTC restore drill · */2 min fila de avisos |
+| Cron (usuário ubuntu) | 05:15/05:20 UTC radar (stage/prod) · 06:00 UTC backup · dom 06:30 UTC restore drill · */2 min fila de avisos · */10 min guarda de disco |
 
 Portas de app não são públicas: security list da OCI só abre 22/80/443 e o
 iptables rejeita o resto (verificado de fora em 14/10/2026).
@@ -83,6 +83,19 @@ Backup que só está no bucket: baixar pelo console da OCI ou
 | Data | Backup | Banco | Resultado |
 |---|---|---|---|
 | 2026-10-14 | 20261014T031838Z | hackahub_stage | ok — contagens iguais à origem (hackathons=4, migrations=1), checksum ok, offsite conferido no bucket |
+
+## Disco (VPS compartilhada)
+
+Incidente 14/10/2026 04:33 UTC: builds paralelas de várias worktrees de
+desenvolvimento encheram o disco (100%), o `hackahub-pg` caiu
+(`No space left on device`) e prod/stage do HackaHub ficaram fora por ~10 min.
+Outros serviços não registraram erro. Recuperação: apagar pastas de
+desenvolvimento já mergeadas + `npm cache clean`, `docker restart hackahub-pg`,
+reiniciar `hackahub-prod`/`hackahub-stage`. Dados íntegros.
+
+Prevenção: `ops/disk-guard.sh` no cron (10 min) limpa sobras do HackaHub acima
+de 90%; deploy mantém 2 releases; pasta de desenvolvimento sem `node_modules`
+depois de mergeada; nunca mais de 3 builds simultâneas.
 
 ## Radar (scraper)
 
