@@ -4,6 +4,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { userMessage } from "@/lib/apiError";
 
+/**
+ * Resposta depois de assinar. Sem canal de e-mail ligado ("pending") nenhum
+ * link saiu, então a tela não diz que chega e-mail agora: a confirmação vai
+ * no primeiro disparo da newsletter.
+ */
+export function subscribeDoneMessage(confirm: "sent" | "pending" | "already"): string {
+  if (confirm === "sent") return "quase lá. Confirme pelo link que mandamos pro seu e-mail.";
+  if (confirm === "already") return "esse e-mail já está na lista.";
+  return "anotado. A newsletter ainda não começou. Quando começar, você recebe um e-mail pra confirmar.";
+}
+
 // Newsletter da landing. Assinar registra o aceite da política de
 // privacidade; a newsletter só sai depois da confirmação pelo e-mail.
 export function NewsletterForm() {
@@ -33,11 +44,7 @@ export function NewsletterForm() {
   if (status === "done") {
     return (
       <p role="status" className="border-[1.5px] border-line bg-mint px-4 py-3 font-mono text-xs text-accent">
-        {confirm === "sent"
-          ? "quase lá. Confirme pelo link que mandamos pro seu e-mail."
-          : confirm === "already"
-            ? "esse e-mail já está na lista."
-            : "anotado. Antes do primeiro envio chega um e-mail pra você confirmar."}
+        {subscribeDoneMessage(confirm)}
       </p>
     );
   }
