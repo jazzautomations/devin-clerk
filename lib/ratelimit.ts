@@ -27,6 +27,10 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // voto ao vivo é editável (nota muda até fechar): folga pra ~10 pitches
   // com troca de nota, mas freia script martelando o endpoint
   "stage-vote": { limit: 120, windowMs: HOUR }, // POST …/[id]/stage/vote
+  // denúncia de conduta: forte, aceita anônimo (chave = IP só em memória,
+  // nunca gravado) — 3/h por IP ou por membro
+  incidents: { limit: 3, windowMs: HOUR }, // POST …/[id]/incidents
+  "image-consent": { limit: 20, windowMs: HOUR }, // POST …/[id]/image-consent
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

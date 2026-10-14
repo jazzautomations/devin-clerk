@@ -17,6 +17,11 @@ type MemberRef = { table: string; column: string };
 const OWNER_COLUMNS = new Set(["memberId", "judgeMemberId"]);
 // mantidas (anonimizadas pela linha de members) pra não distorcer o agregado
 const KEEP_TABLES = new Set(["registrations", "members"]);
+// export: referências que NÃO entram (ator sobre dado de terceiros — quem
+// tratou uma denúncia não recebe a denúncia no próprio export) e colunas
+// internas omitidas (nota interna da organização sobre a denúncia).
+const EXPORT_SKIP = new Set(["incidents.updatedBy"]);
+const EXPORT_OMIT: Record<string, string[]> = { incidents: ["internalNote", "updatedBy"] };
 
 async function memberRefs(): Promise<MemberRef[]> {
   return db
@@ -41,10 +46,14 @@ export async function exportMemberData(memberId: number) {
   if (!member) return null;
   const data: Record<string, unknown[]> = {};
   for (const { table, column } of await memberRefs()) {
+    if (EXPORT_SKIP.has(`${table}.${column}`)) continue;
     const rows = await db
       .prepare(`SELECT * FROM ${ident(table)} WHERE ${ident(column)} = ?`)
-      .all(memberId);
-    if (rows.length) data[`${table}.${column}`] = rows;
+      .all<Record<string, unknown>>(memberId);
+    const omit = EXPORT_OMIT[table] ?? [];
+    if (rows.length) {
+      data[`${table}.${column}`] = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !omit.includes(k))));
+    }
   }
   data["team_members.username"] = await db
     .prepare("SELECT * FROM team_members WHERE username = ?")
@@ -93,6 +102,12 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
         `DELETE FROM registration_answers WHERE registrationId IN
            (SELECT id FROM registrations WHERE memberId = ?)`,
       )
+      .run(memberId);
+    // denúncia de conduta feita pela pessoa: anonimiza o autor (e o contato
+    // que ela deixou), mas a denúncia fica — apagar sumiria com o registro
+    // de um incidente que pode envolver outras pessoas (frente L)
+    await db
+      .prepare("UPDATE incidents SET reporterId = NULL, contact = NULL WHERE reporterId = ?")
       .run(memberId);
     for (const { table, column } of refs) {
       if (!OWNER_COLUMNS.has(column) || KEEP_TABLES.has(table)) continue;

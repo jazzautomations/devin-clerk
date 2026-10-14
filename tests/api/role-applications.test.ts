@@ -108,7 +108,7 @@ describe("POST /api/hackathons/[id]/applications/[kind]", () => {
   });
 
   it("participante inscrito → 409 conflict_participant ao pedir jurado", async () => {
-    await submitRegistration({ memberId: await idOf("clerk_ca_usr"), hackathonId: ED, answers: {}, consent: true, ip: null });
+    await submitRegistration({ memberId: await idOf("clerk_ca_usr"), hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     asUser("clerk_ca_usr");
     const { POST } = await import("@/app/api/hackathons/[id]/applications/[kind]/route");
     const res = await POST(req("POST", { consent: true }), kindCtx("jurado"));
@@ -121,7 +121,7 @@ describe("POST /api/hackathons/[id]/applications/[kind]", () => {
     const { POST } = await import("@/app/api/hackathons/[id]/applications/[kind]/route");
     expect((await POST(req("POST", { consent: true }), kindCtx("jurado"))).status).toBe(201);
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    const res = await reg.POST(req("POST", { consent: true }), edCtx);
+    const res = await reg.POST(req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true } }), edCtx);
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("conflict_role:jurado");
   });

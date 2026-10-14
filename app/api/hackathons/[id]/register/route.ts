@@ -38,6 +38,7 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     consent?: unknown;
     answers?: unknown;
+    terms?: unknown;
   } | null;
   const result = await submitRegistration({
     memberId: member.id,
@@ -45,12 +46,18 @@ export async function POST(
     answers: body?.answers,
     consent: body?.consent === true,
     ip: clientIp(req),
+    // frente L — { birthDate, guardian?, conduct, conductVersion?, imageUse?, diet?, allergies?, allergySevere? }
+    terms: body?.terms,
   });
   if (!result.ok) {
     // frente E — candidato a voluntário/mentor/jurado não compete na mesma edição
     const conflict = result.error.startsWith("conflict_role:");
     return Response.json(
-      { error: result.error, questionId: result.questionId ?? null },
+      {
+        error: result.error,
+        questionId: result.questionId ?? null,
+        ...(result.message ? { message: result.message } : {}),
+      },
       { status: conflict ? 409 : 400 },
     );
   }

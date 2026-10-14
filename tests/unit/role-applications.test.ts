@@ -136,7 +136,7 @@ describe("candidatar", () => {
 describe("conflito participante × ajuda", () => {
   it("inscrito (aprovado, pendente ou na fila) não se candidata a jurado nem aos outros tipos", async () => {
     const m = await makeMember();
-    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null })).toMatchObject({
+    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } })).toMatchObject({
       ok: true,
     });
     for (const k of ["jurado", "mentor", "voluntario"] as const) {
@@ -155,12 +155,12 @@ describe("conflito participante × ajuda", () => {
   it("candidato pendente/aprovado não se inscreve como participante; recusado pode", async () => {
     const m = await makeMember();
     await apply(m, "jurado");
-    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null })).toMatchObject({
+    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } })).toMatchObject({
       ok: false,
       error: "conflict_role:jurado",
     });
     await reviewApplication({ hackathonId: ED, applicationId: await idOf(m, "jurado"), action: "reject", reviewerId: null });
-    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null })).toMatchObject({
+    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } })).toMatchObject({
       ok: true,
       created: true,
     });
@@ -169,7 +169,7 @@ describe("conflito participante × ajuda", () => {
   it("jurado convidado (sem candidatura) também não se inscreve", async () => {
     const m = await makeMember();
     await grantEditionRole(ED, m, "jurado", null);
-    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null })).toMatchObject({
+    expect(await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } })).toMatchObject({
       ok: false,
       error: "conflict_role:jurado",
     });

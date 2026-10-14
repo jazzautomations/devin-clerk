@@ -38,6 +38,12 @@ export type Badge = {
   team: string | null;
   /** token do QR do ingresso; null = sem inscrição aprovada (só papel) */
   token: string | null;
+  /**
+   * frente L — inscrito que NÃO autorizou (ou revogou) uso de imagem: o
+   * crachá sai com o sinal "sem foto" pra equipe de foto. Só vale pra quem
+   * se inscreveu (foi quem recebeu a pergunta); crachá só de papel não marca.
+   */
+  noPhoto?: boolean;
 };
 
 // quem tem mais de um papel sai com o mais alto (organizador > … > participante)
@@ -57,7 +63,10 @@ export async function listBadges(hackathonId: string, role?: BadgeRole | null): 
                 WHERE er.hackathonId = @h AND er.memberId = m.id) AS roles,
               (SELECT t.name FROM team_members tm JOIN teams t ON t.id = tm.teamId
                 WHERE t.hackathonId = @h AND tm.username = m.username
-                ORDER BY t.id LIMIT 1) AS team
+                ORDER BY t.id LIMIT 1) AS team,
+              (SELECT ic.granted FROM image_consents ic
+                WHERE ic.hackathonId = @h AND ic.memberId = m.id
+                ORDER BY ic.id DESC LIMIT 1) AS "imageGranted"
        FROM members m
        LEFT JOIN registrations r ON r.memberId = m.id AND r.hackathonId = @h
        WHERE (r.status = 'approved')
@@ -71,6 +80,7 @@ export async function listBadges(hackathonId: string, role?: BadgeRole | null): 
       status: string | null;
       roles: string | null;
       team: string | null;
+      imageGranted: number | null;
     }>({ h: hackathonId });
 
   const badges = rows.map((r): Badge => {
@@ -84,6 +94,7 @@ export async function listBadges(hackathonId: string, role?: BadgeRole | null): 
       role: top,
       team: r.team,
       token: approved ? ticketToken(r.registrationId!) : null,
+      noPhoto: approved && r.imageGranted !== 1,
     };
   });
   const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
@@ -279,7 +290,7 @@ function drawBadge(
   page.drawRectangle({ x, y: y + H - bandH, width: W, height: bandH, color });
   const roleTxt = ROLE_LABEL[b.role].toUpperCase();
   page.drawText(roleTxt, { x: x + pad, y: y + H - bandH + 2.6 * MM, size: 10, font: f.mono, color: PAPER });
-  const ed = ellipsize(f.mono, f.edition.toUpperCase(), 7, W * 0.5);
+  const ed = ellipsize(f.mono, f.edition.toUpperCase(), 7, b.noPhoto ? W * 0.4 : W * 0.5);
   page.drawText(ed, {
     x: x + W - pad - f.mono.widthOfTextAtSize(ed, 7),
     y: y + H - bandH + 2.9 * MM,
@@ -287,6 +298,23 @@ function drawBadge(
     font: f.mono,
     color: PAPER,
   });
+
+  // sinal "sem foto": círculo cortado (câmera proibida) na faixa, ao lado
+  // do papel — discreto pro público, claro pra equipe de foto
+  if (b.noPhoto) {
+    const cx = x + pad + f.mono.widthOfTextAtSize(roleTxt, 10) + 5 * MM;
+    const cy = y + H - bandH / 2;
+    const r = 2.6 * MM;
+    page.drawCircle({ x: cx, y: cy, size: r, color: PAPER });
+    page.drawCircle({ x: cx, y: cy, size: r - 0.9, borderColor: INK, borderWidth: 1.1 });
+    page.drawLine({
+      start: { x: cx - (r - 1.4) * 0.7, y: cy - (r - 1.4) * 0.7 },
+      end: { x: cx + (r - 1.4) * 0.7, y: cy + (r - 1.4) * 0.7 },
+      thickness: 1.1,
+      color: INK,
+    });
+    page.drawText("SEM FOTO", { x: cx + r + 1.2 * MM, y: y + H - bandH + 2.9 * MM, size: 6.5, font: f.mono, color: PAPER });
+  }
 
   const qrSize = b.token ? H - bandH - 2 * pad + 2 * MM : 0;
   const textW = W - 2 * pad - (b.token ? qrSize + 3 * MM : 0);
