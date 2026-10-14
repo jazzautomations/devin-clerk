@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { AuthShow } from "@/components/AuthShow";
 import { appConfig } from "@/app.config";
 import { NotificationBell } from "@/components/NotificationBell";
 import { DesktopNav, MobileMenu } from "@/components/HeaderNav";
@@ -22,15 +23,15 @@ export function Header() {
           <span className="hidden font-mono text-xs text-muted sm:inline">/hack inova</span>
         </Link>
 
-        <Show when="signed-in">
+        <AuthShow when="signed-in">
           <DesktopNav variant="in" />
-        </Show>
-        <Show when="signed-out">
+        </AuthShow>
+        <AuthShow when="signed-out">
           <DesktopNav variant="out" />
-        </Show>
+        </AuthShow>
 
         <div className="flex items-center gap-2.5 sm:gap-3">
-          <Show when="signed-out">
+          <AuthShow when="signed-out">
             <SignInButton mode="modal">
               <button className="hidden py-2 text-[15px] font-medium underline-offset-4 hover:underline sm:inline">
                 entrar
@@ -40,8 +41,8 @@ export function Header() {
             <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
               <button className="btn min-h-[40px]! px-3.5! py-1.5! text-[14px]!">criar conta</button>
             </SignUpButton>
-          </Show>
-          <Show when="signed-in">
+          </AuthShow>
+          <AuthShow when="signed-in">
             <Link
               href="/dashboard"
               className="hidden min-h-[40px] items-center border-[1.5px] border-line px-3.5 text-[14px] font-semibold hover:bg-foreground hover:text-background sm:inline-flex"
@@ -50,15 +51,15 @@ export function Header() {
             </Link>
             <NotificationBell />
             <UserButton />
-          </Show>
-          <Show when="signed-out">
+          </AuthShow>
+          <AuthShow when="signed-out">
             <MobileMenu variant="out">
               <SignInButton mode="modal">
                 <button className="btn-ghost min-h-[40px]! px-4! text-[14px]!">entrar</button>
               </SignInButton>
             </MobileMenu>
-          </Show>
-          <Show when="signed-in">
+          </AuthShow>
+          <AuthShow when="signed-in">
             <MobileMenu variant="in">
               <Link href="/dashboard" className="btn min-h-[40px]! px-4! text-[14px]!">
                 meu painel
@@ -67,7 +68,7 @@ export function Header() {
                 editar perfil
               </Link>
             </MobileMenu>
-          </Show>
+          </AuthShow>
         </div>
       </div>
     </header>

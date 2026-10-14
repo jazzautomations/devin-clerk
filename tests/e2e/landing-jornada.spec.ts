@@ -38,7 +38,7 @@ test.describe("landing pública", () => {
   test("header de quem não tem conta: o que explica o produto, sem link pra área logada", async ({ page }) => {
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Navegação principal" });
-    await expect(nav.getByRole("link", { name: "como funciona" })).toHaveAttribute("href", "/#como-funciona");
+    await expect(nav.getByRole("link", { name: "como funciona" })).toHaveAttribute("href", "/#o-que-e");
     await expect(nav.getByRole("link", { name: "organizar" })).toHaveAttribute("href", "/organizar");
     await expect(nav.getByRole("link", { name: "patrocinar" })).toHaveAttribute("href", "/empresas");
     await expect(nav.getByRole("link", { name: "hackathons" })).toHaveCount(0);

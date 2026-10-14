@@ -14,12 +14,9 @@ test.describe("plataforma — erro, ids e arquivos que o navegador pede", () => 
     const body = await page.locator("body").innerText();
     expect(body).not.toContain("This page couldn't load");
     expect(body).not.toMatch(/Reload to try again/);
-    // ou 404, ou a tela de erro em PT-BR com o código de referência
-    if (status !== 404) {
-      await expect(page.getByTestId("error-screen")).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Algo quebrou do nosso lado" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "tentar de novo" })).toBeVisible();
-    }
+    // o header decide logado/deslogado no cliente (AuthShow), então o 404
+    // de caminho de arquivo renderiza normal, sem 500
+    expect(status).toBe(404);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/erro-x-png-390.png`, fullPage: true });

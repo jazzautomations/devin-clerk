@@ -12,6 +12,7 @@ import { getEditionCapacity } from "@/lib/registrations";
 import { landingList } from "@/lib/radar";
 import { getStatsMomentum } from "@/lib/momentum";
 import { getChampions, getCommunityProof } from "@/lib/landing";
+import { radarRegion } from "@/lib/radar";
 
 // spec 039 — landing por público: quem participa decide no hero (próxima
 // edição ou hackathons abertos), quem organiza tem a faixa escura e
@@ -176,6 +177,10 @@ export default async function Home() {
   // próximas: Hack Inova primeiro, depois hackathons do Brasil por data
   // (sem gringo online, sem o que fecha em menos de 48h — lib/radar.ts)
   const proximas = landingList(upcoming, now, 6);
+  // "pra que serve": quantos hackathons do Brasil estão abertos agora (radar)
+  const abertosBrasil = upcoming.filter((h) => !h.partner && ["br", "online-br"].includes(radarRegion(h))).length;
+  // por onde a Hack Inova já passou — edições reais encerradas
+  const passadas = past.filter((h) => h.partner).slice(0, 6);
 
   const stats = [
     { n: proof.editions, label: "edições realizadas", delta: 0 },
@@ -214,7 +219,7 @@ export default async function Home() {
           className="relative mx-auto grid max-w-6xl gap-10 px-4 pt-10 pb-14 sm:px-6 sm:pt-16 lg:grid-cols-[1.3fr_1fr] lg:items-end lg:gap-14 lg:pt-20 lg:pb-20"
         >
           <div className="rise min-w-0">
-            <p className="tag">HACK INOVA · HACKAHUB</p>
+            <p className="tag">HACKAHUB · A PLATAFORMA DA HACK INOVA</p>
             <h1
               id="hero-title"
               className="mt-6 text-[clamp(2.9rem,9vw,6.4rem)] leading-[0.88] font-extrabold tracking-[-0.05em]"
@@ -224,8 +229,9 @@ export default async function Home() {
               <span className="text-accent">de hackathon.</span>
             </h1>
             <p className="mt-7 max-w-[50ch] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-relaxed text-[#1e1e1e]">
-              É aqui que a Hack Inova abre inscrição, junta as equipes e guarda o que cada uma construiu.
-              Você cria a conta uma vez e entra em todas as edições.
+              O HackaHub é onde você acha hackathons abertos no Brasil, se inscreve, monta a equipe, entrega
+              o projeto e sai com certificado e portfólio. É também onde a Hack Inova organiza as edições dela,
+              do formulário ao resultado.
             </p>
             <div className="mt-9 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
               <Link href={primaryHref} className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
@@ -267,6 +273,80 @@ export default async function Home() {
           </dl>
         </section>
       )}
+
+      {/* o que é — responde "que porra é essa" antes de qualquer detalhe */}
+      <section id="o-que-e" aria-labelledby="oque-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-28" data-testid="landing-o-que-e">
+        <p className="eyebrow">
+          <b>[00]</b> o que é
+        </p>
+        <h2 id="oque-title" className="mt-4 max-w-[18ch] text-[clamp(2.1rem,4.6vw,3.4rem)] leading-[0.95] font-extrabold tracking-[-0.04em]">
+          Pra que serve o HackaHub.
+        </h2>
+        <ol className="ink-grid mt-10 lg:grid-cols-3">
+          <li className="flex flex-col gap-3 p-6">
+            <span className="pix text-[28px] leading-none text-accent">01</span>
+            <h3 className="text-[1.45rem] leading-tight font-extrabold tracking-[-0.025em]">Achar hackathon</h3>
+            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
+              Um calendário com os hackathons de inscrição aberta no Brasil, separado por estado e atualizado
+              todo dia.
+              {abertosBrasil > 0 && (
+                <>
+                  {" "}
+                  Agora tem <b>{abertosBrasil}</b> {abertosBrasil === 1 ? "aberto" : "abertos"}.
+                </>
+              )}
+            </p>
+          </li>
+          <li className="flex flex-col gap-3 p-6">
+            <span className="pix text-[28px] leading-none text-accent">02</span>
+            <h3 className="text-[1.45rem] leading-tight font-extrabold tracking-[-0.025em]">Participar das edições da Hack Inova</h3>
+            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
+              A inscrição, o ingresso, a equipe, a entrega e o resultado ficam aqui. No dia, você mostra o QR na
+              entrada e passa o resto do tempo construindo.
+            </p>
+          </li>
+          <li className="flex flex-col gap-3 p-6">
+            <span className="pix text-[28px] leading-none text-accent">03</span>
+            <h3 className="text-[1.45rem] leading-tight font-extrabold tracking-[-0.025em]">Guardar o que você fez</h3>
+            <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
+              Cada edição vira um registro no seu perfil: projeto, equipe, prêmio e certificado com carga
+              horária, que você pode apresentar na faculdade como hora complementar.
+            </p>
+          </li>
+        </ol>
+
+        <div className="mt-8 grid gap-8 border-2 border-line bg-mint p-6 sm:p-8 lg:grid-cols-[1fr_1.4fr] lg:items-start" data-testid="landing-primeira-vez">
+          <h3 className="text-[clamp(1.6rem,3vw,2.2rem)] leading-[1] font-extrabold tracking-[-0.03em]">
+            Nunca foi a um hackathon?
+          </h3>
+          <div className="flex flex-col gap-3 text-[16px] leading-relaxed text-[#1e1e1e]">
+            <p>
+              É uma maratona de um ou dois dias. Você forma uma equipe com gente de áreas diferentes, escolhe
+              um desafio, constrói um protótipo e apresenta pra um júri no fim.
+            </p>
+            <p>
+              Não precisa chegar com equipe nem com ideia pronta, e não precisa ser programador: equipe boa
+              mistura código, design, negócio e dados. Participar é de graça.
+            </p>
+          </div>
+        </div>
+
+        {passadas.length > 0 && (
+          <div className="mt-8" data-testid="landing-passadas">
+            <p className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">por onde a Hack Inova já passou</p>
+            <ul className="mt-3 border-b border-line">
+              {passadas.map((h) => (
+                <li key={h.id} className="flex flex-col gap-0.5 border-t border-line py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                  <span className="text-[16px] font-bold">{h.name}</span>
+                  <span className="font-mono text-[12.5px] text-muted">
+                    {h.location ?? "online"} · {fmtMes.format(new Date(h.startsAt)).replace(".", "")} {fmtAno.format(new Date(h.startsAt))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
 
       {/* quem participa: a jornada inteira antes de pedir conta */}
       <section id="como-funciona" aria-labelledby="participar-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-28">
