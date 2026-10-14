@@ -1009,3 +1009,28 @@ export function summaryText(s: AttendanceSummary | undefined): string {
   if (s.expirou) parts.push(`${s.expirou} não confirmou`);
   return parts.join(" · ");
 }
+
+/** convites do RSVP esperando resposta do membro (cartão no /dashboard) */
+export async function listPendingRsvpForMember(
+  memberId: number,
+  now = new Date(),
+): Promise<{ hackathonId: string; hackathonName: string; deadline: string; href: string }[]> {
+  const rows = await db
+    .prepare(
+      `SELECT r.id, r.hackathonId, h.name AS "hackathonName", r.rsvpDeadlineAt
+       FROM registrations r JOIN hackathons h ON h.id = r.hackathonId
+       WHERE r.memberId = ? AND r.status = 'approved' AND r.rsvpStatus = 'pending'
+         AND to_ts(r.rsvpDeadlineAt) > to_ts(?)
+       ORDER BY r.rsvpDeadlineAt`,
+    )
+    .all<{ id: number; hackathonId: string; hackathonName: string; rsvpDeadlineAt: string }>(memberId, sqlTime(now));
+  return rows.map((r) => {
+    const deadline = fromSqlTime(r.rsvpDeadlineAt);
+    return {
+      hackathonId: r.hackathonId,
+      hackathonName: r.hackathonName,
+      deadline: formatDeadline(deadline),
+      href: `/rsvp/${rsvpToken(r.id, deadline)}`,
+    };
+  });
+}

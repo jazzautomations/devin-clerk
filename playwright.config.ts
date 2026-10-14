@@ -4,6 +4,9 @@ import { defineConfig } from "@playwright/test";
 process.env.DATABASE_URL = process.env.E2E_DATABASE_URL;
 // porta própria por worktree quando vários e2e rodam na mesma máquina
 const PORT = Number(process.env.E2E_PORT ?? 3100);
+// segredo do link do RSVP compartilhado entre o server (herda process.env)
+// e os specs que geram token — o server roda em modo produção
+process.env.HACKAHUB_RSVP_SECRET ||= "e2e-rsvp-secret-nao-usar-em-producao";
 
 // E2e roda em produção buildada: `pretest:e2e` zera o banco do e2e
 // (E2E_DATABASE_URL) e faz `next build` em .next-e2e; o webServer aqui sobe
