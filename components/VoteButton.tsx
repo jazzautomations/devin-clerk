@@ -80,18 +80,18 @@ export function VoteButton({
         }
         className={`w-fit border px-4 py-2 font-mono text-sm transition disabled:opacity-60 ${
           voted
-            ? "border-accent/50 bg-accent/10 text-accent"
-            : "border-line text-muted hover:border-accent/50 hover:text-accent"
+            ? "border-accent bg-mint text-accent"
+            : "border-line text-muted hover:bg-mint hover:text-accent"
         }`}
       >
         {voted ? "▲" : "△"} {count} · escolha do povo
       </button>
       {own && (
         <p className="font-mono text-xs text-muted">
-          {"// teu time — o voto é da comunidade, não tua"}
+          {"teu time — o voto é da comunidade, não tua"}
         </p>
       )}
-      {error && <p className="font-mono text-xs text-red-400">{error}</p>}
+      {error && <p className="font-mono text-xs text-orange">{error}</p>}
     </div>
   );
 }

@@ -1,27 +1,39 @@
 @import "tailwindcss";
 
+/* Design system Hack Inova (HACKINOVA.OS): papel, tinta, verde.
+   Fios pretos no lugar de cards com sombra, raio zero, rótulos em pixel.
+   Fonte: hackinova-anhembi.vercel.app/site.css. Os nomes de token antigos
+   (background/surface/line/muted/accent) foram mantidos de propósito:
+   cada classe utilitária existente passa a falar a língua nova. */
 :root {
-  --background: #0a0c0d;
-  --foreground: #e9e7e3;
-  --accent: #a3e635;
-  --surface: #131719;
-  --surface-hi: #1a1f22;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-soft: rgba(255, 255, 255, 0.06);
-  --muted: #92989e;
-  --raro: #38bdf8;
-  --epico: #a78bfa;
-  --lendario: #f59e0b;
-  /* elevação — a sombra é o que separa card de retângulo */
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 36px rgba(0, 0, 0, 0.45);
-  --glow-accent: 0 0 0 1px rgba(163, 230, 53, 0.25), 0 8px 30px rgba(163, 230, 53, 0.08);
+  --background: #fefefe; /* papel */
+  --foreground: #0c0c0c; /* tinta */
+  --accent: #047a43; /* verde de texto/ação — AA sobre papel */
+  --accent-hi: #064f3e;
+  --band: #3ecf8e; /* verde-banda: só fundo, nunca texto sobre papel */
+  --mint: #d8f4e5;
+  --chrome: #dedede;
+  --orange: #ba3919;
+  --surface: #fefefe;
+  --surface-hi: #d8f4e5;
+  --line: #0c0c0c;
+  --line-soft: rgba(12, 12, 12, 0.16);
+  --muted: #474747;
+  /* raridade das cartas — tons escuros p/ contraste AA em fundo claro */
+  --raro: #0369a1;
+  --epico: #6d28d9;
+  --lendario: #a8550a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
+  --color-accent-hi: var(--accent-hi);
+  --color-band: var(--band);
+  --color-mint: var(--mint);
+  --color-chrome: var(--chrome);
+  --color-orange: var(--orange);
   --color-surface: var(--surface);
   --color-surface-hi: var(--surface-hi);
   --color-line: var(--line);
@@ -30,67 +42,359 @@
   --color-raro: var(--raro);
   --color-epico: var(--epico);
   --color-lendario: var(--lendario);
-  --font-sans: var(--font-geist-sans);
-  --font-display: var(--font-space-grotesk);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--foreground);
+  --color-paper: var(--background);
+  --font-sans: var(--font-archivo);
+  --font-display: var(--font-archivo);
+  --font-mono: var(--font-jetbrains);
+  --font-pix: var(--font-vt323);
+}
+
+* {
+  border-radius: 0 !important;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-feature-settings: "ss01";
+  -webkit-font-smoothing: antialiased;
 }
 
+/* marcas de corte nos cantos da tela — assinatura do site da Hack Inova */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 14px;
+  pointer-events: none;
+  z-index: 60;
+  background:
+    linear-gradient(var(--line), var(--line)) left 0 top 8px / 16px 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) left 8px top 0 / 1px 16px no-repeat,
+    linear-gradient(var(--line), var(--line)) right 0 top 8px / 16px 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) right 8px top 0 / 1px 16px no-repeat,
+    linear-gradient(var(--line), var(--line)) left 0 bottom 8px / 16px 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) left 8px bottom 0 / 1px 16px no-repeat,
+    linear-gradient(var(--line), var(--line)) right 0 bottom 8px / 16px 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) right 8px bottom 0 / 1px 16px no-repeat;
+}
+@media (max-width: 640px) {
+  body::after {
+    display: none;
+  }
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 3px;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  /* Archivo pesado com tracking negativo cola as palavras; devolve o respiro */
+  word-spacing: 0.06em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- primitivas ---------- */
+
+/* rótulo pixel: VT323 em bloco de tinta com texto verde-banda */
+.pix {
+  font-family: var(--font-vt323), ui-monospace, monospace;
+  letter-spacing: 0.03em;
+}
+.tag {
+  display: inline-block;
+  font-family: var(--font-vt323), ui-monospace, monospace;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  background: var(--foreground);
+  color: var(--band);
+  padding: 0 8px;
+}
+
+/* faixa de evento: tinta, texto pixel verde, fio verde embaixo */
+.strip {
+  background: var(--foreground);
+  color: var(--band);
+  font-family: var(--font-vt323), ui-monospace, monospace;
+  font-size: 18px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--band);
+}
+
+/* janela: o bloco de conteúdo do sistema. Barra de título pixel. */
+.window {
+  background: var(--chrome);
+  border: 2px solid var(--line);
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  color: var(--foreground);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.window.paper {
+  background: var(--background);
+}
+.window.dark {
+  background: var(--foreground);
+  color: var(--band);
+}
+.window.hard {
+  box-shadow: 6px 6px 0 rgba(12, 12, 12, 0.85);
+}
+.tbar {
+  background: var(--foreground);
+  color: var(--background);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  font-family: var(--font-vt323), ui-monospace, monospace;
+  font-size: 18px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+.tbar .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tbar .dots {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.tbar .dots b {
+  width: 9px;
+  height: 9px;
+  background: var(--background);
+}
+.window.dark .tbar {
+  border-bottom: 1px solid #2a5f45;
+}
+.tbody {
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* área pontilhada sobre verde-banda (a "mesa") */
+.desk {
+  background-color: var(--band);
+  background-image: radial-gradient(var(--foreground) 0.9px, transparent 1.2px);
+  background-size: 7px 7px;
+  border-block: 2px solid var(--line);
+}
+
+/* grade com gaps de 2px em tinta (o mapa do site) */
+.ink-grid {
+  display: grid;
+  gap: 2px;
+  background: var(--line);
+  border: 2px solid var(--line);
+}
+.ink-grid > * {
+  background: var(--background);
+  min-width: 0;
+}
+
+/* botões */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border: 1.5px solid var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 650;
+  font-size: 15px;
+  line-height: 1.3;
+  text-decoration: none;
+  transition:
+    background 0.2s cubic-bezier(0.12, 0.23, 0.5, 1),
+    color 0.2s cubic-bezier(0.12, 0.23, 0.5, 1);
+}
+.btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border: 1.5px solid var(--foreground);
+  background: var(--background);
+  color: var(--foreground);
+  font-weight: 650;
+  font-size: 15px;
+  line-height: 1.3;
+  text-decoration: none;
+  transition:
+    background 0.2s cubic-bezier(0.12, 0.23, 0.5, 1),
+    color 0.2s cubic-bezier(0.12, 0.23, 0.5, 1);
+}
+.btn-ghost:hover {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+/* link grande sublinhado que recolhe no hover */
+.cta-link {
+  position: relative;
+  padding-bottom: 4px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--foreground);
+}
+.cta-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--foreground);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.12, 0.23, 0.5, 1);
+}
+.cta-link:hover::after {
+  transform: scaleX(0);
+  transform-origin: right;
+}
+.cta-link.go::after {
+  background: var(--accent);
+}
+
+/* chip "+ coisa" */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1.5px solid var(--foreground);
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.chip::before {
+  content: "+";
+  color: var(--accent);
+  font-weight: 700;
+}
+.chip.bare::before {
+  content: none;
+}
+
+/* ticker de prova */
+.proof {
+  overflow: hidden;
+  white-space: nowrap;
+  border-block: 2px solid var(--line);
+}
+.proof .track {
+  display: inline-flex;
+  gap: 44px;
+  padding: 14px 44px 14px 0;
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  animation: slide 40s linear infinite;
+}
+.proof .track span::before {
+  content: "◆ ";
+  color: var(--accent);
+  font-size: 10px;
+}
+@keyframes slide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* textura de fundo: papel milimetrado bem leve */
 .grid-texture {
   background-image:
-    linear-gradient(to right, var(--line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+    linear-gradient(to right, var(--line-soft) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line-soft) 1px, transparent 1px);
   background-size: 56px 56px;
-  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 20%, transparent 70%);
+  opacity: 0.5;
 }
 
-/* card com elevacao real — borda + highlight interno + sombra.
-   hover sobe e acende a borda. E o que diferencia produto de wireframe. */
+/* card: papel com fio de tinta; no hover ganha a sombra dura das janelas */
 .card {
-  background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface) 100%);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-card);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  background: var(--background);
+  border: 1.5px solid var(--line);
+  transition:
+    transform 0.18s cubic-bezier(0.12, 0.23, 0.5, 1),
+    box-shadow 0.18s cubic-bezier(0.12, 0.23, 0.5, 1);
 }
 .card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(163, 230, 53, 0.35);
-  box-shadow: var(--shadow-lift), var(--glow-accent);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 rgba(12, 12, 12, 0.85);
 }
 
-/* faixa de arte generativa no topo dos cards — CardArt ganha recorte
-   e um fade pra superficie pra texto por cima continuar legivel */
 .card-cover {
   position: relative;
   overflow: hidden;
-  border-bottom: 1px solid var(--line);
-}
-.card-cover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 40%, rgba(10, 12, 13, 0.55) 100%);
-  pointer-events: none;
+  border-bottom: 1.5px solid var(--line);
 }
 
-/* selo de premio — barra dourada com cara de dinheiro, nao chip cinza */
+/* selo de prêmio — lendário (spec 024): âmbar escuro em pixel, fio âmbar */
 .prize-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.06));
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: #fbefe2;
+  border: 1.5px solid var(--lendario);
   color: var(--lendario);
-  font-family: var(--font-mono), monospace;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.3rem 0.6rem;
-  letter-spacing: 0.02em;
+  font-family: var(--font-vt323), ui-monospace, monospace;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  padding: 0.1rem 0.5rem;
+  letter-spacing: 0.03em;
 }
 
 /* efeito holo das cartinhas — faixa de luz atravessa no hover */
@@ -105,9 +409,9 @@ body {
   background: linear-gradient(
     115deg,
     transparent 42%,
-    rgba(255, 255, 255, 0.07) 47%,
-    rgba(255, 255, 255, 0.13) 50%,
-    rgba(255, 255, 255, 0.07) 53%,
+    rgba(255, 255, 255, 0.28) 47%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0.28) 53%,
     transparent 58%
   );
   transform: translateX(-130%);
@@ -118,27 +422,54 @@ body {
   transform: translateX(130%);
 }
 
+/* trama de pontos da tinta — acabamento "impresso" sobre a arte da carta */
+.scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(12, 12, 12, 0.35) 0.7px, transparent 1px);
+  background-size: 4px 4px;
+  pointer-events: none;
+}
+
+/* campos de formulário: fio de tinta 1.5px, foco laranja */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  background: var(--background);
+  color: var(--foreground);
+  caret-color: var(--accent);
+}
+input::placeholder,
+textarea::placeholder {
+  color: #6b6b6b;
+}
+
 /* tipografia do blog — saída do renderer mínimo de lib/blog.ts */
 .blog-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   line-height: 1.75;
+  font-size: 1.0625rem;
 }
 .blog-body h1,
 .blog-body h2,
 .blog-body h3,
 .blog-body h4 {
-  font-family: var(--font-display), sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 0.75rem;
+  font-family: var(--font-archivo), sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-top: 1rem;
 }
 .blog-body h1 {
-  font-size: 1.875rem;
+  font-size: 2rem;
 }
 .blog-body h2 {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  border-top: 2px solid var(--line);
+  padding-top: 1.25rem;
 }
 .blog-body h3 {
   font-size: 1.25rem;
@@ -154,10 +485,14 @@ body {
   padding-left: 1.5rem;
 }
 .blog-body ul {
-  list-style: disc;
+  list-style: square;
 }
 .blog-body ol {
   list-style: decimal;
+}
+.blog-body ol li::marker {
+  font-family: var(--font-jetbrains), monospace;
+  color: var(--accent);
 }
 .blog-body a {
   color: var(--accent);
@@ -165,37 +500,29 @@ body {
   text-underline-offset: 3px;
 }
 .blog-body strong {
-  font-weight: 600;
+  font-weight: 700;
 }
 .blog-body code {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-jetbrains), monospace;
   font-size: 0.85em;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--mint);
   padding: 0.1rem 0.35rem;
 }
 .blog-body pre {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--foreground);
+  color: #38e08a;
+  border: 2px solid var(--line);
   padding: 1rem;
   overflow-x: auto;
 }
 .blog-body pre code {
   background: none;
-  border: none;
+  color: inherit;
   padding: 0;
   font-size: 0.8125rem;
 }
-
-/* textura de scanlines sutil — acabamento CRT no topo de card/art */
-.scanlines::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 3px,
-    rgba(0, 0, 0, 0.18) 3px 4px
-  );
-  pointer-events: none;
+.blog-body blockquote {
+  border-left: 4px solid var(--accent);
+  padding-left: 1rem;
+  color: var(--muted);
 }

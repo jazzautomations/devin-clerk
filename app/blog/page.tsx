@@ -19,12 +19,12 @@ export default function BlogPage() {
   const posts = listPosts();
 
   return (
-    <section className="mx-auto flex max-w-2xl flex-col gap-8 px-6 py-12">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 [&>*]:max-w-2xl">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// blog"}
+        <p className="tag self-start uppercase">
+          {"blog"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           Bastidores e guias
         </h1>
         <p className="max-w-xl text-muted">
@@ -34,8 +34,8 @@ export default function BlogPage() {
       </div>
 
       {posts.length === 0 ? (
-        <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {"// ainda sem posts — o primeiro tá saindo"}
+        <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
+          {"ainda sem posts — o primeiro tá saindo"}
         </p>
       ) : (
         <ul className="divide-y divide-line border-y border-line">
@@ -46,7 +46,7 @@ export default function BlogPage() {
                 className="group flex flex-col gap-2 py-5"
               >
                 <div className="flex items-baseline justify-between gap-4">
-                  <h2 className="font-display text-xl font-semibold tracking-tight transition group-hover:text-accent">
+                  <h2 className="font-display text-xl font-extrabold tracking-[-0.035em] transition group-hover:text-accent">
                     {p.title}
                   </h2>
                   <time
@@ -62,7 +62,7 @@ export default function BlogPage() {
                     {p.tags.map((t) => (
                       <span
                         key={t}
-                        className="border border-line px-2 py-0.5 font-mono text-[10px] text-muted"
+                        className="border-[1.5px] border-line px-2 py-0.5 font-mono text-[12px] text-muted"
                       >
                         #{t}
                       </span>

@@ -44,10 +44,10 @@ export default async function DashboardPage() {
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12">
+    <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// feed"}
+        <p className="tag self-start uppercase">
+          {"feed"}
         </p>
         <div className="flex items-center gap-3">
           <Avatar
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
             avatarUrl={member.avatarUrl}
             size="md"
           />
-          <h1 className="font-display text-4xl font-bold tracking-tight">
+          <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
             Salve{name ? `, ${name}` : ""}.
           </h1>
         </div>
@@ -84,7 +84,7 @@ export default async function DashboardPage() {
           {cards.length > 0 && (
             <Link
               href={`/u/${member.username}`}
-              className="font-mono text-[10px] text-muted transition hover:text-accent"
+              className="font-mono text-[12px] text-muted transition hover:text-accent"
             >
               {cards.length} {cards.length === 1 ? "cartinha" : "cartinhas"} na
               coleção →
@@ -94,7 +94,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           comunidade — o que a galera tá construindo
         </h2>
         <FeedSection
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
 
       {sessoes.length > 0 && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-widest text-accent uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-accent uppercase">
             sessões hack inova — inscrição direta
           </h2>
           <HackathonFeed
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
       )}
 
       <div className="flex flex-col gap-4">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           radar — brasil + mundo
         </h2>
         <HackathonFeed
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
 
       {past.length > 0 && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
             arquivo — edições passadas
           </h2>
           <ul className="divide-y divide-line border-y border-line">
@@ -143,7 +143,7 @@ export default async function DashboardPage() {
                   className="flex items-center justify-between gap-4 py-3 transition hover:text-accent"
                 >
                   <div>
-                    <p className="font-display font-semibold">{h.name}</p>
+                    <p className="font-display font-extrabold tracking-[-0.02em]">{h.name}</p>
                     <p className="font-mono text-xs text-muted">
                       {h.organizer} · {h.location ?? "online"}
                     </p>
@@ -162,7 +162,7 @@ export default async function DashboardPage() {
       )}
 
       <div className="flex flex-col gap-4">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           vindo por aí
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -173,7 +173,7 @@ export default async function DashboardPage() {
       </div>
 
       {nextFeature && (
-        <div className="border border-dashed border-accent/40 bg-accent/5 px-5 py-4 font-mono text-xs text-muted">
+        <div className="border-[1.5px] border-line bg-mint px-5 py-4 font-mono text-xs text-muted">
           <span className="text-accent">$ keep_building:</span> open Devin and
           ask it to &ldquo;Build &lsquo;{nextFeature.title}&rsquo; from the
           Coming soon page.&rdquo;

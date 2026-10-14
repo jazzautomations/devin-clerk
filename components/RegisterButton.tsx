@@ -76,18 +76,18 @@ export function RegisterButton({
       disabled={loading || status === "rejected"}
       className={
         status === "approved"
-          ? "border border-accent/50 bg-accent/10 px-6 py-3 font-mono text-sm font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-50"
+          ? "border-[1.5px] border-band px-5 py-3 font-mono text-[13px] font-semibold text-band transition hover:bg-band hover:text-foreground disabled:opacity-50"
           : status === "pending"
-            ? "border border-accent/40 bg-surface px-6 py-3 font-mono text-sm font-semibold text-muted transition hover:text-accent disabled:opacity-50"
+            ? "border-[1.5px] border-mint px-5 py-3 font-mono text-[13px] font-semibold text-mint transition hover:bg-mint hover:text-foreground disabled:opacity-50"
             : status === "rejected"
-              ? "border border-line px-6 py-3 font-mono text-sm text-muted opacity-60"
-              : "bg-accent px-6 py-3 font-mono text-sm font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              ? "border-[1.5px] border-[#5e7869] px-5 py-3 font-mono text-[13px] text-[#b8cdc0]"
+              : "pix border-[1.5px] border-band bg-band px-5 py-1.5 text-[24px] leading-[1.4] text-foreground transition hover:border-background hover:bg-background disabled:opacity-50"
       }
     >
       {label}
     </button>
     {reward && (
-      <p className="font-mono text-xs text-accent">{"// "}{reward}</p>
+      <p className="font-mono text-[13px] text-band">{reward}</p>
     )}
     </div>
   );

@@ -18,13 +18,13 @@ export default async function TalentoPage() {
   const talent = await listTalent(100);
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// talento"}
+        <p className="tag self-start uppercase">
+          {"talento"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
-          quem constrói de verdade
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
+          Quem constrói de verdade
         </h1>
         <p className="max-w-xl text-lg text-muted">
           Essas pessoas entregaram em hackathon — projetos no arquivo, pódio
@@ -54,7 +54,7 @@ export default async function TalentoPage() {
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <Link
                       href={`/u/${t.username}`}
-                      className="font-display font-semibold tracking-tight transition hover:text-accent"
+                      className="font-display font-extrabold tracking-[-0.035em] transition hover:text-accent"
                     >
                       {t.name ?? `@${t.username}`}
                     </Link>
@@ -65,7 +65,7 @@ export default async function TalentoPage() {
                       @{t.username}
                     </Link>
                     {t.persona && (
-                      <span className="border border-line bg-surface px-1.5 font-mono text-[10px] text-foreground">
+                      <span className="border border-line bg-surface px-1.5 font-mono text-[12px] text-foreground">
                         {t.persona}
                       </span>
                     )}
@@ -75,13 +75,13 @@ export default async function TalentoPage() {
                   )}
                   {/* openTo é o sinal comercial — leva o acento */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-[10px] text-muted">
+                    <span className="font-mono text-[12px] text-muted">
                       open to:
                     </span>
                     {t.openTo.map((o) => (
                       <span
                         key={o}
-                        className="border border-accent/50 bg-accent/10 px-1.5 font-mono text-[10px] text-accent"
+                        className="border border-accent bg-mint px-1.5 font-mono text-[12px] text-accent"
                       >
                         {o}
                       </span>
@@ -92,7 +92,7 @@ export default async function TalentoPage() {
                       {t.skills.slice(0, 8).map((s) => (
                         <span
                           key={s}
-                          className="border border-line px-1.5 font-mono text-[10px] text-muted"
+                          className="border border-line px-1.5 font-mono text-[12px] text-muted"
                         >
                           {s}
                         </span>
@@ -107,14 +107,14 @@ export default async function TalentoPage() {
                       {level.name} · {t.xp} xp
                     </span>
                   </span>
-                  <span className="font-mono text-[10px] text-muted">
+                  <span className="font-mono text-[12px] text-muted">
                     {t.projects}{" "}
                     {t.projects === 1 ? "projeto entregue" : "projetos entregues"}
                   </span>
                   {t.best && (
                     <Link
                       href={`/h/${t.best.hackathonId}`}
-                      className="w-fit border border-lendario/50 bg-lendario/10 px-1.5 font-mono text-[10px] text-lendario transition hover:brightness-125"
+                      className="w-fit border border-lendario/50 bg-lendario/10 px-1.5 font-mono text-[12px] text-lendario transition hover:brightness-125"
                     >
                       {t.best.placement}º lugar · {t.best.hackathonName}
                     </Link>
@@ -137,9 +137,9 @@ export default async function TalentoPage() {
       </ul>
 
       {talent.length === 0 && (
-        <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
+        <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {
-            "// ninguém marcou \"open to\" ainda — se tu constrói em hackathon, marca no teu /perfil e entra na vitrine"
+            "ninguém marcou \"open to\" ainda — se tu constrói em hackathon, marca no teu /perfil e entra na vitrine"
           }
         </p>
       )}

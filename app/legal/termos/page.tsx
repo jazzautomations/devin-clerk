@@ -13,13 +13,13 @@ export const metadata: Metadata = {
 
 export default function TermosPage() {
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// legal"}
+        <p className="tag self-start uppercase">
+          {"legal"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
-          termos de uso
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
+          Termos de uso
         </h1>
         <p className="text-muted">
           O combinado entre você e o hackahub. Direto ao ponto — se não concorda
@@ -28,7 +28,7 @@ export default function TermosPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           o serviço
         </h2>
         <p className="text-sm leading-relaxed text-muted">
@@ -40,7 +40,7 @@ export default function TermosPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           seu conteúdo
         </h2>
         <p className="text-sm leading-relaxed text-muted">
@@ -52,7 +52,7 @@ export default function TermosPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           conduta
         </h2>
         <p className="text-sm leading-relaxed text-muted">
@@ -63,7 +63,7 @@ export default function TermosPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           resultados e arquivo
         </h2>
         <p className="text-sm leading-relaxed text-muted">
@@ -74,7 +74,7 @@ export default function TermosPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           limites
         </h2>
         <p className="text-sm leading-relaxed text-muted">
@@ -85,7 +85,7 @@ export default function TermosPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           contato
         </h2>
         <p className="text-sm leading-relaxed text-muted">
@@ -97,8 +97,8 @@ export default function TermosPage() {
         </p>
       </div>
 
-      <p className="border-t border-line pt-6 font-mono text-[10px] text-muted">
-        {"// última revisão: out/2026 · "}
+      <p className="border-t border-line pt-6 font-mono text-[12px] text-muted">
+        {"última revisão: out/2026 · "}
         <Link href="/legal/privacidade" className="hover:text-accent">
           privacidade →
         </Link>

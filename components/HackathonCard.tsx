@@ -107,11 +107,11 @@ export function HackathonCard({
       >
         <CardArt seed={hackathon.id} className="h-full w-full" />
         <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
-          <span className="border border-line bg-background/80 px-2 py-0.5 font-mono text-[10px] tracking-widest text-muted uppercase backdrop-blur-sm">
+          <span className="border-[1.5px] border-line bg-background px-2 py-0.5 font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
             {FORMAT_LABEL[hackathon.format]}
           </span>
           {hackathon.partner && (
-            <span className="border border-accent/50 bg-background/80 px-2 py-0.5 font-mono text-[10px] tracking-widest text-accent uppercase backdrop-blur-sm">
+            <span className="border-[1.5px] border-accent bg-background px-2 py-0.5 font-mono text-[12px] tracking-[0.06em] text-accent uppercase">
               parceiro
             </span>
           )}
@@ -120,7 +120,7 @@ export function HackathonCard({
 
       <div className="flex flex-1 flex-col gap-4 p-5">
         <div className="flex flex-col gap-1">
-          <h3 className="font-display text-lg font-semibold tracking-tight">
+          <h3 className="font-display text-lg font-extrabold tracking-[-0.035em]">
             <Link href={`/h/${hackathon.id}`} className="transition hover:text-accent">
               {hackathon.name}
             </Link>
@@ -148,7 +148,7 @@ export function HackathonCard({
         {hackathon.prize && (
           <div className="col-span-2">
             <dt className="sr-only">prêmio</dt>
-            <dd><span className="prize-badge">{hackathon.prize}</span></dd>
+            <dd><span className="prize-badge text-lendario">{hackathon.prize}</span></dd>
           </div>
         )}
         <div className="col-span-2">
@@ -167,7 +167,7 @@ export function HackathonCard({
         {hackathon.tags.map((tag) => (
           <span
             key={tag}
-            className="border border-line px-2 py-0.5 font-mono text-[10px] text-muted"
+            className="border-[1.5px] border-line px-2 py-0.5 font-mono text-[12px] text-muted"
           >
             #{tag}
           </span>
@@ -180,12 +180,12 @@ export function HackathonCard({
           disabled={loading || status === "rejected"}
           className={
             status === "approved"
-              ? "mt-auto border border-accent/50 bg-accent/10 px-4 py-2 font-mono text-xs font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-50"
+              ? "mt-auto border-[1.5px] border-accent bg-mint px-4 py-2 font-mono text-xs font-semibold text-accent transition hover:bg-[#c3ebd5] disabled:opacity-50"
               : status === "pending"
-                ? "mt-auto border border-accent/40 bg-surface px-4 py-2 font-mono text-xs font-semibold text-muted transition hover:text-accent disabled:opacity-50"
+                ? "mt-auto border-[1.5px] border-accent bg-surface px-4 py-2 font-mono text-xs font-semibold text-muted transition hover:text-accent disabled:opacity-50"
                 : status === "rejected"
-                  ? "mt-auto border border-line px-4 py-2 font-mono text-xs text-muted opacity-60"
-                  : "mt-auto bg-accent px-4 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+                  ? "mt-auto border-[1.5px] border-line px-4 py-2 font-mono text-xs text-muted opacity-60"
+                  : "mt-auto bg-foreground px-4 py-2 font-mono text-xs font-semibold text-background transition hover:bg-accent disabled:opacity-50"
           }
         >
           {loading
@@ -207,15 +207,15 @@ export function HackathonCard({
           rel="noopener"
           className={
             closed
-              ? "mt-auto border border-line px-4 py-2 text-center font-mono text-xs text-muted"
-              : "mt-auto border border-line px-4 py-2 text-center font-mono text-xs text-foreground transition hover:border-accent/50 hover:text-accent"
+              ? "mt-auto border-[1.5px] border-line px-4 py-2 text-center font-mono text-xs text-muted"
+              : "mt-auto border-[1.5px] border-line px-4 py-2 text-center font-mono text-xs text-foreground transition hover:bg-mint hover:text-accent"
           }
         >
           {closed ? "ver evento →" : "inscrever no site oficial →"}
         </a>
       )}
       {reward && (
-        <p className="font-mono text-[10px] text-accent">{"// "}{reward}</p>
+        <p className="font-mono text-[12px] text-accent">{""}{reward}</p>
       )}
       </div>
     </article>

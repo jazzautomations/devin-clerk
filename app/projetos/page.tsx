@@ -60,20 +60,20 @@ export default async function ProjetosPage({
   const filtering = !!hackathonId || liveOnly || !!q;
 
   const chip = (active: boolean) =>
-    `border px-3 py-1.5 transition ${
+    `border-[1.5px] px-3 py-1.5 transition ${
       active
-        ? "border-accent/50 bg-accent/10 text-accent"
-        : "border-line text-muted hover:text-foreground"
+        ? "border-line bg-foreground text-band"
+        : "border-line text-foreground hover:bg-mint"
     }`;
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// projetos"}
+        <p className="tag self-start uppercase">
+          {"projetos"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
-          o que já nasceu aqui
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
+          O que já nasceu aqui
         </h1>
         <p className="max-w-xl text-lg text-muted">
           todo time que entregou vira portfólio público — campeões primeiro,
@@ -91,11 +91,11 @@ export default async function ProjetosPage({
             defaultValue={q}
             placeholder="buscar projeto, time…"
             aria-label="buscar projetos"
-            className="w-full max-w-md border border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
+            className="w-full max-w-md border-[1.5px] border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
           />
           <button
             type="submit"
-            className="border border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
+            className="border-[1.5px] border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
           >
             buscar
           </button>
@@ -154,7 +154,7 @@ export default async function ProjetosPage({
             <li
               key={c.teamId}
               className={`card flex flex-col gap-3 p-5 ${
-                c.placement === 1 ? "border-lendario/60 bg-lendario/5" : ""
+                c.placement === 1 ? "border-lendario bg-lendario/10" : ""
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -173,7 +173,7 @@ export default async function ProjetosPage({
                 )}
                 <Link
                   href={`/p/${c.teamId}`}
-                  className="font-display text-lg font-semibold tracking-tight transition hover:text-accent"
+                  className="font-display text-lg font-extrabold tracking-[-0.035em] transition hover:text-accent"
                 >
                   {c.project.title}
                 </Link>
@@ -181,7 +181,7 @@ export default async function ProjetosPage({
                   <span
                     className={`shrink-0 border px-2 py-1 font-mono text-xs ${
                       c.placement === 1
-                        ? "border-lendario/60 bg-lendario/10 text-lendario"
+                        ? "border-lendario bg-lendario/10 text-lendario"
                         : "border-line bg-surface text-muted"
                     }`}
                   >
@@ -222,7 +222,7 @@ export default async function ProjetosPage({
                 {c.liveDeployId && (
                   <a
                     href={`/demo/${c.liveDeployId}/`}
-                    className="border border-accent/50 bg-accent/10 px-2 py-1 text-accent transition hover:bg-accent/15"
+                    className="border-[1.5px] border-accent bg-mint px-2 py-1 text-accent transition hover:bg-[#c3ebd5]"
                   >
                     ● demo ao vivo
                   </a>
@@ -243,10 +243,10 @@ export default async function ProjetosPage({
           ))}
         </ul>
       ) : (
-        <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
+        <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {filtering
-            ? "// nenhum projeto nesse filtro — limpa pra ver o acervo todo"
-            : "// nenhum projeto entregue ainda — o primeiro tá saindo do forno"}
+            ? "nenhum projeto nesse filtro — limpa pra ver o acervo todo"
+            : "nenhum projeto entregue ainda — o primeiro tá saindo do forno"}
         </p>
       )}
     </section>

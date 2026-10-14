@@ -89,7 +89,7 @@ test.describe("trajetória do builder — arco de edições no perfil", () => {
     const res = await page.goto(`/u/${MEMBER}`);
     expect(res?.status()).toBe(200);
 
-    await expect(page.getByText("// trajetória")).toBeVisible();
+    await expect(page.getByText("trajetória", { exact: true })).toBeVisible();
     // linha-resumo: 3 edições, 1 pódio (1º Unifacens), 2 projetos entregues
     await expect(
       page.getByText(/3 edições · 1 pódio · 2 projetos entregues/),
@@ -120,7 +120,7 @@ test.describe("trajetória do builder — arco de edições no perfil", () => {
     await ensureArc();
     const res = await page.goto("/u/e2e_arc_zero");
     expect(res?.status()).toBe(200);
-    await expect(page.getByText("// trajetória")).toHaveCount(0);
+    await expect(page.getByText("trajetória", { exact: true })).toHaveCount(0);
     // perfil continua íntegro — heading e empty state de campanhas
     await expect(
       page.getByRole("heading", { name: "@e2e_arc_zero" }),

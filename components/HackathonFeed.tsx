@@ -45,8 +45,8 @@ export function HackathonFeed({
             onClick={() => setFormat(f.value)}
             className={
               format === f.value
-                ? "border border-accent bg-accent/10 px-3 py-1.5 text-accent"
-                : "border border-line px-3 py-1.5 text-muted transition hover:border-accent/50 hover:text-foreground"
+                ? "border-[1.5px] border-line bg-foreground px-3 py-1.5 text-band"
+                : "border-[1.5px] border-line px-3 py-1.5 text-foreground transition hover:bg-mint hover:text-foreground"
             }
           >
             {f.label}
@@ -59,8 +59,8 @@ export function HackathonFeed({
             onClick={() => setTag(tag === t ? null : t)}
             className={
               tag === t
-                ? "border border-accent bg-accent/10 px-3 py-1.5 text-accent"
-                : "border border-line px-3 py-1.5 text-muted transition hover:border-accent/50 hover:text-foreground"
+                ? "border-[1.5px] border-line bg-foreground px-3 py-1.5 text-band"
+                : "border-[1.5px] border-line px-3 py-1.5 text-foreground transition hover:bg-mint hover:text-foreground"
             }
           >
             #{t}
@@ -77,8 +77,8 @@ export function HackathonFeed({
               onClick={() => setRegion(region === r ? null : r)}
               className={
                 region === r
-                  ? "border border-accent bg-accent/10 px-3 py-1.5 text-accent"
-                  : "border border-line px-3 py-1.5 text-muted transition hover:border-accent/50 hover:text-foreground"
+                  ? "border-[1.5px] border-line bg-foreground px-3 py-1.5 text-band"
+                  : "border-[1.5px] border-line px-3 py-1.5 text-foreground transition hover:bg-mint hover:text-foreground"
               }
             >
               {r.toLowerCase()}
@@ -88,11 +88,11 @@ export function HackathonFeed({
       )}
 
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-start gap-3 border border-dashed border-line px-6 py-10">
+        <div className="flex flex-col items-start gap-3 border-[1.5px] border-line px-6 py-10">
           <p className="font-mono text-sm text-muted">
             {hackathons.length === 0
-              ? "// nenhum hackathon aberto no momento — a curadoria tá trabalhando"
-              : "// nenhum evento com esses filtros"}
+              ? "nenhum hackathon aberto no momento — a curadoria tá trabalhando"
+              : "nenhum evento com esses filtros"}
           </p>
           {hackathons.length > 0 && (
             <button
@@ -101,7 +101,7 @@ export function HackathonFeed({
                 setTag(null);
                 setRegion(null);
               }}
-              className="border border-line px-4 py-2 font-mono text-xs text-muted transition hover:border-accent/50 hover:text-foreground"
+              className="border-[1.5px] border-line px-4 py-2 font-mono text-xs text-foreground transition hover:border-line hover:text-foreground"
             >
               limpar filtros
             </button>

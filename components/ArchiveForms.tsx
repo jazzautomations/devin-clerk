@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const input =
-  "w-full border border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none";
+  "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 // cadastro do arquivo pós-evento — spec 015. Compacto de propósito:
 // SC-002 do spec 003 exige time completo em <1 minuto.
@@ -112,7 +112,7 @@ export function TeamForm({ hackathonId }: { hackathonId: string }) {
         + projeto (o que o time entregou)
       </label>
       {withProject && (
-        <fieldset className="grid gap-3 border border-dashed border-line p-4 sm:col-span-2 sm:grid-cols-2">
+        <fieldset className="grid gap-3 border-[1.5px] border-line p-4 sm:col-span-2 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-xs text-muted">
               título do projeto
@@ -160,19 +160,19 @@ export function TeamForm({ hackathonId }: { hackathonId: string }) {
         <button
           type="submit"
           disabled={status === "saving"}
-          className="bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+          className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
         >
           {status === "saving" ? "cadastrando…" : "cadastrar time →"}
         </button>
         {status === "error" && (
-          <span className="ml-4 font-mono text-xs text-red-400">
-            {"// "}
+          <span className="ml-4 font-mono text-xs text-orange">
+            {""}
             {error}
           </span>
         )}
         {ignored.length > 0 && (
           <span className="ml-4 font-mono text-xs text-lendario">
-            {"// time salvo — usernames ignorados (não existem): "}
+            {"time salvo — usernames ignorados (não existem): "}
             {ignored.join(", ")}
           </span>
         )}
@@ -248,13 +248,13 @@ export function AssetForm({ hackathonId }: { hackathonId: string }) {
         <button
           type="submit"
           disabled={status === "saving"}
-          className="bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+          className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
         >
           {status === "saving" ? "salvando…" : "adicionar material →"}
         </button>
         {status === "error" && (
-          <span className="ml-4 font-mono text-xs text-red-400">
-            {"// "}
+          <span className="ml-4 font-mono text-xs text-orange">
+            {""}
             {error}
           </span>
         )}

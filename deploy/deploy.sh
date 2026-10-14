@@ -42,7 +42,10 @@ User=ubuntu
 WorkingDirectory=$BASE/current
 EnvironmentFile=$ENV_FILE
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/env node node_modules/next/dist/bin/next start -p $PORT -H 127.0.0.1
+# sem -H: no Next 16.3 '-H 127.0.0.1' trava toda request (proxy interno
+# do router). Porta fica fechada pra fora pela security list da OCI + o
+# REJECT do iptables — só o Caddy (80/443) é público.
+ExecStart=/usr/bin/env node node_modules/next/dist/bin/next start -p $PORT
 Restart=always
 RestartSec=3
 Nice=5
@@ -62,7 +65,7 @@ sudo systemctl restart "$SERVICE"
 echo "== health"
 ok=0
 for i in $(seq 1 40); do
-  if curl -fsS "http://127.0.0.1:$PORT/api/health" | grep -q '"ok":true'; then ok=1; break; fi
+  if curl -fsS -m 5 "http://127.0.0.1:$PORT/api/health" | grep -q '"ok":true'; then ok=1; break; fi
   sleep 1
 done
 if [ "$ok" != 1 ]; then

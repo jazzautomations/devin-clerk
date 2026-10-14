@@ -74,8 +74,8 @@ export function DeployPanel({
   if (!deploy && !canDeploy) return null;
   if (!deploy && !hasRepo)
     return (
-      <span className="font-mono text-[10px] text-muted">
-        {"// sem repo pra deployar"}
+      <span className="font-mono text-[12px] text-muted">
+        {"sem repo pra deployar"}
       </span>
     );
 
@@ -83,17 +83,17 @@ export function DeployPanel({
   const liveUrl = live ? `/demo/${deploy.id}/` : url;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
+    <div className="flex flex-wrap items-center gap-3 font-mono text-[12px]">
       {liveUrl && (
         <a
           href={liveUrl}
-          className="border border-accent/50 bg-accent/10 px-2 py-1 text-accent transition hover:bg-accent/20"
+          className="border-[1.5px] border-accent bg-mint px-2 py-1 text-accent transition hover:bg-[#c3ebd5]"
         >
           ● demo ao vivo →
         </a>
       )}
       {deploy && !live && (
-        <span className="border border-line px-2 py-1 text-muted">
+        <span className="border-[1.5px] border-line px-2 py-1 text-muted">
           demo: {LABEL[deploy.status]}
           {deploy.status === "failed" && deploy.error
             ? ` — ${deploy.error.slice(0, 60)}`
@@ -104,7 +104,7 @@ export function DeployPanel({
         <button
           onClick={() => act("POST")}
           disabled={busy}
-          className="border border-line px-2 py-1 transition hover:border-accent/50 hover:text-accent disabled:opacity-40"
+          className="border-[1.5px] border-line px-2 py-1 transition hover:border-line hover:text-accent disabled:opacity-40"
         >
           {deploy ? "re-deploy" : "publicar demo"}
         </button>
@@ -113,12 +113,12 @@ export function DeployPanel({
         <button
           onClick={() => act("DELETE")}
           disabled={busy}
-          className="border border-line px-2 py-1 text-muted transition hover:border-red-500/50 hover:text-red-400 disabled:opacity-40"
+          className="border-[1.5px] border-line px-2 py-1 text-muted transition hover:border-red-500/50 hover:text-orange disabled:opacity-40"
         >
           parar
         </button>
       )}
-      {err && <span className="text-red-400">{err}</span>}
+      {err && <span className="text-orange">{err}</span>}
     </div>
   );
 }

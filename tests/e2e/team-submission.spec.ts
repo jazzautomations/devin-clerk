@@ -28,7 +28,7 @@ test.describe("meu time — submissão self-service na edição", () => {
     await ensureRegistrant();
     await page.goto(`/h/${HID}`);
     // página pública carrega normal
-    await expect(page.getByText("// hackathon")).toBeVisible();
+    await expect(page.getByText("hackathon", { exact: true })).toBeVisible();
     await expect(page.getByTestId("my-team")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /criar time|submeter time/i }),

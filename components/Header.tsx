@@ -3,77 +3,44 @@ import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import { appConfig } from "@/app.config";
 import { NotificationBell } from "@/components/NotificationBell";
 
+const links = [
+  { href: "/radar", label: "radar" },
+  { href: "/feed", label: "feed" },
+  { href: "/membros", label: "membros" },
+  { href: "/projetos", label: "projetos" },
+  { href: "/talento", label: "talento" },
+  { href: "/blog", label: "blog" },
+];
+
+const navLink =
+  "py-2 text-[14px] font-medium text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
+
 export function Header() {
   return (
-    <header className="border-b border-line bg-background/80 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+    <header className="z-40 border-b border-line bg-background lg:sticky lg:top-0">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-1 px-4 py-3 sm:px-6 lg:min-h-[72px] lg:flex-nowrap lg:py-0">
         <Link
           href="/"
-          className="font-mono text-sm font-semibold tracking-tight"
+          aria-label={`${appConfig.name} — início`}
+          className="flex items-center gap-2.5 whitespace-nowrap"
         >
-          <span className="text-accent">{"> "}</span>
-          {appConfig.name.toLowerCase()}
-          <span className="text-accent">_</span>
+          <span
+            aria-hidden
+            className="h-[11px] w-[11px] shrink-0 border-[1.5px] border-line bg-band"
+          />
+          <span className="text-[18px] font-extrabold tracking-[-0.02em] uppercase">
+            {appConfig.name}
+          </span>
+          <span className="hidden font-mono text-xs text-muted sm:inline">/hack inova</span>
         </Link>
-        <nav className="flex items-center gap-6 font-mono text-xs tracking-wide">
-          <Link
-            href="/radar"
-            className="text-muted transition hover:text-accent"
-          >
-            radar
-          </Link>
-          <Link
-            href="/feed"
-            className="text-muted transition hover:text-accent"
-          >
-            feed
-          </Link>
-          <Link
-            href="/membros"
-            className="text-muted transition hover:text-accent"
-          >
-            membros
-          </Link>
-          <Link
-            href="/talento"
-            className="text-muted transition hover:text-accent"
-          >
-            talento
-          </Link>
-          <Link
-            href="/projetos"
-            className="text-muted transition hover:text-accent"
-          >
-            projetos
-          </Link>
-          <Link
-            href="/blog"
-            className="text-muted transition hover:text-accent"
-          >
-            blog
-          </Link>
-          <Link
-            href="/dashboard"
-            className="text-muted transition hover:text-accent"
-          >
-            dashboard
-          </Link>
-          <Show when="signed-in">
-            <Link
-              href="/perfil"
-              className="text-muted transition hover:text-accent"
-            >
-              perfil
-            </Link>
-          </Show>
+
+        <div className="flex items-center gap-3 lg:order-last">
           <Show when="signed-out">
             <SignInButton mode="modal">
-              <button className="text-muted transition hover:text-accent">
-                entrar
-              </button>
+              <button className={navLink}>entrar</button>
             </SignInButton>
             <SignUpButton mode="modal">
-              <button className="bg-accent px-4 py-2 font-semibold text-black transition hover:brightness-110">
+              <button className="btn min-h-[36px]! px-3! py-1! text-[14px]!">
                 criar conta
               </button>
             </SignUpButton>
@@ -81,6 +48,25 @@ export function Header() {
           <Show when="signed-in">
             <NotificationBell />
             <UserButton />
+          </Show>
+        </div>
+
+        <nav
+          aria-label="Navegação principal"
+          className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-x-5 overflow-x-auto px-4 whitespace-nowrap [scrollbar-width:none] sm:mx-0 sm:w-full sm:flex-wrap sm:px-0 lg:ml-auto lg:w-auto [&::-webkit-scrollbar]:hidden"
+        >
+          {links.map((l) => (
+            <Link key={l.href} href={l.href} className={navLink}>
+              {l.label}
+            </Link>
+          ))}
+          <Link href="/dashboard" className={navLink}>
+            painel
+          </Link>
+          <Show when="signed-in">
+            <Link href="/perfil" className={navLink}>
+              perfil
+            </Link>
           </Show>
         </nav>
       </div>

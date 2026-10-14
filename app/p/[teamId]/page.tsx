@@ -52,12 +52,12 @@ export default async function ProjectPage({ params }: Props) {
   const own = member !== null && data.members.includes(member.username);
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// projeto"}
+        <p className="tag self-start uppercase">
+          {"projeto"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           {data.project.title}
         </h1>
         <p className="font-mono text-sm text-muted">
@@ -74,7 +74,7 @@ export default async function ProjectPage({ params }: Props) {
           <span
             className={`w-fit border px-2 py-1 font-mono text-xs ${
               place === 1
-                ? "border-lendario/60 bg-lendario/10 text-lendario"
+                ? "border-lendario bg-lendario/10 text-lendario"
                 : "border-line bg-surface text-muted"
             }`}
           >
@@ -86,7 +86,7 @@ export default async function ProjectPage({ params }: Props) {
       {live && (
         <a
           href={`/demo/${live.id}/`}
-          className="flex items-center justify-between gap-4 border border-accent/50 bg-accent/10 px-5 py-4 font-mono text-sm text-accent transition hover:bg-accent/15"
+          className="flex items-center justify-between gap-4 border-[1.5px] border-accent bg-mint px-5 py-4 font-mono text-sm text-accent transition hover:bg-[#c3ebd5]"
         >
           <span>● demo ao vivo — deploy rodando agora</span>
           <span>abrir →</span>
@@ -98,8 +98,8 @@ export default async function ProjectPage({ params }: Props) {
           {data.project.description}
         </p>
       ) : (
-        <p className="border border-dashed border-line px-5 py-4 font-mono text-xs text-muted">
-          {"// sem descrição — o código conta a história"}
+        <p className="border-[1.5px] border-line px-5 py-4 font-mono text-xs text-muted">
+          {"sem descrição — o código conta a história"}
         </p>
       )}
 
@@ -112,7 +112,7 @@ export default async function ProjectPage({ params }: Props) {
               href={data.project.repoUrl}
               target="_blank"
               rel="noopener"
-              className="border border-line px-6 py-3 font-mono text-sm transition hover:border-accent/50 hover:text-accent"
+              className="border-[1.5px] border-line px-6 py-3 font-mono text-sm transition hover:border-line hover:text-accent"
             >
               repositório →
             </a>
@@ -122,7 +122,7 @@ export default async function ProjectPage({ params }: Props) {
               href={data.project.demoUrl}
               target="_blank"
               rel="noopener"
-              className="border border-line px-6 py-3 font-mono text-sm transition hover:border-accent/50 hover:text-accent"
+              className="border-[1.5px] border-line px-6 py-3 font-mono text-sm transition hover:border-line hover:text-accent"
             >
               demo →
             </a>
@@ -133,7 +133,7 @@ export default async function ProjectPage({ params }: Props) {
               href={data.project.videoUrl}
               target="_blank"
               rel="noopener"
-              className="border border-line px-6 py-3 font-mono text-sm transition hover:border-accent/50 hover:text-accent"
+              className="border-[1.5px] border-line px-6 py-3 font-mono text-sm transition hover:border-line hover:text-accent"
             >
               ▶ vídeo →
             </a>
@@ -141,7 +141,7 @@ export default async function ProjectPage({ params }: Props) {
         </div>
       ) : (
         <p className="font-mono text-xs text-muted">
-          {"// sem links públicos cadastrados — pergunta pro time"}
+          {"sem links públicos cadastrados — pergunta pro time"}
         </p>
       )}
 
@@ -154,12 +154,12 @@ export default async function ProjectPage({ params }: Props) {
           own={own}
         />
         <p className="font-mono text-xs text-muted">
-          {"// escolha do povo — a comunidade vota, o júri decide o pódio"}
+          {"escolha do povo — a comunidade vota, o júri decide o pódio"}
         </p>
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           time — {data.teamName}
         </h2>
         {data.members.length > 0 ? (
@@ -168,7 +168,7 @@ export default async function ProjectPage({ params }: Props) {
               <li key={u}>
                 <Link
                   href={`/u/${u}`}
-                  className="block border border-line bg-surface px-3 py-1.5 font-mono text-xs transition hover:border-accent/50 hover:text-accent"
+                  className="block border-[1.5px] border-line bg-surface px-3 py-1.5 font-mono text-xs transition hover:border-line hover:text-accent"
                 >
                   @{u}
                 </Link>
@@ -176,9 +176,9 @@ export default async function ProjectPage({ params }: Props) {
             ))}
           </ul>
         ) : (
-          <p className="border border-dashed border-line px-5 py-4 font-mono text-xs text-muted">
+          <p className="border-[1.5px] border-line px-5 py-4 font-mono text-xs text-muted">
             {
-              "// membros ainda não vinculados — o organizador liga o time aos perfis pelo /admin"
+              "membros ainda não vinculados — o organizador liga o time aos perfis pelo /admin"
             }
           </p>
         )}

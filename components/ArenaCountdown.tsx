@@ -35,15 +35,14 @@ export function ArenaCountdown({
 
   return (
     <div className="flex flex-col gap-1" data-testid="arena-countdown">
-      <span className="font-mono text-[10px] tracking-widest text-muted uppercase">
-        {"// "}
+      <span className="font-mono text-[12px] tracking-[0.06em] text-[#b8cdc0] uppercase">
         {label}
       </span>
       <span
         data-testid="arena-countdown-digits"
         aria-live="off"
-        className={`font-mono text-3xl font-bold tracking-tight tabular-nums sm:text-4xl ${
-          live ? "text-accent" : "text-foreground"
+        className={`pix text-[clamp(3rem,9vw,4.5rem)] leading-[0.85] tabular-nums ${
+          live ? "text-band" : "text-background"
         }`}
       >
         {pad(parts.d)}:{pad(parts.h)}:{pad(parts.m)}:{pad(parts.s)}

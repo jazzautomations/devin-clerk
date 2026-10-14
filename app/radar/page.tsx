@@ -47,12 +47,12 @@ export default async function RadarPage({
   const tags = await getTags(hackathons);
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12">
+    <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// radar"}
+        <p className="tag self-start uppercase">
+          {"radar"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           Hackathons abertos
         </h1>
         <p className="max-w-xl text-lg text-muted">
@@ -66,11 +66,11 @@ export default async function RadarPage({
             defaultValue={q}
             placeholder="buscar por nome, cidade ou tag…"
             aria-label="buscar no radar"
-            className="w-full max-w-md border border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
+            className="w-full max-w-md border-[1.5px] border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
           />
           <button
             type="submit"
-            className="border border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
+            className="border-[1.5px] border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
           >
             buscar
           </button>
@@ -78,14 +78,14 @@ export default async function RadarPage({
       </div>
 
       {q && hackathons.length === 0 && (
-        <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {`// nada no radar pra "${q}" — tenta outro termo`}
+        <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
+          {`nada no radar pra "${q}" — tenta outro termo`}
         </p>
       )}
 
       {sessoes.length > 0 && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-widest text-accent uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-accent uppercase">
             sessões hack inova — inscrição direta
           </h2>
           <HackathonFeed
@@ -99,7 +99,7 @@ export default async function RadarPage({
 
       {!(q && hackathons.length === 0) && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
             radar — brasil + mundo
           </h2>
           <HackathonFeed
@@ -113,10 +113,10 @@ export default async function RadarPage({
 
       {/* terceiro canal do radar (spec 026): a comunidade indica, a
           curadoria decide — nada entra direto na listagem */}
-      <details className="group border border-dashed border-line">
+      <details className="group border-[1.5px] border-line">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <span className="font-mono text-xs tracking-widest text-muted uppercase">
-            {"// indica um hackathon"}
+          <span className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
+            {"indica um hackathon"}
           </span>
           <span className="font-mono text-xs text-muted">
             <span className="group-open:hidden">▸</span>

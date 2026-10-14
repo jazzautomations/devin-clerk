@@ -34,8 +34,8 @@ export default async function Image({
           justifyContent: "center",
           width: "100%",
           height: "100%",
-          background: "#0b0d0e",
-          border: `6px solid ${place === "1º lugar" ? "#f59e0b" : appConfig.accent}`,
+          background: "#fefefe",
+          border: `10px solid ${place === "1º lugar" ? "#a8550a" : "#0c0c0c"}`,
           padding: "72px 80px",
         }}
       >
@@ -43,20 +43,23 @@ export default async function Image({
           style={{
             display: "flex",
             fontSize: 28,
-            color: appConfig.accent,
             fontFamily: "monospace",
-            marginBottom: 32,
+            marginBottom: 36,
+            background: "#0c0c0c",
+            color: "#3ecf8e",
+            padding: "6px 16px",
+            alignSelf: "flex-start",
           }}
         >
-          {"// hackahub · projeto"}
+          {"HACKAHUB · PROJETO"}
         </div>
         <div
           style={{
             display: "flex",
             fontSize: title.length > 40 ? 64 : 84,
-            fontWeight: 700,
-            color: "#e7e5e0",
-            letterSpacing: "-0.03em",
+            fontWeight: 800,
+            color: "#0c0c0c",
+            letterSpacing: "-0.045em",
             lineHeight: 1.05,
           }}
         >
@@ -66,7 +69,7 @@ export default async function Image({
           style={{
             display: "flex",
             fontSize: 30,
-            color: "#8b8f94",
+            color: "#474747",
             marginTop: 32,
             fontFamily: "monospace",
           }}

@@ -50,7 +50,7 @@ export function ProfileForm({
   }
 
   const input =
-    "w-full border border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none";
+    "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
   return (
     <div className="flex flex-col gap-4 border border-line bg-surface p-6">
@@ -115,10 +115,10 @@ export function ProfileForm({
                     on ? openTo.filter((x) => x !== v) : [...openTo, v],
                   )
                 }
-                className={`border px-3 py-1.5 font-mono text-xs transition ${
+                className={`border-[1.5px] px-3 py-1.5 font-mono text-[13px] transition ${
                   on
-                    ? "border-accent/50 bg-accent/10 text-accent"
-                    : "border-line text-muted hover:text-foreground"
+                    ? "border-line bg-foreground text-band"
+                    : "border-line text-foreground hover:bg-mint"
                 }`}
               >
                 {v}
@@ -179,7 +179,7 @@ export function ProfileForm({
       <button
         onClick={save}
         disabled={status === "saving"}
-        className="mt-2 w-fit bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+        className="mt-2 w-fit border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
       >
         {status === "saving"
           ? "salvando…"
@@ -188,8 +188,8 @@ export function ProfileForm({
             : "salvar perfil"}
       </button>
       {status === "error" && (
-        <p className="font-mono text-xs text-red-400">
-          {"// erro ao salvar — tenta de novo"}
+        <p className="font-mono text-xs text-orange">
+          {"erro ao salvar — tenta de novo"}
         </p>
       )}
     </div>
