@@ -22,6 +22,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   register: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/register
   team: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/team
   "team-board": { limit: 10, windowMs: HOUR }, // POST …/[id]/team-board
+  // voto ao vivo é editável (nota muda até fechar): folga pra ~10 pitches
+  // com troca de nota, mas freia script martelando o endpoint
+  "stage-vote": { limit: 120, windowMs: HOUR }, // POST …/[id]/stage/vote
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
