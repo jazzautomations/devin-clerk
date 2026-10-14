@@ -148,7 +148,7 @@ export function HackathonCard({
         {hackathon.prize && (
           <div className="col-span-2">
             <dt className="sr-only">prêmio</dt>
-            <dd><span className="prize-badge">{hackathon.prize}</span></dd>
+            <dd><span className="prize-badge text-lendario">{hackathon.prize}</span></dd>
           </div>
         )}
         <div className="col-span-2">

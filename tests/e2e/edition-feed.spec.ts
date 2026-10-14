@@ -62,7 +62,7 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
     ensureEditionPost();
     await page.goto(`/h/${ED}`);
     await expect(
-      page.getByRole("heading", { name: "// mural da edição" }),
+      page.getByRole("heading", { name: /mural da edição/i }),
     ).toBeVisible();
     await expect(page.getByText(MARKER)).toBeVisible();
   });

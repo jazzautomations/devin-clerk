@@ -56,9 +56,9 @@ test.describe("/empresas — pitch pra marca", () => {
     ).toBeVisible();
     // links legais no fim da página comercial
     await expect(
-      page.getByRole("link", { name: /privacidade/i }),
+      page.getByRole("main").getByRole("link", { name: /privacidade/i }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: /termos/i })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: /termos/i })).toBeVisible();
   });
 
   test("form envia lead e confirma sem recarregar", async ({ page }) => {

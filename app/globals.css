@@ -382,13 +382,14 @@ h3 {
   border-bottom: 1.5px solid var(--line);
 }
 
-/* selo de prêmio — bloco de tinta com valor em pixel verde */
+/* selo de prêmio — lendário (spec 024): âmbar escuro em pixel, fio âmbar */
 .prize-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--foreground);
-  color: var(--band);
+  background: #fbefe2;
+  border: 1.5px solid var(--lendario);
+  color: var(--lendario);
   font-family: var(--font-vt323), ui-monospace, monospace;
   font-size: 1.05rem;
   line-height: 1.2;

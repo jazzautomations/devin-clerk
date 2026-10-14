@@ -5,7 +5,7 @@ import { openE2eDb } from "./db";
 // (A) /h/[id] de edição ongoing (startsAt passado, endsAt futuro — janela
 //     Devpost rolando) fica viva: faixa de arena "em andamento", countdown
 //     "termina em", seção de inscritos presente; o modo arquivo ("resultado",
-//     "// arquivo") NÃO aparece. Edição encerrada segue intocada.
+//     "arquivo") NÃO aparece. Edição encerrada segue intocada.
 // (B) submissão rica: videoUrl vira link "▶ vídeo" na ficha /p/[teamId] e
 //     logoUrl vira thumb 32px no card de /projetos. Tudo leitura pública —
 //     os campos entram seedados direto no banco do dev server.
@@ -109,7 +109,7 @@ test.describe("/h/[id] de edição ongoing fica viva — spec 030", () => {
   }) => {
     await seed(request);
     await page.goto(`/h/${ONGOING}`);
-    await expect(page.getByText("// hackathon", { exact: true })).toBeVisible();
+    await expect(page.getByText("hackathon", { exact: true })).toBeVisible();
 
     const strip = page.getByTestId("arena-strip");
     await expect(strip).toBeVisible();
@@ -124,7 +124,7 @@ test.describe("/h/[id] de edição ongoing fica viva — spec 030", () => {
     await expect(
       page.getByRole("heading", { name: "resultado" }),
     ).toHaveCount(0);
-    await expect(page.getByText("// arquivo")).toHaveCount(0);
+    await expect(page.getByText("arquivo", { exact: true })).toHaveCount(0);
     // inscritos não somem numa edição rolando
     await expect(page.getByText(/inscritos \(\d+\)/)).toBeVisible();
   });
@@ -136,7 +136,7 @@ test.describe("/h/[id] de edição ongoing fica viva — spec 030", () => {
     await seed(request);
     await page.goto(`/h/${OVER}`);
     await expect(
-      page.getByText("// arquivo", { exact: true }),
+      page.getByText("arquivo", { exact: true }),
     ).toBeVisible();
     await expect(page.getByTestId("arena-strip")).toHaveCount(0);
     await expect(

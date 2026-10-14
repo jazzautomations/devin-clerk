@@ -315,7 +315,7 @@ export default async function HackathonPage({
                       {c.title}
                     </h3>
                     <div className="flex flex-col gap-2">
-                      {c.prize && <p className="prize-badge w-fit">prêmio: {c.prize}</p>}
+                      {c.prize && <p className="prize-badge w-fit text-lendario">prêmio: {c.prize}</p>}
                       {c.description && (
                         <p className="text-[15px] leading-relaxed text-muted">{c.description}</p>
                       )}
