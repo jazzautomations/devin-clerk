@@ -146,7 +146,7 @@ describe("validateAnswers — obrigatória e tipos", () => {
 describe("submitRegistration — consentimento + respostas numa transação", () => {
   it("sem consentimento → 400 e nada gravado", async () => {
     const m = await makeMember();
-    const r = await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: false, ip: "1.2.3.4" });
+    const r = await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: false, ip: "1.2.3.4", terms: { birthDate: "2000-01-01", conduct: true } });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("consent_required");
     expect(await getRegistrationStatus(m, ED)).toBeNull();
@@ -161,7 +161,7 @@ describe("submitRegistration — consentimento + respostas numa transação", ()
       hackathonId: ED,
       answers: { [opt.id]: "zé" },
       consent: true,
-      ip: "1.2.3.4",
+      ip: "1.2.3.4", terms: { birthDate: "2000-01-01", conduct: true },
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.questionId).toBe(req.id);
@@ -177,7 +177,7 @@ describe("submitRegistration — consentimento + respostas numa transação", ()
       .prepare("INSERT OR IGNORE INTO challenges (id, hackathonId, sponsor, title) VALUES (?, ?, 'Banco Parceiro', 'Desafio')")
       .run("ch-form-ut", ED);
     const q = await createQuestion(ED, { kind: "short_text", label: "Curso", required: true });
-    const r = await submitRegistration({ memberId: m, hackathonId: ED, answers: { [q.id]: "ADS" }, consent: true, ip: "200.1.1.1" });
+    const r = await submitRegistration({ memberId: m, hackathonId: ED, answers: { [q.id]: "ADS" }, consent: true, ip: "200.1.1.1", terms: { birthDate: "2000-01-01", conduct: true } });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.status).toBe("approved");
@@ -200,15 +200,15 @@ describe("submitRegistration — consentimento + respostas numa transação", ()
 
   it("edição sem perguntas: só o consentimento basta (1 clique + caixa)", async () => {
     const m = await makeMember();
-    const r = await submitRegistration({ memberId: m, hackathonId: ED, answers: undefined, consent: true, ip: null });
+    const r = await submitRegistration({ memberId: m, hackathonId: ED, answers: undefined, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     expect(r.ok && r.status).toBe("approved");
   });
 
   it("re-envio de quem já está inscrito é idempotente (não paga de novo nem exige caixa)", async () => {
     const m = await makeMember();
-    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null });
+    await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     const xp = await xpOf(m);
-    const again = await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: false, ip: null });
+    const again = await submitRegistration({ memberId: m, hackathonId: ED, answers: {}, consent: false, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     expect(again.ok && again.created).toBe(false);
     expect(await xpOf(m)).toBe(xp);
   });
@@ -219,7 +219,7 @@ describe("submitRegistration — consentimento + respostas numa transação", ()
     // corrompe a versão viva pra o INSERT da resposta violar a FK
     await db.prepare("UPDATE edition_questions SET version = 99 WHERE id = ?").run(q.id);
     await expect(
-      submitRegistration({ memberId: m, hackathonId: ED, answers: { [q.id]: "x" }, consent: true, ip: null }),
+      submitRegistration({ memberId: m, hackathonId: ED, answers: { [q.id]: "x" }, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } }),
     ).rejects.toThrow();
     expect(await getRegistrationStatus(m, ED)).toBeNull();
     const n = await db.prepare("SELECT COUNT(*) AS n FROM consents WHERE memberId = ?").get<{ n: number }>(m);
@@ -238,13 +238,13 @@ describe("versão congelada", () => {
   it("editar pergunta COM resposta sobe a version; resposta antiga segue com o texto original", async () => {
     const q = await createQuestion(ED, { kind: "single", label: "Camiseta", options: ["P", "M"] });
     const m1 = await makeMember();
-    await submitRegistration({ memberId: m1, hackathonId: ED, answers: { [q.id]: "M" }, consent: true, ip: null });
+    await submitRegistration({ memberId: m1, hackathonId: ED, answers: { [q.id]: "M" }, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
 
     const u = await updateQuestion(ED, q.id, { label: "Tamanho da camiseta", options: ["P", "M", "G"] });
     expect(u?.version).toBe(2);
 
     const m2 = await makeMember();
-    await submitRegistration({ memberId: m2, hackathonId: ED, answers: { [q.id]: "G" }, consent: true, ip: null });
+    await submitRegistration({ memberId: m2, hackathonId: ED, answers: { [q.id]: "G" }, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
 
     const a1 = await getAnswersForRegistration(m1, ED);
     const a2 = await getAnswersForRegistration(m2, ED);
@@ -255,7 +255,7 @@ describe("versão congelada", () => {
   it("mudar só obrigatoriedade/posição não cria versão nova", async () => {
     const q = await createQuestion(ED, { kind: "short_text", label: "Curso" });
     const m = await makeMember();
-    await submitRegistration({ memberId: m, hackathonId: ED, answers: { [q.id]: "x" }, consent: true, ip: null });
+    await submitRegistration({ memberId: m, hackathonId: ED, answers: { [q.id]: "x" }, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     const u = await updateQuestion(ED, q.id, { required: true });
     expect(u?.version).toBe(1);
     expect(u?.required).toBe(true);
@@ -269,11 +269,11 @@ describe("vagas + fila de espera", () => {
     const b = await makeMember();
     const c = await makeMember();
     expect((await register(a, ED)).status).toBe("approved");
-    const rb = await submitRegistration({ memberId: b, hackathonId: ED, answers: {}, consent: true, ip: null });
+    const rb = await submitRegistration({ memberId: b, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     expect(rb.ok && rb.status).toBe("waitlist");
     expect(rb.ok && rb.position).toBe(1);
     expect(rb.ok && rb.reward).toBeUndefined();
-    await submitRegistration({ memberId: c, hackathonId: ED, answers: {}, consent: true, ip: null });
+    await submitRegistration({ memberId: c, hackathonId: ED, answers: {}, consent: true, ip: null, terms: { birthDate: "2000-01-01", conduct: true } });
     expect(await getWaitlistPosition(c, ED)).toBe(2);
     expect(await xpOf(b)).toBe(0);
     expect(await getMemberCard(b, ED)).toBeNull();
@@ -373,7 +373,7 @@ describe("admin: inscritos com respostas + CSV", () => {
       hackathonId: ED,
       answers: { [q1.id]: '=HYPERLINK("x")', [q2.id]: ["js", "py"] },
       consent: true,
-      ip: null,
+      ip: null, terms: { birthDate: "2000-01-01", conduct: true },
     });
     const rows = await listRegistrantsWithAnswers(ED);
     expect(rows).toHaveLength(1);

@@ -12,7 +12,7 @@ const portas = [
   {
     k: "01",
     title: "Edições Hack Inova",
-    desc: "Cada edição ganha página própria, inscrição em 1 clique e painel de organização.",
+    desc: "Cada edição ganha página própria, inscrição pela plataforma e painel de organização.",
     foot: "inscrição · times · arquivo",
     href: "/radar",
   },
@@ -55,7 +55,7 @@ const jornada = [
   },
   {
     step: "02 · INSCRIÇÃO",
-    title: "Inscrição em 1 clique",
+    title: "Inscrição com teu perfil",
     desc: "Quem tem perfil se inscreve na hora. Edição curada? Fila de aprovação.",
   },
   {
@@ -158,7 +158,7 @@ export default async function Home() {
             </h1>
             <p className="mt-7 max-w-[54ch] text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
               <strong className="font-bold">A plataforma da Hack Inova.</strong>{" "}
-              Cada edição ganha página própria, inscrição em 1 clique, times,
+              Cada edição ganha página própria, inscrição com teu perfil, times,
               projetos e arquivo. Quem participa sai com perfil, portfólio e a
               carta da edição.
             </p>
@@ -296,10 +296,10 @@ export default async function Home() {
           <div className="window dark hard">
             <WindowBar title="INSCRICAO.exe" />
             <div className="tbody">
-              <div className="text-[11px]">INSCRIÇÃO</div>
-              <div className="pix text-[50px] leading-[0.8]">1 CLIQUE</div>
+              <div className="text-[11px]">TEU PERFIL É</div>
+              <div className="pix text-[50px] leading-[0.8]">TUA FICHA</div>
               <p className="mt-2 mb-3 text-[13.5px] leading-snug text-mint">
-                Teu perfil é tua ficha. Inscreveu, ganhou a carta da edição e
+                Inscreveu, ganhou a carta da edição e
                 entrou na lista do organizador.
               </p>
               <Link href="/dashboard" className={goBand}>

@@ -61,8 +61,9 @@ test.describe("página da edição — substitui site novo + google form", () =>
     ).toBeVisible();
     await expect(page.getByText(/cartinha colecionável/i)).toBeVisible();
     await expect(page.getByText(/mintadas até agora/i)).toBeVisible();
+    // frente L: inscrição sempre pelo formulário (nascimento, conduta, imagem)
     await expect(
-      page.getByRole("button", { name: /inscrever-se em 1 clique/i }),
+      page.getByRole("link", { name: /fazer inscrição/i }),
     ).toBeVisible();
   });
 

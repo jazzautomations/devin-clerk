@@ -12,10 +12,10 @@ type Status = RegistrationStatus | null;
 // cria pedido pendente (sem recompensa); pendente vê "aguardando
 // aprovação" e pode desistir (DELETE cancela o pedido); rejeitado vê o
 // veredito honesto, terminal — não clica de novo.
-// spec 033 — edição com perguntas leva pro formulário (/h/[id]/inscricao);
-// sem perguntas continua 1 clique, com a caixa de aceite LGPD logo acima
-// do botão (o aceite precisa ser um ato explícito e registrável, então não
-// dá pra embutir no clique). Edição cheia → fila de espera com posição.
+// spec 033 — edição com perguntas leva pro formulário (/h/[id]/inscricao).
+// Frente L: toda edição passa pelo formulário (nascimento, código de
+// conduta, uso de imagem); o modo 1 clique com a caixa LGPD só sobra pra
+// quem chama sem formHref. Edição cheia → fila de espera com posição.
 export function RegisterButton({
   hackathonId,
   requiresApproval = false,

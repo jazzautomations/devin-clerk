@@ -134,7 +134,7 @@ export function QuestionEditor({
         <h2 className="text-[22px] font-extrabold tracking-[-0.02em]">Perguntas ({active.length})</h2>
         <p className="text-[14px] text-muted">
           {participant
-            ? "Nome, e-mail e GitHub já vêm do perfil, não precisa perguntar. Sem perguntas, a inscrição é 1 clique (com a caixa de aceite)."
+            ? "Nome, e-mail e GitHub já vêm do perfil, não precisa perguntar. Sem perguntas extras, a inscrição pede só os termos do evento (nascimento, conduta, imagem)."
             : "Nome, e-mail e GitHub já vêm do perfil. Pergunte o que ajuda a decidir: área, disponibilidade, experiência. Sem perguntas, a candidatura é só o aceite."}
         </p>
         {active.length === 0 && (

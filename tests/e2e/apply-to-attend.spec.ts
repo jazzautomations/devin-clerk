@@ -51,9 +51,10 @@ test.describe("edição curada — apply to attend (spec 032)", () => {
   }) => {
     await ensureCuratedEdition(request);
     await page.goto(`/h/${CURATED}`);
+    // frente L: toda inscrição passa pelo formulário (nascimento, conduta)
     await expect(
-      page.getByRole("button", { name: /pedir lugar/i }),
-    ).toBeVisible();
+      page.getByRole("link", { name: /pedir lugar/i }),
+    ).toHaveAttribute("href", `/h/${CURATED}/inscricao`);
     await expect(
       page.getByRole("button", { name: /inscrever-se em 1 clique/i }),
     ).toHaveCount(0);

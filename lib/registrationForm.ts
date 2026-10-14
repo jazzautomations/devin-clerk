@@ -6,6 +6,13 @@ import {
   register,
   type RegistrationStatus,
 } from "@/lib/registrations";
+import {
+  getEditionTerms,
+  imagePurposeFor,
+  saveRegistrationTerms,
+  sendGuardianEmail,
+  validateRegistrationTerms,
+} from "@/lib/eventTerms";
 
 // spec 033 US1 — formulário de inscrição por edição (substitui o Google
 // Forms) + consentimento LGPD (FR-002). Perguntas tipadas e versionadas:
@@ -457,7 +464,7 @@ export async function hasCurrentConsent(
 // ---------- inscrição completa ----------
 
 export type SubmitResult =
-  | { ok: false; error: string; questionId?: number }
+  | { ok: false; error: string; questionId?: number; message?: string }
   | {
       ok: true;
       status: RegistrationStatus;
@@ -481,6 +488,8 @@ export async function submitRegistration(input: {
   ip: string | null;
   /** frente N #6 — opt-in de aparecer na lista pública da edição (padrão não) */
   publicListing?: boolean;
+  /** termos do evento (lib/eventTerms): nascimento, responsável, conduta, imagem, dieta */
+  terms?: unknown;
 }): Promise<SubmitResult> {
   const { memberId, hackathonId } = input;
   const existing = await getRegistrationStatus(memberId, hackathonId);
@@ -506,9 +515,23 @@ export async function submitRegistration(input: {
   if (!input.consent && !(await hasCurrentConsent(memberId, hackathonId))) {
     return { ok: false, error: "consent_required" };
   }
+  // frente L — idade mínima, responsável, código de conduta, imagem e dieta.
+  // Depois do consentimento: quem fica abaixo da idade mínima não grava nada.
+  const ed = await db
+    .prepare(
+      `SELECT h.startsAt, m.email FROM hackathons h, members m WHERE h.id = ? AND m.id = ?`,
+    )
+    .get<{ startsAt: string; email: string }>(hackathonId, memberId);
+  const terms = validateRegistrationTerms(input.terms, {
+    terms: await getEditionTerms(hackathonId),
+    startsAt: ed?.startsAt ?? new Date().toISOString(),
+    memberEmail: ed?.email ?? null,
+  });
+  if (!terms.ok) return { ok: false, error: terms.error, message: terms.message };
   const purpose = input.consent ? (await consentPurpose(hackathonId)).text : null;
+  const imagePurpose = await imagePurposeFor(hackathonId);
 
-  return db.transaction(async (): Promise<SubmitResult> => {
+  const result = await db.transaction(async (): Promise<SubmitResult & { registrationId?: number }> => {
     const reg = await register(memberId, hackathonId);
     if (!reg.created) return { ok: true, status: reg.status, created: false, position: reg.position };
     if (purpose) {
@@ -533,9 +556,33 @@ export async function submitRegistration(input: {
         )
         .run(regId!.id, a.questionId, a.version, a.value);
     }
+    await saveRegistrationTerms({
+      registrationId: regId!.id,
+      memberId,
+      hackathonId,
+      terms: terms.value,
+      imagePurpose,
+    });
     const reward = reg.status === "approved" ? await completeRegistration(memberId, hackathonId) : undefined;
-    return { ok: true, status: reg.status, created: true, position: reg.position, reward };
+    return {
+      ok: true,
+      status: reg.status,
+      created: true,
+      position: reg.position,
+      reward,
+      registrationId: regId!.id,
+    };
   })();
+  // menor: avisa o responsável depois do commit (driver sem env = skipped)
+  if (result.ok && result.created && terms.value.guardian && result.registrationId) {
+    await sendGuardianEmail(result.registrationId);
+  }
+  if (result.ok) {
+    const { registrationId: _drop, ...rest } = result;
+    void _drop;
+    return rest;
+  }
+  return result;
 }
 
 // ---------- admin: inscritos com respostas + CSV ----------
@@ -552,6 +599,12 @@ export type RegistrantWithAnswers = {
   promotedAt: string | null;
   consentVersion: string | null;
   consentAt: string | null;
+  /** frente L — uso de imagem vigente (false = não autorizou ou revogou) */
+  imageConsent: boolean;
+  /** idade na data do evento (o painel nunca mostra a data de nascimento) */
+  ageAtEvent: number | null;
+  conductVersion: number | null;
+  guardianName: string | null;
   answers: Record<number, { value: string; label: string; questionVersion: number }>;
 };
 
@@ -566,9 +619,14 @@ export async function listRegistrantsWithAnswers(hackathonId: string): Promise<R
                    AND (o.waitlistedAt < r.waitlistedAt
                         OR (o.waitlistedAt = r.waitlistedAt AND o.id <= r.id)))
               END AS waitlistPosition,
-              c.termsVersion AS consentVersion, c.acceptedAt AS consentAt
+              c.termsVersion AS consentVersion, c.acceptedAt AS consentAt,
+              COALESCE((SELECT ic.granted = 1 FROM image_consents ic
+                        WHERE ic.memberId = r.memberId AND ic.hackathonId = r.hackathonId
+                        ORDER BY ic.id DESC LIMIT 1), false) AS "imageConsent",
+              t.ageAtEvent, t.conductVersion, t.guardianName
        FROM registrations r
        JOIN members m ON m.id = r.memberId
+       LEFT JOIN registration_terms t ON t.registrationId = r.id
        LEFT JOIN LATERAL (
          SELECT termsVersion, acceptedAt FROM consents
          WHERE memberId = r.memberId AND hackathonId = r.hackathonId AND scope = 'participante'
@@ -597,7 +655,11 @@ export async function listRegistrantsWithAnswers(hackathonId: string): Promise<R
     bag[a.questionId] = { value: a.value, label: a.label, questionVersion: a.questionVersion };
     byReg.set(a.registrationId, bag);
   }
-  return rows.map(({ registrationId, ...r }) => ({ ...r, answers: byReg.get(registrationId) ?? {} }));
+  return rows.map(({ registrationId, ...r }) => ({
+    ...r,
+    imageConsent: Boolean(r.imageConsent),
+    answers: byReg.get(registrationId) ?? {},
+  }));
 }
 
 // RFC4180 + defesa contra injeção de fórmula (planilha executa =, +, -, @)
@@ -619,6 +681,10 @@ export function registrantsCsv(questions: EditionQuestion[], rows: RegistrantWit
     "promovido_em",
     "termo_versao",
     "consentimento_em",
+    "uso_imagem",
+    "idade_no_evento",
+    "responsavel",
+    "codigo_conduta_versao",
   ];
   const header = [
     ...fixed,
@@ -636,6 +702,10 @@ export function registrantsCsv(questions: EditionQuestion[], rows: RegistrantWit
       r.promotedAt,
       r.consentVersion,
       r.consentAt,
+      r.imageConsent ? "autorizou" : "nao autorizou",
+      r.ageAtEvent,
+      r.guardianName,
+      r.conductVersion,
       ...questions.map((q) => {
         const a = r.answers[q.id];
         return a ? displayAnswer(a.value) : "";

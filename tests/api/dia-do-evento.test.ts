@@ -434,6 +434,7 @@ describe("crachás", () => {
       role: (["participante", "staff", "mentor", "jurado", "organizador"] as const)[i % 5],
       team: i % 2 ? "Time Ímpar com nome bem comprido que não cabe" : null,
       token: i % 3 ? ticketToken(i + 1) : null,
+      noPhoto: i % 4 === 0,
     }));
     const bytes = await badgesPdf(badges, { hackathonName: "Hack Inova Alphaville 2026" });
     const pdf = await PDFDocument.load(bytes);

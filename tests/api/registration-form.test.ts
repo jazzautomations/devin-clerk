@@ -58,7 +58,7 @@ describe("POST /api/hackathons/[id]/register — formulário", () => {
   it("anon → 401 JSON", async () => {
     asUser(null);
     const { POST } = await import("@/app/api/hackathons/[id]/register/route");
-    const res = await POST(req("POST", { consent: true }), ctx);
+    const res = await POST(req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true } }), ctx);
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
@@ -76,7 +76,7 @@ describe("POST /api/hackathons/[id]/register — formulário", () => {
     asUser("clerk_f_usr");
     const q = await createQuestion(ED, { kind: "short_text", label: "Curso", required: true });
     const { POST } = await import("@/app/api/hackathons/[id]/register/route");
-    const res = await POST(req("POST", { consent: true, answers: { [q.id]: "" } }), ctx);
+    const res = await POST(req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true }, answers: { [q.id]: "" } }), ctx);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.questionId).toBe(q.id);
@@ -88,7 +88,7 @@ describe("POST /api/hackathons/[id]/register — formulário", () => {
     const q = await createQuestion(ED, { kind: "single", label: "Camiseta", required: true, options: ["P", "M"] });
     const { POST } = await import("@/app/api/hackathons/[id]/register/route");
     const res = await POST(
-      req("POST", { consent: true, answers: { [q.id]: "M" } }, { "x-forwarded-for": "177.10.0.1, 10.0.0.1" }),
+      req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true }, answers: { [q.id]: "M" } }, { "x-forwarded-for": "177.10.0.1, 10.0.0.1" }),
       ctx,
     );
     expect(res.status).toBe(200);
@@ -103,9 +103,9 @@ describe("POST /api/hackathons/[id]/register — formulário", () => {
     await setEditionCapacity(ED, 1);
     const { POST, DELETE } = await import("@/app/api/hackathons/[id]/register/route");
     asUser("clerk_f_usr");
-    expect((await POST(req("POST", { consent: true }), ctx)).status).toBe(200);
+    expect((await POST(req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true } }), ctx)).status).toBe(200);
     asUser("clerk_f_usr2");
-    const res = await POST(req("POST", { consent: true }), ctx);
+    const res = await POST(req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true } }), ctx);
     expect(res.status).toBe(201);
     expect(await res.json()).toMatchObject({ registered: false, status: "waitlist", position: 1 });
     asUser("clerk_f_usr");
@@ -159,7 +159,7 @@ describe("admin do formulário — /api/admin/hackathons/[id]/questions", () => 
     const q = await createQuestion(ED, { kind: "short_text", label: "Universidade" });
     asUser("clerk_f_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    await reg.POST(req("POST", { consent: true, answers: { [q.id]: "Anhembi" } }), ctx);
+    await reg.POST(req("POST", { consent: true, terms: { birthDate: "2000-01-01", conduct: true }, answers: { [q.id]: "Anhembi" } }), ctx);
 
     const { GET } = await import("@/app/api/admin/hackathons/[id]/registrations/route");
     asUser("clerk_f_out");

@@ -206,7 +206,7 @@ export function HackathonCard({
                   ? "não rolou dessa vez"
                   : hackathon.requiresApproval
                     ? "pedir lugar"
-                    : "inscrever-se em 1 clique"}
+                    : "inscrever-se"}
         </button>
       ) : (
         <a

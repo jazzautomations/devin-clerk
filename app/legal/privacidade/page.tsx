@@ -49,6 +49,21 @@ export default function PrivacidadePage() {
             hackathons, posts, comentários e likes que você faz no feed.
           </li>
           <li>
+            <span className="text-foreground">Termos da inscrição numa edição</span>{" "}
+            — data de nascimento (só pra checar a idade mínima; a organização
+            vê a idade no dia do evento, não a data), nome e e-mail do
+            responsável quando a edição aceita menor, versão do código de
+            conduta aceita, restrição alimentar e alergias quando a edição
+            pergunta, e o histórico de autorização/revogação do uso de imagem.
+            Tudo isso é apagado se você cancelar a inscrição ou excluir a conta.
+          </li>
+          <li>
+            <span className="text-foreground">Relatos de conduta</span> —
+            relato anônimo não guarda nome nem IP. Se você excluir a conta, os
+            relatos que fez ficam sem autor e sem o contato informado, mas não
+            são apagados (podem envolver outras pessoas).
+          </li>
+          <li>
             <span className="text-foreground">Contato comercial</span> — se uma
             empresa envia o formulário em `/empresas`, guardamos empresa,
             e-mail, interesse e mensagem como lead pra organização responder.

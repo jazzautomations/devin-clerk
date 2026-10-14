@@ -13,7 +13,7 @@ import { getRegistrationIds } from "@/lib/registrations";
 export const metadata: Metadata = {
   title: "radar",
   description:
-    "Hackathons abertos no Brasil e no mundo — sessões Hack Inova com inscrição em 1 clique e o radar curado das fontes oficiais.",
+    "Hackathons abertos no Brasil e no mundo — sessões Hack Inova com inscrição pelo HackaHub e o radar curado das fontes oficiais.",
   alternates: { canonical: "/radar" },
 };
 
@@ -56,7 +56,7 @@ export default async function RadarPage({
           Hackathons abertos
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Os da comunidade com inscrição em 1 clique, e o resto do cenário
+          Os da comunidade com inscrição pelo HackaHub, e o resto do cenário
           curado do Brasil e do mundo — raspado das fontes oficiais.
         </p>
         <form action="/radar" className="mt-1 flex gap-2">

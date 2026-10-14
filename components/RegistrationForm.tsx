@@ -4,6 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EditionQuestion } from "@/lib/registrationForm";
+import {
+  EMPTY_TERMS,
+  TermsAcceptBoxes,
+  TermsPersonalFields,
+  ageOnDay,
+  termsPayload,
+  type TermsConfig,
+  type TermsValue,
+} from "@/components/EventTermsFields";
 
 type Value = string | string[] | boolean | undefined;
 
@@ -15,6 +24,14 @@ const ERROR_TEXT: Record<string, string> = {
   duplicate: "você já se candidatou a esse tipo nesta edição",
   already_has_role: "você já tem esse papel nesta edição",
   edition_over: "edição encerrada",
+  birth_date_required: "informe sua data de nascimento",
+  birth_date_invalid: "data de nascimento inválida",
+  guardian_required: "menor de 18 precisa informar o nome completo do responsável legal",
+  guardian_email_invalid: "informe um e-mail válido do responsável legal",
+  guardian_email_same: "o e-mail do responsável precisa ser diferente do seu",
+  guardian_consent_required: "confirme que seu responsável legal autorizou a participação",
+  conduct_required: "aceite o código de conduta da edição pra concluir",
+  conduct_outdated: "o código de conduta foi atualizado; recarregue a página",
 };
 
 export function errorText(code: string): string {
@@ -40,6 +57,7 @@ export function RegistrationForm({
   requiresApproval = false,
   full = false,
   target,
+  terms,
 }: {
   hackathonId: string;
   questions: EditionQuestion[];
@@ -48,11 +66,15 @@ export function RegistrationForm({
   requiresApproval?: boolean;
   full?: boolean;
   target?: { submitUrl: string; cta: string; pagePath: string };
+  /** frente L — termos do evento (só na inscrição de participante) */
+  terms?: TermsConfig;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<number, Value>>({});
   const [consent, setConsent] = useState(false);
   const [listed, setListed] = useState(false);
+  const [tv, setTv] = useState<TermsValue>(EMPTY_TERMS);
+  const patchTerms = (p: Partial<TermsValue>) => setTv((s) => ({ ...s, ...p }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; questionId: number | null } | null>(null);
 
@@ -60,8 +82,25 @@ export function RegistrationForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (terms) {
+      const age = ageOnDay(tv.birthDate, terms.eventDay);
+      const local =
+        age === null
+          ? "informe sua data de nascimento"
+          : age < terms.minAge
+            ? `Esta edição é para quem tem ${terms.minAge} anos ou mais na data do evento.`
+            : null;
+      if (local) {
+        setError({ text: local, questionId: null });
+        return;
+      }
+    }
     if (!consent) {
       setError({ text: "marque o aceite dos termos pra concluir", questionId: null });
+      return;
+    }
+    if (terms && !tv.conduct) {
+      setError({ text: "aceite o código de conduta da edição pra concluir", questionId: null });
       return;
     }
     setBusy(true);
@@ -70,9 +109,12 @@ export function RegistrationForm({
       const res = await fetch(target?.submitUrl ?? `/api/hackathons/${hackathonId}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          target ? { consent: true, answers: values } : { consent: true, answers: values, publicListing: listed },
-        ),
+        body: JSON.stringify({
+          consent: true,
+          answers: values,
+          ...(target ? {} : { publicListing: listed }),
+          ...(terms ? { terms: termsPayload(terms, tv) } : {}),
+        }),
       });
       if (res.status === 401) {
         router.push(`/sign-in?redirect_url=${encodeURIComponent(target?.pagePath ?? `/h/${hackathonId}/inscricao`)}`);
@@ -205,8 +247,12 @@ export function RegistrationForm({
         })}
       </ol>
 
+      {terms && <TermsPersonalFields cfg={terms} value={tv} onChange={patchTerms} />}
+
       <ConsentBox text={consentText} checked={consent} onChange={setConsent} />
       {!target && <PublicListingBox checked={listed} onChange={setListed} />}
+
+      {terms && <TermsAcceptBoxes cfg={terms} value={tv} onChange={patchTerms} />}
 
       {error && error.questionId === null && (
         <p role="alert" className="font-mono text-[13px] text-orange">

@@ -77,7 +77,7 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
     await expect(form.getByRole("radiogroup", { name: "Já tem time?" })).toBeVisible();
     await expect(page.getByText(/Nome, e-mail e GitHub vêm do seu cadastro/)).toBeVisible();
     // aceite LGPD: nunca pré-marcado, cita a organização e os termos
-    const consent = form.getByRole("checkbox", { name: /Autorizo Hack Inova E2E/ });
+    const consent = form.getByRole("checkbox", { name: /Autorizo Hack Inova E2E a tratar/ });
     await expect(consent).not.toBeChecked();
     await expect(form.getByRole("link", { name: "termos" })).toHaveAttribute("href", "/legal/termos");
     await expect(form.getByRole("button", { name: /concluir inscrição/i })).toBeVisible();
@@ -86,16 +86,25 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
   test("enviar sem marcar o aceite avisa e não sai da página", async ({ page, request }) => {
     await seed(request);
     await page.goto(`/h/${WITH_FORM}/inscricao`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /concluir inscrição/i }).click();
-    await expect(page.getByTestId("registration-form").getByRole("alert")).toContainText(/aceite/);
+    // frente L: a data de nascimento vem antes do aceite
+    // repete até hidratar: antes disso o onChange do React não pega o fill
+    await expect(async () => {
+      await page.getByLabel(/data de nascimento/i).fill("2000-01-01");
+      await page.getByRole("button", { name: /concluir inscrição/i }).click();
+      await expect(page.getByTestId("registration-form").getByRole("alert")).toContainText(/aceite/, { timeout: 1000 });
+    }).toPass();
     await expect(page).toHaveURL(new RegExp(`/h/${WITH_FORM}/inscricao`));
   });
 
-  test("edição sem perguntas segue 1 clique, com a caixa de aceite junto do botão", async ({ page, request }) => {
+  test("edição sem perguntas também vai pro formulário (nascimento, conduta e imagem não cabem em 1 clique)", async ({
+    page,
+    request,
+  }) => {
     await seed(request);
     await page.goto(`/h/${NO_FORM}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: /inscrever-se em 1 clique/i })).toBeVisible();
-    await expect(page.getByRole("checkbox", { name: /Autorizo Hack Inova E2E/ })).not.toBeChecked();
+    await expect(page.getByRole("link", { name: /fazer inscrição/i })).toHaveAttribute("href", `/h/${NO_FORM}/inscricao`);
+    await page.goto(`/h/${NO_FORM}/inscricao`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("checkbox", { name: /Autorizo Hack Inova E2E a tratar/ })).not.toBeChecked();
   });
 
   test("APIs anon → 401 JSON (register, perguntas, capacidade, CSV)", async ({ request }) => {
@@ -129,8 +138,5 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
     await page.goto(`/h/${NO_FORM}`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1000);
     await noHorizontalScroll(page);
-    const box = page.locator(".window", { has: page.getByRole("checkbox", { name: /Autorizo/ }) });
-    await box.scrollIntoViewIfNeeded();
-    await box.screenshot({ path: "test-results/feat-b/edicao-sem-perguntas-390.png" });
   });
 });

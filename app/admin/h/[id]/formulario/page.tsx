@@ -7,6 +7,8 @@ import { AUDIENCES, countCurrentAnswers, isAudience, listQuestions, type Audienc
 import { KIND_LABEL } from "@/lib/applicationKinds";
 import { getOpenKinds } from "@/lib/roleApplications";
 import { QuestionEditor } from "@/components/QuestionEditor";
+import { EventTermsEditor } from "@/components/EventTermsEditor";
+import { getEditionTerms } from "@/lib/eventTerms";
 
 const AUDIENCE_LABEL: Record<Audience, string> = { participante: "participante", ...KIND_LABEL };
 
@@ -19,11 +21,12 @@ export default async function FormularioPage({ params, searchParams }: PageProps
   const audience: Audience = isAudience(raw) ? raw : "participante";
   const member = await currentMember();
   if (!(await canManageEdition(member, id))) notFound();
-  const [questions, answered, cap, open] = await Promise.all([
+  const [questions, answered, cap, open, terms] = await Promise.all([
     listQuestions(id, { includeArchived: true, audience }),
     countCurrentAnswers(id, audience),
     getEditionCapacity(id),
     getOpenKinds(id),
+    getEditionTerms(id),
   ]);
   const participant = audience === "participante";
   return (
@@ -87,6 +90,15 @@ export default async function FormularioPage({ params, searchParams }: PageProps
         capacity={cap.capacity}
         audience={audience}
       />
+      {participant && (
+        <EventTermsEditor
+          hackathonId={id}
+          minAge={terms.minAge}
+          dietEnabled={terms.dietEnabled}
+          conductText={terms.conductText}
+          conductVersion={terms.conductVersion}
+        />
+      )}
     </div>
   );
 }

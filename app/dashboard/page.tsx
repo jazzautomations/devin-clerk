@@ -69,7 +69,7 @@ export default async function DashboardPage() {
           </h1>
         </div>
         <p className="max-w-xl text-lg text-muted">
-          Hackathons abertos — os da comunidade com inscrição em 1 clique, e o
+          Hackathons abertos — os da comunidade com inscrição pelo HackaHub, e o
           resto do mundo curado embaixo.{" "}
           <Link href={`/u/${member.username}`} className="text-accent hover:underline">
             teu perfil público →

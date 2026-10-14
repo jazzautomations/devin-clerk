@@ -46,7 +46,8 @@ export function RegistrantsTable({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <p className="font-mono text-[13px] text-muted">
           {rows.length} {rows.length === 1 ? "inscrição" : "inscrições"} · {count("approved")} aprovados ·{" "}
-          {count("pending")} pendentes · {count("waitlist")} na fila
+          {count("pending")} pendentes · {count("waitlist")} na fila ·{" "}
+          <span data-testid="no-photo-count">{rows.filter((r) => !r.imageConsent).length} sem uso de imagem</span>
         </p>
         <a href={`/api/admin/hackathons/${id}/registrations?format=csv`} className="btn rounded-[6px]">
           exportar csv ↓
@@ -71,6 +72,20 @@ export function RegistrantsTable({
                       {r.waitlistPosition !== null && ` #${r.waitlistPosition}`}
                     </span>
                     <span className="truncate font-semibold">{r.name ?? r.username}</span>
+                    {!r.imageConsent && (
+                      <span
+                        className="shrink-0 border border-orange px-1.5 font-mono text-[11px] text-orange uppercase"
+                        title="não autorizou uso de imagem"
+                        data-testid="no-photo"
+                      >
+                        sem foto
+                      </span>
+                    )}
+                    {r.ageAtEvent !== null && r.ageAtEvent < 18 && (
+                      <span className="shrink-0 border border-line px-1.5 font-mono text-[11px] uppercase">
+                        menor · {r.ageAtEvent}
+                      </span>
+                    )}
                     <span className="hidden truncate font-mono text-[12px] text-muted sm:inline">@{r.username}</span>
                   </span>
                   <span className="font-mono text-[12px] text-muted">
@@ -110,6 +125,13 @@ export function RegistrantsTable({
                       ? `aceite dos termos v${r.consentVersion} em ${fmt(r.consentAt)}`
                       : "sem aceite registrado (inscrição anterior ao formulário)"}
                     {r.promotedAt && ` · saiu da fila em ${fmt(r.promotedAt)}`}
+                  </p>
+                  <p className="font-mono text-[12px] text-muted">
+                    {r.ageAtEvent !== null
+                      ? `${r.ageAtEvent} anos no evento · código de conduta v${r.conductVersion}`
+                      : "sem data de nascimento/código de conduta (inscrição anterior aos termos)"}
+                    {r.guardianName && ` · responsável: ${r.guardianName}`}
+                    {` · uso de imagem: ${r.imageConsent ? "autorizado" : "não autorizado"}`}
                   </p>
                 </div>
               </details>
