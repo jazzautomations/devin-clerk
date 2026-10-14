@@ -23,7 +23,7 @@ type Initial = {
   openTo: string[];
 };
 
-const STEPS = ["quem é você", "teu perfil", "links"] as const;
+const STEPS = ["quem é você", "seu perfil", "links"] as const;
 
 const label = "font-mono text-[12px] tracking-[0.06em] text-muted uppercase";
 const input =
@@ -96,7 +96,7 @@ export function OnboardingWizard({
     return (
       <section className="flex flex-col gap-6" data-testid="onboarding-done" aria-live="polite">
         <div className="border-2 border-line bg-foreground p-6 text-background sm:p-8">
-          <p className="font-mono text-[12px] tracking-[0.06em] text-band uppercase">teu próximo passo</p>
+          <p className="font-mono text-[12px] tracking-[0.06em] text-band uppercase">seu próximo passo</p>
           <h2 className="mt-2 text-[clamp(1.8rem,5vw,2.6rem)] leading-[1] font-extrabold tracking-[-0.035em]">{n.title}</h2>
           <p className="mt-3 max-w-[48ch] text-[15px] leading-relaxed text-[#b8cdc0]">{n.detail}</p>
           <Link href={n.href} className="btn-go mt-6 w-full sm:w-auto" data-testid="onboarding-next">
@@ -163,7 +163,7 @@ export function OnboardingWizard({
             </div>
           </fieldset>
           <fieldset className="flex flex-col gap-3">
-            <legend className={label}>o que tu quer aqui? (pode marcar mais de um)</legend>
+            <legend className={label}>o que você quer aqui? (pode marcar mais de um)</legend>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {INTENTS.map((it) => {
                 const on = v.intents.includes(it.key);
@@ -197,9 +197,9 @@ export function OnboardingWizard({
       {step === 1 && (
         <div className="flex flex-col gap-5">
           <h2 id="onb-step-title" className="text-[clamp(1.7rem,5vw,2.4rem)] leading-[1] font-extrabold tracking-[-0.035em]">
-            O básico do teu perfil
+            O básico do seu perfil
           </h2>
-          <p className="-mt-2 text-[14.5px] text-muted">A foto vem da tua conta. Só o nome aparece de cara; o resto é opcional.</p>
+          <p className="-mt-2 text-[14.5px] text-muted">A foto vem da sua conta. Só o nome é obrigatório.</p>
           <label className="flex flex-col gap-1.5">
             <span className={label}>nome de exibição</span>
             <input className={input} value={v.name} maxLength={LIMITS.name} onChange={(e) => set("name", e.target.value)} autoComplete="name" />
@@ -249,7 +249,7 @@ export function OnboardingWizard({
       {step === 2 && (
         <div className="flex flex-col gap-5">
           <h2 id="onb-step-title" className="text-[clamp(1.7rem,5vw,2.4rem)] leading-[1] font-extrabold tracking-[-0.035em]">
-            Onde acham teu trabalho
+            Onde encontram seu trabalho
           </h2>
           <label className="flex flex-col gap-1.5">
             <span className={label}>GitHub (opcional)</span>
@@ -262,7 +262,7 @@ export function OnboardingWizard({
           <fieldset className="flex flex-col gap-2 border-t border-line pt-5">
             <legend className={label}>diretório de talentos (opcional)</legend>
             <p className="text-[14.5px] text-muted">
-              Marca o que te interessa pra aparecer em /talento, onde marcas procuram gente. Nada marcado, tu fica fora.
+              Marque o que te interessa pra aparecer no diretório de talentos, onde empresas procuram gente. Sem marcar nada, você fica de fora.
             </p>
             <div className="mt-1 flex flex-wrap gap-2">
               {OPEN_TO.map((o) => {

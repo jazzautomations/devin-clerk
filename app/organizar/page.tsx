@@ -99,8 +99,8 @@ const etapas: { k: string; title: string; items: string[]; img: StaticImageData;
     items: [
       "carga horária por papel: participante, staff, mentoria, júri, organização",
       "código verificável e PDF pra cada pessoa",
-      "CSV de horas pra coordenação de curso",
-      "pesquisa NPS por papel, só pra quem esteve lá",
+      "planilha de horas pra coordenação de curso",
+      "pesquisa de satisfação só pra quem esteve lá",
       "relatório pronto pro patrocinador",
     ],
     img: imgCertificados,
@@ -109,9 +109,9 @@ const etapas: { k: string; title: string; items: string[]; img: StaticImageData;
 ];
 
 const patrocinio = [
-  { title: "Desafio próprio", desc: "O problema, o prêmio e o que entregar são da marca; os times escolhem." },
-  { title: "Relatório da edição", desc: "Funil, times no desafio, stack usada, vencedores e votos do público." },
-  { title: "Contatos com opt-in", desc: "QR no estande: só entra na lista quem quiser falar com a marca." },
+  { title: "Desafio da empresa", desc: "A empresa define o problema, o prêmio e o que entregar. As equipes escolhem se vão pegar." },
+  { title: "Relatório da edição", desc: "Inscritos, presentes, equipes no desafio, stack usada, vencedores e votos do público." },
+  { title: "Contato com consentimento", desc: "No estande tem um QR. Só entra na lista quem quiser falar com a empresa." },
   { title: "Logo na edição", desc: "Na página pública da edição, por nível de patrocínio." },
 ];
 
@@ -133,14 +133,13 @@ export default async function OrganizarPage() {
         <div className="rise min-w-0">
           <p className="tag">PRA QUEM ORGANIZA</p>
           <h1 id="org-title" className="mt-6 text-[clamp(2.6rem,7.6vw,5.6rem)] leading-[0.9] font-extrabold tracking-[-0.05em]">
-            Tua edição,
+            Seu hackathon,
             <br />
             <span className="text-accent">do formulário ao certificado.</span>
           </h1>
           <p className="mt-7 max-w-[52ch] text-[clamp(1.05rem,1.6vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
-            A Hack Inova roda hackathon com universidade, comunidade e empresa. Quem participa se inscreve,
-            confirma, faz check-in, entrega e recebe o certificado na mesma plataforma; a organização acompanha
-            cada etapa num painel da edição.
+            A Hack Inova monta a edição com a sua faculdade, comunidade ou empresa. Os participantes fazem
+            tudo pela plataforma, da inscrição ao certificado, e você acompanha cada etapa no painel.
           </p>
           <div className="mt-9 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
             <a href="#contato" className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="organizar-cta-contato">
@@ -280,7 +279,7 @@ export default async function OrganizarPage() {
               <b>[04]</b> contato
             </p>
             <h2 id="contato-title" className="text-[clamp(2rem,4.4vw,3rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Conta da tua edição.
+              Conte sobre a sua edição.
             </h2>
             <p className="max-w-[42ch] text-[16px] leading-relaxed text-[#2b2b2b]">
               Quando, onde, quantas pessoas e o tema, se já tiver. A mensagem cai direto na fila da Hack Inova.

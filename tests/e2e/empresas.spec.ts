@@ -83,7 +83,7 @@ test.describe("/empresas — pitch pra marca", () => {
   test("landing aponta a linha comercial pra /empresas", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("link", { name: /marca.*desafio|desafio patrocinado/i }),
+      page.getByRole("link", { name: /patrocinar um desafio|desafio patrocinado/i }),
     ).toHaveAttribute("href", "/empresas");
   });
 });

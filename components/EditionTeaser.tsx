@@ -121,11 +121,11 @@ export function EditionTeaser({
                 {past
                   ? "Resultado, projetos e pódio ficam pra quem tem conta."
                   : h.partner && !closed
-                    ? "Cria tua conta e já cai na inscrição."
-                    : "Entra pra acompanhar a edição."}
+                    ? "Crie sua conta e siga direto pra inscrição."
+                    : "Entre pra acompanhar a edição."}
               </p>
               <p className="mt-3 max-w-[52ch] text-[14.5px] leading-relaxed text-[#b8cdc0]">
-                Lá dentro: programação, avisos, quem tá procurando time, mural da edição, ingresso com QR e certificado.
+                Com a conta você vê a programação, os avisos, quem está procurando equipe, o seu ingresso e, no fim, o certificado.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:items-end">

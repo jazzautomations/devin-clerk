@@ -28,7 +28,7 @@ test.describe("landing pública", () => {
     }
     await expect(page.locator("#como-funciona")).toBeVisible();
     await expect(page.getByTestId("landing-organizar").getByRole("link", { name: /organizar/i })).toHaveAttribute("href", "/organizar");
-    await expect(page.getByTestId("landing-patrocinar").getByRole("link", { name: /desafio patrocinado/i })).toHaveAttribute("href", "/empresas");
+    await expect(page.getByTestId("landing-patrocinar").getByRole("link", { name: /patrocinar um desafio/i })).toHaveAttribute("href", "/empresas");
     // FAQ abre e fecha
     const q = page.getByTestId("landing-faq").locator("summary").first();
     await q.click();
@@ -167,7 +167,7 @@ test.describe("onboarding e painel", () => {
   test("membro já onboarded passa direto do /bem-vindo pro painel", async ({ memberPage: page }) => {
     await page.goto("/bem-vindo");
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole("heading", { name: /teu próximo passo/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /seu próximo passo/i })).toBeVisible();
   });
 
   test("refazer: 3 passos com progresso, voltar, e o fim mostra o próximo passo", async ({ memberPage: page }) => {

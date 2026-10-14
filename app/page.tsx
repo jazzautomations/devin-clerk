@@ -28,24 +28,24 @@ const FORMAT_LABEL: Record<string, string> = { online: "online", presencial: "pr
 // jornada de quem participa — cada passo existe hoje na plataforma
 const passos = [
   {
-    title: "Acha a edição",
-    desc: "Edições da Hack Inova e os hackathons abertos no Brasil e no mundo numa lista só.",
+    title: "Escolha a edição",
+    desc: "Data, local, desafios e quantas vagas ainda sobram.",
   },
   {
-    title: "Se inscreve com teu perfil",
-    desc: "Um cadastro pra todas as edições e o formulário curto de cada uma. Lotou? Fila de espera com posição.",
+    title: "Faça a inscrição",
+    desc: "Seu perfil já leva nome, GitHub e LinkedIn. Se lotar, você entra na fila e acompanha sua posição.",
   },
   {
-    title: "Confirma presença e pega o ingresso",
-    desc: "Confirmação antes do evento e QR pessoal pro check-in na entrada.",
+    title: "Confirme presença",
+    desc: "Uma semana antes a organização pergunta se você vai. Confirmou, o QR de entrada chega no seu e-mail.",
   },
   {
-    title: "Monta time e entrega",
-    desc: "Quadro de quem procura time, entrega com prazo, rascunho e versão enviada.",
+    title: "Monte a equipe e entregue",
+    desc: "Quem está sem equipe aparece no quadro da edição. A entrega fecha no horário marcado.",
   },
   {
-    title: "Sai com prova do que fez",
-    desc: "Certificado verificável, feedback do júri, carta colecionável e o projeto no teu perfil público.",
+    title: "Leve o que construiu",
+    desc: "Certificado com código de verificação, os comentários do júri e o projeto no seu perfil.",
   },
 ] as const;
 
@@ -54,69 +54,69 @@ const ciclo = [
   {
     k: "inscrição",
     title: "Formulário da edição",
-    items: ["perguntas próprias e curadoria", "vagas com fila de espera", "aceite LGPD e uso de imagem à parte"],
+    items: ["perguntas da sua edição, com aprovação manual se quiser", "limite de vagas e fila de espera", "consentimento LGPD e de uso de imagem"],
   },
   {
     k: "confirmação",
     title: "Presença e avisos",
-    items: ["RSVP com lembretes antes do evento", "quem não confirma libera a vaga", "avisos por e-mail e WhatsApp"],
+    items: ["confirmação de presença com lembrete", "vaga de quem não confirma vai pra fila", "avisos por e-mail e WhatsApp"],
   },
   {
     k: "dia do evento",
     title: "Credenciamento",
-    items: ["check-in por QR, offline", "crachás em PDF", "programação com .ics e refeições"],
+    items: ["check-in por QR que funciona sem internet", "crachás prontos pra imprimir", "programação no calendário de cada um"],
   },
   {
     k: "entrega",
-    title: "Projetos no prazo",
-    items: ["prazo com tolerância e trava", "desafios de patrocinador", "candidatura de mentor, jurado e voluntário"],
+    title: "Entrega",
+    items: ["prazo com trava automática", "desafios de patrocinador", "inscrição de mentores, jurados e voluntários"],
   },
   {
     k: "avaliação",
     title: "Júri e final",
-    items: ["rubrica e feedback pro time", "voto do público no telão", "pódio no arquivo da edição"],
+    items: ["notas por critério e comentário pra equipe", "voto do público no telão", "pódio guardado no arquivo"],
   },
   {
     k: "depois",
-    title: "Certificado e retorno",
-    items: ["certificado com carga horária", "pesquisa NPS por papel", "relatório pro patrocinador"],
+    title: "Depois do evento",
+    items: ["certificado com carga horária", "pesquisa de satisfação", "relatório pro patrocinador"],
   },
 ] as const;
 
 const patrocinio = [
-  { title: "Desafio próprio", desc: "Tua marca propõe o problema, o prêmio e o que entregar; os times escolhem." },
-  { title: "Relatório automático", desc: "Funil da edição, times no teu desafio, stack usada, vencedores e votos do público." },
-  { title: "Contatos com opt-in", desc: "Quem quiser falar com a marca escaneia o QR no estande. Só com consentimento." },
-  { title: "NPS do patrocinador", desc: "Pesquisa pós-evento pra quem esteve lá, separada por papel." },
+  { title: "Desafio da sua empresa", desc: "Você define o problema, o prêmio e o que a equipe precisa entregar." },
+  { title: "Relatório no fim", desc: "Quantos se inscreveram, quantos apareceram, quem pegou seu desafio, que stack usou e quem ganhou." },
+  { title: "Contato com consentimento", desc: "No estande tem um QR. Quem quiser conversar com a sua empresa escaneia e libera o contato." },
+  { title: "Avaliação da edição", desc: "Depois do evento, quem esteve lá dá uma nota. Você vê o resultado." },
 ] as const;
 
 // por dentro — prints reais das telas logadas (assets/landing)
 const telas = [
   {
-    bar: "edição / teu próximo passo",
+    bar: "edição / seu próximo passo",
     title: "Página da edição",
-    desc: "Data, local, prazos e, no topo, o teu próximo passo: inscrição, presença, ingresso, entrega, resultado.",
+    desc: "No topo, o que falta você fazer: confirmar presença, abrir o ingresso, entregar o projeto.",
     img: imgEdicao,
-    alt: "Página de uma edição logada: ficha da edição e o painel 'teu próximo passo' com o trilho da jornada",
+    alt: "Página de uma edição logada: ficha da edição e o painel 'seu próximo passo' com o trilho da jornada",
   },
   {
     bar: "meu painel",
     title: "Meu painel",
-    desc: "Um card por edição em que tu tá, com o que fazer agora. Certificados e histórico logo abaixo.",
+    desc: "Uma linha por edição em que você está, com o próximo passo de cada uma.",
     img: imgPainel,
     alt: "Meu painel: saudação, lembrete de perfil e cards de próximo passo por edição",
   },
   {
     bar: "hackathons abertos",
     title: "Hackathons abertos",
-    desc: "As edições da Hack Inova com inscrição pela plataforma e o radar do que tá aberto no Brasil e no mundo.",
+    desc: "As edições da Hack Inova e outros hackathons abertos no Brasil, com filtro por cidade e formato.",
     img: imgHackathons,
     alt: "Lista de hackathons abertos com filtros por formato e região",
   },
   {
     bar: "perfil público",
-    title: "Teu perfil vira portfólio",
-    desc: "Trajetória por edição, projetos, pódio, cartas colecionáveis e links. É o link que tu manda pra recrutador.",
+    title: "Seu perfil vira portfólio",
+    desc: "Edições, projetos e pódios num link só. É o que você manda pra recrutador.",
     img: imgPerfil,
     alt: "Perfil público de uma pessoa: nível, badges, carta da edição e trajetória",
   },
@@ -124,38 +124,38 @@ const telas = [
 
 // o que vem com a conta — tudo existe hoje
 const beneficios = [
-  { title: "Inscrição em minutos", desc: "Teu perfil preenche o básico; cada edição pede só o que é dela." },
-  { title: "Próximo passo sempre à vista", desc: "Presença, ingresso com QR, entrega e resultado no teu painel." },
-  { title: "Time e mural", desc: "Quadro de quem procura time e o mural de cada edição." },
-  { title: "Certificado verificável", desc: "Código público e carga horária quando a edição define." },
-  { title: "Portfólio que fica", desc: "Projetos, pódio e cartas no teu perfil público." },
-  { title: "Avisos sem ruído", desc: "Aviso da organização no app, no e-mail e no WhatsApp se tu quiser." },
+  { title: "Inscrição rápida", desc: "Cada edição só pergunta o que é dela. O resto vem do seu perfil." },
+  { title: "Você sabe o que falta", desc: "Confirmar presença, abrir o ingresso, entregar. Aparece no seu painel." },
+  { title: "Equipe", desc: "Quem está sem equipe se encontra no quadro da edição." },
+  { title: "Certificado que se confere", desc: "Qualquer pessoa confere pelo código. Com carga horária quando a edição define." },
+  { title: "Portfólio", desc: "Seus projetos e pódios ficam no seu perfil." },
+  { title: "Avisos", desc: "Pelo app e pelo e-mail. No WhatsApp, só se você quiser." },
 ];
 
 const faq = [
   {
     q: "Quanto custa participar?",
-    a: "Nada. Participante nunca paga; quem banca a edição é a organização e os patrocinadores.",
+    a: "Nada. Quem participa não paga. A edição é bancada pela organização e pelos patrocinadores.",
   },
   {
-    q: "Preciso ter time pra me inscrever?",
-    a: "Não. Depois da inscrição tu entra no quadro de quem procura time da edição, e o time se forma ali ou no dia.",
+    q: "Preciso ter equipe pra me inscrever?",
+    a: "Não. Depois da inscrição você pode aparecer no quadro de quem procura equipe. Muita equipe se forma ali ou no próprio dia.",
   },
   {
     q: "Como funciona a inscrição?",
-    a: "Tu cria o perfil uma vez e preenche o formulário curto de cada edição. Edição com curadoria responde por aqui; edição lotada abre fila de espera.",
+    a: "Você cria a conta uma vez e, em cada edição, preenche um formulário curto. Algumas edições aprovam uma inscrição de cada vez. Quando lota, abre fila de espera.",
   },
   {
-    q: "O que eu levo pra casa?",
-    a: "Certificado com código verificável (com carga horária quando a edição define), a carta da edição e o projeto no teu perfil público.",
+    q: "O que eu levo do evento?",
+    a: "Certificado com código de verificação, os comentários do júri, a carta da edição e o projeto no seu perfil.",
   },
   {
     q: "Por que preciso de conta pra ver a plataforma?",
-    a: "Inscritos, times e perfis são gente de verdade. Fica aberto só o que é divulgação: esta página, o resumo de cada edição, o cartão do perfil e a verificação de certificado.",
+    a: "Porque lá dentro tem gente de verdade: inscritos, equipes, perfis. Fica aberto só esta página, o resumo de cada edição, o cartão de perfil e a verificação de certificado.",
   },
   {
     q: "Quero levar um hackathon pra minha faculdade ou comunidade.",
-    a: "Conta pra gente o que tu tem em mente na página de organizar. A Hack Inova responde e a edição roda inteira aqui.",
+    a: "Fale com a gente na página de organizar. A Hack Inova responde e a edição roda inteira aqui.",
   },
 ] as const;
 
@@ -183,7 +183,7 @@ export default async function Home() {
   ].filter((s) => s.n > 0);
 
   const primaryHref = proxima ? `/h/${proxima.id}` : "/radar";
-  const primaryLabel = proxima ? "Participar da próxima edição" : "Ver hackathons abertos";
+  const primaryLabel = proxima ? "Quero participar" : "Ver hackathons abertos";
 
   return (
     <div className="-mb-24 overflow-x-clip">
@@ -222,15 +222,15 @@ export default async function Home() {
               <span className="text-accent">de hackathon.</span>
             </h1>
             <p className="mt-7 max-w-[50ch] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-relaxed text-[#1e1e1e]">
-              Onde a Hack Inova abre as edições dela e onde fica o que tu constrói: inscrição, time,
-              entrega, certificado e o portfólio que sobra depois.
+              É aqui que a Hack Inova abre inscrição, junta as equipes e guarda o que cada uma construiu.
+              Você cria a conta uma vez e entra em todas as edições.
             </p>
             <div className="mt-9 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
               <Link href={primaryHref} className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
                 {primaryLabel} →
               </Link>
               <Link href="/organizar" className="cta-link go self-start text-[clamp(1.1rem,2vw,1.35rem)] sm:self-auto" data-testid="hero-cta-organizar">
-                Vai organizar um hackathon?
+                Organizo hackathon
               </Link>
             </div>
           </div>
@@ -277,11 +277,11 @@ export default async function Home() {
               id="participar-title"
               className="text-[clamp(2.1rem,4.6vw,3.4rem)] leading-[0.95] font-extrabold tracking-[-0.04em]"
             >
-              Da inscrição ao portfólio, sem perder o fio.
+              Você traz o notebook. O resto está aqui.
             </h2>
             <p className="max-w-[42ch] text-[16px] leading-relaxed text-muted">
-              Estudante, dev, designer ou founder: um perfil, todas as edições. A página de cada edição
-              mostra o teu próximo passo.
+              Inscrição, presença, ingresso, equipe e entrega ficam no mesmo lugar, e a página da edição
+              sempre mostra o que falta você fazer.
             </p>
             <Link href="/radar" className="cta-link go self-start text-[18px]">
               Ver hackathons abertos
@@ -310,12 +310,12 @@ export default async function Home() {
               <b>[02]</b> por dentro
             </p>
             <h2 id="dentro-title" className="max-w-[20ch] text-[clamp(2rem,4.2vw,3rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              O que tu vê depois de criar a conta.
+              Por dentro da plataforma.
             </h2>
           </div>
           <p className="max-w-[44ch] text-[15.5px] leading-relaxed text-muted">
-            A plataforma é pra quem tem conta: edições, inscritos, times, projetos e perfis ficam lá dentro. Estas
-            são as telas de verdade.
+            Inscritos, equipes e perfis são pessoas de verdade, então ficam só pra quem tem conta. Estas são as
+            telas, com dados de demonstração.
           </p>
         </div>
         <div className="grid gap-x-8 gap-y-12 lg:grid-cols-2">
@@ -373,7 +373,7 @@ export default async function Home() {
                 <b>[04]</b> do arquivo
               </p>
               <h2 id="vitrine-title" className="max-w-[18ch] text-[clamp(2rem,4.2vw,3rem)] leading-none font-extrabold tracking-[-0.04em]">
-                O que os times levaram pro pódio.
+                Quem já subiu no pódio.
               </h2>
             </div>
             <Link href="/projetos" className="font-mono text-[13px] font-medium text-accent underline-offset-4 hover:underline">
@@ -429,16 +429,16 @@ export default async function Home() {
                 id="organizar-title"
                 className="max-w-[20ch] text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.98] font-extrabold tracking-[-0.04em]"
               >
-                A edição inteira, do formulário ao certificado.
+                Seu hackathon, do formulário ao certificado.
               </h2>
             </div>
             <div className="flex flex-col gap-5 lg:items-end lg:text-right">
               <p className="max-w-[44ch] text-[15px] leading-relaxed text-[#b8cdc0]">
-                Universidade, comunidade ou empresa: a Hack Inova roda a edição contigo, e cada etapa tem uma tela
-                no painel.
+                Faculdade, comunidade ou empresa. A Hack Inova monta a edição com você, e cada etapa tem uma
+                tela no painel da organização.
               </p>
               <Link href="/organizar" className="btn-go self-start lg:self-end">
-                Ver como funciona pra organizar →
+                Como funciona pra organizar →
               </Link>
             </div>
           </div>
@@ -473,13 +473,13 @@ export default async function Home() {
               <b>[06]</b> pra patrocinador
             </p>
             <h2 id="patrocinar-title" className="text-[clamp(2rem,4.2vw,3rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Tua marca no problema, não no banner.
+              Patrocine um problema.
             </h2>
             <p className="max-w-[42ch] text-[16px] leading-relaxed text-muted">
-              Patrocínio que vira desafio, contato com consentimento e um relatório no fim.
+              Sua empresa propõe o desafio, as equipes constroem em cima dele e você recebe um relatório do que aconteceu.
             </p>
             <Link href="/empresas" className="cta-link go self-start text-[18px]">
-              Lançar um desafio patrocinado
+              Quero patrocinar um desafio
             </Link>
           </div>
           <dl className="grid border-t-2 border-line sm:grid-cols-2">
@@ -498,13 +498,13 @@ export default async function Home() {
         <div className="grid gap-8 border-2 border-line lg:grid-cols-[1fr_1.4fr]">
           <div className="flex flex-col gap-5 border-b-2 border-line bg-mint p-6 sm:p-8 lg:border-r-2 lg:border-b-0">
             <p className="eyebrow">
-              <b>[07]</b> tua conta
+              <b>[07]</b> sua conta
             </p>
             <h2 id="conta-title" className="text-[clamp(1.9rem,4vw,2.8rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Um cadastro, todas as edições.
+              Uma conta, todas as edições.
             </h2>
             <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">
-              Criar conta não custa nada e leva 3 passos curtos depois do cadastro. Dá pra pular e completar depois.
+              É de graça. Depois do cadastro são três telas rápidas sobre você, e dá pra pular.
             </p>
             <Show when="signed-out">
               <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
@@ -538,7 +538,7 @@ export default async function Home() {
               <b>[08]</b> dúvidas
             </p>
             <h2 id="faq-title" className="text-[clamp(2rem,4.2vw,3rem)] leading-none font-extrabold tracking-[-0.04em]">
-              Perguntas que chegam antes da inscrição.
+              Perguntas frequentes.
             </h2>
           </div>
           <div className="border-b-2 border-line" data-testid="landing-faq">
@@ -573,10 +573,10 @@ export default async function Home() {
           <div>
             <p className="tag">NEWSLETTER</p>
             <h2 id="news-title" className="mt-4 text-[clamp(2rem,4vw,2.75rem)] leading-none font-extrabold tracking-[-0.04em]">
-              Toda semana, o que tá aberto.
+              Um e-mail por semana.
             </h2>
             <p className="mt-3 max-w-[46ch] text-[15px] text-[#2b2b2b]">
-              Hackathons abertos, prazos e as próximas edições da Hack Inova. Um e-mail por semana.
+              Hackathons com inscrição aberta, prazos e as próximas edições da Hack Inova.
             </p>
           </div>
           <NewsletterForm />

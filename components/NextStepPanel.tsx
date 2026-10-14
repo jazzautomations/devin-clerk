@@ -26,7 +26,7 @@ export function NextStepPanel({
     <section
       data-testid="next-step"
       data-step={step.key}
-      aria-label="teu próximo passo"
+      aria-label="seu próximo passo"
       className={dark ? "border-2 border-line bg-foreground text-background" : "border-[1.5px] border-line bg-background"}
     >
       {heading && (
@@ -78,7 +78,7 @@ export function NextStepPanel({
       <div className="flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:gap-8 sm:px-5 sm:py-6">
         <div className="min-w-0">
           <p className={`font-mono text-[12px] tracking-[0.06em] uppercase ${dark ? "text-band" : "text-accent"}`}>
-            teu próximo passo
+            seu próximo passo
           </p>
           <p
             className={`mt-1.5 leading-[1.02] font-extrabold tracking-[-0.03em] ${

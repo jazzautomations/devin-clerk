@@ -95,7 +95,7 @@ export default async function DashboardPage() {
             <b>[01]</b> {steps.length === 1 ? "tua edição" : "tuas edições"}
           </p>
           <h2 id="passos-title" className="text-[clamp(1.7rem,3.4vw,2.4rem)] leading-none font-extrabold tracking-[-0.035em]">
-            Teu próximo passo
+            Seu próximo passo
           </h2>
         </div>
         {steps.length > 0 ? (
