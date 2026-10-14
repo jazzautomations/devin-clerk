@@ -259,7 +259,7 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
           void act("min-votes", { value: Number(v) });
         }}
       >
-        <span className={`min-w-0 flex-1 font-mono text-[12px] ${snap.quorum.met ? "text-accent" : "text-orange"}`}>
+        <span className={`basis-full font-mono text-[12px] ${snap.quorum.met ? "text-accent" : "text-orange"}`}>
           quórum: {snap.quorum.total} de {snap.quorum.min} votos
           {snap.quorum.met ? " · ranking vale" : " · sem quórum, o público não vê ranking"}
         </span>
