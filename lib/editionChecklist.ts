@@ -8,10 +8,11 @@ import { parseEventTime } from "@/lib/eventTime";
 // Publicar (rascunho → no ar) exige o mínimo: data de início válida e, se
 // não for online, o local. O resto é recomendação.
 
-export type EditionPhase = "rascunho" | "inscricoes" | "inscricoes_encerradas" | "dia_do_evento" | "encerrada";
+export type EditionPhase = "rascunho" | "arquivada" | "inscricoes" | "inscricoes_encerradas" | "dia_do_evento" | "encerrada";
 
 export const PHASE_LABEL: Record<EditionPhase, string> = {
   rascunho: "rascunho · só a equipe vê",
+  arquivada: "arquivada · fora do ar",
   inscricoes: "inscrições abertas",
   inscricoes_encerradas: "inscrições encerradas",
   dia_do_evento: "dia do evento",
@@ -35,6 +36,7 @@ type Facts = {
   registrationDeadline: string | null;
   capacity: number | null;
   active: number;
+  publishedAt: string | null;
   rsvpEnabled: number;
   terms: boolean;
   questions: boolean;
@@ -51,7 +53,7 @@ async function facts(hackathonId: string): Promise<Facts | null> {
   const row = await db
     .prepare(
       `SELECT h.name, h.startsAt, h.endsAt, h.format, h.location, h.registrationDeadline, h.capacity,
-              h.active, h.rsvpEnabled,
+              h.active, h.publishedAt, h.rsvpEnabled,
               EXISTS (SELECT 1 FROM edition_terms t WHERE t.hackathonId = h.id) AS "terms",
               EXISTS (SELECT 1 FROM edition_questions q
                       WHERE q.hackathonId = h.id AND q.audience = 'participante' AND q.archived = 0) AS "questions",
@@ -72,10 +74,10 @@ async function facts(hackathonId: string): Promise<Facts | null> {
 const DAY = 86_400_000;
 
 export function editionPhase(
-  h: Pick<Facts, "active" | "startsAt" | "endsAt" | "registrationDeadline">,
+  h: Pick<Facts, "active" | "startsAt" | "endsAt" | "registrationDeadline"> & { publishedAt?: string | null },
   now = new Date(),
 ): EditionPhase {
-  if (h.active !== 1) return "rascunho";
+  if (h.active !== 1) return h.publishedAt ? "arquivada" : "rascunho";
   const start = parseEventTime(h.startsAt);
   const end = parseEventTime(h.endsAt) ?? start;
   const t = now.getTime();
@@ -151,6 +153,6 @@ export async function getEditionChecklist(hackathonId: string, now = new Date())
     { key: "certificados", label: "certificados emitidos", done: f.certificates, href: tab("/certificados") },
     { key: "nps", label: "pesquisa de satisfação enviada", done: f.nps, href: tab("/nps") },
   ];
-  const items = phase === "encerrada" ? after : phase === "dia_do_evento" ? dayOf : before;
+  const items = phase === "encerrada" || phase === "arquivada" ? after : phase === "dia_do_evento" ? dayOf : before;
   return { phase, items, blockers: blockersOf(f), capacity: f.capacity };
 }

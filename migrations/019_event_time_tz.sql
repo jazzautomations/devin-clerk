@@ -44,3 +44,26 @@ UPDATE hackathons SET "source" = 'seed'
 -- check-in fora da janela do evento (véspera até 2 dias depois do fim) só
 -- com o admin global forçando; fica marcado aqui.
 ALTER TABLE checkins ADD COLUMN IF NOT EXISTS "outsideWindow" INTEGER NOT NULL DEFAULT 0;
+
+-- rascunho e arquivada eram o mesmo estado (active = 0), e o organizador
+-- conseguia publicar de novo uma edição que o admin global tirou do ar.
+-- "publishedAt" marca a primeira vez que a edição ficou no ar: com ela
+-- preenchida, voltar pro ar é só com o admin global. O gatilho cobre todo
+-- caminho que põe active = 1 (painel, seed, curadoria, radar).
+ALTER TABLE hackathons ADD COLUMN IF NOT EXISTS "publishedAt" TEXT;
+UPDATE hackathons SET "publishedAt" = sqlite_now()
+  WHERE "active" = 1 AND "publishedAt" IS NULL;
+
+CREATE OR REPLACE FUNCTION hackathons_mark_published() RETURNS trigger
+  LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."active" = 1 AND NEW."publishedAt" IS NULL THEN
+    NEW."publishedAt" := sqlite_now();
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS hackathons_mark_published ON hackathons;
+CREATE TRIGGER hackathons_mark_published
+  BEFORE INSERT OR UPDATE OF "active" ON hackathons
+  FOR EACH ROW EXECUTE FUNCTION hackathons_mark_published();

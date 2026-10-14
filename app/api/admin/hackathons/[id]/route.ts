@@ -79,10 +79,17 @@ export async function PATCH(
       return bad("active deve ser booleano");
     }
     // publicar (rascunho → no ar) é do organizador, com o mínimo pronto;
-    // arquivar uma edição que está no ar fica com o admin global
+    // arquivar e desarquivar ficam com o admin global
     if (b.active !== before.active) {
       if (!b.active && !isAdmin) {
         return Response.json({ error: "Só a administração do HackaHub arquiva uma edição." }, { status: 403 });
+      }
+      // já esteve no ar e saiu: foi arquivada pelo admin, que decide a volta
+      if (b.active && !isAdmin && before.publishedAt) {
+        return Response.json(
+          { error: "Esta edição foi arquivada. Só a administração do HackaHub coloca de volta no ar." },
+          { status: 403 },
+        );
       }
       if (b.active && !isAdmin) {
         const missing = await getPublishBlockers(id);

@@ -10,7 +10,7 @@ import { EditEventForm } from "@/components/EditEventForm";
 import { PublishEditionButton } from "@/components/PublishEditionButton";
 
 // Aba "configurar": datas, local, prazo, curadoria e vagas da edição, e o
-// botão de publicar enquanto ela é rascunho. Organizador da edição (ou admin
+// botão de publicar enquanto ela é rascunho (arquivada volta só pelo admin). Organizador da edição (ou admin
 // global). Arquivar e o link externo de inscrição ficam só com o admin.
 export default async function EdicaoPage({ params }: PageProps<"/admin/h/[id]/edicao">) {
   const { id } = await params;
@@ -32,7 +32,12 @@ export default async function EdicaoPage({ params }: PageProps<"/admin/h/[id]/ed
       <section className="flex flex-col gap-3">
         <h2 className="text-[1.6rem] leading-none font-extrabold tracking-[-0.03em]">Configurar a edição</h2>
         <p className="text-[14px] text-muted">Datas e horários são sempre no horário de Brasília.</p>
-        {!h.active && <PublishEditionButton hackathonId={id} blockers={blockers} />}
+        {!h.active && !h.publishedAt && <PublishEditionButton hackathonId={id} blockers={blockers} />}
+        {!h.active && h.publishedAt && !isAdmin && (
+          <p className="font-mono text-[13px] text-muted" data-testid="edition-archived">
+            Esta edição foi arquivada. Para colocar de volta no ar, fale com a administração do HackaHub.
+          </p>
+        )}
       </section>
       <EditEventForm
         isAdmin={isAdmin}

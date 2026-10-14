@@ -29,7 +29,7 @@ async function seed(request: APIRequestContext) {
          active, source, requiresApproval, capacity)
        VALUES (?, 'E2E Painel do Organizador', 'Hack Inova E2E', ?, NULL, 'presencial', 'Campus E2E',
                '/h/e2e-painel-org', '[]', 0, 'e2e', 1, NULL)
-       ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, endsAt = NULL, active = 0,
+       ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, endsAt = NULL, active = 0, publishedAt = NULL,
          requiresApproval = 1, location = excluded.location`,
     )
     .run(ED, start);
@@ -169,5 +169,26 @@ test.describe("painel do organizador (sem admin global)", () => {
       )
       .get<{ n: number }>(ED);
     expect(n!.n).toBe(1);
+  });
+
+  test("edição arquivada pelo admin: o organizador não vê o botão de publicar e a API recusa", async ({
+    memberPage: page,
+  }) => {
+    const db = openE2eDb();
+    // o admin global arquivou (a edição já tinha ido ao ar no primeiro teste)
+    await db.prepare("UPDATE hackathons SET active = 0 WHERE id = ?").run(ED);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/admin/h/${ED}`);
+    await expect(page.getByTestId("ov-phase")).toHaveText(/arquivada/);
+    await expect(page.getByTestId("draft-note")).toContainText("arquivada");
+    await expect(page.getByRole("button", { name: "publicar edição" })).toHaveCount(0);
+    await page.goto(`/admin/h/${ED}/edicao`);
+    await expect(page.getByTestId("edition-archived")).toBeVisible();
+    await expect(page.getByRole("button", { name: "publicar edição" })).toHaveCount(0);
+    await noHorizontalScroll(page);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/painel-arquivada-390.png`, fullPage: true });
+    const res = await page.request.patch(`/api/admin/hackathons/${ED}`, { data: { active: true } });
+    expect(res.status()).toBe(403);
+    expect((await db.prepare("SELECT active FROM hackathons WHERE id = ?").get<{ active: number }>(ED))!.active).toBe(0);
   });
 });

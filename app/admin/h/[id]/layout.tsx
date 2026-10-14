@@ -102,7 +102,9 @@ export default async function EditionPanelLayout({
         </h1>
         {!h.active && (
           <p className="font-mono text-[12px] text-muted" data-testid="draft-note">
-            fora do ar: a página pública só aparece depois de publicar a edição.
+            {h.publishedAt
+              ? "fora do ar: a edição foi arquivada pela administração do HackaHub."
+              : "fora do ar: a página pública só aparece depois de publicar a edição."}
           </p>
         )}
         <AdminTabs base={`/admin/h/${id}`} groups={groups} extra={extra} />

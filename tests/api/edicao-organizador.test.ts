@@ -149,13 +149,33 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
     const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
     const org = await member();
     await grantEditionRole(H, org.id, "organizador", null);
-    await db.prepare("UPDATE hackathons SET active = 0, location = NULL WHERE id = ?").run(H);
+    await db.prepare("UPDATE hackathons SET active = 0, publishedAt = NULL, location = NULL WHERE id = ?").run(H);
     as(org);
     const blocked = await PATCH(req("PATCH", { active: true }), ctx());
     expect(blocked.status).toBe(409);
     expect((await blocked.json()).missing).toEqual(["local do evento"]);
     expect((await getHackathon(H))!.active).toBe(false);
     await PATCH(req("PATCH", { location: "Unipe, Alphaville" }), ctx());
+    expect((await PATCH(req("PATCH", { active: true }), ctx())).status).toBe(200);
+    expect((await getHackathon(H))!.active).toBe(true);
+    expect((await getHackathon(H))!.publishedAt).toBeTruthy();
+  });
+
+  it("edição arquivada pelo admin só volta pro ar pelo admin", async () => {
+    const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
+    const { getEditionChecklist } = await import("@/lib/editionChecklist");
+    const admin = await member("admin");
+    const org = await member();
+    await grantEditionRole(H, org.id, "organizador", null);
+    as(admin);
+    expect((await PATCH(req("PATCH", { active: false }), ctx())).status).toBe(200);
+    const archived = (await getEditionChecklist(H, new Date("2026-11-01T12:00:00Z")))!;
+    expect(archived.phase).toBe("arquivada");
+    as(org);
+    const res = await PATCH(req("PATCH", { active: true }), ctx());
+    expect(res.status).toBe(403);
+    expect((await getHackathon(H))!.active).toBe(false);
+    as(admin);
     expect((await PATCH(req("PATCH", { active: true }), ctx())).status).toBe(200);
     expect((await getHackathon(H))!.active).toBe(true);
   });
@@ -316,6 +336,9 @@ describe("visão geral: fase e checklist", () => {
     const { editionPhase } = await import("@/lib/editionChecklist");
     const h = { active: 1, startsAt: "2026-11-28T09:00", endsAt: "2026-11-29T18:00", registrationDeadline: "2026-11-20" };
     expect(editionPhase({ ...h, active: 0 }, new Date("2026-11-01T12:00:00Z"))).toBe("rascunho");
+    expect(editionPhase({ ...h, active: 0, publishedAt: "2026-10-01 12:00:00" }, new Date("2026-11-01T12:00:00Z"))).toBe(
+      "arquivada",
+    );
     expect(editionPhase(h, new Date("2026-11-01T12:00:00Z"))).toBe("inscricoes");
     expect(editionPhase(h, new Date("2026-11-22T12:00:00Z"))).toBe("inscricoes_encerradas");
     expect(editionPhase(h, new Date("2026-11-28T10:00:00Z"))).toBe("dia_do_evento");
@@ -324,7 +347,7 @@ describe("visão geral: fase e checklist", () => {
 
   it("checklist aponta o que falta, com link pra aba que resolve", async () => {
     const { getEditionChecklist } = await import("@/lib/editionChecklist");
-    await db.prepare("UPDATE hackathons SET active = 0, capacity = NULL WHERE id = ?").run(H);
+    await db.prepare("UPDATE hackathons SET active = 0, publishedAt = NULL, capacity = NULL WHERE id = ?").run(H);
     const c = (await getEditionChecklist(H, new Date("2026-11-01T12:00:00Z")))!;
     expect(c.phase).toBe("rascunho");
     expect(c.blockers).toEqual([]);

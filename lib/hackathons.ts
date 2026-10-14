@@ -23,10 +23,13 @@ export type Hackathon = {
   // só cai na aprovação do admin (a coluna nasce do ALTER de registrations)
   requiresApproval: boolean;
   // radar Brasil-first (migration 023): região gravada pelo scraper e a
-  // fonte ("sympla", "devpost+taikai"; null = edição da casa). lib/radar.ts
+  // fonte ("sympla", "devpost+taikai"; null, "seed" ou "painel" = edição da casa). lib/radar.ts
   // deriva a região quando a coluna está vazia.
   region?: string | null;
   source?: string | null;
+  // primeira vez que a edição ficou no ar (migration 019). Fora do ar com
+  // publishedAt = arquivada; sem publishedAt = rascunho.
+  publishedAt?: string | null;
 };
 
 type Row = Omit<Hackathon, "tags" | "active" | "partner" | "requiresApproval"> & {
