@@ -225,4 +225,66 @@ describe("público — snapshot e SSE", () => {
     expect(stageChannelCount()).toBe(0); // desconectou → para de consultar o banco
     expect((await GET(new Request("http://t/x"), ctx("nao-existe"))).status).toBe(404);
   });
+
+  // lê o stream por `ms` e devolve o texto (e o reader, pra cancelar)
+  async function collect(r: Response, ms: number) {
+    const reader = r.body!.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    const end = Date.now() + ms;
+    for (;;) {
+      const left = end - Date.now();
+      if (left <= 0) break;
+      const got = await Promise.race([reader.read(), new Promise<null>((ok) => setTimeout(() => ok(null), left))]);
+      if (!got || got.done) break;
+      buf += dec.decode(got.value);
+    }
+    return { buf, reader };
+  }
+
+  it("auditoria 041: primeiro ouvinte recebe 1 snapshot, não 2 (o 1º tick não repete)", async () => {
+    const { GET } = await import("@/app/api/hackathons/[id]/stage/stream/route");
+    const ac = new AbortController();
+    const r = await GET(new Request("http://t/x", { signal: ac.signal }), ctx());
+    const { buf, reader } = await collect(r, 2600); // passa de 2 ticks de 1 s
+    expect(buf.match(/event: stage\n/g)).toHaveLength(1);
+    ac.abort();
+    await reader.cancel();
+  });
+
+  it("auditoria 041: acima do teto por IP leva 429; liberar uma conexão abre vaga", async () => {
+    const { GET } = await import("@/app/api/hackathons/[id]/stage/stream/route");
+    const { stageLimits, stageOpenConnections } = await import("@/lib/stageStream");
+    const before = stageLimits.perIp;
+    stageLimits.perIp = 5;
+    const open: { ac: AbortController; r: Response }[] = [];
+    const conn = async (ip: string) => {
+      const ac = new AbortController();
+      const r = await GET(new Request("http://t/x", { signal: ac.signal, headers: { "x-forwarded-for": ip } }), ctx());
+      if (r.status === 200) open.push({ ac, r });
+      return r;
+    };
+    try {
+      for (let i = 0; i < 5; i++) expect((await conn("203.0.113.9")).status).toBe(200);
+      const sexta = await conn("203.0.113.9");
+      expect(sexta.status).toBe(429);
+      expect(sexta.headers.get("retry-after")).toBeTruthy();
+      expect(await sexta.json()).toMatchObject({ error: expect.any(String) });
+      expect((await conn("198.51.100.7")).status).toBe(200); // outro IP segue
+      expect(stageOpenConnections()).toBe(6);
+      const first = open.shift()!;
+      first.ac.abort();
+      await first.r.body!.cancel();
+      expect((await conn("203.0.113.9")).status).toBe(200);
+      // edição inexistente não segura vaga
+      expect((await GET(new Request("http://t/x", { headers: { "x-forwarded-for": "192.0.2.1" } }), ctx("nao-existe"))).status).toBe(404);
+    } finally {
+      for (const o of open) {
+        o.ac.abort();
+        await o.r.body!.cancel().catch(() => {});
+      }
+      stageLimits.perIp = before;
+    }
+    expect(stageOpenConnections()).toBe(0);
+  });
 });

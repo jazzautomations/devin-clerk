@@ -48,7 +48,7 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
         setError(typeof d.error === "string" ? d.error : `erro ${r.status}`);
       }
     } catch {
-      setError("sem conexão — tenta de novo");
+      setError("sem conexão. Tente de novo.");
     } finally {
       setBusy(null);
     }
@@ -66,6 +66,15 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
     void saveQueue(ids);
   };
   const isLast = cur !== null && cur.position >= snap.total;
+  // motivo dos botões de navegação desligados (fora de "ocupado")
+  const navWhy =
+    state.queue.length === 0
+      ? state.candidates.length
+        ? "Monte a fila de pitches abaixo pra começar."
+        : "Nenhum time com projeto cadastrado ainda. A fila aparece quando houver."
+      : isLast
+        ? "Este é o último pitch da fila."
+        : null;
 
   return (
     <div className="flex w-full max-w-xl flex-col gap-5" data-testid="stage-control">
@@ -102,7 +111,7 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
               {ended
                 ? "final encerrada — o telão mostra o ranking"
                 : state.queue.length
-                  ? "ninguém no palco — toca em começar/próximo"
+                  ? "ninguém no palco. Toque em começar ou próximo."
                   : "monte a fila lá embaixo"}
             </p>
           )}
@@ -113,7 +122,13 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
                 ❚❚ pausar
               </button>
             ) : (
-              <button type="button" className="btn-ghost" disabled={!!busy || !cur} onClick={() => act("timer-start")}>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={!!busy || !cur}
+                aria-describedby={!cur ? "timer-why" : undefined}
+                onClick={() => act("timer-start")}
+              >
                 ▶ iniciar tempo
               </button>
             )}
@@ -121,6 +136,11 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
               ↺ zerar
             </button>
           </div>
+          {!cur && !snap.timer.running && (
+            <p id="timer-why" className="font-mono text-[12px] text-mint">
+              O tempo começa quando um time estiver no palco.
+            </p>
+          )}
           <label className="flex items-center justify-between gap-3 font-mono text-[13px] text-mint">
             tempo de pitch
             <select
@@ -143,24 +163,33 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
 
       {/* navegação */}
       {!ended && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className="btn-ghost min-h-14!"
-            disabled={!!busy || !cur || cur.position <= 1}
-            onClick={() => act("prev", { from })}
-          >
-            ◀ anterior
-          </button>
-          <button
-            type="button"
-            className="btn min-h-14!"
-            disabled={!!busy || state.queue.length === 0 || isLast}
-            onClick={() => act("next", { from })}
-            data-testid="stage-next"
-          >
-            {cur ? "próximo ▶" : "começar ▶"}
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className="btn-ghost min-h-14!"
+              disabled={!!busy || !cur || cur.position <= 1}
+              aria-describedby={navWhy ? "nav-why" : undefined}
+              onClick={() => act("prev", { from })}
+            >
+              ◀ anterior
+            </button>
+            <button
+              type="button"
+              className="btn min-h-14!"
+              disabled={!!busy || state.queue.length === 0 || isLast}
+              aria-describedby={navWhy ? "nav-why" : undefined}
+              onClick={() => act("next", { from })}
+              data-testid="stage-next"
+            >
+              {cur ? "próximo ▶" : "começar ▶"}
+            </button>
+          </div>
+          {navWhy && (
+            <p id="nav-why" className="font-mono text-[12px] text-muted" data-testid="stage-nav-why">
+              {navWhy}
+            </p>
+          )}
         </div>
       )}
 
@@ -190,14 +219,14 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
       {/* fila */}
       <div className="window paper">
         <div className="tbar">
-          <span className="title">FILA.exe · {state.queue.length} pitches</span>
+          <span className="title">fila de pitches · {state.queue.length}</span>
         </div>
         <div className="tbody gap-3 p-0!">
           {state.queue.length === 0 ? (
             <div className="flex flex-col gap-3 p-4">
               <p className="font-mono text-[13px] text-muted">
                 {state.candidates.length
-                  ? "fila vazia — adiciona os times na ordem dos pitches"
+                  ? "fila vazia. Adicione os times na ordem dos pitches."
                   : "nenhum time com projeto cadastrado nesta edição ainda"}
               </p>
               {state.candidates.length > 0 && !ended && (
@@ -292,7 +321,9 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
                 <span className="pix w-8 text-[20px]">{r.avg === null ? "—" : `${r.position}º`}</span>
                 <span className="min-w-0 flex-1 truncate">{r.title}</span>
                 <span className="shrink-0 font-mono text-[12px] text-muted">
-                  {fmtAvg(r.avg)} · {r.votes}v{r.tied ? " · empate" : ""}
+                  {fmtAvg(r.avg)} · {r.votes} {r.votes === 1 ? "voto" : "votos"}
+                  {r.tied ? " · empate" : ""}
+                  {r.fewVotes ? " · poucos votos" : ""}
                 </span>
               </li>
             ))}
@@ -364,7 +395,7 @@ function QueueRow({
       >
         <span className="block truncate text-[14px] font-semibold">{team.title}</span>
         <span className="block truncate font-mono text-[11px] text-muted">
-          {onStage ? "● no palco" : `${team.teamName} · tocar = pôr no palco`}
+          {onStage ? "● no palco" : `${team.teamName} · toque pra pôr no palco`}
         </span>
       </button>
       <button type="button" aria-label="subir" className={icon} disabled={disabled || index === 0} onClick={onUp}>

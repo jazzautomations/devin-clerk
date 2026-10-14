@@ -65,6 +65,8 @@ export type RankingEntry = {
   avg: number | null;
   position: number;
   tied: boolean;
+  /** abaixo do mínimo de votos por time: fica atrás de quem tem votos suficientes */
+  fewVotes: boolean;
 };
 
 export type StageSnapshot = {
@@ -255,7 +257,7 @@ export async function advanceStage(
   return mutate(hackathonId, (s) => {
     if (s.status === "ended") throw new StageError("a final já foi encerrada", 409);
     if (expected !== undefined && expected !== s.currentTeamId) {
-      throw new StageError("o palco já mudou — a tela atualizou, confere e tenta de novo", 409);
+      throw new StageError("o palco já mudou. A tela atualizou, confira e tente de novo", 409);
     }
     if (queue.length === 0) throw new StageError("monte a fila dos pitches antes", 409);
     const idx = s.currentTeamId === null ? -1 : queue.indexOf(s.currentTeamId);
@@ -385,7 +387,7 @@ export async function castLiveVote(
   if (!Number.isSafeInteger(teamId)) throw new StageError("pitch inválido", 400);
   const voter = await voterStatus(hackathonId, memberId);
   if (!voter.ok) throw new StageError("só vota quem fez check-in nesta edição", 403);
-  if (voter.teamId === teamId) throw new StageError("não dá pra votar no teu próprio time", 403);
+  if (voter.teamId === teamId) throw new StageError("não dá pra votar no seu próprio time", 403);
 
   const now = stamp(new Date());
   const res = await db
@@ -469,12 +471,54 @@ export async function tallyFor(hackathonId: string, teamId: number): Promise<Tal
   return { count, sum, avg: count ? round2(sum / count) : null, dist };
 }
 
+/** piso de votos por time pra disputar a escolha do público: um voto só nunca decide */
+export const FEW_VOTES_FLOOR = 2;
+
 /**
- * "Escolha do público": todos os times da fila, ordenados pela média
- * (arredondada em 2 casas — o que aparece na tela é o que decide). Mesma
- * média = mesma posição e `tied` ligado (ranking 1,1,3); a ordem dentro do
- * empate é só de exibição (mais votos primeiro). Time sem voto fica no fim.
+ * Mínimo de votos por time: o maior entre o piso (2) e 30% da média de
+ * votos dos times votados. Sem isso, 1 voto 5 vence 9 votos de média 4,8.
  */
+export function minVotesPerTeam(votes: number[]): number {
+  const voted = votes.filter((v) => v > 0);
+  if (voted.length === 0) return FEW_VOTES_FLOOR;
+  const mean = voted.reduce((a, b) => a + b, 0) / voted.length;
+  return Math.max(FEW_VOTES_FLOOR, Math.ceil(mean * 0.3));
+}
+
+/**
+ * Ordenação pura da escolha do público. Times com votos suficientes
+ * (`minVotesPerTeam`) vêm primeiro, pela média (arredondada em 2 casas — o
+ * que aparece na tela é o que decide); os com poucos votos vêm depois, também
+ * pela média, marcados com `fewVotes`. Mesma média no mesmo grupo = mesma
+ * posição e `tied` ligado (1,1,3); a ordem dentro do empate é só de exibição
+ * (mais votos primeiro). Time sem voto fica no fim.
+ */
+export function rankAudience<T extends { teamName: string; votes: number; sum: number }>(
+  rows: T[],
+): (T & { avg: number | null; position: number; tied: boolean; fewVotes: boolean })[] {
+  const min = minVotesPerTeam(rows.map((r) => r.votes));
+  const withAvg = rows.map((r) => ({
+    ...r,
+    avg: r.votes ? round2(r.sum / r.votes) : null,
+    fewVotes: r.votes > 0 && r.votes < min,
+  }));
+  withAvg.sort(
+    (a, b) =>
+      Number(a.avg === null) - Number(b.avg === null) ||
+      Number(a.fewVotes) - Number(b.fewVotes) ||
+      (b.avg ?? -1) - (a.avg ?? -1) ||
+      b.votes - a.votes ||
+      a.teamName.localeCompare(b.teamName, "pt-BR"),
+  );
+  const same = (a: (typeof withAvg)[number], b: (typeof withAvg)[number]) => a.avg === b.avg && a.fewVotes === b.fewVotes;
+  return withAvg.map((r, i) => {
+    const first = withAvg.findIndex((o) => same(o, r));
+    const tied = r.avg !== null && withAvg.filter((o) => same(o, r)).length > 1;
+    return { ...r, position: r.avg === null ? i + 1 : first + 1, tied };
+  });
+}
+
+/** "Escolha do público": todos os times da fila, na ordem de `rankAudience`. */
 export async function liveRanking(hackathonId: string): Promise<RankingEntry[]> {
   const queue = await getQueue(hackathonId);
   if (queue.length === 0) return [];
@@ -485,29 +529,19 @@ export async function liveRanking(hackathonId: string): Promise<RankingEntry[]> 
     )
     .all<{ teamId: number; votes: number; sum: number }>(hackathonId);
   const byTeam = new Map(agg.map((a) => [a.teamId, a]));
-  const rows = queue.map((t) => {
-    const a = byTeam.get(t.teamId);
-    const votes = Number(a?.votes ?? 0);
-    const sum = Number(a?.sum ?? 0);
-    return {
-      teamId: t.teamId,
-      teamName: t.teamName,
-      title: t.title,
-      logoUrl: t.logoUrl,
-      votes,
-      sum,
-      avg: votes ? round2(sum / votes) : null,
-    };
-  });
-  rows.sort(
-    (a, b) =>
-      (b.avg ?? -1) - (a.avg ?? -1) || b.votes - a.votes || a.teamName.localeCompare(b.teamName, "pt-BR"),
+  return rankAudience(
+    queue.map((t) => {
+      const a = byTeam.get(t.teamId);
+      return {
+        teamId: t.teamId,
+        teamName: t.teamName,
+        title: t.title,
+        logoUrl: t.logoUrl,
+        votes: Number(a?.votes ?? 0),
+        sum: Number(a?.sum ?? 0),
+      };
+    }),
   );
-  return rows.map((r, i) => {
-    const first = rows.findIndex((o) => o.avg === r.avg);
-    const tied = r.avg !== null && rows.filter((o) => o.avg === r.avg).length > 1;
-    return { ...r, position: r.avg === null ? i + 1 : first + 1, tied };
-  });
 }
 
 /** resultado do público pra ficha do projeto — só depois da final encerrada e com voto */
@@ -525,7 +559,8 @@ export async function getAudienceResult(
   if (!(await audienceQuorum(team.hackathonId)).met) return null;
   const ranking = await liveRanking(team.hackathonId);
   const me = ranking.find((r) => r.teamId === teamId);
-  if (!me || me.avg === null) return null;
+  // poucos votos não vira selo de "escolha do público" na ficha
+  if (!me || me.avg === null || me.fewVotes) return null;
   return {
     position: me.position,
     avg: me.avg,
