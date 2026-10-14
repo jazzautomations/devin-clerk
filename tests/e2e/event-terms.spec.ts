@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // frente L — termos do evento. Login real é bloqueado pelo captcha do Clerk,
@@ -12,7 +13,7 @@ const START = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
 const yearsBefore = (n: number) => `${Number(START.slice(0, 4)) - n}${START.slice(4)}`;
 
 async function seed(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   await db
     .prepare(
@@ -48,7 +49,7 @@ test.describe("termos do evento (frente L)", () => {
     await expect(page.getByRole("link", { name: /relatar um problema/i })).toHaveAttribute("href", `/h/${ED}/incidente`);
   });
 
-  test("página da edição linka conduta e canal de denúncia", async ({ page, request }) => {
+  test("página da edição linka conduta e canal de denúncia", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${ED}`, { waitUntil: "domcontentloaded" });
     const box = page.getByTestId("safety-links");
@@ -74,7 +75,7 @@ test.describe("termos do evento (frente L)", () => {
   });
 
   test("inscrição pede nascimento, conduta e imagem (desmarcada); menor vê responsável; abaixo da mínima bloqueia", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await seed(request);
@@ -116,7 +117,7 @@ test.describe("termos do evento (frente L)", () => {
     }
   });
 
-  test("390px sem scroll horizontal em conduta, incidente e inscrição", async ({ page, request }) => {
+  test("390px sem scroll horizontal em conduta, incidente e inscrição", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.setViewportSize({ width: 390, height: 844 });
     for (const [path, shot] of [

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD da arena ao vivo — spec 016. Página pública, sem login.
 // hack-inova-alphaville-2026: edição futura do seed (startsAt 2026-11-14,
@@ -8,7 +9,7 @@ const HID = "hack-inova-alphaville-2026";
 
 test.describe("arena ao vivo — edição futura parece viva", () => {
   test("faixa de arena: fase, countdown DD:HH:MM:SS e N inscritos", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto(`/h/${HID}`);
     const strip = page.getByTestId("arena-strip");
@@ -32,7 +33,7 @@ test.describe("arena ao vivo — edição futura parece viva", () => {
     );
   });
 
-  test("countdown ticka de verdade no cliente", async ({ page }) => {
+  test("countdown ticka de verdade no cliente", async ({ memberPage: page }) => {
     await page.goto(`/h/${HID}`);
     const digits = page.getByTestId("arena-countdown-digits");
     const before = await digits.innerText();
@@ -42,10 +43,10 @@ test.describe("arena ao vivo — edição futura parece viva", () => {
       .not.toBe(before);
   });
 
-  test("edição passada NÃO mostra faixa de arena", async ({ page }) => {
+  test("edição passada NÃO mostra faixa de arena", async ({ memberPage: page }) => {
     await page.goto("/h/hack-inova-unifacens-2026");
     await expect(page.getByTestId("arena-strip")).toHaveCount(0);
     // arquivo continua intacto
-    await expect(page.getByText("resultado")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Resultado" })).toBeVisible();
   });
 });

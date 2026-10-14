@@ -83,7 +83,7 @@ const insSponsor = db.prepare(
   `INSERT OR IGNORE INTO sponsors (id, name, url, tier) VALUES (?, ?, ?, ?)`,
 );
 const insVote = db.prepare(
-  `INSERT OR IGNORE INTO votes (memberId, teamId) VALUES (?, ?)`,
+  `INSERT OR IGNORE INTO votes (memberId, teamId, createdAt) VALUES (?, ?, datetime('now'))`,
 );
 
 const mid = async (u: string) =>

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD da submissão de time — spec 021. Criar/editar exige login + inscrição
@@ -24,7 +25,7 @@ async function ensureRegistrant() {
 }
 
 test.describe("meu time — submissão self-service na edição", () => {
-  test("anon NÃO vê a seção/formulário meu time", async ({ page }) => {
+  test("membro sem inscrição NÃO vê a seção/formulário meu time", async ({ memberPage: page }) => {
     await ensureRegistrant();
     await page.goto(`/h/${HID}`);
     // página pública carrega normal

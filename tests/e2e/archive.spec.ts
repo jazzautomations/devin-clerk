@@ -1,25 +1,26 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD do arquivo de edições — spec 003.
 
 test.describe("arquivo da edição — prova pública do evento", () => {
   test("edição encerrada mostra pódio com o vencedor real", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/h/hack-inova-unifacens-2026");
-    await expect(page.getByText("resultado")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Resultado" })).toBeVisible();
     // pódio em destaque, 1º lugar identificado
     await expect(page.getByText("1º")).toBeVisible();
     await expect(page.getByText("One Day Hospital").first()).toBeVisible();
   });
 
-  test("edição futura NÃO mostra seção de resultado", async ({ page }) => {
+  test("edição futura NÃO mostra seção de resultado", async ({ memberPage: page }) => {
     await page.goto("/h/hack-inova-alphaville-2026");
-    await expect(page.getByText("resultado")).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: "Resultado" })).not.toBeVisible();
   });
 
   test("edição passada sem dados mostra empty state honesto", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/h/hackinova-os-2-anhembi-2026");
     await expect(

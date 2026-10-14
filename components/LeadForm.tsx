@@ -13,10 +13,13 @@ import {
 const inputCls =
   "w-full border-[1.5px] border-line bg-background px-4 py-3 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
-export function LeadForm() {
+// spec 039 — variante "organizar" (/organizar): interesse fixo, rótulos de
+// quem organiza (instituição/comunidade) e mensagem guiada.
+export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar" } = {}) {
+  const org = variant === "organizar";
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
-  const [interest, setInterest] = useState<LeadInterest>("desafio");
+  const [interest, setInterest] = useState<LeadInterest>(org ? "organizar" : "desafio");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState<
@@ -62,7 +65,7 @@ export function LeadForm() {
       <div className="grid gap-3 sm:grid-cols-2">
         <label htmlFor="lead-company" className="flex flex-col gap-1.5">
           <span className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
-            nome da empresa
+            {org ? "instituição ou comunidade" : "nome da empresa"}
           </span>
           <input
             id="lead-company"
@@ -70,7 +73,7 @@ export function LeadForm() {
             required
             value={company}
             onChange={(e) => setCompany(e.target.value)}
-            placeholder="Acme Inc."
+            placeholder={org ? "Universidade, liga, comunidade…" : "Acme Inc."}
             className={inputCls}
           />
         </label>
@@ -84,11 +87,12 @@ export function LeadForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="voce@empresa.com"
+            placeholder={org ? "voce@instituicao.edu.br" : "voce@empresa.com"}
             className={inputCls}
           />
         </label>
       </div>
+      {!org && (
       <label htmlFor="lead-interest" className="flex flex-col gap-1.5">
         <span className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
           interesse
@@ -99,23 +103,24 @@ export function LeadForm() {
           onChange={(e) => setInterest(e.target.value as LeadInterest)}
           className={inputCls}
         >
-          {LEAD_INTERESTS.map((i) => (
+          {LEAD_INTERESTS.filter((i) => i !== "organizar").map((i) => (
             <option key={i} value={i}>
               {LEAD_INTEREST_LABELS[i]}
             </option>
           ))}
         </select>
       </label>
+      )}
       <label htmlFor="lead-message" className="flex flex-col gap-1.5">
         <span className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
-          mensagem (opcional)
+          {org ? "conta da edição (opcional)" : "mensagem (opcional)"}
         </span>
         <textarea
           id="lead-message"
           rows={3}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="contexto, edição que tu tem em mente, budget…"
+          placeholder={org ? "quando, onde, quantas pessoas, tema…" : "contexto, edição que tu tem em mente, budget…"}
           className={inputCls}
         />
       </label>

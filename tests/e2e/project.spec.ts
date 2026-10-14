@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD das páginas de projeto — spec 010.
 // O funil Colosseum: hackathon (/h) → projeto (/p) → portfólio (/u).
@@ -7,7 +8,7 @@ const HACK = "hack-inova-unifacens-2026"; // seed: One Day Hospital, 1º lugar
 
 test.describe("página do projeto — a URL que carrega o funil", () => {
   test("click-through: arquivo da edição → página do projeto", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto(`/h/${HACK}`);
     // o título do projeto no pódio virou link pra /p/<teamId>
@@ -34,7 +35,7 @@ test.describe("página do projeto — a URL que carrega o funil", () => {
     expect(garbage.status()).toBe(404);
   });
 
-  test("metadata carrega o projeto — og:title no head", async ({ page }) => {
+  test("metadata carrega o projeto — og:title no head", async ({ memberPage: page }) => {
     // resolve o teamId real pelo link no arquivo (seed não garante id fixo)
     await page.goto(`/h/${HACK}`);
     const href = await page
@@ -54,7 +55,7 @@ test.describe("página do projeto — a URL que carrega o funil", () => {
   });
 
   test("perfil do membro também linka pra página do projeto", async ({
-    page,
+    memberPage: page,
   }) => {
     // o seed não vincula membros — resolve um membro com projeto via /membros
     // só navega se existir; sem membro com projeto o teste passa trivialmente

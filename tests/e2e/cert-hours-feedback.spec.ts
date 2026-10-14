@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // roadmap 037 #2 (certificado com carga horária) e #9 (feedback do júri pro
@@ -93,29 +94,37 @@ test.describe("certificado com carga horária — verificação pública", () =>
 });
 
 test.describe("feedback do júri — trancado pra quem não é do time", () => {
-  test("deslogado vê o pedido de login e nenhum comentário, mesmo publicado e liberado", async ({ page }) => {
-    const res = await page.goto(`/p/${teamId}/feedback`);
-    expect(res?.status()).toBe(200);
-    await expect(page.getByTestId("feedback-locked")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /entre pra ver o feedback/i })).toBeVisible();
+  test("deslogado vai pro cadastro e nenhum comentário vaza, mesmo publicado e liberado", async ({ page }) => {
+    await page.goto(`/p/${teamId}/feedback`);
+    // spec 039 — a página é logada: o proxy manda pro cadastro com volta
+    await expect(page).toHaveURL(new RegExp(`/sign-up\\?redirect_url=%2Fp%2F${teamId}%2Ffeedback`));
     const html = await page.content();
     expect(html).not.toContain("comentário anônimo E2E");
     expect(html).not.toContain("nota interna E2E");
     expect(html).not.toContain("Jurado Secreto");
   });
 
-  test("ficha pública do projeto não mostra o atalho do feedback pra deslogado", async ({ page }) => {
+  test("membro de fora do time vê o pedido trancado, sem comentário", async ({ memberPage }) => {
+    const res = await memberPage.goto(`/p/${teamId}/feedback`);
+    expect(res?.status()).toBe(200);
+    await expect(memberPage.getByTestId("feedback-locked")).toBeVisible();
+    const html = await memberPage.content();
+    expect(html).not.toContain("comentário anônimo E2E");
+    expect(html).not.toContain("Jurado Secreto");
+  });
+
+  test("cartão público do projeto não mostra o atalho do feedback pra deslogado", async ({ page }) => {
     await page.goto(`/p/${teamId}`);
     await expect(page.getByRole("heading", { name: "Projeto K" })).toBeVisible();
     await expect(page.getByTestId("feedback-link")).toHaveCount(0);
   });
 
-  test("time inexistente: 404", async ({ page }) => {
+  test("time inexistente: 404", async ({ memberPage: page }) => {
     const res = await page.goto("/p/99999999/feedback");
     expect(res?.status()).toBe(404);
   });
 
-  test("390px sem scroll horizontal na página do feedback", async ({ page }) => {
+  test("390px sem scroll horizontal na página do feedback", async ({ memberPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/p/${teamId}/feedback`);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

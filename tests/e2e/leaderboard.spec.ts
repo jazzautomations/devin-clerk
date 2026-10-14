@@ -1,10 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD do leaderboard de membros — spec 007.
 
 test.describe("leaderboard — ranking público por xp", () => {
   test("mostra posições numeradas e o #1 em destaque lendário", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/membros");
     await expect(
@@ -25,7 +26,7 @@ test.describe("leaderboard — ranking público por xp", () => {
   });
 
   test("toggle 'recém-chegados' ordena por entrada e some com o pódio", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/membros");
     await page.getByRole("link", { name: /recém-chegados/i }).click();

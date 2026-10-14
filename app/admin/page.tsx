@@ -448,7 +448,7 @@ export default async function AdminPage() {
         <SponsorForm />
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div id="leads" className="flex scroll-mt-24 flex-col gap-4">
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>
           {"leads"} ({leads.length})
         </h2>

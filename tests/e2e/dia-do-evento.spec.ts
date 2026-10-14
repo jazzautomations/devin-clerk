@@ -8,7 +8,7 @@ import { openE2eDb } from "./db";
 const H = "e2e-dia-do-evento";
 
 async function ensureEdition(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   const future = new Date(Date.now() + 10 * 86_400_000).toISOString();
   await db
@@ -27,7 +27,7 @@ test.describe("dia do evento — offline, walk-in, crachás", () => {
     await ensureEdition(request);
     for (const tab of ["crachas", "checkin"]) {
       await page.goto(`/admin/h/${H}/${tab}`);
-      await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+      await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
     }
   });
 

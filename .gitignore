@@ -59,3 +59,6 @@ __pycache__/
 
 # worktrees/estado local do Claude Code
 .claude/
+
+# sessão do membro de teste do e2e (spec 039)
+/tests/e2e/.auth/

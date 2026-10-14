@@ -57,7 +57,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${appConfig.name} — a rede social dos hackathons`,
+    default: `${appConfig.name} — sua comunidade de hackathon`,
     template: `%s — ${appConfig.name}`,
   },
   description: appConfig.description,

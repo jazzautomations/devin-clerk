@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // Frente N — acabamentos do QA ponta a ponta, lado público. Login real é
@@ -20,7 +21,7 @@ async function member(tag: string, name: string) {
 }
 
 async function seed(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   await db
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, format, location, registrationUrl, tags, active, source)
@@ -48,7 +49,7 @@ test.describe("lista pública de inscritos — só quem optou", () => {
     await seed(request);
   });
 
-  test("conta todos os aprovados, lista só quem consentiu e explica o porquê", async ({ page }) => {
+  test("conta todos os aprovados, lista só quem consentiu e explica o porquê", async ({ memberPage: page }) => {
     await page.goto(`/h/${HACK}`);
     const box = page.getByTestId("public-attendees");
     await expect(box).toContainText("inscritos (3)");
@@ -60,7 +61,7 @@ test.describe("lista pública de inscritos — só quem optou", () => {
     await expect(page.getByTestId("public-listing-toggle")).toHaveCount(0);
   });
 
-  test("390px sem scroll horizontal na página da edição", async ({ page }) => {
+  test("390px sem scroll horizontal na página da edição", async ({ memberPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/h/${HACK}`);
     await page.getByTestId("public-attendees").scrollIntoViewIfNeeded();
@@ -77,7 +78,7 @@ test.describe("lista pública de inscritos — só quem optou", () => {
 
 test.describe("username trocado — link antigo redireciona", () => {
   test("/u/antigo responde 308 pro /u/novo e o perfil abre", async ({ page, request }) => {
-    await request.get("/radar");
+    await request.get("/api/health");
     const id = await member("trocou", "Tina Trocou");
     await db.prepare("UPDATE members SET username = 'qa_tina', usernameChangedAt = datetime('now') WHERE id = ?").run(id);
     await db

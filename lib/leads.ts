@@ -1,5 +1,6 @@
 import db from "@/lib/db";
-import { isLeadInterest, type LeadInterest } from "@/lib/leadInterests";
+import { notify } from "@/lib/notifications";
+import { isLeadInterest, LEAD_INTEREST_LABELS as LEAD_INTEREST_LABELS_LOCAL, type LeadInterest } from "@/lib/leadInterests";
 
 // whitelist mora no módulo puro lib/leadInterests.ts (seguro pra client);
 // re-export pra quem só importa a lib
@@ -70,6 +71,7 @@ export async function createLead(input: {
   const lead = await db
     .prepare("SELECT * FROM leads WHERE id = ?")
     .get(Number(res.lastInsertRowid)) as Lead;
+  await notifyAdmins(lead);
   return { lead, created: true };
 }
 
@@ -79,4 +81,15 @@ export async function listLeads(limit = 200): Promise<Lead[]> {
       "SELECT * FROM leads ORDER BY createdAt DESC, id DESC LIMIT ?",
     )
     .all(limit) as Lead[];
+}
+
+/** spec 039 — lead novo avisa os admins in-app (fila em /admin) */
+async function notifyAdmins(lead: Lead): Promise<void> {
+  const admins = await db.prepare("SELECT id FROM members WHERE role = 'admin'").all<{ id: number }>();
+  const what = lead.interest === "organizar" ? "quer organizar uma edição" : `lead de ${LEAD_INTEREST_LABELS_LOCAL[lead.interest]}`;
+  await Promise.all(
+    admins.map((a) =>
+      notify(a.id, { type: "lead", text: `${lead.company} ${what}`, href: "/admin#leads" }),
+    ),
+  );
 }

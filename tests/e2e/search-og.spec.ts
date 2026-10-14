@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do spec 023 — busca ?q= nas listas públicas + OG dinâmico por edição.
@@ -6,7 +7,7 @@ import { openE2eDb } from "./db";
 // garante um membro buscável no banco do dev server (mesmo pattern do
 // talento.spec.ts): bate /membros primeiro pra forçar o init/migrações do db
 async function ensureSearchMember(request: APIRequestContext): Promise<void> {
-  await request.get("/membros");
+  await request.get("/api/health");
   const db = openE2eDb();
   await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email)
@@ -21,7 +22,7 @@ async function ensureSearchMember(request: APIRequestContext): Promise<void> {
 
 test.describe("?q= — busca server-side nas listas públicas", () => {
   test("/radar?q=alphaville estreita pro evento; zzz cai no empty state", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/radar?q=alphaville");
     await expect(
@@ -38,7 +39,7 @@ test.describe("?q= — busca server-side nas listas públicas", () => {
   });
 
   test("form de busca do radar submete via GET e preserva o termo", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/radar");
     const input = page.getByRole("searchbox", { name: /buscar/i });
@@ -49,7 +50,7 @@ test.describe("?q= — busca server-side nas listas públicas", () => {
   });
 
   test("/membros?q= filtra por skill/username e preserva o sort", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await ensureSearchMember(request);
@@ -71,7 +72,7 @@ test.describe("?q= — busca server-side nas listas públicas", () => {
   });
 
   test("/projetos?q= filtra por título e preserva chips de filtro", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/projetos?q=hospital");
     await expect(
@@ -113,7 +114,7 @@ test.describe("og-image dinâmico — card social por edição", () => {
   });
 
   test("/p/[teamId]/opengraph-image responde PNG", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await page.goto("/projetos");

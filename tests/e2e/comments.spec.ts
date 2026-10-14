@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD dos comentários no feed — spec 011. Leitura é pública; escrever
@@ -70,7 +71,7 @@ async function expandThread(
 }
 
 test.describe("comentários — conversa pública no feed", () => {
-  test("anon vê a contagem e lê a thread expandida", async ({ page }) => {
+  test("anon vê a contagem e lê a thread expandida", async ({ memberPage: page }) => {
     await ensureThread();
     await page.goto("/feed");
     const post = await expandThread(page);
@@ -82,15 +83,13 @@ test.describe("comentários — conversa pública no feed", () => {
     ).toHaveAttribute("href", "/u/e2e_commenter");
   });
 
-  test("composer de comentário é oculto pra quem não tá logado", async ({
+  test("anon não lê o feed: vai pro cadastro e volta pro /feed depois (spec 039)", async ({
     page,
   }) => {
     await ensureThread();
     await page.goto("/feed");
-    const post = await expandThread(page);
-    await expect(post.getByText(C1)).toBeVisible();
-    // ler é público, escrever é de membro — nenhuma caixa de comentário
-    await expect(post.getByPlaceholder(/comenta/i)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/sign-up\?redirect_url=%2Ffeed/);
+    expect(await page.content()).not.toContain(C1);
   });
 
   test("POST deslogado → 401 JSON, nunca redirect", async ({ request }) => {

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do CRM de sponsors — spec 019. O vínculo desafio→sponsor via API exige
@@ -47,7 +48,7 @@ async function ensureLinkedChallenge() {
 
 test.describe("sponsors — CRM de marcas na página pública", () => {
   test("desafio vinculado mostra nome do sponsor como link + chip de tier", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureLinkedChallenge();
     await page.goto(`/h/${HID}`);
@@ -65,7 +66,7 @@ test.describe("sponsors — CRM de marcas na página pública", () => {
   });
 
   test("desafio só-texto (seed) continua sem link nem chip", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/h/hack-inova-puc-saude-2026");
     // seed Oracle é texto puro — nenhum link "Oracle" nem chip de tier

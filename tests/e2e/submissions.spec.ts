@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { memberRequest, test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD da indicação de hackathon — spec 026. O POST /api/submissions é
@@ -24,7 +25,7 @@ const subsCount = async (url: string) => {
 
 test.describe("/radar — bloco indica um hackathon", () => {
   test("rodapé do radar tem o details com o formulário de indicação", async ({
-    page,
+    memberPage: page,
   }) => {
     const res = await page.goto("/radar");
     expect(res?.status()).toBe(200);
@@ -40,10 +41,13 @@ test.describe("/radar — bloco indica um hackathon", () => {
   });
 });
 
-test.describe("POST /api/submissions — público", () => {
-  test("indicação válida anon → 201; honeypot → 201 sem gravar", async ({
-    request,
+test.describe("POST /api/submissions — indicação de quem tem conta (spec 039)", () => {
+  test("anon → 401; membro: indicação válida → 201; honeypot → 201 sem gravar", async ({
+    request: anon,
+    memberPage,
   }) => {
+    expect((await anon.post("/api/submissions", { headers: xff(), data: { name: "Anon", url: "https://anon.dev" } })).status()).toBe(401);
+    const request = await memberRequest(memberPage);
     const url = `https://e2e-${Date.now()}.dev/hack`;
     const ok = await request.post("/api/submissions", {
       headers: xff(),
@@ -61,7 +65,8 @@ test.describe("POST /api/submissions — público", () => {
     expect(await subsCount(botUrl)).toBe(0);
   });
 
-  test("inválido → 400; mesma url → 200 sem duplicar", async ({ request }) => {
+  test("membro: inválido → 400; mesma url → 200 sem duplicar", async ({ memberPage }) => {
+    const request = await memberRequest(memberPage);
     const bad = await request.post("/api/submissions", {
       headers: xff(),
       data: { name: "X", url: "javascript:alert(1)" },

@@ -7,6 +7,7 @@ export const LEAD_INTERESTS = [
   "edicao",
   "talento",
   "outro",
+  "organizar",
 ] as const;
 
 export type LeadInterest = (typeof LEAD_INTERESTS)[number];
@@ -16,6 +17,7 @@ export const LEAD_INTEREST_LABELS: Record<LeadInterest, string> = {
   edicao: "patrocínio de edição",
   talento: "talento",
   outro: "outro",
+  organizar: "organizar uma edição",
 };
 
 export function isLeadInterest(v: unknown): v is LeadInterest {

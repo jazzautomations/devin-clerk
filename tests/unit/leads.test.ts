@@ -136,3 +136,17 @@ describe("listLeads", () => {
     expect(await listLeads()).toEqual([]);
   });
 });
+
+describe("createLead — aviso pros admins (spec 039)", () => {
+  it("lead novo notifica cada admin; retry deduplicado não notifica de novo", async () => {
+    await db.prepare("DELETE FROM notifications").run();
+    await db.prepare("INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_adm_lead', 'adm_lead', 'adm@t.dev', 'admin')").run();
+    const input = { company: "Faculdade X", email: "coord@x.edu.br", interest: "organizar" as const, message: "março, 100 pessoas" };
+    await createLead(input);
+    await createLead(input);
+    const rows = await db
+      .prepare("SELECT n.text, n.href FROM notifications n JOIN members m ON m.id = n.memberId WHERE m.username = 'adm_lead'")
+      .all<{ text: string; href: string }>();
+    expect(rows).toEqual([{ text: "Faculdade X quer organizar uma edição", href: "/admin#leads" }]);
+  });
+});

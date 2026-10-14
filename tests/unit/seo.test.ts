@@ -19,39 +19,28 @@ describe("SITE_URL / absoluteUrl", () => {
 });
 
 describe("buildSitemap", () => {
-  it("cobre rotas estáticas, edições /h/* e posts /blog/*", async () => {
+  it("só lista rota pública: estáticas abertas e o teaser das edições (spec 039)", async () => {
     const urls = (await buildSitemap()).map((e) => e.url);
-    for (const path of [
-      "/",
-      "/radar",
-      "/feed",
-      "/membros",
-      "/talento",
-      "/projetos",
-      "/blog",
-      "/empresas",
-      "/legal/termos",
-      "/legal/privacidade",
-    ]) {
+    for (const path of ["/", "/organizar", "/empresas", "/legal/termos", "/legal/privacidade"]) {
       expect(urls).toContain(absoluteUrl(path));
     }
     expect(urls).toContain(absoluteUrl("/h/hack-inova-unifacens-2026"));
     expect(urls).toContain(absoluteUrl("/h/hack-inova-alphaville-2026"));
-    expect(urls.some((u) => u.startsWith(absoluteUrl("/blog/")))).toBe(true);
-    // sem rotas privadas nem api
-    expect(urls.some((u) => u.includes("/admin"))).toBe(false);
-    expect(urls.some((u) => u.includes("/api"))).toBe(false);
-    expect(urls.some((u) => u.includes("/dashboard"))).toBe(false);
+    // a plataforma logada fica de fora
+    for (const priv of ["/radar", "/feed", "/membros", "/talento", "/projetos", "/blog", "/u/", "/admin", "/api", "/dashboard"]) {
+      expect(urls.some((u) => u.startsWith(absoluteUrl(priv)))).toBe(false);
+    }
   });
 });
 
 describe("buildRobots", () => {
-  it("permite tudo e aponta o sitemap absoluto", () => {
+  it("libera a raiz, bloqueia a área logada e aponta o sitemap absoluto", () => {
     const robots = buildRobots();
     expect(robots.sitemap).toBe(absoluteUrl("/sitemap.xml"));
     const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules];
     expect(rules[0].userAgent).toBe("*");
     expect(rules[0].allow).toBe("/");
+    expect(rules[0].disallow).toEqual(expect.arrayContaining(["/api/", "/dashboard", "/radar", "/bem-vindo"]));
   });
 });
 

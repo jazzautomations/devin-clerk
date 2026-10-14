@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // Filtro "onde" do radar — chips de UF/bucket derivados do texto livre de
@@ -10,7 +11,7 @@ const EXTERIOR = "e2e-lisbon-jam";
 
 async function ensureRegionEvents(request: APIRequestContext) {
   // bate /radar primeiro pra forçar o init/migrações do db no server
-  await request.get("/radar");
+  await request.get("/api/health");
   const db = openE2eDb();
   const day = 86_400_000;
   const future = new Date(Date.now() + 30 * day).toISOString();
@@ -29,7 +30,7 @@ async function ensureRegionEvents(request: APIRequestContext) {
 
 test.describe("radar — filtro por localização", () => {
   test("linha 'onde' lista as regiões presentes e filtra por UF", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await ensureRegionEvents(request);

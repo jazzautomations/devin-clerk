@@ -275,6 +275,78 @@ h3 {
   background: var(--foreground);
   color: var(--background);
 }
+/* botão de ação sobre tinta (faixas escuras): verde-banda com texto tinta */
+.btn-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 20px;
+  border: 1.5px solid var(--band);
+  background: var(--band);
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.3;
+  text-decoration: none;
+  transition:
+    background 0.2s cubic-bezier(0.12, 0.23, 0.5, 1),
+    color 0.2s cubic-bezier(0.12, 0.23, 0.5, 1);
+}
+.btn-go:hover {
+  background: var(--background);
+  border-color: var(--background);
+}
+.btn-go:focus-visible {
+  outline-color: var(--band);
+}
+
+/* rótulo de seção: mono, número verde — "[01] próximas edições" */
+.eyebrow {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.eyebrow b {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* lista numerada mono verde (jornada) */
+.steps {
+  counter-reset: step;
+}
+.steps > li {
+  counter-increment: step;
+}
+.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* entrada sutil das seções (só quem não pediu menos movimento) */
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 0.6s cubic-bezier(0.12, 0.23, 0.5, 1) both;
+  }
+  .rise-2 {
+    animation-delay: 0.08s;
+  }
+  .rise-3 {
+    animation-delay: 0.16s;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
 
 /* link grande sublinhado que recolhe no hover */
 .cta-link {

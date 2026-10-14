@@ -12,7 +12,7 @@ const SHOTS = process.env.FEAT_J_SHOTS ?? "test-results/feat-j";
 const sqlTime = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
 
 async function seed(request: APIRequestContext, tag: string) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   const start = new Date(Date.now() + 10 * 86_400_000);
   await db
@@ -96,7 +96,7 @@ test.describe("RSVP — guardas", () => {
   test("aba /admin/h/[id]/presenca exige login", async ({ page, request }) => {
     await seed(request, "guard");
     await page.goto(`/admin/h/${HACK}/presenca`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("cron e APIs do organizador respondem 401 JSON", async ({ request }) => {

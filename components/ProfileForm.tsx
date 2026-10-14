@@ -24,6 +24,9 @@ export function ProfileForm({
   const [twitter, setTwitter] = useState(member.twitter ?? "");
   const [website, setWebsite] = useState(member.website ?? "");
   const [headline, setHeadline] = useState(member.headline ?? "");
+  const [city, setCity] = useState(member.city ?? "");
+  const [institution, setInstitution] = useState(member.institution ?? "");
+  const [course, setCourse] = useState(member.course ?? "");
   const [personas, setPersonas] = useState<string[]>(
     member.personas.length ? member.personas : member.persona ? [member.persona] : [],
   );
@@ -47,6 +50,9 @@ export function ProfileForm({
         twitter,
         website,
         headline,
+        city,
+        institution,
+        course,
         personas,
         openTo,
         phone,
@@ -73,6 +79,20 @@ export function ProfileForm({
         <span className="font-mono text-xs text-muted">nome</span>
         <input className={input} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">cidade / UF</span>
+          <input className={input} value={city} onChange={(e) => setCity(e.target.value)} placeholder="Sorocaba, SP" />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">instituição</span>
+          <input className={input} value={institution} onChange={(e) => setInstitution(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">curso</span>
+          <input className={input} value={course} onChange={(e) => setCourse(e.target.value)} />
+        </label>
+      </div>
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">bio</span>
         <textarea

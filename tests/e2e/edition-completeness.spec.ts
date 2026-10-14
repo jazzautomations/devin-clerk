@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do spec 030 — duas pontas da completude da edição:
@@ -23,7 +24,7 @@ async function seed(
   withTeam = false,
 ): Promise<number | null> {
   // dev server faz init do db ao servir qualquer rota — bate uma antes
-  await request.get("/radar");
+  await request.get("/api/health");
   const db = openE2eDb();
   const now = Date.now();
   const iso = (t: number) => new Date(t).toISOString();
@@ -91,7 +92,7 @@ async function seed(
 
 test.describe("/h/[id] de edição ongoing fica viva — spec 030", () => {
   test("arena 'em andamento' + countdown 'termina em'; sem modo arquivo", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await seed(request);
@@ -117,7 +118,7 @@ test.describe("/h/[id] de edição ongoing fica viva — spec 030", () => {
   });
 
   test("edição encerrada continua em modo arquivo (complemento exato)", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await seed(request);
@@ -134,7 +135,7 @@ test.describe("/h/[id] de edição ongoing fica viva — spec 030", () => {
 
 test.describe("submissão rica — vídeo na ficha, logo no card", () => {
   test("/p/[teamId] mostra '▶ vídeo' externo junto de repo", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     const teamId = await seed(request, true);
@@ -149,7 +150,7 @@ test.describe("submissão rica — vídeo na ficha, logo no card", () => {
   });
 
   test("/projetos renderiza thumb 32px do logo; sem logoUrl nenhum img", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await seed(request, true);

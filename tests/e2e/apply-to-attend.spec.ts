@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do spec 032 — edição curada (requiresApproval) troca "inscrever-se em
@@ -11,7 +12,7 @@ async function ensureCuratedEdition(
   request: APIRequestContext,
 ): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
-  await request.get("/radar");
+  await request.get("/api/health");
   const db = openE2eDb();
   const future = new Date(Date.now() + 30 * 86_400_000).toISOString();
   // organizer 'Hack Inova' → partner → inscrição inline (não link externo)
@@ -28,7 +29,7 @@ async function ensureCuratedEdition(
 
 test.describe("edição curada — apply to attend (spec 032)", () => {
   test("card no radar mostra 'pedir lugar' em vez de 'inscrever'", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await ensureCuratedEdition(request);
@@ -45,8 +46,8 @@ test.describe("edição curada — apply to attend (spec 032)", () => {
     ).toHaveCount(0);
   });
 
-  test("página da edição mostra CTA 'pedir lugar' pra anon", async ({
-    page,
+  test("página da edição mostra CTA 'pedir lugar' pra membro sem inscrição", async ({
+    memberPage: page,
     request,
   }) => {
     await ensureCuratedEdition(request);

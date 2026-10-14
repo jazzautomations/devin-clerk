@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD da entrega de projeto — spec 034 §5. Enviar e operar o painel exigem
@@ -65,7 +66,7 @@ async function team(hackathonId: string, name: string, project: Record<string, u
 }
 
 test.beforeAll(async ({ request }) => {
-  await request.get("/radar"); // server inicializa o banco (migrations + seed)
+  await request.get("/api/health"); // server inicializa o banco (migrations + seed)
   const db = openE2eDb();
   for (const id of [ANTES, DEPOIS]) {
     await db.prepare("DELETE FROM prize_categories WHERE hackathonId = ?").run(id);
@@ -111,7 +112,7 @@ async function noOverflow(page: Page, shot: string) {
 }
 
 test.describe("projetos da edição — matriz de visibilidade", () => {
-  test("antes do prazo: só a contagem, nenhum título vaza", async ({ page }) => {
+  test("antes do prazo: só a contagem, nenhum título vaza", async ({ memberPage: page }) => {
     await page.goto(`/h/${ANTES}/projetos`);
     await expect(page.getByTestId("entries-counts")).toHaveText("2 times · 1 entregue");
     await expect(page.getByTestId("entries-locked")).toBeVisible();
@@ -119,13 +120,13 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await expect(page.getByText("Rascunho Secreto")).toHaveCount(0);
   });
 
-  test("ficha de projeto antes do prazo não mostra conteúdo pra quem é de fora", async ({ page }) => {
+  test("ficha de projeto antes do prazo não mostra conteúdo pra quem é de fora", async ({ memberPage: page }) => {
     await page.goto(`/p/${ids.antesEnviado}`);
     await expect(page.getByTestId("project-hidden")).toContainText("em construção");
     await expect(page.getByText("não pode vazar")).toHaveCount(0);
   });
 
-  test("bloco de prazos na página da edição", async ({ page }) => {
+  test("bloco de prazos na página da edição", async ({ memberPage: page }) => {
     await page.goto(`/h/${ANTES}`);
     const block = page.getByTestId("edition-deadlines");
     await expect(block).toBeVisible();
@@ -137,7 +138,7 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await noOverflow(page, "edicao-prazos-390");
   });
 
-  test("depois do prazo e publicado: resultados, mostruário e todas as entregas com status", async ({ page }) => {
+  test("depois do prazo e publicado: resultados, mostruário e todas as entregas com status", async ({ memberPage: page }) => {
     await page.goto(`/h/${DEPOIS}/projetos`);
     await expect(page.getByTestId("entries-counts")).toHaveText("3 times · 2 entregues");
     const results = page.getByTestId("entries-results");
@@ -153,7 +154,7 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await noOverflow(page, "projetos-edicao-390");
   });
 
-  test("filtro 'tem vídeo' deixa só quem tem vídeo", async ({ page }) => {
+  test("filtro 'tem vídeo' deixa só quem tem vídeo", async ({ memberPage: page }) => {
     await page.goto(`/h/${DEPOIS}/projetos`);
     await page.getByRole("link", { name: "tem vídeo" }).click();
     await expect(page).toHaveURL(/video=1/);
@@ -162,7 +163,7 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await expect(showcase.getByText("Planilha Viva")).toHaveCount(0);
   });
 
-  test("ficha /p na ordem da spec: tagline, selos, vídeos, versão avaliada, depois do hackathon", async ({ page }) => {
+  test("ficha /p na ordem da spec: tagline, selos, vídeos, versão avaliada, depois do hackathon", async ({ memberPage: page }) => {
     await page.goto(`/p/${ids.campeao}`);
     await expect(page.getByRole("heading", { name: "Fila Zero", exact: true })).toBeVisible();
     await expect(page.getByText("fila do posto de saúde em tempo real")).toBeVisible();
@@ -183,7 +184,7 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
 test.describe("entrega — portas trancadas sem login", () => {
   test("aba /admin/h/[id]/entregas exige login", async ({ page }) => {
     await page.goto(`/admin/h/${DEPOIS}/entregas`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("APIs de envio, painel e cron respondem 401 JSON", async ({ request }) => {

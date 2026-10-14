@@ -42,6 +42,6 @@ test.describe("admin operacional — APIs trancadas sem login", () => {
 
   test("/admin exige login — redirect pro sign-in", async ({ page }) => {
     await page.goto("/admin");
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 });

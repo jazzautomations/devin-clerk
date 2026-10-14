@@ -15,6 +15,7 @@ import { ShareBar } from "@/components/ShareBar";
 import { absoluteUrl } from "@/lib/seo";
 import { renderUserMarkdown } from "@/lib/blog";
 import { sponsorLogosForChallenges } from "@/lib/editionSponsors";
+import { PublicCard } from "@/components/PublicCard";
 
 // Ficha do projeto (spec 010/030; ordem da spec 034 §5.8): capa · título ·
 // tagline · selos · vídeo do time · vídeo do palco · demo ao vivo ·
@@ -56,6 +57,26 @@ export default async function ProjectPage({ params }: Props) {
   const member = userId ? await getMemberByClerkId(userId) : null;
   const data = await getProjectView(id, member);
   if (!data) notFound();
+  // spec 039 — sem conta: cartão mínimo (título, edição, prêmio)
+  if (!userId) {
+    const premio = [
+      ...(data.placement >= 1 && data.placement <= 3 ? [`${data.placement}º lugar`] : []),
+      ...data.awards.filter((a) => !a.startsWith(`${data.placement}º lugar`)),
+    ];
+    return (
+      <PublicCard
+        kind="projeto"
+        title={data.title}
+        subtitle={data.showContent ? (data.fields?.tagline ?? null) : null}
+        path={`/p/${data.teamId}`}
+        facts={[
+          ["edição", data.hackathonName],
+          ["time", data.teamName],
+          ...(premio.length ? ([["prêmio", premio.join(" · ")]] as [string, string][]) : []),
+        ]}
+      />
+    );
+  }
 
   const [deploy, voteCount, voted, showFeedback, sponsorLogos] = await Promise.all([
     getLatestDeployForTeam(data.teamId),

@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do spec 027 — evento em andamento (janela de submissão já abriu, ainda
@@ -13,7 +14,7 @@ async function ensureOngoingEvents(
   request: APIRequestContext,
 ): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
-  await request.get("/radar");
+  await request.get("/api/health");
   const db = openE2eDb();
   const now = Date.now();
   const iso = (t: number) => new Date(t).toISOString();
@@ -50,7 +51,7 @@ async function ensureOngoingEvents(
 
 test.describe("radar mostra eventos em andamento — spec 027", () => {
   test("evento ongoing aparece no radar marcado 'em andamento · até'", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await ensureOngoingEvents(request);
@@ -61,7 +62,7 @@ test.describe("radar mostra eventos em andamento — spec 027", () => {
   });
 
   test("evento encerrado não aparece entre os abertos", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await ensureOngoingEvents(request);
@@ -82,10 +83,10 @@ test.describe("radar mostra eventos em andamento — spec 027", () => {
     await ensureOngoingEvents(request);
     await page.goto("/");
     await expect(page.getByText(/^\+\d+ · 30d$/).first()).toBeVisible();
-    // "edições no arquivo" não tem timestamp real de entrada → sem momentum
+    // "edições realizadas" não tem timestamp real de entrada → sem momentum
     const arquivo = page
       .locator("dl > div")
-      .filter({ hasText: "edições no arquivo" });
+      .filter({ hasText: "edições realizadas" });
     await expect(arquivo.getByText(/· 30d/)).toHaveCount(0);
   });
 });

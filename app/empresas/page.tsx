@@ -51,6 +51,18 @@ const oferta = [
       </>
     ),
   },
+  {
+    num: "04",
+    title: "Relatório e contatos com opt-in",
+    desc: (
+      <>
+        A marca recebe um relatório da edição: funil de inscrição, times que
+        entraram no desafio, stack usada, vencedores e o NPS por papel. Quem quiser
+        falar com a marca escaneia o QR do estande e entra na lista só com
+        consentimento.
+      </>
+    ),
+  },
 ];
 
 export default async function EmpresasPage() {
@@ -112,7 +124,7 @@ export default async function EmpresasPage() {
             O que sua marca pode fazer
           </h2>
         </div>
-        <div className="grid gap-px border border-line bg-line sm:grid-cols-3">
+        <div className="grid gap-px border border-line bg-line sm:grid-cols-2">
           {oferta.map((o) => (
             <div key={o.num} className="flex flex-col gap-3 bg-background p-6">
               <span className="font-mono text-xs text-accent">{o.num}</span>
