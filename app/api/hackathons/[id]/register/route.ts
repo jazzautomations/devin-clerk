@@ -47,9 +47,11 @@ export async function POST(
     ip: clientIp(req),
   });
   if (!result.ok) {
+    // frente E — candidato a voluntário/mentor/jurado não compete na mesma edição
+    const conflict = result.error.startsWith("conflict_role:");
     return Response.json(
       { error: result.error, questionId: result.questionId ?? null },
-      { status: 400 },
+      { status: conflict ? 409 : 400 },
     );
   }
   const { status, created, position } = result;
