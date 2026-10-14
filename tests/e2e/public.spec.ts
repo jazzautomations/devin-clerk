@@ -1,32 +1,26 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
-// BDD dos fluxos públicos — navegável sem login.
-// Fluxos autenticados (signup→perfil→inscrição→carta) são testados pelo
-// usuário no tunnel público (Clerk captcha bloqueia automação — ver AGENTS.md).
+// BDD dos fluxos principais. Spec 039: a landing é pública; radar,
+// comunidade e a página completa da edição são de quem tem conta
+// (memberPage, sessão do global-setup).
 
-test.describe("landing — pitch enxuto", () => {
-  test("mostra proposta, stats e portas de entrada, sem o app inteiro", async ({
-    page,
-  }) => {
+test.describe("landing — explica o produto pra quem não tem conta (spec 039)", () => {
+  test("hero, prova do banco, jornada, telas por dentro, conta e newsletter", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: /um perfil/i }),
-    ).toBeVisible();
-    // stats provam que o produto vive
-    await expect(
-      page.getByText("hackathons abertos", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText(/posts no feed/i)).toBeVisible();
-    // portas de entrada pras rotas — não as rotas embutidas na página
-    await expect(page.getByRole("link", { name: /explorar o radar/i })).toBeVisible();
-    // newsletter persiste interesse
+    await expect(page.getByRole("heading", { level: 1, name: /sua comunidade de hackathon/i })).toBeVisible();
+    // prova real: stats do banco com rótulo
+    await expect(page.getByText("membros", { exact: true }).first()).toBeVisible();
+    await expect(page.locator("#como-funciona")).toBeVisible();
+    await expect(page.getByTestId("landing-por-dentro").locator("img")).toHaveCount(4);
+    await expect(page.getByTestId("landing-conta")).toBeVisible();
     await expect(page.getByText(/newsletter/i)).toBeVisible();
   });
 });
 
-test.describe("radar — descoberta pública", () => {
+test.describe("radar — descoberta (logado)", () => {
   test("lista hackathons reais com sessões hack inova em destaque", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/radar");
     await expect(
@@ -42,7 +36,7 @@ test.describe("radar — descoberta pública", () => {
     ).toBeVisible();
   });
 
-  test("filtro de formato reduz a lista", async ({ page }) => {
+  test("filtro de formato reduz a lista", async ({ memberPage: page }) => {
     await page.goto("/radar");
     const before = await page.locator("article").count();
     await page.getByRole("button", { name: "presencial" }).last().click();
@@ -53,7 +47,7 @@ test.describe("radar — descoberta pública", () => {
 
 test.describe("página da edição — substitui site novo + google form", () => {
   test("mostra dados, carta colecionável e CTA de inscrição", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/h/hack-inova-alphaville-2026");
     await expect(
@@ -67,7 +61,7 @@ test.describe("página da edição — substitui site novo + google form", () =>
     ).toBeVisible();
   });
 
-  test("edição encerrada mostra arquivo + tiragem fechada", async ({ page }) => {
+  test("edição encerrada mostra arquivo + tiragem fechada", async ({ memberPage: page }) => {
     await page.goto("/h/hack-inova-unifacens-2026");
     await expect(
       page.getByText("edição encerrada", { exact: true }),
@@ -76,20 +70,21 @@ test.describe("página da edição — substitui site novo + google form", () =>
   });
 });
 
-test.describe("comunidade e feed — rede social pública", () => {
-  test("/membros lista quem constrói", async ({ page }) => {
+test.describe("comunidade e feed — pra quem tem conta", () => {
+  test("/membros lista quem constrói", async ({ memberPage: page }) => {
     await page.goto("/membros");
     await expect(
       page.getByRole("heading", { name: /quem tá na frente/i }),
     ).toBeVisible();
   });
 
-  test("/feed é leitura pública", async ({ page }) => {
+  test("/feed: membro lê e tem o compositor (anon vai pro cadastro)", async ({ memberPage: page }) => {
     await page.goto("/feed");
     await expect(
       page.getByRole("heading", { name: /o que a comunidade/i }),
     ).toBeVisible();
-    await expect(page.getByText(/cria conta pra postar/i)).toBeVisible();
+    await expect(page.getByText(/cria conta pra postar/i)).toHaveCount(0);
+    await expect(page.getByPlaceholder(/o que tu tá construindo/i)).toBeVisible();
   });
 });
 
@@ -97,7 +92,7 @@ test.describe("proteção — auth guarda o que é de membro", () => {
   test("/dashboard e /perfil redirecionam pro sign-in", async ({ page }) => {
     for (const path of ["/dashboard", "/perfil", "/admin"]) {
       await page.goto(path);
-      await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+      await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
     }
   });
 });

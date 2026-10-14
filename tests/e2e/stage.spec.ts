@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // Modo palco (spec 033, frente F). Login real é bloqueado pelo captcha,
@@ -61,7 +62,7 @@ let liveB = 0;
 let endedA = 0;
 
 async function seed(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   await edition(LIVE, "E2E Final Ao Vivo");
   liveA = await team(LIVE, "Time Alfa", "Projeto Palco Alfa");
   liveB = await team(LIVE, "Time Beta", "Projeto Palco Beta");
@@ -174,9 +175,9 @@ test.describe("modo palco — final ao vivo", () => {
 
   test("/h/[id]/votar e o painel do palco exigem login", async ({ page }) => {
     await page.goto(`/h/${LIVE}/votar`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15_000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15_000 });
     await page.goto(`/admin/h/${LIVE}/palco`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15_000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15_000 });
   });
 
   test("APIs de controle e voto anon → 401 JSON; snapshot público 200", async ({ request }) => {
@@ -220,7 +221,7 @@ test.describe("modo palco — final ao vivo", () => {
     expect(data).toMatchObject({ hackathonId: LIVE, status: "live", current: { title: "Projeto Palco Alfa" } });
   });
 
-  test("página da edição chama pro voto; ficha do projeto mostra a escolha do público", async ({ page }) => {
+  test("página da edição chama pro voto; ficha do projeto mostra a escolha do público", async ({ memberPage: page }) => {
     await page.goto(`/h/${LIVE}`, { waitUntil: "domcontentloaded" });
     const cta = page.getByTestId("stage-cta");
     await expect(cta).toContainText("FINAL AO VIVO");

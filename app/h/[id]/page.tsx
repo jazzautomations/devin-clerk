@@ -36,8 +36,9 @@ import { ArenaCountdown } from "@/components/ArenaCountdown";
 import { Avatar } from "@/components/Avatar";
 import { FeedSection } from "@/components/FeedSection";
 import { listPosts } from "@/lib/posts";
-import { CardArt } from "@/components/CardArt";
-import { TicketLink } from "@/components/TicketLink";
+import { NextStepPanel } from "@/components/NextStepPanel";
+import { EditionTeaser } from "@/components/EditionTeaser";
+import { getNextStep } from "@/lib/nextStepFacts";
 import { EditionAnnouncements } from "@/components/EditionAnnouncements";
 import {
   KIND_LABEL,
@@ -131,7 +132,30 @@ export default async function HackathonPage({
     new Date(h.registrationDeadline) < now;
 
   const { userId } = await auth();
-  const member = userId ? await getMemberByClerkId(userId) : null;
+  // spec 039 — sem conta: teaser público (divulgação). O resto é de quem entra.
+  if (!userId) {
+    const [capT, sponsorsT, challengesT] = await Promise.all([
+      getEditionCapacity(h.id),
+      listEditionSponsors(h.id),
+      getChallenges(h.id),
+    ]);
+    return (
+      <>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(eventJsonLd(h, [])) }} />
+        <EditionTeaser
+          h={h}
+          past={past}
+          closed={closed}
+          approved={capT.approved}
+          capacity={capT.capacity}
+          remaining={capT.remaining}
+          sponsors={sponsorsT}
+          challenges={challengesT}
+        />
+      </>
+    );
+  }
+  const member = await getMemberByClerkId(userId);
   // spec 032 — "inscrito" = approved; pending/rejected têm estado próprio
   // no CTA e não abrem os gates (time/board/mural) da página
   const myStatus = member ? await getRegistrationStatus(member.id, h.id) : null;
@@ -197,12 +221,18 @@ export default async function HackathonPage({
     member ? getMyApplications(member.id, h.id) : Promise.resolve({} as Partial<Record<ApplicationKind, ApplicationStatus>>),
     member && myStatus ? getImageConsent(member.id, h.id) : Promise.resolve(null),
   ]);
-  // quem se candidatou pra ajudar (pendente/aprovado) não compete na mesma edição
-  const helping = (Object.entries(myApps) as [ApplicationKind, ApplicationStatus][]).find(
-    ([, st]) => st !== "rejected",
-  );
   // roadmap 037 #4 — itens abertos da programação viram subEvent no JSON-LD
   const publicSchedule = await listVisibleScheduleItems(h.id, ANON_VIEWER);
+  // spec 039 — o próximo passo da pessoa nesta edição, no topo da página
+  const step = await getNextStep(h, member, now);
+  const cancellable = canRegister && (myStatus === "approved" || myStatus === "pending" || myStatus === "waitlist");
+  const regStatus = past
+    ? "edição encerrada"
+    : closed
+      ? "encerradas"
+      : h.registrationDeadline
+        ? `até ${fmt.format(new Date(h.registrationDeadline))}`
+        : "abertas";
   // numeração das seções na ordem em que aparecem (as condicionais pulam)
   let secN = 0;
   const nextK = () => String(++secN).padStart(2, "0");
@@ -224,29 +254,31 @@ export default async function HackathonPage({
           <span>
             {past
               ? "ARQUIVO DA EDIÇÃO"
-              : h.partner
-                ? "INSCRIÇÃO PELO HACKAHUB, SEM FORMS"
-                : "EVENTO NO RADAR"}
+              : !h.partner
+                ? "EVENTO NO RADAR"
+                : closed
+                  ? "INSCRIÇÕES ENCERRADAS"
+                  : "INSCRIÇÃO PELO HACKAHUB"}
           </span>
         </div>
       </div>
 
-      {/* hero: nome grande à esquerda, ingresso à direita */}
-      <header className="mx-auto grid max-w-6xl gap-10 px-4 pt-10 pb-10 sm:px-6 sm:pt-16 lg:grid-cols-[1.55fr_1fr] lg:items-end lg:gap-14">
+      {/* hero: nome grande à esquerda, ficha (ingresso) à direita */}
+      <header className="mx-auto grid max-w-6xl gap-8 px-4 pt-8 pb-8 sm:px-6 sm:pt-14 lg:grid-cols-[1.55fr_1fr] lg:items-end lg:gap-14">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="tag uppercase">{past ? "arquivo" : "hackathon"}</p>
             {h.partner && <span className="chip bare">edição hack inova</span>}
             <span className="chip bare">{FORMAT_LABEL[h.format]}</span>
           </div>
-          <h1 className="mt-5 text-[clamp(2.5rem,7vw,5.25rem)] leading-[0.92] font-extrabold tracking-[-0.045em] break-words">
+          <h1 className="mt-5 text-[clamp(2.4rem,7vw,5.25rem)] leading-[0.92] font-extrabold tracking-[-0.045em] break-words">
             {h.name}
           </h1>
-          <p className="mt-5 text-[17px] text-muted">
+          <p className="mt-4 text-[17px] text-muted">
             Realização <strong className="font-bold text-foreground">{h.organizer}</strong>
           </p>
           {h.tags.length > 0 && (
-            <div className="mt-6 flex flex-wrap gap-1.5">
+            <div className="mt-5 flex flex-wrap gap-1.5">
               {h.tags.map((t) => (
                 <span key={t} className="chip">
                   {t}
@@ -256,31 +288,85 @@ export default async function HackathonPage({
           )}
         </div>
 
-        {/* ingresso — a ficha técnica do site da Hack Inova */}
+        {/* ficha técnica — a única da página */}
         <div className="border-t-[3px] border-b border-line">
-          <div className="card-cover h-16">
-            <CardArt seed={h.id} className="h-full w-full" />
-          </div>
-          <div className="flex items-baseline gap-2 pt-5 text-[clamp(3.5rem,8vw,4.75rem)] leading-none font-extrabold tracking-[-0.04em] tabular-nums">
+          <div className="flex items-baseline gap-2 pt-4 text-[clamp(3.2rem,8vw,4.75rem)] leading-none font-extrabold tracking-[-0.04em] tabular-nums">
             {dia}
             <span className="text-[0.5em] text-accent">
               {mes} {ano}
             </span>
           </div>
-          <p className="mt-3 mb-5 text-[14px] text-muted first-letter:uppercase">
+          <p className="mt-2 mb-4 text-[14px] text-muted first-letter:uppercase">
             {diaSemana} · {fmt.format(startDate)}
           </p>
-          <div className="border-t border-line py-5">
-            <p className="text-[22px] leading-tight font-extrabold tracking-[-0.02em]">
-              {h.location ?? "Online"}
-            </p>
-            <p className="mt-1 font-mono text-[13px] text-muted">
-              {FORMAT_LABEL[h.format]} · {cap.approved}{" "}
-              {cap.approved === 1 ? "inscrito" : "inscritos"}
-            </p>
-          </div>
+          <dl className="text-[14.5px]">
+            <div className="grid grid-cols-[88px_1fr] gap-3 border-t border-line py-2.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">local</dt>
+              <dd className="font-semibold">{h.location ?? "Online"}</dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 border-t border-line py-2.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">formato</dt>
+              <dd className="font-semibold">
+                {FORMAT_LABEL[h.format]}
+                {h.partner && (
+                  <span className="font-normal text-muted">
+                    {" "}
+                    · {cap.approved} {cap.approved === 1 ? "inscrito" : "inscritos"}
+                  </span>
+                )}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 border-t border-line py-2.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">inscrições</dt>
+              <dd className={`font-semibold ${closed || past ? "text-muted" : "text-accent"}`}>{regStatus}</dd>
+            </div>
+            {cap.capacity !== null && (
+              <div className="grid grid-cols-[88px_1fr] gap-3 border-t border-line py-2.5">
+                <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">vagas</dt>
+                <dd className="font-semibold" data-testid="edition-capacity">
+                  {cap.remaining === 0
+                    ? `esgotadas · ${cap.waitlist} na fila`
+                    : `${cap.remaining} de ${cap.capacity} livres`}
+                </dd>
+              </div>
+            )}
+          </dl>
         </div>
       </header>
+
+      {/* spec 039 — teu próximo passo: o estado da pessoa na edição e a ação */}
+      <div className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
+        <NextStepPanel step={step}>
+          {(cancellable || (registered && !past && step.action?.href !== `/h/${h.id}/ingresso`)) && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              {registered && !past && step.action?.href !== `/h/${h.id}/ingresso` ? (
+                <Link
+                  href={`/h/${h.id}/ingresso`}
+                  data-testid="ticket-link"
+                  className="font-mono text-[13px] text-band underline-offset-4 hover:underline"
+                >
+                  meu ingresso · QR do check-in →
+                </Link>
+              ) : (
+                <span />
+              )}
+              {cancellable && (
+                <div className="sm:w-auto [&_button]:w-full sm:[&_button]:w-auto">
+                  <RegisterButton
+                    hackathonId={h.id}
+                    requiresApproval={h.requiresApproval}
+                    status={myStatus}
+                    formHref={`/h/${h.id}/inscricao`}
+                    consentText={consent?.text ?? null}
+                    full={!h.requiresApproval && cap.remaining === 0}
+                    waitlistPosition={myPosition}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </NextStepPanel>
+      </div>
 
       <div className="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:gap-14">
         {/* coluna principal */}
@@ -288,7 +374,7 @@ export default async function HackathonPage({
           {member && <EditionAnnouncements hackathonId={h.id} member={member} />}
           {!past && <ScheduleNowNext hackathonId={h.id} member={member} now={now} compact />}
           {!past && countdownTo && (
-            <div data-testid="arena-strip" className="window dark hard">
+            <div data-testid="arena-strip" className="window dark">
               <div className="tbar">
                 <span className="title">CONTAGEM.exe</span>
                 <span className="dots" aria-hidden>
@@ -302,7 +388,6 @@ export default async function HackathonPage({
                     data-testid="arena-phase"
                     className={`pix text-[22px] uppercase ${PHASE_CLASS[phase]}`}
                   >
-                    {""}
                     {PHASE_LABEL[phase]}
                   </p>
                   <p data-testid="arena-attendees" className="font-mono text-[13px] text-mint">
@@ -396,15 +481,8 @@ export default async function HackathonPage({
             </section>
           )}
 
-          {sponsors.length > 0 && (
-            <section className="flex flex-col gap-5">
-              <SectionHead k={nextK()} title="Patrocinadores" />
-              <EditionSponsors sponsors={sponsors} />
-            </section>
-          )}
-
           {(past || hasArchive) && (
-            <section className="flex flex-col gap-5">
+            <section id="resultado" className="flex scroll-mt-24 flex-col gap-5">
               <SectionHead k={nextK()} title="Resultado" />
               {podium.length > 0 ? (
                 <ol className="ink-grid sm:grid-cols-3">
@@ -604,176 +682,45 @@ export default async function HackathonPage({
               editionLabel={h.name}
             />
           </section>
-        </div>
-
-        {/* coluna lateral: inscrição, ficha, carta, inscritos */}
-        <aside className="order-first flex min-w-0 flex-col gap-8 lg:sticky lg:top-24 lg:order-none lg:self-start">
-          <TicketLink hackathonId={h.id} show={registered && !past} />
-          <StageCta hackathonId={h.id} />
-          {canRegister && (
-            <div className="window dark hard">
-              <div className="tbar">
-                <span className="title">INSCRICAO.exe</span>
-                <span className="dots" aria-hidden>
-                  <b />
-                  <b />
-                </span>
-              </div>
-              <div className="tbody gap-3 p-5!">
-                {!h.requiresApproval && cap.capacity !== null && cap.remaining === 0 ? (
-                  <>
-                    <p className="text-[11px]">VAGAS ESGOTADAS · {cap.waitlist} NA FILA</p>
-                    <div className="pix -mt-2 text-[40px] leading-[0.85]">FILA</div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[11px]">INSCRIÇÕES ABERTAS</p>
-                    <div className="pix -mt-2 text-[46px] leading-[0.85]">ENTRAR</div>
-                  </>
-                )}
-                {helping && myStatus === null ? (
-                  <p className="text-[14px] leading-snug text-mint" data-testid="register-blocked-helper">
-                    {`você se candidatou como ${KIND_LABEL[helping[0]]} — quem ajuda não se inscreve como participante na mesma edição`}
-                  </p>
-                ) : (
-                <div className="[&_button]:w-full">
-                  <RegisterButton
-                    hackathonId={h.id}
-                    requiresApproval={h.requiresApproval}
-                    status={myStatus}
-                    formHref={`/h/${h.id}/inscricao`}
-                    consentText={consent?.text ?? null}
-                    full={!h.requiresApproval && cap.remaining === 0}
-                    waitlistPosition={myPosition}
-                  />
-                </div>
-                )}
-                {!member && (
-                  <p className="text-[13px] leading-snug text-mint">
-                    {"vai pedir login — é o cadastro único do hackahub, não um Google Form"}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!past && !h.partner && (
-            <a
-              href={h.registrationUrl}
-              target="_blank"
-              rel="noopener"
-              className="btn w-full"
-            >
-              inscrever no site oficial ↗
-            </a>
-          )}
-
-          {helpKinds.length > 0 && (
-            <section data-testid="help-cta" className="flex flex-col gap-3 border-[1.5px] border-line p-4">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-[22px] leading-none font-extrabold tracking-[-0.03em]">Quer ajudar?</h2>
-                <p className="text-[13px] text-muted">
-                  A organização está recebendo candidaturas. Quem ajuda não compete na mesma edição.
-                </p>
-              </div>
-              <ul className="flex flex-col">
-                {helpKinds.map((k) => {
-                  const st = myApps[k];
-                  return (
-                    <li key={k} className="flex items-center justify-between gap-3 border-t border-line py-3">
-                      <div className="min-w-0">
-                        <p className="text-[15px] font-bold first-letter:uppercase">{KIND_LABEL[k]}</p>
-                        <p className="text-[13px] leading-snug text-muted">{KIND_PITCH[k]}</p>
-                      </div>
-                      <Link
-                        href={`/h/${h.id}/candidatura/${k}`}
-                        className={`shrink-0 rounded-[6px] border-[1.5px] px-3 py-2 font-mono text-[12px] font-semibold whitespace-nowrap ${
-                          st ? "border-line text-muted" : "border-accent text-accent hover:bg-accent hover:text-background"
-                        }`}
-                        aria-label={`candidatar-se como ${KIND_LABEL[k]}`}
-                      >
-                        {st === "pending"
-                          ? "em análise"
-                          : st === "approved"
-                            ? "aprovada"
-                            : st === "rejected"
-                              ? "não aprovada"
-                              : "candidatar-se"}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+          {sponsors.length > 0 && (
+            <section className="flex flex-col gap-5">
+              <SectionHead k={nextK()} title="Patrocinadores" note="Quem banca a edição." />
+              <EditionSponsors sponsors={sponsors} />
             </section>
           )}
+        </div>
+
+        {/* coluna lateral: palco, links da edição, carta, inscritos, ajudar */}
+        <aside className="flex min-w-0 flex-col gap-8 lg:sticky lg:top-24 lg:self-start">
+          <StageCta hackathonId={h.id} />
 
           {h.partner && (
-            <section data-testid="safety-links" className="flex flex-col gap-2 border-[1.5px] border-line p-4">
-              <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">conduta e segurança</h2>
-              <ul className="flex flex-col gap-1.5 text-[14px]">
-                <li>
-                  <Link href={`/h/${h.id}/conduta`} className="text-accent underline-offset-4 hover:underline">
-                    código de conduta da edição →
-                  </Link>
-                </li>
-                <li>
-                  <Link href={`/h/${h.id}/incidente`} className="text-accent underline-offset-4 hover:underline">
-                    relatar um problema (pode ser anônimo) →
-                  </Link>
-                </li>
+            <nav aria-label="Nesta edição" data-testid="safety-links" className="flex flex-col border-[1.5px] border-line">
+              <h2 className="border-b border-line px-4 py-2.5 font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
+                nesta edição
+              </h2>
+              <ul className="flex flex-col text-[14.5px]">
+                {publicSchedule.length > 0 && (
+                  <EditionLink href={`/h/${h.id}/programacao`} label="programação" note={`${publicSchedule.length} itens · .ics`} />
+                )}
+                {(past || hasArchive) && <EditionLink href={`/h/${h.id}/projetos`} label="projetos entregues" />}
+                <EditionLink href={`/h/${h.id}/duvidas`} label="dúvidas pra organização" />
+                <EditionLink href={`/h/${h.id}/conduta`} label="código de conduta da edição" />
+                <EditionLink href={`/h/${h.id}/incidente`} label="relatar um problema (pode ser anônimo)" />
               </ul>
               {myImage && (
-                <div className="border-t border-line pt-2">
+                <div className="border-t border-line px-4 py-3">
                   <ImageConsentToggle hackathonId={h.id} granted={myImage.granted} source="edicao" />
                 </div>
               )}
-            </section>
+            </nav>
           )}
-
-          <dl className="border-b border-line">
-            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
-              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">data</dt>
-              <dd className="text-[15px] font-semibold">{fmt.format(new Date(h.startsAt))}</dd>
-            </div>
-            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
-              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">formato</dt>
-              <dd className="text-[15px] font-semibold">{FORMAT_LABEL[h.format]}</dd>
-            </div>
-            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
-              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">local</dt>
-              <dd className="text-[15px] font-semibold">{h.location ?? "Online"}</dd>
-            </div>
-            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
-              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">inscrições</dt>
-              <dd
-                className={`text-[15px] font-semibold ${closed && !past ? "text-muted" : "text-accent"}`}
-              >
-                {past
-                  ? "edição encerrada"
-                  : closed
-                    ? "encerradas"
-                    : h.registrationDeadline
-                      ? `até ${fmt.format(new Date(h.registrationDeadline))}`
-                      : "abertas"}
-              </dd>
-            </div>
-            {cap.capacity !== null && (
-              <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
-                <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">vagas</dt>
-                <dd className="text-[15px] font-semibold" data-testid="edition-capacity">
-                  {cap.remaining === 0
-                    ? `esgotadas · ${cap.waitlist} na fila`
-                    : `${cap.remaining} de ${cap.capacity} livres`}
-                </dd>
-              </div>
-            )}
-          </dl>
 
           <div className="flex flex-col gap-4">
             <h2 className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
               cartinha colecionável desta edição
             </h2>
-            <div className="grid grid-cols-[minmax(0,180px)_1fr] items-start gap-4">
+            <div className="grid grid-cols-[minmax(0,160px)_1fr] items-start gap-4">
               <CollectibleCard
                 hackathonId={h.id}
                 name={h.name}
@@ -844,9 +791,62 @@ export default async function HackathonPage({
               )}
             </div>
           )}
+
+          {helpKinds.length > 0 && (
+            <section data-testid="help-cta" className="flex flex-col gap-3 border-[1.5px] border-line p-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-[22px] leading-none font-extrabold tracking-[-0.03em]">Quer ajudar?</h2>
+                <p className="text-[13px] text-muted">
+                  A organização está recebendo candidaturas. Quem ajuda não compete na mesma edição.
+                </p>
+              </div>
+              <ul className="flex flex-col">
+                {helpKinds.map((k) => {
+                  const st = myApps[k];
+                  return (
+                    <li key={k} className="flex items-center justify-between gap-3 border-t border-line py-3">
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-bold first-letter:uppercase">{KIND_LABEL[k]}</p>
+                        <p className="text-[13px] leading-snug text-muted">{KIND_PITCH[k]}</p>
+                      </div>
+                      <Link
+                        href={`/h/${h.id}/candidatura/${k}`}
+                        className={`shrink-0 rounded-[6px] border-[1.5px] px-3 py-2 font-mono text-[12px] font-semibold whitespace-nowrap ${
+                          st ? "border-line text-muted" : "border-accent text-accent hover:bg-accent hover:text-background"
+                        }`}
+                        aria-label={`candidatar-se como ${KIND_LABEL[k]}`}
+                      >
+                        {st === "pending"
+                          ? "em análise"
+                          : st === "approved"
+                            ? "aprovada"
+                            : st === "rejected"
+                              ? "não aprovada"
+                              : "candidatar-se"}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
         </aside>
       </div>
     </div>
+  );
+}
+
+function EditionLink({ href, label, note }: { href: string; label: string; note?: string }) {
+  return (
+    <li className="border-t border-line-soft first:border-t-0">
+      <Link
+        href={href}
+        className="flex items-baseline justify-between gap-3 px-4 py-2.5 text-foreground underline-offset-4 hover:bg-mint hover:underline"
+      >
+        <span>{label}</span>
+        <span className="shrink-0 font-mono text-[12px] text-accent">{note ?? "→"}</span>
+      </Link>
+    </li>
   );
 }
 

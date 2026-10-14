@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do board "procuro time" — spec 012. Leitura é pública; anunciar
@@ -38,7 +39,7 @@ async function ensureBoardEntry() {
 }
 
 test.describe("procuro time — board público da edição", () => {
-  test("anon vê o anúncio seedado na página da edição", async ({ page }) => {
+  test("membro vê o anúncio seedado na página da edição", async ({ memberPage: page }) => {
     await ensureBoardEntry();
     await page.goto(`/h/${HID}`);
     // seção pública: need, skills, autor linkado pro perfil
@@ -49,7 +50,7 @@ test.describe("procuro time — board público da edição", () => {
     ).toHaveAttribute("href", "/u/e2e_teamseeker");
   });
 
-  test("composer é oculto pra quem não tá logado", async ({ page }) => {
+  test("composer é oculto pra quem não tá inscrito", async ({ memberPage: page }) => {
     await ensureBoardEntry();
     await page.goto(`/h/${HID}`);
     await expect(page.getByText(NEED)).toBeVisible();

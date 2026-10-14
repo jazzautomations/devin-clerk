@@ -28,12 +28,23 @@ export type Member = {
   cards?: number;
   createdAt: string;
   usernameChangedAt?: string | null;
+  // spec 039 — onboarding
+  onboardedAt?: string | null;
+  intents?: string[];
+  city?: string | null;
+  institution?: string | null;
+  course?: string | null;
 };
 
-type MemberRow = Omit<Member, "skills" | "personas"> & { skills: string; personas: string };
+type MemberRow = Omit<Member, "skills" | "personas" | "intents"> & { skills: string; personas: string; intents?: string };
 
 function toMember(row: MemberRow): Member {
-  return { ...row, skills: JSON.parse(row.skills), personas: JSON.parse(row.personas ?? "[]") };
+  return {
+    ...row,
+    skills: JSON.parse(row.skills),
+    personas: JSON.parse(row.personas ?? "[]"),
+    intents: JSON.parse(row.intents ?? "[]"),
+  };
 }
 
 export function adminEmails(): string[] {
@@ -331,4 +342,42 @@ export async function updateMemberProfile(
     primary: patch.personas?.[0] ?? null,
     personas: patch.personas ? JSON.stringify(patch.personas) : null,
   });
+}
+
+// ---------- onboarding (spec 039) ----------
+
+export type OnboardingPatch = {
+  personas?: string[];
+  intents?: string[];
+  name?: string | null;
+  headline?: string | null;
+  city?: string | null;
+  institution?: string | null;
+  course?: string | null;
+  github?: string | null;
+  linkedin?: string | null;
+};
+
+/**
+ * Grava o que veio do passo do /bem-vindo (campo ausente preserva; null
+ * limpa os opcionais) e, com finish, marca onboardedAt — uma vez só.
+ */
+export async function saveOnboarding(memberId: number, patch: OnboardingPatch, finish: boolean): Promise<void> {
+  const sets: string[] = [];
+  const params: Record<string, unknown> = { id: memberId };
+  const put = (col: string, v: unknown) => {
+    sets.push(`${col} = @${col}`);
+    params[col] = v;
+  };
+  if (patch.personas) {
+    put("personas", JSON.stringify(patch.personas));
+    put("persona", patch.personas[0] ?? null);
+  }
+  if (patch.intents) put("intents", JSON.stringify(patch.intents));
+  for (const k of ["name", "headline", "city", "institution", "course", "github", "linkedin"] as const) {
+    if (patch[k] !== undefined) put(k, patch[k]);
+  }
+  if (finish) sets.push("onboardedAt = COALESCE(onboardedAt, datetime('now'))");
+  if (sets.length === 0) return;
+  await db.prepare(`UPDATE members SET ${sets.join(", ")} WHERE id = @id`).run(params);
 }

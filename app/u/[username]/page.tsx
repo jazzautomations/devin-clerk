@@ -16,6 +16,8 @@ import { Avatar } from "@/components/Avatar";
 import { ShareBar } from "@/components/ShareBar";
 import { profileUrl } from "@/lib/social";
 import { personaLabel } from "@/lib/personas";
+import { auth } from "@clerk/nextjs/server";
+import { PublicCard } from "@/components/PublicCard";
 
 // spec 029 — desfecho de cada edição do arco → chip da trajetória:
 // pódio nas cores de raridade, entrega em accent, presença em muted
@@ -82,6 +84,28 @@ export default async function PublicProfilePage({
     const moved = await resolveUsernameRedirect(decodeURIComponent(username));
     if (moved) permanentRedirect(`/u/${moved}`);
     notFound();
+  }
+
+  // spec 039 — sem conta: cartão mínimo (nome, headline, personas, edições)
+  const { userId } = await auth();
+  if (!userId) {
+    const editions = (await getRegistrationIds(member.id)).length;
+    const personas = member.personas.map((p) => personaLabel(p)).filter(Boolean).join(" · ");
+    return (
+      <PublicCard
+        kind="perfil"
+        title={member.name ?? `@${member.username}`}
+        subtitle={member.headline}
+        path={`/u/${member.username}`}
+        facts={[
+          ["usuário", `@${member.username}`],
+          ...(personas ? ([["quem é", personas]] as [string, string][]) : []),
+          ["edições", String(editions)],
+        ]}
+      >
+        <Avatar username={member.username} name={member.name} avatarUrl={member.avatarUrl} size="md" />
+      </PublicCard>
+    );
   }
 
   const history = (

@@ -62,7 +62,7 @@ test.describe("certificado — verificação pública", () => {
 test.describe("júri — portas trancadas sem login", () => {
   test("aba /admin/h/[id]/juri exige login", async ({ page }) => {
     await page.goto(`/admin/h/${HACK}/juri`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("APIs do júri e dos certificados respondem 401 JSON", async ({ request }) => {

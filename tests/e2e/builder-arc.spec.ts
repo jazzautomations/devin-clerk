@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD da trajetória no perfil — spec 029. Leitura é pública; o seed vincula
@@ -83,7 +84,7 @@ async function ensureArc(): Promise<void> {
 
 test.describe("trajetória do builder — arco de edições no perfil", () => {
   test("perfil mostra a faixa com desfechos em ordem cronológica", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureArc();
     const res = await page.goto(`/u/${MEMBER}`);
@@ -116,7 +117,7 @@ test.describe("trajetória do builder — arco de edições no perfil", () => {
     await expect(arc.getByText("participou")).toBeVisible();
   });
 
-  test("membro sem participação não renderiza a seção", async ({ page }) => {
+  test("membro sem participação não renderiza a seção", async ({ memberPage: page }) => {
     await ensureArc();
     const res = await page.goto("/u/e2e_arc_zero");
     expect(res?.status()).toBe(200);

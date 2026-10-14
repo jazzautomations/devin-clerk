@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { memberRequest, test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do mural da edição — spec 028. Leitura é pública; postar no mural
@@ -29,7 +30,7 @@ async function ensureEditionPost(): Promise<void> {
 
 test.describe("mural da edição — atividade viva em /h/[id]", () => {
   test("página da edição mostra a seção e os posts escopados", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureEditionPost();
     await page.goto(`/h/${ED}`);
@@ -39,8 +40,8 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
     await expect(page.getByText(MARKER)).toBeVisible();
   });
 
-  test("anon lê o mural mas não vê composer — postar é de inscrito", async ({
-    page,
+  test("membro sem inscrição lê o mural mas não vê composer — postar é de inscrito", async ({
+    memberPage: page,
   }) => {
     await ensureEditionPost();
     await page.goto(`/h/${ED}`);
@@ -50,7 +51,7 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
   });
 
   test("post escopado aparece no /feed com chip linkando a edição", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureEditionPost();
     await page.goto("/feed");
@@ -59,9 +60,11 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
     await expect(chip).toHaveAttribute("href", `/h/${ED}`);
   });
 
-  test("POST anon com hackathonId → 401 JSON; GET ?h= filtra a edição", async ({
-    request,
+  test("POST anon com hackathonId → 401 JSON; GET ?h= (membro) filtra a edição", async ({
+    request: anon,
+    memberPage,
   }) => {
+    const request = anon;
     await ensureEditionPost();
     const res = await request.post("/api/posts", {
       data: { body: "oi", hackathonId: ED },
@@ -69,7 +72,10 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
     expect(res.status()).toBe(401);
     expect(res.headers()["content-type"]).toContain("application/json");
 
-    const scoped = await request.get(`/api/posts?h=${ED}`);
+    // spec 039 — leitura da API é de quem tem conta; anon leva 401
+    expect((await anon.get(`/api/posts?h=${ED}`)).status()).toBe(401);
+    const member = await memberRequest(memberPage);
+    const scoped = await member.get(`/api/posts?h=${ED}`);
     expect(scoped.status()).toBe(200);
     const { posts } = await scoped.json();
     expect(posts.some((p: { body: string }) => p.body === MARKER)).toBe(true);
@@ -77,7 +83,7 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
       posts.every((p: { hackathonId: string | null }) => p.hackathonId === ED),
     ).toBe(true);
 
-    const nf = await request.get("/api/posts?h=nope-404");
+    const nf = await member.get("/api/posts?h=nope-404");
     expect(nf.status()).toBe(404);
   });
 });

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD do índice de projetos — spec 017.
 // O "/companies" do Colosseum: tudo que já nasceu, cruzando edições.
@@ -7,7 +8,7 @@ const HACK = "hack-inova-unifacens-2026"; // seed: One Day Hospital, 1º lugar
 
 test.describe("/projetos — portfólio público de tudo que nasceu", () => {
   test("renderiza heading, card do seed e click-through pra /p", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/projetos");
     await expect(
@@ -37,7 +38,7 @@ test.describe("/projetos — portfólio público de tudo que nasceu", () => {
     ).toBeVisible();
   });
 
-  test("header tem link 'projetos' que abre o índice", async ({ page }) => {
+  test("header tem link 'projetos' que abre o índice", async ({ memberPage: page }) => {
     await page.goto("/");
     const link = page
       .locator("header")
@@ -48,7 +49,7 @@ test.describe("/projetos — portfólio público de tudo que nasceu", () => {
   });
 
   test("?h= filtra por edição; edição sem projeto cai no empty state", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto(`/projetos?h=${HACK}`);
     await expect(
@@ -63,8 +64,8 @@ test.describe("/projetos — portfólio público de tudo que nasceu", () => {
     await expect(page.getByText(/nenhum projeto/i).first()).toBeVisible();
   });
 
-  test("metadata: canonical /projetos e sitemap cobre a rota", async ({
-    page,
+  test("metadata: canonical /projetos; sitemap não lista a área logada (spec 039)", async ({
+    memberPage: page,
     request,
   }) => {
     await page.goto("/projetos");
@@ -75,6 +76,6 @@ test.describe("/projetos — portfólio público de tudo que nasceu", () => {
 
     const sm = await request.get("/sitemap.xml");
     expect(sm.status()).toBe(200);
-    expect(await sm.text()).toContain("/projetos");
+    expect(await sm.text()).not.toContain("/projetos");
   });
 });

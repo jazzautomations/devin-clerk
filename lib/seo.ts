@@ -1,12 +1,11 @@
 import type { MetadataRoute } from "next";
 import { appConfig } from "@/app.config";
-import { listPosts, type PostMeta } from "@/lib/blog";
+import { type PostMeta } from "@/lib/blog";
 import {
   getOpenHackathons,
   getPastHackathons,
   type Hackathon,
 } from "@/lib/hackathons";
-import { listMembers } from "@/lib/members";
 
 // Camada de SEO (spec 009): base URL única, sitemap/robots e JSON-LD.
 // NEXT_PUBLIC_SITE_URL em produção; placeholder explícito em dev/preview.
@@ -21,14 +20,11 @@ export function absoluteUrl(path = "/"): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+// spec 039 — só rota PÚBLICA (lib/access) entra no sitemap: o resto da
+// plataforma é logado e redirecionaria o crawler pro cadastro
 const STATIC_ROUTES: { path: string; priority: number; freq: "weekly" | "daily" }[] = [
   { path: "/", priority: 1, freq: "weekly" },
-  { path: "/radar", priority: 0.9, freq: "daily" },
-  { path: "/feed", priority: 0.7, freq: "daily" },
-  { path: "/membros", priority: 0.6, freq: "daily" },
-  { path: "/talento", priority: 0.6, freq: "daily" },
-  { path: "/projetos", priority: 0.7, freq: "weekly" },
-  { path: "/blog", priority: 0.8, freq: "weekly" },
+  { path: "/organizar", priority: 0.8, freq: "weekly" },
   { path: "/empresas", priority: 0.7, freq: "weekly" },
   { path: "/legal/termos", priority: 0.2, freq: "weekly" },
   { path: "/legal/privacidade", priority: 0.2, freq: "weekly" },
@@ -52,27 +48,32 @@ export async function buildSitemap(now = new Date()): Promise<MetadataRoute.Site
       priority: 0.7,
     });
   }
-  for (const m of await listMembers(500)) {
-    sitemap.push({
-      url: absoluteUrl(`/u/${m.username}`),
-      changeFrequency: "weekly",
-      priority: 0.4,
-    });
-  }
-  for (const p of listPosts()) {
-    sitemap.push({
-      url: absoluteUrl(`/blog/${p.slug}`),
-      lastModified: p.date,
-      changeFrequency: "monthly",
-      priority: 0.6,
-    });
-  }
   return sitemap;
 }
 
 export function buildRobots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/" },
+    // a plataforma logada nem é rastreável (redireciona pro cadastro); o
+    // disallow evita o crawler gastar requisição nela
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: [
+        "/api/",
+        "/admin",
+        "/dashboard",
+        "/perfil",
+        "/bem-vindo",
+        "/notificacoes",
+        "/radar",
+        "/feed",
+        "/membros",
+        "/projetos",
+        "/talento",
+        "/blog",
+        "/rsvp/",
+      ],
+    },
     sitemap: absoluteUrl("/sitemap.xml"),
   };
 }

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD da moderação — spec 018. Apagar exige login (Clerk captcha bloqueia
@@ -41,9 +42,8 @@ test.describe("moderação — visitante não apaga nada", () => {
     expect(res.status()).toBe(401);
     expect(res.headers()["content-type"]).toContain("application/json");
     // e o post segue lá — anon não pode tirar nada do ar
-    const list = await request.get("/api/posts");
-    const { posts } = await list.json();
-    expect(posts.some((p: { id: number }) => p.id === postId)).toBe(true);
+    const still = await openE2eDb().prepare("SELECT id FROM posts WHERE id = ?").get(postId);
+    expect(still).toBeTruthy();
   });
 
   test("DELETE comentário deslogado → 401 JSON", async ({ request }) => {
@@ -53,7 +53,7 @@ test.describe("moderação — visitante não apaga nada", () => {
     expect(res.headers()["content-type"]).toContain("application/json");
   });
 
-  test("anon não vê controle de apagar no feed", async ({ page }) => {
+  test("anon não vê controle de apagar no feed", async ({ memberPage: page }) => {
     await ensurePost();
     await page.goto("/feed");
     const post = page.locator("li", { hasText: MARKER });

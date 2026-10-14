@@ -8,6 +8,7 @@ import { UsernameChange } from "@/components/UsernameChange";
 import { getContactPrefs } from "@/lib/contact";
 import { listMyImageConsents } from "@/lib/eventTerms";
 import { ImageConsentToggle } from "@/components/ImageConsentToggle";
+import { ProfileReminder } from "@/components/ProfileReminder";
 
 export default async function PerfilPage() {
   const { userId } = await auth();
@@ -49,6 +50,7 @@ export default async function PerfilPage() {
         </p>
         <UsernameChange username={member.username} changedAt={member.usernameChangedAt ?? null} />
       </div>
+      <ProfileReminder member={member} href="/bem-vindo?refazer=1" />
       <ProfileForm member={member} openTo={openTo} contact={contact} />
       {images.length > 0 && (
         <section id="imagem" className="flex flex-col gap-3 border-t-2 border-line pt-6" data-testid="image-consents">

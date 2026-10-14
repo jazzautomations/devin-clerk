@@ -7,6 +7,8 @@ import { applyContactPatch, parseContactPatch } from "@/lib/contact";
 import { normalizeSocial, type SocialKind } from "@/lib/social";
 import { parsePersonas, personaLabel } from "@/lib/personas";
 import { deleteMemberData } from "@/lib/privacy";
+import { saveOnboarding } from "@/lib/members";
+import { LIMITS, shortText } from "@/lib/onboarding";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
@@ -54,6 +56,14 @@ export async function PATCH(req: Request) {
     if ("error" in p) return Response.json({ error: p.error }, { status: 400 });
     personas = p.value;
   }
+  // spec 039 — cidade, instituição e curso (opcionais; "" limpa)
+  const extra: { city?: string | null; institution?: string | null; course?: string | null } = {};
+  for (const k of ["city", "institution", "course"] as const) {
+    if (body[k] === undefined) continue;
+    const t = shortText(body[k], LIMITS[k], k);
+    if ("error" in t) return Response.json({ error: t.error }, { status: 400 });
+    extra[k] = t.value;
+  }
   if (typeof body.persona === "string" && body.persona !== "" && !personaLabel(body.persona)) {
     return Response.json({ error: `persona desconhecida: ${body.persona}` }, { status: 400 });
   }
@@ -71,6 +81,7 @@ export async function PATCH(req: Request) {
     persona: typeof body.persona === "string" ? body.persona : undefined,
     personas,
   });
+  if (member && Object.keys(extra).length > 0) await saveOnboarding(member.id, extra, false);
   const newBadges = member ? (await checkBadges(member.id)).map((b) => b.id) : [];
   return Response.json({ ok: true, newBadges });
 }

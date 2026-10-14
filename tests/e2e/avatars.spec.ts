@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD dos avatares — spec 020. Leitura pública: membro com avatarUrl (foto
@@ -42,7 +43,7 @@ async function ensureAvatarPosts() {
 
 test.describe("avatares — a cara de quem constrói", () => {
   test("post de membro com avatarUrl renderiza a imagem no feed", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureAvatarPosts();
     await page.goto("/feed");
@@ -54,7 +55,7 @@ test.describe("avatares — a cara de quem constrói", () => {
   });
 
   test("membro sem foto cai pro bloco de iniciais — nunca img quebrada", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureAvatarPosts();
     await page.goto("/feed");
@@ -66,7 +67,7 @@ test.describe("avatares — a cara de quem constrói", () => {
   });
 
   test("perfil público mostra o avatar grande no cabeçalho", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureAvatarPosts();
     await page.goto("/u/e2e_avatar");
@@ -75,7 +76,7 @@ test.describe("avatares — a cara de quem constrói", () => {
     await expect(img).toHaveAttribute("src", AVATAR_URL);
   });
 
-  test("perfil público sem foto mostra iniciais grandes", async ({ page }) => {
+  test("perfil público sem foto mostra iniciais grandes", async ({ memberPage: page }) => {
     await ensureAvatarPosts();
     await page.goto("/u/e2e_noavatar");
     await expect(page.locator("span[data-avatar]").first()).toHaveText("SF");

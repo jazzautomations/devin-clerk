@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { memberRequest, test } from "./auth";
 import { openE2eDb } from "./db";
 
 // Programação da edição (roadmap 037 #4) pelo lado anônimo: itens abertos
@@ -14,7 +15,7 @@ const SHOTS = process.env.E2E_SHOT_DIR;
 const sql = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
 
 async function seed(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações do server do e2e
+  await request.get("/api/health"); // força init/migrações do server do e2e
   const db = openE2eDb();
   const start = new Date(Date.now() + 20 * 86_400_000);
   start.setUTCHours(12, 0, 0, 0);
@@ -80,7 +81,7 @@ function parseIcs(text: string) {
 }
 
 test.describe("programação da edição — sem login (037 #4)", () => {
-  test("página pública agrupa por dia e esconde itens de mentores e rascunhos", async ({ page, request }) => {
+  test("página pública agrupa por dia e esconde itens de mentores e rascunhos", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/h/${HACK}/programacao`, { waitUntil: "domcontentloaded" });
@@ -116,8 +117,14 @@ test.describe("programação da edição — sem login (037 #4)", () => {
     expect(again.map((e) => e.UID)).toEqual(events.map((e) => e.UID));
   });
 
-  test(".ics de item: aberto baixa; de mentores e rascunho são 404 pra anon", async ({ request }) => {
-    const ids = await seed(request);
+  test(".ics de item (logado): aberto baixa; de mentores e rascunho são 404 pra quem não é mentor", async ({
+    request: anon,
+    memberPage,
+  }) => {
+    const ids = await seed(anon);
+    // spec 039 — item avulso é de quem tem conta; o feed da edição (webcal) segue aberto
+    expect((await anon.get(`/h/${HACK}/programacao/${ids["Almoço"]}.ics`, { maxRedirects: 0 })).status()).toBe(307);
+    const request = await memberRequest(memberPage);
     const ok = await request.get(`/h/${HACK}/programacao/${ids["Almoço"]}.ics`);
     expect(ok.status()).toBe(200);
     expect(ok.headers()["content-type"]).toContain("text/calendar");
@@ -130,7 +137,7 @@ test.describe("programação da edição — sem login (037 #4)", () => {
   test("aba /admin/h/[id]/programacao exige login e APIs respondem 401 JSON", async ({ page, request }) => {
     await seed(request);
     await page.goto(`/admin/h/${HACK}/programacao`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
     const calls = [
       request.get(`/api/admin/hackathons/${HACK}/schedule`),
       request.post(`/api/admin/hackathons/${HACK}/schedule`, { data: { title: "x" } }),
@@ -146,7 +153,7 @@ test.describe("programação da edição — sem login (037 #4)", () => {
     }
   });
 
-  test("página da edição: 'agora / a seguir' durante o evento, link fora dele, subEvent no JSON-LD", async ({ page, request }) => {
+  test("página da edição: 'agora / a seguir' durante o evento, link fora dele, subEvent no JSON-LD", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/h/${LIVE}`, { waitUntil: "domcontentloaded" });

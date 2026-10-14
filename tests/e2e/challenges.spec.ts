@@ -1,11 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD dos desafios patrocinados — spec 006. O sponsor na página pública
 // É o inventário que se vende; participante nunca paga.
 
 test.describe("desafios patrocinados — inventário de monetização", () => {
   test("edição da PUC mostra desafio Oracle com prêmio em destaque", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/h/hack-inova-puc-saude-2026");
     await expect(page.getByText(/desafios patrocinados/i)).toBeVisible();
@@ -20,7 +21,7 @@ test.describe("desafios patrocinados — inventário de monetização", () => {
   });
 
   test("edição sem desafio NÃO mostra a seção (inventário vazio não renderiza)", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/h/hack-inova-alphaville-2026");
     await expect(page.getByText(/desafios patrocinados/i)).not.toBeVisible();

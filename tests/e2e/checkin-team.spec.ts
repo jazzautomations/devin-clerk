@@ -8,7 +8,7 @@ import { openE2eDb } from "./db";
 const H = "e2e-checkin-jam";
 
 async function ensureEdition(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   const future = new Date(Date.now() + 10 * 86_400_000).toISOString();
   await db
@@ -27,14 +27,14 @@ test.describe("check-in e equipe da edição (spec 033 US4/US7)", () => {
     await ensureEdition(request);
     for (const tab of ["equipe", "checkin"]) {
       await page.goto(`/admin/h/${H}/${tab}`);
-      await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+      await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
     }
   });
 
   test("/h/[id]/ingresso exige login", async ({ page, request }) => {
     await ensureEdition(request);
     await page.goto(`/h/${H}/ingresso`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("APIs de equipe e check-in anon → 401 JSON", async ({ request }) => {

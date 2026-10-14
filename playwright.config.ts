@@ -15,6 +15,8 @@ process.env.HACKAHUB_RSVP_SECRET ||= "e2e-rsvp-secret-nao-usar-em-producao";
 // banco dev, modo start elimina os timeouts de cold-compile.
 export default defineConfig({
   testDir: "./tests/e2e",
+  // spec 039 — sessão de um membro de teste pros specs da área logada
+  globalSetup: "./tests/e2e/global-setup.ts",
   workers: 1,
   retries: 0,
   timeout: 30_000,

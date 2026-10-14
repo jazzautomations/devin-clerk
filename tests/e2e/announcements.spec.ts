@@ -10,7 +10,7 @@ const SEEDED_TITLE = "Credenciamento abre às 8h (e2e)";
 
 async function seed(request: APIRequestContext) {
   // força init/migrações do banco no server do e2e
-  await request.get("/radar");
+  await request.get("/api/health");
   const db = openE2eDb();
   const future = new Date(Date.now() + 20 * 86_400_000).toISOString();
   await db
@@ -35,13 +35,13 @@ test.describe("avisos e dúvidas — sem login (spec 033)", () => {
   test("aba /admin/h/[id]/avisos exige login", async ({ page, request }) => {
     await seed(request);
     await page.goto(`/admin/h/${HACK}/avisos`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("/h/[id]/duvidas anon vai pro login", async ({ page, request }) => {
     await seed(request);
     await page.goto(`/h/${HACK}/duvidas`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("aviso seedado não aparece pra anon na página da edição", async ({ page, request }) => {

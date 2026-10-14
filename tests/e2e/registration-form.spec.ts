@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // spec 033 US1 — formulário de inscrição por edição + aceite LGPD + vagas.
@@ -9,7 +10,7 @@ const WITH_FORM = "e2e-form-jam";
 const NO_FORM = "e2e-form-sem";
 
 async function seed(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   const future = new Date(Date.now() + 30 * 86_400_000).toISOString();
   for (const [id, name, capacity] of [
@@ -57,7 +58,7 @@ async function noHorizontalScroll(page: Page) {
 }
 
 test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
-  test("anon vê o CTA que leva pro formulário na página da edição", async ({ page, request }) => {
+  test("membro sem inscrição vê o CTA que leva pro formulário na página da edição", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${WITH_FORM}`, { waitUntil: "domcontentloaded" });
     const cta = page.getByRole("link", { name: /fazer inscrição/i });
@@ -66,7 +67,7 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
     await expect(page.getByTestId("edition-capacity")).toContainText("40 de 40");
   });
 
-  test("formulário renderiza as perguntas seedadas, o aceite e o resumo do perfil", async ({ page, request }) => {
+  test("formulário renderiza as perguntas seedadas, o aceite e o resumo do perfil", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${WITH_FORM}/inscricao`, { waitUntil: "domcontentloaded" });
     const form = page.getByTestId("registration-form");
@@ -75,7 +76,8 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
     await expect(form.getByRole("radio", { name: "GG" })).toBeVisible();
     await expect(form.getByRole("checkbox", { name: "vegano" })).toBeVisible();
     await expect(form.getByRole("radiogroup", { name: "Já tem time?" })).toBeVisible();
-    await expect(page.getByText(/Nome, e-mail e GitHub vêm do seu cadastro/)).toBeVisible();
+    // logado: o resumo mostra o que vem do perfil (spec 039: a página é de quem tem conta)
+    await expect(page.getByRole("link", { name: "ajustar no perfil" })).toHaveAttribute("href", "/perfil");
     // aceite LGPD: nunca pré-marcado, cita a organização e os termos
     const consent = form.getByRole("checkbox", { name: /Autorizo Hack Inova E2E a tratar/ });
     await expect(consent).not.toBeChecked();
@@ -83,7 +85,7 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
     await expect(form.getByRole("button", { name: /concluir inscrição/i })).toBeVisible();
   });
 
-  test("enviar sem marcar o aceite avisa e não sai da página", async ({ page, request }) => {
+  test("enviar sem marcar o aceite avisa e não sai da página", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${WITH_FORM}/inscricao`, { waitUntil: "domcontentloaded" });
     // frente L: a data de nascimento vem antes do aceite
@@ -97,7 +99,7 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
   });
 
   test("edição sem perguntas também vai pro formulário (nascimento, conduta e imagem não cabem em 1 clique)", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await seed(request);
@@ -128,7 +130,7 @@ test.describe("formulário de inscrição da edição (spec 033 US1)", () => {
     }
   });
 
-  test("390px sem scroll horizontal no formulário e na edição", async ({ page, request }) => {
+  test("390px sem scroll horizontal no formulário e na edição", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/h/${WITH_FORM}/inscricao`, { waitUntil: "domcontentloaded" });

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD da escolha do povo — spec 025. Votar exige login (Clerk captcha bloqueia
@@ -18,7 +19,7 @@ async function seedTeamId(): Promise<number> {
 
 test.describe("escolha do povo — voto da comunidade", () => {
   test("card do /projetos mostra o placar ▲ N mesmo deslogado", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/projetos");
     const card = page.locator("li", { hasText: "One Day Hospital" });
@@ -26,7 +27,7 @@ test.describe("escolha do povo — voto da comunidade", () => {
   });
 
   test("chip 'escolha do povo' ordena por votos e volta pro júri", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/projetos");
     const chip = page.getByRole("link", { name: /escolha do povo/i });
@@ -48,17 +49,17 @@ test.describe("escolha do povo — voto da comunidade", () => {
     expect(res.headers()["content-type"]).toContain("application/json");
   });
 
-  test("ficha /p/[teamId] tem o botão ▲ e o clique anon leva pro sign-in", async ({
+  test("ficha /p/[teamId]: membro vê o botão ▲; anon vê o cartão com CTA de cadastro", async ({
     page,
+    memberPage,
   }) => {
-    await page.goto(`/p/${await seedTeamId()}`);
-    const btn = page.getByRole("button", { name: /escolha do povo/i });
-    await expect(btn).toBeVisible();
-    // hydration race: o primeiro clique pode cair antes do hidratar no dev —
-    // repete até o router.push("/sign-in") pegar
-    await expect(async () => {
-      await btn.click();
-      await expect(page).toHaveURL(/\/sign-in/, { timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    const id = await seedTeamId();
+    await memberPage.goto(`/p/${id}`);
+    await expect(memberPage.getByRole("button", { name: /escolha do povo/i })).toBeVisible();
+    // spec 039 — sem conta: cartão mínimo, sem voto, e o CTA volta pra ficha
+    await page.goto(`/p/${id}`);
+    await expect(page.getByTestId("public-card")).toBeVisible();
+    await expect(page.getByRole("button", { name: /escolha do povo/i })).toHaveCount(0);
+    await expect(page.getByTestId("public-card-cta")).toHaveAttribute("href", `/sign-up?redirect_url=%2Fp%2F${id}`);
   });
 });

@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do diretório /talento — spec 014. Leitura é pública; o opt-in em si é
@@ -46,7 +47,7 @@ async function ensureTalent(): Promise<void> {
 
 test.describe("talento — diretório de quem constrói de verdade", () => {
   test("/talento é público: heading, chips openTo, prova de entrega", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureTalent();
     const res = await page.goto("/talento");
@@ -76,7 +77,7 @@ test.describe("talento — diretório de quem constrói de verdade", () => {
   });
 
   test("membro sem openTo não aparece — o diretório é opt-in", async ({
-    page,
+    memberPage: page,
   }) => {
     await ensureTalent();
     await page.goto("/talento");
@@ -86,6 +87,6 @@ test.describe("talento — diretório de quem constrói de verdade", () => {
 
   test("/perfil (onde se marca open to) exige login", async ({ page }) => {
     await page.goto("/perfil");
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 });

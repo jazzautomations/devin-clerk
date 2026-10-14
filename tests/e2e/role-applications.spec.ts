@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // frente E (spec 033) — candidatura a voluntário/mentor/jurado. Login real
@@ -9,7 +10,7 @@ const H = "e2e-cand-jam";
 const CLOSED = "e2e-cand-fechada";
 
 async function seed(request: APIRequestContext) {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   const future = new Date(Date.now() + 20 * 86_400_000).toISOString();
   for (const [id, name] of [
@@ -32,7 +33,7 @@ async function seed(request: APIRequestContext) {
 }
 
 test.describe("candidatura por tipo (frente E)", () => {
-  test("anon vê 'Quer ajudar?' só com os tipos abertos", async ({ page, request }) => {
+  test("membro vê 'Quer ajudar?' só com os tipos abertos", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${H}`, { waitUntil: "domcontentloaded" });
     const cta = page.getByTestId("help-cta");
@@ -48,7 +49,7 @@ test.describe("candidatura por tipo (frente E)", () => {
     await expect(cta.getByRole("link", { name: "candidatar-se como jurado" })).toHaveCount(0);
   });
 
-  test("edição sem tipo aberto não mostra o bloco", async ({ page, request }) => {
+  test("edição sem tipo aberto não mostra o bloco", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${CLOSED}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "E2E Cand Fechada" })).toBeVisible();
@@ -58,13 +59,13 @@ test.describe("candidatura por tipo (frente E)", () => {
   test("/h/[id]/candidatura/mentor exige login", async ({ page, request }) => {
     await seed(request);
     await page.goto(`/h/${H}/candidatura/mentor`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("aba de candidaturas do painel exige login", async ({ page, request }) => {
     await seed(request);
     await page.goto(`/admin/h/${H}/candidaturas`);
-    await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
   });
 
   test("APIs de candidatura anon → 401 JSON", async ({ request }) => {
@@ -83,7 +84,7 @@ test.describe("candidatura por tipo (frente E)", () => {
     }
   });
 
-  test("390px: página da edição com o bloco sem scroll horizontal", async ({ page, request }) => {
+  test("390px: página da edição com o bloco sem scroll horizontal", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/h/${H}`, { waitUntil: "domcontentloaded" });

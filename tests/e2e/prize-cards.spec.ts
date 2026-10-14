@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // BDD do spec 024 — prêmio vende o clique: card do radar mostra o valor
@@ -9,7 +10,7 @@ const PRIZE = "R$ 42 mil";
 
 async function ensurePrizeEvent(request: APIRequestContext): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
-  await request.get("/radar");
+  await request.get("/api/health");
   const db = openE2eDb();
   await db.prepare(
     `INSERT INTO hackathons
@@ -23,7 +24,7 @@ async function ensurePrizeEvent(request: APIRequestContext): Promise<void> {
 
 test.describe("prêmio nos cards — spec 024", () => {
   test("card do radar mostra o prêmio em lendário, verbatim", async ({
-    page,
+    memberPage: page,
     request,
   }) => {
     await ensurePrizeEvent(request);
@@ -35,7 +36,7 @@ test.describe("prêmio nos cards — spec 024", () => {
     await expect(chip).toHaveClass(/text-lendario/);
   });
 
-  test("card sem prêmio não renderiza a linha", async ({ page }) => {
+  test("card sem prêmio não renderiza a linha", async ({ memberPage: page }) => {
     await page.goto("/radar?q=alphaville");
     const card = page.locator("article", {
       hasText: "Hack Inova Alphaville",

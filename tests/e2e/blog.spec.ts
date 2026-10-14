@@ -1,9 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./auth";
 
 // BDD do blog + infra de SEO — spec 009. Tudo público, sem login.
 
 test.describe("blog — listagem e leitura", () => {
-  test("/blog lista os posts com título, data e tags", async ({ page }) => {
+  test("/blog lista os posts com título, data e tags", async ({ memberPage: page }) => {
     await page.goto("/blog");
     await expect(
       page.getByRole("heading", { name: /bastidores e guias/i }),
@@ -18,7 +19,7 @@ test.describe("blog — listagem e leitura", () => {
   });
 
   test("/blog/[slug] renderiza o artigo com tipografia e volta", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/blog/o-que-rolou-no-hack-inova-unifacens");
     await expect(
@@ -34,24 +35,22 @@ test.describe("blog — listagem e leitura", () => {
     ).toBeVisible();
   });
 
-  test("slug inexistente dá 404", async ({ page }) => {
+  test("slug inexistente dá 404", async ({ memberPage: page }) => {
     const res = await page.goto("/blog/post-que-nao-existe");
     expect(res?.status()).toBe(404);
   });
 
-  test("header tem link pro blog", async ({ page }) => {
+  test("rodapé tem link pro blog (saiu do header na spec 039)", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page
-        .locator("header")
-        .getByRole("link", { name: "blog", exact: true }),
-    ).toBeVisible();
+      page.locator("footer").getByRole("link", { name: "Blog", exact: true }),
+    ).toHaveAttribute("href", "/blog");
   });
 });
 
 test.describe("seo — metadata e dados estruturados", () => {
   test("post tem canonical, og:type article e JSON-LD Article", async ({
-    page,
+    memberPage: page,
   }) => {
     await page.goto("/blog/o-que-rolou-no-hack-inova-unifacens");
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
@@ -87,27 +86,29 @@ test.describe("seo — metadata e dados estruturados", () => {
     expect(json.location?.name).toMatch(/unifacens/i);
   });
 
-  test("/sitemap.xml retorna 200 e lista /blog e /h/*", async ({
+  test("/sitemap.xml retorna 200, lista o teaser /h/* e não lista área logada", async ({
     request,
   }) => {
     const res = await request.get("/sitemap.xml");
     expect(res.status()).toBe(200);
     const xml = await res.text();
-    expect(xml).toContain("/blog");
-    expect(xml).toContain("/blog/o-que-rolou-no-hack-inova-unifacens");
     expect(xml).toContain("/h/hack-inova-unifacens-2026");
+    expect(xml).toContain("/organizar");
+    expect(xml).not.toContain("/blog");
+    expect(xml).not.toContain("/radar");
   });
 
-  test("/robots.txt permite tudo e aponta o sitemap", async ({ request }) => {
+  test("/robots.txt libera a raiz, bloqueia a área logada e aponta o sitemap", async ({ request }) => {
     const res = await request.get("/robots.txt");
     expect(res.status()).toBe(200);
     const body = await res.text();
     expect(body).toContain("Allow: /");
+    expect(body).toContain("Disallow: /dashboard");
     expect(body.toLowerCase()).toContain("sitemap:");
   });
 
   test("OG image padrão responde imagem", async ({ page, request }) => {
-    await page.goto("/blog");
+    await page.goto("/");
     const ogImage = await page
       .locator('meta[property="og:image"]')
       .getAttribute("content");

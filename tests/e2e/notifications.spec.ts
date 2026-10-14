@@ -27,7 +27,7 @@ test.describe("notificações — sino é privilégio de membro", () => {
     expect(res.status()).toBe(401);
     expect(res.headers()["content-type"]).toContain("application/json");
     await page.goto("/notificacoes");
-    await expect(page).toHaveURL(/sign-in/);
+    await expect(page).toHaveURL(/sign-in|sign-up/);
   });
 
   test("POST /api/notifications deslogado → 401 JSON", async ({ request }) => {

@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
+import { test } from "./auth";
 import { openE2eDb } from "./db";
 
 // Frente O (migration 017) — patrocinadores, opt-in por QR e NPS. O caminho
@@ -15,7 +16,7 @@ const LOGO =
   );
 
 async function seed(request: APIRequestContext): Promise<number> {
-  await request.get("/radar"); // força init/migrações no server do e2e
+  await request.get("/api/health"); // força init/migrações no server do e2e
   const db = openE2eDb();
   await db
     .prepare(
@@ -74,7 +75,7 @@ const noOverflow = (page: import("@playwright/test").Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
 test.describe("patrocinadores na vitrine", () => {
-  test("logo e nível na página pública da edição (sem logo, mostra o nome)", async ({ page, request }) => {
+  test("logo e nível na página pública da edição (sem logo, mostra o nome)", async ({ memberPage: page, request }) => {
     await seed(request);
     await page.goto(`/h/${HACK}`, { waitUntil: "domcontentloaded" });
     const block = page.getByTestId("edition-sponsors");
@@ -87,7 +88,7 @@ test.describe("patrocinadores na vitrine", () => {
     expect(items[0]).toMatch(/master/i);
   });
 
-  test("logo da marca no projeto que entrou no desafio", async ({ page, request }) => {
+  test("logo da marca no projeto que entrou no desafio", async ({ memberPage: page, request }) => {
     const teamId = await seed(request);
     await page.goto(`/p/${teamId}`, { waitUntil: "domcontentloaded" });
     const row = page.getByTestId("project-challenge");
@@ -95,7 +96,7 @@ test.describe("patrocinadores na vitrine", () => {
     await expect(row.getByRole("img", { name: "logo de Marca E2E" })).toBeVisible();
   });
 
-  test("390px sem scroll horizontal na edição e no projeto", async ({ page, request }) => {
+  test("390px sem scroll horizontal na edição e no projeto", async ({ memberPage: page, request }) => {
     const teamId = await seed(request);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/h/${HACK}`, { waitUntil: "domcontentloaded" });
@@ -119,7 +120,7 @@ test.describe("páginas novas exigem login", () => {
     test(`${path} anon vai pro login`, async ({ page, request }) => {
       await seed(request);
       await page.goto(path);
-      await expect(page).toHaveURL(/sign-in|clerk/i, { timeout: 15000 });
+      await expect(page).toHaveURL(/sign-in|sign-up|clerk/i, { timeout: 15000 });
     });
   }
 
