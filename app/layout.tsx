@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ptBR } from "@clerk/localizations";
 import { Archivo, JetBrains_Mono, VT323 } from "next/font/google";
 import { appConfig } from "@/app.config";
 import { SITE_URL } from "@/lib/seo";
@@ -29,6 +30,28 @@ const vt323 = VT323({
 // tudo SSR por request: radar/feed/membros/perfil servem dados vivos do
 // banco — prerender estático serviria snapshot obsoleto da comunidade
 // (e quebraria o e2e, que roda contra `next start` e seeda depois do build)
+// Clerk em PT-BR e com o nosso nome — o nome do app no Clerk ("devin-clerk",
+// herdado do workshop) não aparece em nenhuma tela
+const clerkPtBR = {
+  ...ptBR,
+  signIn: {
+    ...ptBR.signIn,
+    start: {
+      ...ptBR.signIn?.start,
+      title: "Entrar no HackaHub",
+      subtitle: "Bem-vindo de volta — entra pra continuar",
+    },
+  },
+  signUp: {
+    ...ptBR.signUp,
+    start: {
+      ...ptBR.signUp?.start,
+      title: "Criar conta no HackaHub",
+      subtitle: "Um perfil pra todas as edições",
+    },
+  },
+};
+
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -49,6 +72,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <ClerkProvider
+      localization={clerkPtBR}
       appearance={{
         variables: {
           colorPrimary: "#0c0c0c",
