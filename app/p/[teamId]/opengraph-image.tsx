@@ -1,6 +1,8 @@
 import { ImageResponse } from "next/og";
 import { appConfig } from "@/app.config";
+import { OG_CACHE_HEADERS } from "@/lib/ogCache";
 import { getProjectByTeamId } from "@/lib/archive";
+import { parseId } from "@/lib/ids";
 
 // OG do projeto (spec 023) — /p/<teamId> compartilhado mostra o projeto:
 // título grande + edição + colocação (ouro pro 1º). Fallback 200 genérico.
@@ -15,7 +17,8 @@ export default async function Image({
   params: Promise<{ teamId: string }>;
 }) {
   const { teamId } = await params;
-  const page = /^\d+$/.test(teamId) ? await getProjectByTeamId(Number(teamId)) : null;
+  const id = parseId(teamId);
+  const page = id === null ? null : await getProjectByTeamId(id);
   const title = page?.project.title ?? appConfig.name;
   const detail = page
     ? `${page.teamName} · ${page.hackathonName}`
@@ -79,6 +82,6 @@ export default async function Image({
         </div>
       </div>
     ),
-    size,
+    { ...size, headers: OG_CACHE_HEADERS },
   );
 }

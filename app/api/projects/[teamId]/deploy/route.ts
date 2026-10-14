@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getMemberByClerkId } from "@/lib/members";
+import { parseId } from "@/lib/ids";
 import {
   canDeploy,
   getDeployForTeam,
@@ -17,8 +18,8 @@ async function gate(ctx: Ctx) {
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) return { err: Response.json({ error: "Unauthorized" }, { status: 401 }) };
-  const teamId = Number((await ctx.params).teamId);
-  if (!Number.isInteger(teamId) || !await projectExists(teamId))
+  const teamId = parseId((await ctx.params).teamId);
+  if (teamId === null || !await projectExists(teamId))
     return { err: Response.json({ error: "Projeto não encontrado" }, { status: 404 }) };
   if (!await canDeploy(member, teamId))
     return { err: Response.json({ error: "Forbidden" }, { status: 403 }) };

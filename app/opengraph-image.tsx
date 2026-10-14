@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { appConfig } from "@/app.config";
+import { OG_CACHE_HEADERS } from "@/lib/ogCache";
 
 // OG image padrão do site (spec 009, redesenhada na 039): mesma hierarquia
 // da landing — selo, "Sua comunidade de hackathon." e a jornada em mono.
@@ -69,6 +70,6 @@ export default function Image() {
         </div>
       </div>
     ),
-    size,
+    { ...size, headers: OG_CACHE_HEADERS },
   );
 }
