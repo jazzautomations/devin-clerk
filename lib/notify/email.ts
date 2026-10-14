@@ -41,6 +41,16 @@ export function emailDriver(env: DriverEnv = process.env): Driver<EmailMessage> 
             subject: m.subject,
             html: m.html,
             text: m.text,
+            ...(m.attachments?.length
+              ? {
+                  attachments: m.attachments.map((a) => ({
+                    filename: a.filename,
+                    content: a.content,
+                    ...(a.contentType ? { content_type: a.contentType } : {}),
+                    ...(a.contentId ? { content_id: a.contentId } : {}),
+                  })),
+                }
+              : {}),
             ...(m.unsubscribeUrl
               ? { headers: { "List-Unsubscribe": `<${m.unsubscribeUrl}>` } }
               : {}),

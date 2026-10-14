@@ -16,6 +16,17 @@ export type EmailMessage = {
   idempotencyKey: string;
   /** vira header List-Unsubscribe (Gmail/Outlook mostram "cancelar inscrição") */
   unsubscribeUrl?: string;
+  /** anexos; com contentId viram imagem inline (<img src="cid:…">) */
+  attachments?: EmailAttachment[];
+};
+
+export type EmailAttachment = {
+  filename: string;
+  /** conteúdo em base64 */
+  content: string;
+  contentType?: string;
+  /** Content-ID pra imagem inline — referenciado no HTML como cid:<contentId> */
+  contentId?: string;
 };
 
 export type WhatsappMessage = {
