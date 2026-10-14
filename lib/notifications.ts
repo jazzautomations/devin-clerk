@@ -1,6 +1,5 @@
 import db from "@/lib/db";
 
-// schema próprio (idempotente) — não edita lib/db.ts; pattern de lib/deploys.ts
 export type Notification = {
   id: number;
   memberId: number;

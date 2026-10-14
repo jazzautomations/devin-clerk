@@ -1,6 +1,5 @@
 import db from "@/lib/db";
 
-// schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
 export type BoardEntry = {
   id: number;
   memberId: number;

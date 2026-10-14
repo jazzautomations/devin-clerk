@@ -13,7 +13,7 @@ type Notification = {
   createdAt: string;
 };
 
-// createdAt do SQLite é UTC "YYYY-MM-DD HH:MM:SS"
+// createdAt é UTC "YYYY-MM-DD HH:MM:SS"
 function timeAgo(iso: string): string {
   const then = new Date(`${iso.replace(" ", "T")}Z`).getTime();
   const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));

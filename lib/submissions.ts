@@ -1,7 +1,6 @@
 import db from "@/lib/db";
 import { getHackathon, type Hackathon } from "@/lib/hackathons";
 
-// schema próprio (idempotente) — não edita lib/db.ts (pattern lib/leads.ts).
 // Terceira origem do radar: a comunidade indica, a curadoria decide — a
 // indicação nunca alimenta listagem pública direto.
 export type SubmissionFormat = "online" | "presencial" | "hibrido";

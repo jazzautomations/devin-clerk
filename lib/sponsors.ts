@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import db from "@/lib/db";
 
-// schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
-// challenges ganha vínculo pra sponsors — ALTER idempotente.
-// sponsor TEXT segue NOT NULL como nome de exibição/fallback.
+// challenges.sponsorId liga o desafio ao sponsor; challenges.sponsor (TEXT)
+// segue como nome de exibição/fallback.
 export const SPONSOR_TIERS = ["apoio", "sponsor", "master"] as const;
 export type SponsorTier = (typeof SPONSOR_TIERS)[number];
 

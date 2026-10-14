@@ -1,7 +1,6 @@
 import db from "@/lib/db";
 import { isLeadInterest, type LeadInterest } from "@/lib/leadInterests";
 
-// schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
 // whitelist mora no módulo puro lib/leadInterests.ts (seguro pra client);
 // re-export pra quem só importa a lib
 export {

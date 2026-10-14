@@ -1,7 +1,6 @@
 import db from "@/lib/db";
 import { isEligibleForVoting } from "@/lib/entries";
 
-// schema próprio (idempotente) — não edita lib/db.ts (pattern lib/leads.ts)
 // escolha do povo (spec 025): um voto por membro por projeto, em toggle.
 // voto é sinal separado do placement — o pódio segue sendo do júri.
 // erro de domínio com status HTTP — a rota mapeia sem parsear mensagem

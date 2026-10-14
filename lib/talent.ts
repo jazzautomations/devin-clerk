@@ -10,9 +10,6 @@ import {
 // re-exporta o vocabulário puro — lib/talent é a porta de entrada do domínio
 export { OPEN_TO, isOpenToValue, parseOpenTo, type OpenToValue };
 
-// migração idempotente — openTo vive aqui e não no schema principal de
-// lib/db.ts (trabalho paralelo naquele arquivo)
-// avatarUrl é de lib/members — mesmo guard aqui pra import isolado
 
 /**
  * Grava o opt-in comercial do membro. Valida contra a whitelist (throw em

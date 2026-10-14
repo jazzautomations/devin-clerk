@@ -2,11 +2,8 @@ import db from "@/lib/db";
 import { claimEditionInvites } from "@/lib/roles";
 import { toLikePattern } from "@/lib/search";
 
-// migração idempotente — avatarUrl vive aqui e não no schema principal de
-// lib/db.ts (trabalho paralelo naquele arquivo)
 // spec 032 — "campanhas" públicas contam só inscrições aprovadas (pedido
-// pendente não é campanha); guarda da coluna status — dona do schema é
-// lib/registrations, aqui garante pra quem importa members.ts direto
+// pendente não é campanha)
 export type Member = {
   id: number;
   clerkId: string;
@@ -135,7 +132,7 @@ export async function listLeaderboard(
       ? "m.createdAt DESC, m.id DESC"
       : "m.xp DESC, m.username ASC";
   // ?q= (spec 023): username/name/headline/skills — LIKE com curinga escapado
-  // (toLikePattern); lib/db traduz LIKE → ILIKE (case-insensitive como era no sqlite)
+  // (toLikePattern); lib/db traduz LIKE → ILIKE (case-insensitive)
   const rows = await db
     .prepare(
       `SELECT m.*,

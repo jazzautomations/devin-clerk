@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import db from "@/lib/db";
 
-// schema próprio (idempotente) — não edita lib/db.ts
 export const DEPLOY_TTL_MS = 72 * 3600 * 1000;
 export const MAX_ACTIVE_DEPLOYS = 3;
 const DEPLOYS_DIR = path.join(process.cwd(), "data", "deploys");

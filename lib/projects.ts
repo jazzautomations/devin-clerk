@@ -6,7 +6,6 @@ import type { TeamProject } from "@/lib/archive";
 // import acima é type-only, não roda o módulo; mesmo espírito do import
 // de efeito abaixo pra votes
 import "@/lib/archive";
-import "@/lib/votes"; // garante a tabela votes (schema próprio — spec 025)
 
 // Índice público de projetos (spec 017) — o "/companies" do Colosseum:
 // todo time que ENTREGOU vira card, cruzando edições. INNER JOIN em

@@ -18,7 +18,7 @@ export async function getStatsMomentum(now = new Date()): Promise<StatsMomentum>
     now: now.toISOString(),
   };
   // to_ts() normaliza os dois formatos gravados ("YYYY-MM-DD HH:MM:SS"
-  // do sqlite e ISO com offset do scraper) antes de comparar
+  // UTC e ISO com offset do scraper) antes de comparar
   const count = async (sql: string) =>
     (await db.prepare(sql).get(params) as { n: number }).n;
   return {
