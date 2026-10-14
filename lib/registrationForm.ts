@@ -214,6 +214,20 @@ export async function updateQuestion(
   })();
 }
 
+/** respostas por pergunta na versão ATUAL (as que uma edição congelaria) */
+export async function countCurrentAnswers(hackathonId: string): Promise<Record<number, number>> {
+  const rows = await db
+    .prepare(
+      `SELECT q.id, COUNT(a.registrationId) AS n
+       FROM edition_questions q
+       JOIN registration_answers a ON a.questionId = q.id AND a.questionVersion = q.version
+       WHERE q.hackathonId = ?
+       GROUP BY q.id`,
+    )
+    .all<{ id: number; n: number }>(hackathonId);
+  return Object.fromEntries(rows.map((r) => [r.id, r.n]));
+}
+
 /** arquivar tira do formulário mas preserva respostas e coluna no CSV */
 export async function setQuestionArchived(
   hackathonId: string,

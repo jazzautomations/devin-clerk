@@ -13,7 +13,7 @@ export function RegistrationActions({
 }: {
   hackathonId: string;
   memberId: number;
-  status: "pending" | "rejected";
+  status: "pending" | "rejected" | "waitlist";
 }) {
   const [busy, setBusy] = useState<"" | "approve" | "reject">("");
   const [error, setError] = useState("");

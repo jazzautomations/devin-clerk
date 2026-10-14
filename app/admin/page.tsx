@@ -232,7 +232,9 @@ export default async function AdminPage() {
                                         >
                                           {r.status === "pending"
                                             ? "pendente"
-                                            : "recusado"}
+                                            : r.status === "waitlist"
+                                              ? "fila de espera"
+                                              : "recusado"}
                                         </span>
                                         <RegistrationActions
                                           hackathonId={e.id}

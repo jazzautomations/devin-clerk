@@ -6,9 +6,12 @@ import { getHackathon, isOver } from "@/lib/hackathons";
 import { absoluteUrl, eventJsonLd, jsonLd } from "@/lib/seo";
 import { getMemberByClerkId } from "@/lib/members";
 import {
+  getEditionCapacity,
   getRegistrationsByHackathon,
   getRegistrationStatus,
+  getWaitlistPosition,
 } from "@/lib/registrations";
+import { consentPurpose, hasActiveQuestions } from "@/lib/registrationForm";
 import { RegisterButton } from "@/components/RegisterButton";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
@@ -150,6 +153,13 @@ export default async function HackathonPage({
   const ano = startDate.getFullYear();
   const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(startDate);
   const canRegister = !past && !closed && h.partner;
+  // spec 033 US1/FR-009 — formulário da edição, aceite LGPD e vagas
+  const [hasForm, consent, cap, myPosition] = await Promise.all([
+    canRegister ? hasActiveQuestions(h.id) : Promise.resolve(false),
+    canRegister ? consentPurpose(h.id) : Promise.resolve(null),
+    getEditionCapacity(h.id),
+    member && myStatus === "waitlist" ? getWaitlistPosition(member.id, h.id) : Promise.resolve(null),
+  ]);
   // numeração das seções na ordem em que aparecem (as condicionais pulam)
   let secN = 0;
   const nextK = () => String(++secN).padStart(2, "0");
@@ -556,6 +566,10 @@ export default async function HackathonPage({
                     hackathonId={h.id}
                     requiresApproval={h.requiresApproval}
                     status={myStatus}
+                    formHref={hasForm ? `/h/${h.id}/inscricao` : null}
+                    consentText={consent?.text ?? null}
+                    full={!h.requiresApproval && cap.remaining === 0}
+                    waitlistPosition={myPosition}
                   />
                 </div>
                 {!member && (
@@ -605,6 +619,16 @@ export default async function HackathonPage({
                       : "abertas"}
               </dd>
             </div>
+            {cap.capacity !== null && (
+              <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
+                <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">vagas</dt>
+                <dd className="text-[15px] font-semibold" data-testid="edition-capacity">
+                  {cap.remaining === 0
+                    ? `esgotadas · ${cap.waitlist} na fila`
+                    : `${cap.remaining} de ${cap.capacity} livres`}
+                </dd>
+              </div>
+            )}
           </dl>
 
           <div className="flex flex-col gap-4">
