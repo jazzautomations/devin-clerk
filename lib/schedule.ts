@@ -448,6 +448,123 @@ export async function notifyScheduleChange(
   })();
 }
 
+// ---------- edição mudou de data (frente N #7) ----------
+// Quando o organizador muda o startsAt da edição, a programação inteira
+// fica no dia errado. Deslocar é opcional e explícito (o organizador marca
+// na hora de salvar): todos os itens andam o mesmo delta, cada um sobe a
+// revision (o .ics atualiza pelo UID + SEQUENCE) e os inscritos recebem UM
+// aviso "a agenda mudou" — não um por item.
+
+const MIN_MS = 60_000;
+
+/** "+2 dias", "−3 h", "+1 dia e 2 h", "+30 min" */
+export function formatShift(deltaMs: number): string {
+  const sign = deltaMs < 0 ? "−" : "+";
+  let mins = Math.round(Math.abs(deltaMs) / MIN_MS);
+  const days = Math.floor(mins / 1440);
+  mins -= days * 1440;
+  const hours = Math.floor(mins / 60);
+  mins -= hours * 60;
+  const parts = [
+    days ? `${days} ${days === 1 ? "dia" : "dias"}` : null,
+    hours ? `${hours} h` : null,
+    mins ? `${mins} min` : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return "+0 min";
+  return `${sign}${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} e ${parts.at(-1)}` : parts[0]}`;
+}
+
+export async function countScheduleItems(hackathonId: string): Promise<{ total: number; published: number }> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE publishedAt IS NOT NULL) AS published
+       FROM schedule_items WHERE hackathonId = ?`,
+    )
+    .get<{ total: number; published: number }>(hackathonId);
+  return { total: Number(row?.total ?? 0), published: Number(row?.published ?? 0) };
+}
+
+export function shiftNoticeText(
+  hackathonId: string,
+  deltaMs: number,
+  firstItemStart: string | null,
+): { title: string; body: string } {
+  const first = firstItemStart ? ` — primeiro item ${shortDayLabel(firstItemStart)} às ${timeLabel(firstItemStart)}` : "";
+  return {
+    title: `a agenda mudou: programação deslocada ${formatShift(deltaMs)}${first}`.slice(0, 140),
+    body: [
+      `A data da edição mudou e a programação inteira foi deslocada (${formatShift(deltaMs)}).`,
+      `Se você assinou o calendário (.ics), ele se atualiza sozinho.`,
+      `Programação completa: ${absoluteUrl(`/h/${hackathonId}/programacao`)}`,
+    ].join("\n"),
+  };
+}
+
+/**
+ * Diferença de relógio entre o início antigo e o novo, como o organizador
+ * vê no formulário (datetime-local, sem fuso): compara "YYYY-MM-DDTHH:MM"
+ * dos dois lados, ignorando sufixo de fuso — o formulário mostra os 16
+ * primeiros caracteres e devolve sem fuso, então só a parede do relógio é
+ * comparável. Só data ("2027-01-01") vale 09:00. null se não der pra ler.
+ */
+export function wallClockDelta(oldStart: string, newStart: string): number | null {
+  const wall = (v: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(v.trim());
+    if (!m) return null;
+    return Date.UTC(+m[1], +m[2] - 1, +m[3], m[4] === undefined ? 9 : +m[4], m[5] === undefined ? 0 : +m[5]);
+  };
+  const a = wall(oldStart);
+  const b = wall(newStart);
+  return a === null || b === null ? null : b - a;
+}
+
+/**
+ * Desloca todos os itens da programação em deltaMs. Itens publicados ganham
+ * revision nova (claim em schedule_change_notices — o aviso por item não
+ * dispara de novo pra mesma alteração) e quem tem relação com a edição
+ * recebe um aviso único. delta 0 é no-op.
+ */
+export async function shiftSchedule(
+  hackathonId: string,
+  deltaMs: number,
+  actorId: number | null,
+): Promise<{ moved: number; announcementId: number | null }> {
+  if (!Number.isFinite(deltaMs) || Math.round(deltaMs / 1000) === 0) return { moved: 0, announcementId: null };
+  return db.transaction(async () => {
+    const items = await db
+      .prepare(`SELECT ${COLS} FROM schedule_items WHERE hackathonId = ? ORDER BY id FOR UPDATE`)
+      .all<ScheduleItem>(hackathonId);
+    const published: ScheduleItem[] = [];
+    for (const it of items) {
+      const moved = (await db
+        .prepare(
+          `UPDATE schedule_items SET startsAt = ?, endsAt = ?, revision = revision + 1, updatedAt = datetime('now')
+           WHERE id = ? RETURNING ${COLS}`,
+        )
+        .get<ScheduleItem>(
+          toDbText(new Date(fromDbText(it.startsAt).getTime() + deltaMs)),
+          toDbText(new Date(fromDbText(it.endsAt).getTime() + deltaMs)),
+          it.id,
+        ))!;
+      if (moved.publishedAt) published.push(moved);
+    }
+    let announcementId: number | null = null;
+    if (published.length > 0) {
+      const recipients = await scheduleRecipients(hackathonId, "todos");
+      if (recipients.length > 0) {
+        const first = published.reduce((m, it) => (it.startsAt < m ? it.startsAt : m), published[0].startsAt);
+        announcementId = (await publishToMembers(hackathonId, actorId, shiftNoticeText(hackathonId, deltaMs, first), recipients)).id;
+      }
+      for (const it of published) {
+        await db
+          .prepare("INSERT OR IGNORE INTO schedule_change_notices (itemId, revision, announcementId) VALUES (?, ?, ?)")
+          .run(it.id, it.revision, announcementId);
+      }
+    }
+    return { moved: items.length, announcementId };
+  })();
+}
+
 // ---------- calendário ----------
 
 export function itemUid(item: Pick<ScheduleItem, "id" | "hackathonId">): string {

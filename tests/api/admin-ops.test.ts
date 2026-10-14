@@ -171,3 +171,49 @@ describe("GET /api/admin/subscribers", () => {
     expect(body).toContain("john@x.dev");
   });
 });
+
+describe("PATCH /api/admin/hackathons/[id] — deslocar programação junto (frente N #7)", () => {
+  async function item(title: string, startsAt: string, endsAt: string) {
+    await db
+      .prepare(
+        `INSERT INTO schedule_items (hackathonId, title, startsAt, endsAt, publishedAt)
+         VALUES (?, ?, ?, ?, datetime('now'))`,
+      )
+      .run(HID, title, startsAt, endsAt);
+  }
+  const starts = async () =>
+    (await db.prepare("SELECT startsAt FROM schedule_items WHERE hackathonId = ? ORDER BY id").all<{ startsAt: string }>(HID)).map(
+      (r) => r.startsAt,
+    );
+
+  beforeEach(async () => {
+    await db.prepare("DELETE FROM schedule_items WHERE hackathonId = ?").run(HID);
+    await item("Abertura", "2026-12-01 12:00:00", "2026-12-01 13:00:00");
+    await item("Pitch", "2026-12-02 18:00:00", "2026-12-02 20:00:00");
+  });
+
+  it("sem confirmação a data muda e a programação fica onde estava", async () => {
+    const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
+    const res = await PATCH(req(`/x`, "PATCH", { startsAt: "2026-12-08T09:00" }), { params });
+    expect(res.status).toBe(200);
+    expect((await res.json()).schedule).toBeNull();
+    expect(await starts()).toEqual(["2026-12-01 12:00:00", "2026-12-02 18:00:00"]);
+  });
+
+  it("shiftSchedule:true desloca todos pelo mesmo delta da data (+7 dias) e devolve o resumo", async () => {
+    const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
+    const res = await PATCH(req(`/x`, "PATCH", { startsAt: "2026-12-08T09:00", shiftSchedule: true }), { params });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.schedule.moved).toBe(2);
+    expect(await starts()).toEqual(["2026-12-08 12:00:00", "2026-12-09 18:00:00"]);
+    expect((await getHackathon(HID))!.startsAt).toBe("2026-12-08T09:00");
+  });
+
+  it("400 quando shiftSchedule não é booleano", async () => {
+    const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
+    const res = await PATCH(req(`/x`, "PATCH", { startsAt: "2026-12-08T09:00", shiftSchedule: "sim" }), { params });
+    expect(res.status).toBe(400);
+    expect(await starts()).toEqual(["2026-12-01 12:00:00", "2026-12-02 18:00:00"]);
+  });
+});
