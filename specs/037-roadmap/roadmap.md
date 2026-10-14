@@ -68,5 +68,14 @@ Não competir em volume com Devpost/lablab nem virar rede social de vaidade.
 - **Validar com 2–3 coordenadores** a demanda de hora complementar antes de investir além do item 2.
 - Contato com organizadores do AI Tinkerers SP (034) pra ver o lado logado da plataforma deles.
 
+## Depois (anotado pelo dono em 14/10/2026)
+- **Copilot HackaHub**, inspirado no Colosseum Copilot. É um assistente que responde em cima da base do próprio HackaHub:
+  - projetos e campeões de edições passadas;
+  - quem já construiu o quê;
+  - desafios de patrocinador;
+  - perguntas da edição (regras, programação, prazos).
+
+  Ajuda o participante a validar a ideia ("já fizeram isso?"), achar time e escolher stack. Ajuda o organizador a responder dúvidas e montar desafio. Fica pra depois da landing, do onboarding e das correções da auditoria. Antes de construir, validar o uso com a galera da Hack Inova. Fica em pé: IA nunca dá nota nem decide prêmio (ver "Não fazer").
+
 ## Não fazer (consolidado)
 Token/NFT/voto on-chain · IA dando nota · proctoring/time-tracking · muro de login em projeto · bio gerada por IA · pontuação automática de candidato · Hopin/Discord/Slido próprios · impressão no check-in com driver · Open Badges completo agora · check-in facial · ingresso pago/nota fiscal · marketplace de eventos do mundo · hackathon de 5 semanas pra universitário.
