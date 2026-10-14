@@ -50,11 +50,7 @@ export function EditionRows({
               </span>
               <span className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-3 sm:justify-end">
                 {mine && <span className="chip bare bg-foreground! text-band!">inscrito</span>}
-                {h.partner ? (
-                  <span className="chip bare border-accent! bg-mint! text-accent!">edição hack inova</span>
-                ) : (
-                  <span className="chip bare">radar</span>
-                )}
+                {h.partner && <span className="chip bare border-accent! bg-mint! text-accent!">edição hack inova</span>}
                 {prize && <span className="chip bare max-w-[180px] truncate">{prize}</span>}
               </span>
             </Link>
