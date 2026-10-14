@@ -1,9 +1,10 @@
-"""Testes do scraper v2 — asserts puros (a venv não tem pytest).
+"""Testes do scraper — pytest (ou asserts puros sem pytest).
 
 Uso:
-  uv run --python .venv-scraper/bin/python scripts/test_scrape_radar.py
-  # ou
+  DATABASE_URL=postgres://…dev uv run --python .venv-scraper/bin/python -m pytest scripts/test_scrape_radar.py
   npm run test:scrape
+Os testes de banco criam um schema descartável e apagam no fim; sem
+DATABASE_URL eles são pulados. Fixtures reais em scripts/fixtures/radar.
 """
 
 import os
@@ -17,10 +18,16 @@ import scrape_radar as sr  # noqa: E402
 MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
 
 
+FIX = Path(__file__).resolve().parent / "fixtures" / "radar"
+
+
 def _db():
     """Schema descartável num Postgres real (DATABASE_URL), com as migrations
     do app aplicadas — o scraper testa contra o mesmo schema de produção."""
     import psycopg
+    if not os.environ.get("DATABASE_URL"):
+        import pytest
+        pytest.skip("sem DATABASE_URL")
     raw = psycopg.connect(os.environ["DATABASE_URL"], autocommit=True)
     schema = f"t_{uuid.uuid4().hex[:10]}"
     raw.execute(f"CREATE SCHEMA {schema}")
@@ -32,6 +39,17 @@ def _db():
 
 
 _SCHEMAS: list = []
+
+
+def _drop_schemas():
+    while _SCHEMAS:
+        raw, schema = _SCHEMAS.pop()
+        raw.execute(f"DROP SCHEMA {schema} CASCADE")
+        raw.close()
+
+
+def teardown_function(_fn):  # pytest: cada teste limpa o schema dele
+    _drop_schemas()
 
 
 def _row(**kw):
@@ -191,7 +209,7 @@ def test_taikai_prize_display():
     """prize int + prizeCurrency.name → display com símbolo da moeda."""
     assert sr.taikai_prize(20000, "EUR") == "€20,000"
     assert sr.taikai_prize(3500, "USD") == "$3,500"
-    assert sr.taikai_prize(15000, "BRL") == "R$15,000"
+    assert sr.taikai_prize(15000, "BRL") == "R$ 15.000"  # real no formato BR
     assert sr.taikai_prize(0, "EUR") is None
     assert sr.taikai_prize(None, "EUR") is None
     # moeda fora do mapa cai pro código — nunca inventa símbolo
@@ -306,6 +324,290 @@ def test_sweep_respects_registration_deadline():
         "SELECT active FROM hackathons WHERE id='all-past'").fetchone()[0] == 0
 
 
+# ---------- classificação com casos reais (prod, 14/10/2026) ----------
+
+MEETUP_LIXO = [
+    "Retrospectiva do Grupo: o que construímos até aqui",
+    "21º Meet Up: Introdução à linguagem Latex",
+    "30º BitDevs BH",
+    "Front @ Uber 2026",
+    "Azure Databricks Day - GenAI, Python, Delta, Spark, ML",
+    "Construindo Workflows Reutilizáveis no VS Code",
+    "LFDT Mentorship: Talent Angels - Pilot Project",
+    "ZK Learning Group: Quantum resistance and ZKP",
+    "HandsOn AI",
+    "Introdução a Cloud AWS",
+    "Golang SP & Sigma Software (APENAS PARA MULHERES - ADA",
+]
+
+
+def test_meetup_so_entra_hackathon():
+    for name in MEETUP_LIXO:
+        assert sr.classify(_row(name=name, source="meetup")) == \
+            "nao-hackathon", name
+    assert sr.classify(_row(name="Hackathon de IA da comunidade",
+                            source="meetup")) is None
+    # nome neutro, mas a descrição diz que é hackathon
+    assert sr.classify(_row(name="Desafio Open Finance", source="meetup"),
+                       "Hackathon de 48h com equipes e entrega de protótipo"
+                       ) is None
+    # descrição de hackathon não salva palestra
+    assert sr.classify(_row(name="Palestra sobre carreira", source="meetup"),
+                       "dicas pra quem vai a um hackathon") == "nao-hackathon"
+
+
+def test_termos_de_hackathon_brasileiros():
+    for name in [
+        "Hackathon Cidades Sábias",
+        "Hackaton: Cocriando o Futuro da Nossa Cidade",
+        "HackathOrion 2026 - Outubro",
+        "Hack 4 Fun 2026 - Soluções para enfrentar o El Niño",
+        "Game Jam Plus 2026/2027 — Criações Goianas",
+        "Gamejam+ Amazonas, Aperte o Play!",
+        "NASA Space Apps Challenge Goiânia",
+        "Maratona de Inovação • Acelera Perifa",
+        "Maratona de Programação SBC — Fase Regional",
+        "Datathon Saúde Pública",
+        "Ideathon Sebrae",
+        "Desafio de Inovação Aberta TJPA",
+    ]:
+        assert sr.classify(_row(name=name, source="sympla")) is None, name
+
+
+def test_evento_sobre_hackathon_nao_e_hackathon():
+    for name in [
+        "Abertura da Game Jam Plus 2026/27 (DJUFF x ACJOGOS-RJ)",
+        "Workshop preparatório para o Hackathon X",
+        "Mentoria: como vencer um hackathon",
+        "Inscrição para Mentores do Hackathon Regional Inova Agro MS",
+        "Bootcamp Design Systems Avançados 2.0 com AI (Outubro)",
+        "CONEXÃO UNIVERSO",
+        "AKCIT Camp - Online",
+    ]:
+        assert sr.classify(_row(name=name, source="sympla")) == \
+            "nao-hackathon", name
+    assert sr.classify(_row(name="Learn to Hack: MATLAB Edition 2026",
+                            source="devpost")) == "nao-hackathon"
+    # summit com hackathon dentro continua valendo
+    assert sr.classify(_row(name="Data Summit — Hackathon oficial",
+                            source="meetup")) is None
+
+
+def test_devpost_tira_o_lixo():
+    ok = dict(source="devpost", registrations=300)
+    assert sr.classify(_row(name="2026-2027 Fall ESE Senior Design",
+                            organizer="university of pennsylvania", **ok)
+                       ) == "disciplina"
+    assert sr.classify(_row(name="Pumpkin Playground", organizer="ACM",
+                            prize="$30", **ok)) == "premio-irrisorio"
+    assert sr.classify(_row(name="Next Byte Hacks V5", organizer="NBH",
+                            prize="$100", **ok)) == "premio-irrisorio"
+    assert sr.classify(_row(name="InternWell Hack2.0", organizer="SLIET",
+                            prize="₹ 1,000", **ok)) == "premio-irrisorio"
+    assert sr.classify(_row(name="Code for Humanity", organizer="nill",
+                            **ok)) == "organizador-vazio"
+    assert sr.classify(_row(name="Ghost Hack", organizer="Org",
+                            source="devpost", registrations=3)
+                       ) == "sem-inscritos"
+    # o que é bom fica
+    assert sr.classify(_row(name="PayPal AI Hackathon", organizer="PayPal",
+                            prize="$67,500", **ok)) is None
+    assert sr.classify(_row(name="Syntax Summit", organizer="Student Org",
+                            **ok)) is None  # Devpost só lista hackathon
+    assert sr.classify(_row(name="Next Founders Hackathon", organizer="SO",
+                            prize="$275", **ok)) is None
+    assert sr.classify(_row(name="CodeSprint by Elite Coders",
+                            organizer="elite coders", prize="₹ 30,000", **ok)
+                       ) is None  # ~US$ 360
+
+
+def test_curadoria_nao_passa_pelo_filtro():
+    assert sr.classify(_row(name="Encontro qualquer", source="curadoria")) \
+        is None
+
+
+def test_prize_usd():
+    assert sr.prize_usd("$30") == 30
+    assert sr.prize_usd("$138,000") == 138000
+    assert round(sr.prize_usd("₹ 1,000")) == 12
+    assert round(sr.prize_usd("R$ 15 mil")) == 2700
+    assert round(sr.prize_usd("€10,680")) == 11748
+    assert sr.prize_usd(None) is None
+    assert sr.prize_usd("muitos prêmios") is None
+
+
+# ---------- região ----------
+
+def test_region_de_cada_evento():
+    reg = lambda **kw: sr.region_of(_row(**kw))  # noqa: E731
+    assert reg(format="presencial", location="Belém, PA",
+               source="curadoria") == "br"
+    assert reg(format="hibrido", location="Santa Casa, São Paulo",
+               source="curadoria") == "br"
+    assert reg(format="presencial", location="ParkShoppingCanoas, Canoas, RS",
+               source="sympla") == "br"
+    assert reg(format="presencial", location="Mumbai, Índia",
+               source="curadoria") == "exterior"
+    assert reg(format="presencial", location="Washington DC",
+               source="devpost") == "exterior"
+    assert reg(format="presencial", location="jaipur",
+               source="devpost") == "exterior"
+    # online: fonte brasileira, português ou prêmio em real
+    assert reg(format="online", source="sympla",
+               name="Engenharia de Software") == "online-br"
+    assert reg(format="online", source="taikai",
+               name="Desafio de Inovação Aberta") == "online-br"
+    assert reg(format="online", source="taikai", name="Web3 Builders",
+               prize="R$ 15.000") == "online-br"
+    assert reg(format="online", source="devpost",
+               name="PayPal AI Hackathon") == "online-mundo"
+    # espanhol não é português
+    assert reg(format="online", source="devpost",
+               name="Hackathon Agéntico SoftwareChido 2026B") == "online-mundo"
+
+
+def test_upsert_grava_region_e_exclui_recusado():
+    conn = _db()
+    sr.ensure_schema(conn)
+    sr.upsert(conn, [
+        _row(id="sympla-1", name="Hackathon Cidades Sábias",
+             format="presencial", location="Canoas, RS", source="sympla"),
+        _row(id="meetup-9", name="Hack velho que virou palestra",
+             source="meetup"),
+    ])
+    assert conn.execute("SELECT region FROM hackathons WHERE id='sympla-1'"
+                        ).fetchone()[0] == "br"
+    n = sr.exclude_rejected(conn, [(_row(id="meetup-9"), "nao-hackathon")])
+    assert n == 1
+    assert conn.execute(
+        "SELECT active, \"excludedReason\" FROM hackathons WHERE id='meetup-9'"
+    ).fetchone() == (0, "nao-hackathon")
+    # voltou a passar no filtro → upsert reativa e limpa o motivo
+    sr.upsert(conn, [_row(id="meetup-9", name="Hackathon de verdade",
+                          source="meetup")])
+    assert conn.execute(
+        "SELECT active, \"excludedReason\" FROM hackathons WHERE id='meetup-9'"
+    ).fetchone() == (1, None)
+
+
+def test_reclassify_existing_desliga_lixo_antigo_e_poupa_casa():
+    conn = _db()
+    sr.ensure_schema(conn)
+    sr.upsert(conn, [
+        _row(id="meetup-1", name="30º BitDevs BH", source="meetup",
+             format="presencial", location="Belo Horizonte"),
+        _row(id="devpost-1", name="Pumpkin Playground", prize="$30",
+             organizer="ACM"),
+        _row(id="devpost-2", name="PayPal AI Hackathon", prize="$67,500",
+             organizer="PayPal"),
+        _row(id="comu-1", name="Encontro da comunidade", source="comunidade"),
+    ])
+    conn.execute("UPDATE hackathons SET region=NULL WHERE id='devpost-2'")
+    off, filled = sr.reclassify_existing(conn)
+    assert off == 2
+    act = dict(conn.execute("SELECT id, active FROM hackathons").fetchall())
+    assert act == {"meetup-1": 0, "devpost-1": 0, "devpost-2": 1, "comu-1": 1}
+    assert filled == 1
+    assert conn.execute("SELECT region FROM hackathons WHERE id='devpost-2'"
+                        ).fetchone()[0] == "online-mundo"
+
+
+def test_migration_023_desativa_meetup_e_disciplina():
+    """A migration roda de novo aqui sobre linhas antigas: o que não é
+    hackathon sai do ar com motivo, sem DELETE."""
+    conn = _db()
+    for i, (src, name) in enumerate([
+        ("meetup", "Retrospectiva do Grupo: o que construímos até aqui"),
+        ("meetup", "Hackathon Comunidade Rio"),
+        ("devpost", "2026-2027 Fall ESE Senior Design"),
+        ("devpost", "PayPal AI Hackathon"),
+    ]):
+        conn.execute(
+            "INSERT INTO hackathons (id, name, organizer, startsAt, format,"
+            " registrationUrl, active, source) VALUES"
+            " (?, ?, 'Org', '2999-01-01', 'online', 'https://x.dev', 1, ?)",
+            (f"m{i}", name, src))
+    sql = (MIGRATIONS / "023_radar_brasil.sql").read_text()
+    data_sql = sql.split("ADD COLUMN \"excludedReason\" TEXT;", 1)[1]
+    conn.conn.execute(data_sql)
+    rows = dict(conn.execute(
+        "SELECT id, active FROM hackathons WHERE id LIKE 'm%'").fetchall())
+    assert rows == {"m0": 0, "m1": 1, "m2": 0, "m3": 1}
+    assert conn.execute("SELECT COUNT(*) FROM hackathons WHERE id LIKE 'm%'"
+                        ).fetchone()[0] == 4
+
+
+# ---------- fontes brasileiras (fixtures reais) ----------
+
+NOW_FIX = sr.datetime(2026, 10, 14, 12, 0, tzinfo=sr.timezone.utc)
+
+
+def test_parse_pt_dates():
+    assert sr.parse_pt_dates("Sábado, 31 de Out às 16:00", NOW_FIX) == (
+        "2026-10-31T16:00:00-03:00", "2026-10-31T23:59:00-03:00")
+    assert sr.parse_pt_dates("06 de Out a 16 de Nov", NOW_FIX) == (
+        "2026-10-06T09:00:00-03:00", "2026-11-16T18:00:00-03:00")
+    # virada de ano: dezembro → janeiro
+    assert sr.parse_pt_dates("28 de Dez a 03 de Jan", NOW_FIX)[1] == \
+        "2027-01-03T18:00:00-03:00"
+    # mês que passou há muito é do ano que vem
+    assert sr.parse_pt_dates("18 de Jan a 26 de Jan", NOW_FIX)[0] == \
+        "2027-01-18T09:00:00-03:00"
+    assert sr.parse_pt_dates("21 de out. de 2026", NOW_FIX)[0] == \
+        "2026-10-21T09:00:00-03:00"
+    assert sr.parse_pt_dates("sem data", NOW_FIX) == (None, None)
+
+
+def test_sympla_fixture():
+    md = (FIX / "sympla_busca_hackathon.md").read_text()
+    rows = sr.parse_sympla_md(md, NOW_FIX)
+    assert len(rows) == 24, len(rows)
+    by = {r["name"]: r for r in rows}
+    h = by["Hackathon Cidades Sábias"]
+    assert h["location"] == "ParkShoppingCanoas, Canoas, RS"
+    assert h["format"] == "presencial"
+    assert h["startsAt"].startswith("2026-10-06")
+    assert h["endsAt"].startswith("2026-11-16")
+    assert h["registrationUrl"] == \
+        "https://www.sympla.com.br/evento/hackathon-cidades-sabias/3608159"
+    # imagem reaproveitada de outro evento: o nome sai do slug
+    assert "Hackathon Unimed Uberlândia 2026" in by
+    assert by["Hackathon Unimed Uberlândia 2026"]["location"].endswith(
+        "Uberlândia, MG")
+    # online
+    assert by["AKCIT Camp - Online"]["format"] == "online"
+    # passa no classificador só o que é hackathon
+    kept = [r["name"] for r in rows if sr.classify(r) is None]
+    assert "Hackathon Cidades Sábias" in kept
+    assert "Game Jam Plus 2026/2027 — Criações Goianas" in kept
+    assert "NASA Space Apps Challenge Goiânia" in kept
+    for lixo in ("CONEXÃO UNIVERSO",
+                 "POSTGRESQL MOTHERFUCKER ADVANCED",
+                 "Abertura da Game Jam Plus 2026/27 (DJUFF x ACJOGOS-RJ)"):
+        assert lixo not in kept, lixo
+    assert all(sr.region_of(r) == "br" for r in rows
+               if r["format"] == "presencial")
+
+
+def test_doity_fixture():
+    cards = sr.parse_doity_cards(
+        (FIX / "doity_busca_inovacao.html").read_text())
+    assert len(cards) >= 10
+    c = next(c for c in cards if "Acelera Perifa" in c["title"])
+    assert c["url"] == "https://doity.com.br/maratona-de-inovacao-acelera-perifa"
+    assert c["meta"] == "21 de out. de 2026 · Maceió, AL"
+    hack = [c["title"] for c in cards if sr.HACK_RE.search(c["title"])]
+    assert hack == ["Maratona de Inovação • Acelera Perifa"], hack
+    ev = sr.parse_doity_event((FIX / "doity_evento_maratona.html").read_text())
+    assert ev["name"] == "Maratona de Inovação • Acelera Perifa"
+    assert ev["startsAt"] == "2026-10-21T13:00:00-03:00"
+    assert ev["endsAt"] == "2026-10-22T17:00:00-03:00"
+    assert ev["format"] == "presencial"
+    assert ev["location"].endswith("Maceió, AL")
+    assert ev["organizer"].startswith("Liinc")
+    assert "Maratona de Inovação" in ev["description"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     try:
@@ -313,6 +615,5 @@ if __name__ == "__main__":
             fn()
             print(f"[pass] {fn.__name__}")
     finally:
-        for raw, schema in _SCHEMAS:
-            raw.execute(f"DROP SCHEMA {schema} CASCADE")
+        _drop_schemas()
     print(f"\n{len(fns)} testes OK")
