@@ -189,6 +189,20 @@ describe("júri — fluxo", () => {
     const missing = await GET(req("GET"), { params: Promise.resolve({ code: "NAOEXISTE0" }) });
     expect(missing.status).toBe(404);
   });
+
+  it("auditoria 041: PDF de certificado revogado responde 410 sem cache", async () => {
+    const [c] = await listMemberCertificates(ids.api_jur);
+    const { GET } = await import("@/app/c/[code]/pdf/route");
+    await db.prepare("UPDATE certificates SET revokedAt = sqlite_now() WHERE code = ?").run(c.code);
+    try {
+      const res = await GET(req("GET"), { params: Promise.resolve({ code: c.code }) });
+      expect(res.status).toBe(410);
+      expect(res.headers.get("content-type")).not.toBe("application/pdf");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    } finally {
+      await db.prepare("UPDATE certificates SET revokedAt = NULL WHERE code = ?").run(c.code);
+    }
+  });
 });
 
 describe("auditoria 041 — publicar com avaliação faltando", () => {

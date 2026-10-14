@@ -203,6 +203,10 @@ test.describe("pacote D — júri, palco e certificados logado", () => {
     await expect(page.getByTestId("cert-revoked")).toContainText(/revogado/i);
     await expect(page.getByText(/certificado válido/i)).toHaveCount(0);
     await expect(page.getByRole("link", { name: /baixar pdf/i })).toHaveCount(0);
+    // e o link direto do PDF, pra quem já o tinha guardado, também não entrega o arquivo
+    const pdf = await page.request.get(`/c/${REVOKED}/pdf`);
+    expect(pdf.status()).toBe(410);
+    expect(pdf.headers()["content-type"]).not.toContain("application/pdf");
     await noHorizontalScroll(page, "cert-revogado-390");
   });
 });
