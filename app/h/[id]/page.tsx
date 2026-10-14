@@ -590,8 +590,17 @@ export default async function HackathonPage({
                 </span>
               </div>
               <div className="tbody gap-3 p-5!">
-                <p className="text-[11px]">INSCRIÇÕES ABERTAS</p>
-                <div className="pix -mt-2 text-[46px] leading-[0.85]">ENTRAR</div>
+                {!h.requiresApproval && cap.capacity !== null && cap.remaining === 0 ? (
+                  <>
+                    <p className="text-[11px]">VAGAS ESGOTADAS · {cap.waitlist} NA FILA</p>
+                    <div className="pix -mt-2 text-[40px] leading-[0.85]">FILA</div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px]">INSCRIÇÕES ABERTAS</p>
+                    <div className="pix -mt-2 text-[46px] leading-[0.85]">ENTRAR</div>
+                  </>
+                )}
                 {helping && myStatus === null ? (
                   <p className="text-[14px] leading-snug text-mint" data-testid="register-blocked-helper">
                     {`você se candidatou como ${KIND_LABEL[helping[0]]} — quem ajuda não se inscreve como participante na mesma edição`}

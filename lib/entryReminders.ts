@@ -72,6 +72,7 @@ export async function runEntryReminders(now = new Date()): Promise<ReminderResul
         await db.transaction(async () => {
           if (!(await once(h.id, t.id, kind))) return;
           await publishAnnouncement(h.id, null, {
+            system: true,
             audience: "time",
             teamId: t.id,
             title: `Faltam ${label} pra entrega`,
@@ -92,6 +93,7 @@ export async function runEntryReminders(now = new Date()): Promise<ReminderResul
         await db.transaction(async () => {
           if (!(await once(h.id, t.id, "travado"))) return;
           await publishAnnouncement(h.id, null, {
+            system: true,
             audience: "time",
             teamId: t.id,
             title: t.version ? "Entrega travada — boa sorte no júri" : "Prazo de entrega encerrado",

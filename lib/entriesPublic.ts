@@ -6,7 +6,6 @@ import {
   flowEnabled,
   getEntry,
   getSubmissionSettings,
-  isLocked,
   judgedVersions,
   lockAt,
   toDbTime,
@@ -132,7 +131,10 @@ export async function getEditionEntriesView(hackathonId: string, now = new Date(
             ? t.title !== null
               ? "travado"
               : "nao_entregue"
-            : deriveStatus(!!v, isLocked(settings, t.reopenedUntil, now));
+            // lista pública só existe depois do prazo: quem enviou conta como
+            // entregue mesmo com reabertura em curso (não mostra "enviado" ×
+            // "entregue" pra mesma situação)
+            : deriveStatus(!!v, true);
           const snap = legacy ? null : (v?.snapshot ?? null);
           const showContent =
             (legacy ? t.title !== null : !!v) && (phase !== "depois" || !!settings?.entriesShowContent);

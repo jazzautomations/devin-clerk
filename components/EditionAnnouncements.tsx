@@ -21,7 +21,9 @@ export async function EditionAnnouncements({
     getEditionRoles(hackathonId, member.id),
   ]);
   const staff = member.role === "admin" || roles.length > 0;
-  if (!staff && status !== "approved" && status !== "pending") return null;
+  // fila de espera também lê: quem é promovido na véspera não pode perder
+  // o "credenciamento abre 8h"
+  if (!staff && status !== "approved" && status !== "pending" && status !== "waitlist") return null;
 
   const items = await listAnnouncementsForMember(hackathonId, member.id, { all: staff });
   const unread = items.filter((a) => !a.read).map((a) => a.id);

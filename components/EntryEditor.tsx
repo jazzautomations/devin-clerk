@@ -300,7 +300,7 @@ export function EntryEditor({
                   onClick={() => set("technologies", [...techs, t].join(", "))}
                   className="chip cursor-pointer hover:border-accent hover:text-accent"
                 >
-                  + {t}
+                  {t}
                 </button>
               ))}
           </div>

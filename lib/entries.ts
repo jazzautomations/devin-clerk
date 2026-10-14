@@ -649,7 +649,8 @@ export async function submitEntry(
          VALUES (?, ?, 'enviado', ?, ?)`,
       )
       .run(team.hackathonId, teamId, member.id, row!.version);
-    await publishAnnouncement(team.hackathonId, member.id, {
+    await publishAnnouncement(team.hackathonId, null, {
+      system: true,
       audience: "time",
       teamId,
       title: `Entrega recebida — versão ${row!.version}`,

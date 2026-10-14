@@ -95,13 +95,13 @@ describe("validateAnnouncementInput", () => {
 });
 
 describe("recipientsFor — público-alvo", () => {
-  it("todos = approved + pending (sem rejected/waitlist); aprovados = approved", async () => {
+  it("todos = approved + pending + fila de espera (sem rejected); aprovados = approved", async () => {
     const a = await registered("approved");
     const p = await registered("pending");
     await registered("rejected");
-    await registered("waitlist");
+    const w = await registered("waitlist");
     const todos = (await recipientsFor(H, "todos")).map((r) => r.memberId).sort();
-    expect(todos).toEqual([a, p].sort());
+    expect(todos).toEqual([a, p, w].sort());
     const aprovados = (await recipientsFor(H, "aprovados")).map((r) => r.memberId);
     expect(aprovados).toEqual([a]);
   });

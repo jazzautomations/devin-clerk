@@ -262,3 +262,12 @@ describe("progresso, sigilo e publicação", () => {
     expect(n!.n).toBe(1);
   });
 });
+
+describe("rubrica sem critério repetido (achado do QA)", () => {
+  it("mesmo nome (ignorando maiúscula) dá 409", async () => {
+    const h = "hack-inova-unifacens-2026";
+    await db.prepare("DELETE FROM rubric_criteria WHERE hackathonId = ?").run(h);
+    await addCriterion(h, { label: "Impacto", weight: 1 });
+    await expect(addCriterion(h, { label: "impacto", weight: 2 })).rejects.toMatchObject({ status: 409 });
+  });
+});

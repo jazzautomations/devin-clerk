@@ -217,7 +217,7 @@ export function StageScreen({
           </span>
         )}
         <span className={conn === "ao vivo" ? "" : "text-[#f2b880]"} title="conexão com o servidor">
-          ● {conn.toUpperCase()}
+          ● {snap.status === "ended" ? "ENCERRADA" : conn.toUpperCase()}
         </span>
         {!fs && (
           <button
@@ -243,9 +243,13 @@ export function StageScreen({
                 <p className="font-mono text-[1.4vw] text-muted">nenhum pitch na fila</p>
               )}
             </Win>
-            <Win title="VOTE.exe">
-              <Qr svg={qrSvg} url={voteUrl} open={null} />
-              <p className="text-center font-mono text-[1vw] text-muted">média das notas 1–5 de quem fez check-in</p>
+            <Win title="COMO_FOI.exe">
+              <div className="flex flex-1 flex-col justify-center gap-[1vw]">
+                <p className="pix text-[2.2vw] leading-tight">VOTAÇÃO ENCERRADA</p>
+                <p className="font-mono text-[1.1vw] text-muted">
+                  média das notas 1–5 de quem fez check-in · o pódio oficial é do júri
+                </p>
+              </div>
             </Win>
           </div>
         ) : cur ? (

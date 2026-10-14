@@ -108,7 +108,8 @@ export function CheckinDesk({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
-  const lastRef = useRef<{ text: string; t: number } | null>(null);
+  // último QR lido e quando ele foi VISTO pela última vez (atualiza a cada frame)
+  const lastRef = useRef<{ text: string; seen: number } | null>(null);
   const inFlight = useRef(false);
 
   // lê pacote e fila do storage NA HORA (não do render): duas leituras
@@ -335,10 +336,13 @@ export function CheckinDesk({
         }
         const now = Date.now();
         const last = lastRef.current;
-        // o mesmo QR fica na frente da câmera por vários frames — uma leitura a cada 4s
-        if (text && !(last && last.text === text && now - last.t < 4000)) {
-          lastRef.current = { text, t: now };
-          await submit({ token: text });
+        // o mesmo QR fica parado na frente da câmera: só reenvia se ele saiu do
+        // quadro por mais de 5s e voltou, ou se outro QR foi lido no meio —
+        // senão a releitura sobrescreve o "check-in feito" (e a busca manual)
+        if (text) {
+          const fresh = !last || last.text !== text || now - last.seen > 5000;
+          lastRef.current = { text, seen: now };
+          if (fresh) await submit({ token: text });
         }
         timerRef.current = window.setTimeout(tick, 250);
       };

@@ -23,7 +23,7 @@ export type DeliveryStatus = "queued" | "sent" | "failed" | "skipped";
 export type StoredAudience = Audience | "lista";
 
 export const AUDIENCE_LABEL: Record<StoredAudience, string> = {
-  todos: "todos os inscritos",
+  todos: "todos os inscritos (inclusive fila de espera)",
   aprovados: "só aprovados",
   presentes: "só quem fez check-in",
   time: "um time",
@@ -45,6 +45,8 @@ export type AnnouncementInput = {
   teamId: number | null;
   title: string;
   body: string;
+  /** mensagem automática do sistema — entrega normal, fora da lista de avisos do painel */
+  system?: boolean;
 };
 
 export function validateAnnouncementInput(raw: unknown): AnnouncementInput {
@@ -106,16 +108,17 @@ export async function recipientsFor(
       )
       .all<RecipientRow>(hackathonId);
   } else {
-    const statuses = audience === "todos" ? ["approved", "pending"] : ["approved"];
+    // "todos" inclui a fila de espera: quem sobe na véspera precisa do aviso
+    const statuses = audience === "todos" ? ["approved", "pending", "waitlist"] : ["approved"];
     rows = await db
       .prepare(
         `SELECT ${cols}
          FROM registrations r
          JOIN members m ON m.id = r.memberId
-         WHERE r.hackathonId = ? AND r.status IN (?, ?)
+         WHERE r.hackathonId = ? AND r.status = ANY(?)
          ORDER BY m.id`,
       )
-      .all<RecipientRow>(hackathonId, statuses[0], statuses[1] ?? statuses[0]);
+      .all<RecipientRow>(hackathonId, statuses);
   }
   return rows.map((r) => ({ ...r, whatsappOptIn: r.whatsappOptIn === 1 }));
 }
@@ -165,10 +168,18 @@ export async function publishAnnouncement(
     }
     const row = await db
       .prepare(
-        `INSERT INTO announcements (hackathonId, audience, teamId, title, body, createdBy)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO announcements (hackathonId, audience, teamId, title, body, createdBy, system)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .get<{ id: number }>(hackathonId, input.audience, input.teamId, input.title, input.body, createdBy);
+      .get<{ id: number }>(
+        hackathonId,
+        input.audience,
+        input.teamId,
+        input.title,
+        input.body,
+        createdBy,
+        input.system ? 1 : 0,
+      );
     const queued = await fanOut(row!.id);
     return { id: row!.id, queued };
   })();
@@ -376,7 +387,7 @@ export async function listAnnouncementsForAdmin(hackathonId: string): Promise<Ad
          FROM announcements a
          LEFT JOIN teams t ON t.id = a.teamId
          LEFT JOIN members m ON m.id = a.createdBy
-         WHERE a.hackathonId = ? ORDER BY a.id DESC LIMIT 100`,
+         WHERE a.hackathonId = ? AND a.system = 0 ORDER BY a.id DESC LIMIT 100`,
       )
       .all<Omit<AdminAnnouncement, "stats" | "failures">>(hackathonId),
     db

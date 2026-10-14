@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { unregister } from "@/lib/registrations";
 
 // Direitos do titular (LGPD art. 18): exportar e excluir. Genérico de
 // propósito — descobre pelo catálogo do Postgres toda coluna que referencia
@@ -67,6 +68,21 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
   const anon = `removido-${memberId}`;
 
   await db.transaction(async () => {
+    // inscrições: pedido/fila sai de vez; aprovado em edição que ainda não
+    // começou libera a vaga pelo cancelamento normal (promove a fila); só
+    // edição em andamento/encerrada guarda a linha anonimizada (contagem)
+    const regs = await db
+      .prepare(
+        `SELECT r.hackathonId, r.status, to_ts(h.startsAt) > now() AS future
+         FROM registrations r JOIN hackathons h ON h.id = r.hackathonId
+         WHERE r.memberId = ?`,
+      )
+      .all<{ hackathonId: string; status: string; future: boolean }>(memberId);
+    for (const r of regs) {
+      if (r.status === "approved" && !r.future) continue;
+      if (r.status === "approved") await unregister(memberId, r.hackathonId);
+      else await db.prepare("DELETE FROM registrations WHERE memberId = ? AND hackathonId = ?").run(memberId, r.hackathonId);
+    }
     // dependentes sem cascade dos posts da pessoa
     await db.prepare("DELETE FROM likes WHERE postId IN (SELECT id FROM posts WHERE memberId = ?)").run(memberId);
     await db

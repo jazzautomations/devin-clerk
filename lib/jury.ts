@@ -128,6 +128,10 @@ export async function addCriterion(
 ): Promise<Criterion> {
   const label = validLabel(input.label);
   const weight = validWeight(input.weight);
+  const dup = await db
+    .prepare("SELECT 1 FROM rubric_criteria WHERE hackathonId = ? AND lower(label) = lower(?)")
+    .get(hackathonId, label);
+  if (dup) throw new JuryError("já existe um critério com esse nome", 409);
   const row = await db
     .prepare(
       `INSERT INTO rubric_criteria (hackathonId, label, weight, position)

@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const status = await getRegistrationStatus(member.id, id);
   const staff = member.role === "admin" || (await getEditionRoles(id, member.id)).length > 0;
-  if (!staff && status !== "approved" && status !== "pending") {
+  if (!staff && status !== "approved" && status !== "pending" && status !== "waitlist") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   return Response.json({

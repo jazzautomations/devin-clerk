@@ -12,6 +12,7 @@ import { getAudienceResult } from "@/lib/stage";
 import { VoteButton } from "@/components/VoteButton";
 import { ShareBar } from "@/components/ShareBar";
 import { absoluteUrl } from "@/lib/seo";
+import { renderUserMarkdown } from "@/lib/blog";
 
 // Ficha do projeto (spec 010/030; ordem da spec 034 §5.8): capa · título ·
 // tagline · selos · vídeo do time · vídeo do palco · demo ao vivo ·
@@ -66,7 +67,10 @@ export default async function ProjectPage({ params }: Props) {
   const f = data.fields;
   const place = data.placement;
   const badges = [
-    ...(place >= 1 && place <= 3 ? [{ text: `${place}º lugar`, gold: place === 1 }] : []),
+    // "1º lugar · Grande prêmio" já diz a colocação — não repete o selo cru
+    ...(place >= 1 && place <= 3 && !data.awards.some((a) => a.startsWith(`${place}º lugar`))
+      ? [{ text: `${place}º lugar`, gold: place === 1 }]
+      : []),
     ...data.awards.map((a) => ({ text: a, gold: true })),
     ...(data.finalist && data.phase === "publicado" ? [{ text: "finalista", gold: false }] : []),
     ...(data.phase !== "legado" && data.status === "travado" ? [{ text: "entregue no prazo", gold: false }] : []),
@@ -156,7 +160,11 @@ export default async function ProjectPage({ params }: Props) {
           )}
 
           {f.description ? (
-            <p className="max-w-2xl leading-relaxed whitespace-pre-line break-words text-muted">{f.description}</p>
+            <div
+              className="blog-body max-w-2xl break-words"
+              // renderer escapa HTML cru; só gera markup de markdown (lib/blog)
+              dangerouslySetInnerHTML={{ __html: renderUserMarkdown(f.description) }}
+            />
           ) : (
             <p className="border-[1.5px] border-line px-5 py-4 font-mono text-xs text-muted">
               {"sem descrição — o código conta a história"}
@@ -175,7 +183,7 @@ export default async function ProjectPage({ params }: Props) {
               <h2 className={h2}>tecnologias</h2>
               <ul className="flex flex-wrap gap-1.5">
                 {f.technologies.map((t) => (
-                  <li key={t} className="chip">
+                  <li key={t} className="tag">
                     {t}
                   </li>
                 ))}
