@@ -57,7 +57,7 @@ export default function Image() {
             marginTop: 32,
           }}
         >
-          Hackathon sem Forms e sem grupo de zap.
+          A edição inteira num lugar só.
         </div>
       </div>
     ),

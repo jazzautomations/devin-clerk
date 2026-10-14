@@ -12,7 +12,7 @@ const portas = [
   {
     k: "01",
     title: "Edições Hack Inova",
-    desc: "Cada edição ganha página própria com inscrição em 1 clique. Nada de site novo, nada de Google Forms.",
+    desc: "Cada edição ganha página própria, inscrição em 1 clique e painel de organização.",
     foot: "inscrição · times · arquivo",
     href: "/radar",
   },
@@ -55,7 +55,7 @@ const jornada = [
   },
   {
     step: "02 · INSCRIÇÃO",
-    title: "1 clique, sem Forms",
+    title: "Inscrição em 1 clique",
     desc: "Quem tem perfil se inscreve na hora. Edição curada? Fila de aprovação.",
   },
   {
@@ -152,9 +152,9 @@ export default async function Home() {
           <div className="min-w-0">
             <p className="tag">HACKAHUB · HACK INOVA</p>
             <h1 className="mt-6 text-[clamp(2.6rem,8.4vw,6.3rem)] leading-[0.9] font-extrabold tracking-[-0.045em]">
-              Hackathon sem Forms
+              A edição inteira
               <br />
-              <span className="text-accent">e sem grupo de zap.</span>
+              <span className="text-accent">num lugar só.</span>
             </h1>
             <p className="mt-7 max-w-[54ch] text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
               <strong className="font-bold">A plataforma da Hack Inova.</strong>{" "}
@@ -296,7 +296,7 @@ export default async function Home() {
           <div className="window dark hard">
             <WindowBar title="INSCRICAO.exe" />
             <div className="tbody">
-              <div className="text-[11px]">SEM GOOGLE FORMS</div>
+              <div className="text-[11px]">INSCRIÇÃO</div>
               <div className="pix text-[50px] leading-[0.8]">1 CLIQUE</div>
               <p className="mt-2 mb-3 text-[13.5px] leading-snug text-mint">
                 Teu perfil é tua ficha. Inscreveu, ganhou a carta da edição e
@@ -422,8 +422,8 @@ export default async function Home() {
               Do anúncio ao arquivo, a edição inteira num lugar só.
             </h2>
             <p className="max-w-[40ch] text-[14px] text-[#b8cdc0]">
-              Em construção: formulário próprio da edição, avisos por e-mail e
-              zap, check-in por QR e júri com rubrica.
+              Formulário próprio, avisos por e-mail e WhatsApp, check-in por QR,
+              júri com rubrica, voto ao vivo e certificado verificável.
             </p>
           </div>
           <ol className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

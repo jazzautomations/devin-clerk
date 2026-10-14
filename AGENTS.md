@@ -10,11 +10,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # HackaHub
 
-A plataforma onde a **Hack Inova** organiza as edições dela (inscrição sem
-Google Forms, avisos sem grupo de WhatsApp, check-in, júri, certificado) e a
+A plataforma onde a **Hack Inova** organiza as edições dela (inscrição, avisos,
+check-in, júri, certificado) e a
 rede/vitrine dos hackathons no Brasil. Produto e escopo: `specs/000-prd.md` e
 `specs/033-hackinova-ops/spec.md` (a spec vigente). Copy e UI em PT-BR, tom
-direto, sem emoji na UI.
+direto, sem emoji na UI. Copy fala do que o HackaHub faz, nunca contra
+ferramenta ou pessoa (nada de "sem Forms"/"sem grupo de zap").
 
 Stack: Next.js 16 (App Router, `proxy.ts` no lugar de middleware), React 19,
 Tailwind v4, Clerk, Postgres.

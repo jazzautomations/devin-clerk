@@ -65,7 +65,7 @@ Você recebe este aviso porque está inscrito em ${esc(a.hackathonName)}.<br>
 <a href="${esc(urls.edition)}" style="color:#047a43;">Cancelar inscrição na edição</a> para não receber mais avisos dela.
 </td></tr>
 </table>
-<p style="margin:12px 0 0;font-family:${mono};font-size:11px;color:#474747;">HackaHub · avisos sem grupo de WhatsApp</p>
+<p style="margin:12px 0 0;font-family:${mono};font-size:11px;color:#474747;">HackaHub · avisos da edição</p>
 </td></tr></table>
 </body></html>`;
 
