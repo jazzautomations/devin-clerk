@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ challengeId: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -21,7 +21,7 @@ export async function PATCH(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { challengeId } = await params;
-  if (!getChallenge(challengeId)) {
+  if (!await getChallenge(challengeId)) {
     return Response.json(
       { error: "Desafio não encontrado" },
       { status: 404 },
@@ -69,7 +69,7 @@ export async function PATCH(
   }
 
   try {
-    const challenge = updateChallenge(challengeId, patch);
+    const challenge = await updateChallenge(challengeId, patch);
     return Response.json({ challenge });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Erro");

@@ -6,8 +6,8 @@ import { getHackathon } from "@/lib/hackathons";
 
 const HID = "admin-ops-test";
 
-function resetHackathon(): void {
-  db.prepare(
+async function resetHackathon(): Promise<void> {
+  await db.prepare(
     `INSERT OR REPLACE INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -25,26 +25,26 @@ function resetHackathon(): void {
   );
 }
 
-function makeMember(username: string): number {
-  db.prepare(
+async function makeMember(username: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, name, email) VALUES (?, ?, ?, ?)",
   ).run(`clerk_${username}`, username, `Nome ${username}`, `${username}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE username = ?").get(username) as {
+    await db.prepare("SELECT id FROM members WHERE username = ?").get(username) as {
       id: number;
     }
   ).id;
 }
 
-beforeEach(() => {
-  resetHackathon();
-  db.prepare("DELETE FROM registrations").run();
-  db.prepare("DELETE FROM subscribers").run();
+beforeEach(async () => {
+  await resetHackathon();
+  await db.prepare("DELETE FROM registrations").run();
+  await db.prepare("DELETE FROM subscribers").run();
 });
 
 describe("updateHackathon — edição parcial", () => {
-  it("aplica só os campos enviados e preserva o resto", () => {
-    const h = updateHackathon(HID, { name: "Nome Novo", location: "Campinas" });
+  it("aplica só os campos enviados e preserva o resto", async () => {
+    const h = await updateHackathon(HID, { name: "Nome Novo", location: "Campinas" });
     expect(h?.name).toBe("Nome Novo");
     expect(h?.location).toBe("Campinas");
     // não mexeu no resto
@@ -54,39 +54,39 @@ describe("updateHackathon — edição parcial", () => {
     expect(h?.active).toBe(true);
   });
 
-  it("aceita null pra limpar campo opcional", () => {
-    const h = updateHackathon(HID, { endsAt: null, location: null });
+  it("aceita null pra limpar campo opcional", async () => {
+    const h = await updateHackathon(HID, { endsAt: null, location: null });
     expect(h?.endsAt).toBeNull();
     expect(h?.location).toBeNull();
   });
 
-  it("toggle active arquiva sem apagar", () => {
-    const h = updateHackathon(HID, { active: false });
+  it("toggle active arquiva sem apagar", async () => {
+    const h = await updateHackathon(HID, { active: false });
     expect(h?.active).toBe(false);
-    expect(getHackathon(HID)).not.toBeNull(); // registro continua lá
+    expect(await getHackathon(HID)).not.toBeNull(); // registro continua lá
   });
 
-  it("serializa tags como JSON", () => {
-    const h = updateHackathon(HID, { tags: ["ia", "saude"] });
+  it("serializa tags como JSON", async () => {
+    const h = await updateHackathon(HID, { tags: ["ia", "saude"] });
     expect(h?.tags).toEqual(["ia", "saude"]);
   });
 
-  it("retorna null pra edição inexistente", () => {
-    expect(updateHackathon("fantasma", { name: "x" })).toBeNull();
+  it("retorna null pra edição inexistente", async () => {
+    expect(await updateHackathon("fantasma", { name: "x" })).toBeNull();
   });
 });
 
 describe("listRegistrants — inscritos por edição com e-mail", () => {
-  it("retorna username, name, email e createdAt ordenados por entrada", () => {
-    const a = makeMember("ana");
-    const b = makeMember("bia");
-    db.prepare(
+  it("retorna username, name, email e createdAt ordenados por entrada", async () => {
+    const a = await makeMember("ana");
+    const b = await makeMember("bia");
+    await db.prepare(
       "INSERT INTO registrations (memberId, hackathonId, createdAt) VALUES (?, ?, '2026-10-01 10:00:00')",
     ).run(a, HID);
-    db.prepare(
+    await db.prepare(
       "INSERT INTO registrations (memberId, hackathonId, createdAt) VALUES (?, ?, '2026-10-02 10:00:00')",
     ).run(b, HID);
-    const list = listRegistrants(HID);
+    const list = await listRegistrants(HID);
     expect(list).toHaveLength(2);
     expect(list[0].username).toBe("ana");
     expect(list[0].email).toBe("ana@t.dev");
@@ -95,20 +95,20 @@ describe("listRegistrants — inscritos por edição com e-mail", () => {
     expect(list[1].username).toBe("bia");
   });
 
-  it("edição sem inscritos retorna lista vazia", () => {
-    expect(listRegistrants(HID)).toEqual([]);
+  it("edição sem inscritos retorna lista vazia", async () => {
+    expect(await listRegistrants(HID)).toEqual([]);
   });
 });
 
 describe("listSubscribers — base da newsletter", () => {
-  it("retorna emails com createdAt, mais recente primeiro", () => {
-    db.prepare(
+  it("retorna emails com createdAt, mais recente primeiro", async () => {
+    await db.prepare(
       "INSERT INTO subscribers (email, createdAt) VALUES ('a@x.dev', '2026-09-01 10:00:00')",
     ).run();
-    db.prepare(
+    await db.prepare(
       "INSERT INTO subscribers (email, createdAt) VALUES ('b@x.dev', '2026-09-02 10:00:00')",
     ).run();
-    const subs = listSubscribers();
+    const subs = await listSubscribers();
     expect(subs).toHaveLength(2);
     expect(subs[0].email).toBe("b@x.dev");
     expect(subs[1].email).toBe("a@x.dev");

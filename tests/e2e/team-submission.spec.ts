@@ -10,24 +10,22 @@ const HID = "hack-inova-alphaville-2026"; // edição futura ativa (seed)
 
 // idempotente: membro inscrito existir é irrelevante pro anon — mas garante
 // que a edição tem dados reais no banco do dev server
-function ensureRegistrant() {
+async function ensureRegistrant() {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, name) VALUES ('e2e_teamowner', 'e2e_teamowner', 'e2e-team-owner@t.dev', 'E2E Owner')",
   ).run();
-  const m = db
+  const m = await db
     .prepare("SELECT id FROM members WHERE clerkId = 'e2e_teamowner'")
     .get() as { id: number };
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO registrations (memberId, hackathonId) VALUES (?, ?)",
   ).run(m.id, HID);
-  db.close();
 }
 
 test.describe("meu time — submissão self-service na edição", () => {
   test("anon NÃO vê a seção/formulário meu time", async ({ page }) => {
-    ensureRegistrant();
+    await ensureRegistrant();
     await page.goto(`/h/${HID}`);
     // página pública carrega normal
     await expect(page.getByText("// hackathon")).toBeVisible();
@@ -38,7 +36,7 @@ test.describe("meu time — submissão self-service na edição", () => {
   });
 
   test("POST deslogado → 401 JSON", async ({ request }) => {
-    ensureRegistrant();
+    await ensureRegistrant();
     const res = await request.post(`/api/hackathons/${HID}/team`, {
       data: { name: "Time Anon", project: { title: "X" } },
     });
@@ -49,7 +47,7 @@ test.describe("meu time — submissão self-service na edição", () => {
   test("PATCH deslogado → 401 JSON; GET deslogado → 401 JSON", async ({
     request,
   }) => {
-    ensureRegistrant();
+    await ensureRegistrant();
     const patch = await request.patch(`/api/hackathons/${HID}/team`, {
       data: { teamId: 1, title: "x" },
     });

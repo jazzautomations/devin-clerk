@@ -23,11 +23,11 @@ export async function POST(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const hackathon = getHackathon(id);
+  const hackathon = await getHackathon(id);
   if (!hackathon || !hackathon.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Member not found" }, { status: 404 });
   }
@@ -36,14 +36,14 @@ export async function POST(
   if (limited) {
     return limited;
   }
-  const { status, created } = register(member.id, hackathon.id);
+  const { status, created } = await register(member.id, hackathon.id);
   if (status !== "approved") {
     return Response.json(
       { registered: false, status, created, hackathonId: hackathon.id },
       { status: status === "pending" && created ? 201 : 200 },
     );
   }
-  const reward = completeRegistration(member.id, hackathon.id);
+  const reward = await completeRegistration(member.id, hackathon.id);
   return Response.json({
     registered: true,
     status: "approved",
@@ -65,12 +65,12 @@ export async function GET(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const hackathon = getHackathon(id);
+  const hackathon = await getHackathon(id);
   if (!hackathon || !hackathon.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
-  const status = member ? getRegistrationStatus(member.id, id) : null;
+  const member = await getMemberByClerkId(userId);
+  const status = member ? await getRegistrationStatus(member.id, id) : null;
   return Response.json({ status });
 }
 
@@ -83,10 +83,10 @@ export async function DELETE(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Member not found" }, { status: 404 });
   }
-  unregister(member.id, id);
+  await unregister(member.id, id);
   return Response.json({ registered: false, status: null, hackathonId: id });
 }

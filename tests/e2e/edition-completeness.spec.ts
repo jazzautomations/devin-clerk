@@ -25,22 +25,10 @@ async function seed(
   // dev server faz init do db ao servir qualquer rota — bate uma antes
   await request.get("/radar");
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  // as colunas novas chegam pelo ALTER guardado de lib/archive.ts quando o
-  // server importa o módulo — garante aqui caso o seed rode antes (pattern
-  // idempotente dos outros specs e2e)
-  const tpCols = (
-    db.prepare("PRAGMA table_info(team_projects)").all() as { name: string }[]
-  ).map((c) => c.name);
-  for (const c of ["videoUrl", "logoUrl"]) {
-    if (!tpCols.includes(c)) {
-      db.exec(`ALTER TABLE team_projects ADD COLUMN ${c} TEXT`);
-    }
-  }
   const now = Date.now();
   const iso = (t: number) => new Date(t).toISOString();
   const day = 86_400_000;
-  db.prepare(
+  await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, registrationUrl,
         registrationDeadline, tags, active, source)
@@ -50,7 +38,7 @@ async function seed(
        endsAt = excluded.endsAt,
        registrationDeadline = excluded.registrationDeadline, active = 1`,
   ).run(ONGOING, iso(now - 3 * day), iso(now + 10 * day), iso(now + 10 * day));
-  db.prepare(
+  await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, registrationUrl,
         tags, active, source)
@@ -60,37 +48,37 @@ async function seed(
        endsAt = excluded.endsAt, active = 1`,
   ).run(OVER, iso(now - 10 * day), iso(now - 9 * day));
   // inscrito na edição ongoing — seção "inscritos" precisa de ≥1
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES ('e2e_030', 'e2e_030', 'e2e-030@t.dev')",
   ).run();
-  const m = db
+  const m = await db
     .prepare("SELECT id FROM members WHERE clerkId = 'e2e_030'")
     .get() as { id: number };
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO registrations (memberId, hackathonId) VALUES (?, ?)",
   ).run(m.id, ONGOING);
   // time + projeto rico na edição ongoing — alimenta /p/[teamId] e /projetos;
   // FK: filhos (projects/members) saem antes do time, senão a re-seed trava
-  db.prepare(
+  await db.prepare(
     `DELETE FROM team_projects WHERE teamId IN
        (SELECT id FROM teams WHERE hackathonId = ?)`,
   ).run(ONGOING);
-  db.prepare(
+  await db.prepare(
     `DELETE FROM team_members WHERE teamId IN
        (SELECT id FROM teams WHERE hackathonId = ?)`,
   ).run(ONGOING);
-  db.prepare("DELETE FROM teams WHERE hackathonId = ?").run(ONGOING);
+  await db.prepare("DELETE FROM teams WHERE hackathonId = ?").run(ONGOING);
   let teamId: number | null = null;
   if (withTeam) {
-    db.prepare(
+    await db.prepare(
       "INSERT INTO teams (hackathonId, name, placement) VALUES (?, 'E2E Rich Team', 0)",
     ).run(ONGOING);
-    const t = db
+    const t = await db
       .prepare(
         "SELECT id FROM teams WHERE hackathonId = ? AND name = 'E2E Rich Team'",
       )
       .get(ONGOING) as { id: number };
-    db.prepare(
+    await db.prepare(
       `INSERT OR REPLACE INTO team_projects
          (teamId, title, description, repoUrl, videoUrl, logoUrl)
        VALUES (?, 'E2E Projeto Rico', 'projeto com pitch em vídeo e logo',
@@ -98,7 +86,6 @@ async function seed(
     ).run(t.id, VIDEO, LOGO);
     teamId = t.id;
   }
-  db.close();
   return teamId;
 }
 

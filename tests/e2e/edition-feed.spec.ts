@@ -11,55 +11,27 @@ const ED_NAME = "Hack Inova Alphaville";
 const MARKER = "post e2e — mural da edição";
 
 // idempotente: garante membro + post escopado, sem duplicar em rerun
-function ensureEditionPost(): void {
+async function ensureEditionPost(): Promise<void> {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  db.exec(`CREATE TABLE IF NOT EXISTS members (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    clerkId TEXT UNIQUE NOT NULL,
-    username TEXT UNIQUE NOT NULL,
-    name TEXT,
-    email TEXT NOT NULL,
-    bio TEXT,
-    skills TEXT NOT NULL DEFAULT '[]',
-    github TEXT,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    memberId INTEGER NOT NULL REFERENCES members(id),
-    body TEXT NOT NULL,
-    link TEXT,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-  );`);
-  // a coluna chega pelo ALTER guardado de lib/posts.ts quando o dev server
-  // importa o módulo — garante aqui pro caso do seed rodar antes
-  const cols = (
-    db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
-  ).map((c) => c.name);
-  if (!cols.includes("hackathonId")) {
-    db.exec("ALTER TABLE posts ADD COLUMN hackathonId TEXT");
-  }
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, name) VALUES ('e2e_mural', 'e2e_mural', 'e2e_mural@t.dev', 'E2E Mural')",
   ).run();
-  const m = db
+  const m = await db
     .prepare("SELECT id FROM members WHERE clerkId = 'e2e_mural'")
     .get() as { id: number };
-  const has = db.prepare("SELECT 1 FROM posts WHERE body = ?").get(MARKER);
+  const has = await db.prepare("SELECT 1 FROM posts WHERE body = ?").get(MARKER);
   if (!has) {
-    db.prepare(
+    await db.prepare(
       "INSERT INTO posts (memberId, body, hackathonId) VALUES (?, ?, ?)",
     ).run(m.id, MARKER, ED);
   }
-  db.close();
 }
 
 test.describe("mural da edição — atividade viva em /h/[id]", () => {
   test("página da edição mostra a seção e os posts escopados", async ({
     page,
   }) => {
-    ensureEditionPost();
+    await ensureEditionPost();
     await page.goto(`/h/${ED}`);
     await expect(
       page.getByRole("heading", { name: "// mural da edição" }),
@@ -70,7 +42,7 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
   test("anon lê o mural mas não vê composer — postar é de inscrito", async ({
     page,
   }) => {
-    ensureEditionPost();
+    await ensureEditionPost();
     await page.goto(`/h/${ED}`);
     await expect(page.getByText(MARKER)).toBeVisible();
     await expect(page.getByPlaceholder(/construindo/i)).toHaveCount(0);
@@ -80,7 +52,7 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
   test("post escopado aparece no /feed com chip linkando a edição", async ({
     page,
   }) => {
-    ensureEditionPost();
+    await ensureEditionPost();
     await page.goto("/feed");
     const post = page.locator("li", { hasText: MARKER });
     const chip = post.getByRole("link", { name: `→ ${ED_NAME}` });
@@ -90,7 +62,7 @@ test.describe("mural da edição — atividade viva em /h/[id]", () => {
   test("POST anon com hackathonId → 401 JSON; GET ?h= filtra a edição", async ({
     request,
   }) => {
-    ensureEditionPost();
+    await ensureEditionPost();
     const res = await request.post("/api/posts", {
       data: { body: "oi", hackathonId: ED },
     });

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function TalentoPage() {
-  const talent = listTalent(100);
+  const talent = await listTalent(100);
 
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">

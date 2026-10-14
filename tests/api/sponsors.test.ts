@@ -9,13 +9,13 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const PUC = "hack-inova-puc-saude-2026";
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_admin','admin_t','a@t.dev','admin')",
   ).run();
-  db.prepare("DELETE FROM challenges WHERE id NOT LIKE 'seed-%'").run();
-  db.prepare("UPDATE challenges SET sponsorId = NULL, active = 1").run();
-  db.prepare("DELETE FROM sponsors").run();
+  await db.prepare("DELETE FROM challenges WHERE id NOT LIKE 'seed-%'").run();
+  await db.prepare("UPDATE challenges SET sponsorId = NULL, active = 1").run();
+  await db.prepare("DELETE FROM sponsors").run();
 });
 
 const req = (method: string, body?: unknown) =>

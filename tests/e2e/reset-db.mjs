@@ -1,11 +1,14 @@
-// pretest:e2e — zera o banco dedicado do e2e (data/e2e.db) antes do build,
-// pra cada rodada começar só com o bootstrap seed. O servidor do e2e é
-// `next start` (build+start, sem dev-mode) porque dois `next dev` no mesmo
-// projeto compartilham estado e o segundo nasce com rotas quebradas.
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+// pretest:e2e — zera o banco dedicado do e2e antes do build, pra cada rodada
+// começar só com migrations + seed de base (aplicados no boot do server).
+// Recusa rodar contra banco que não seja de e2e.
+import pg from "pg";
 
-const dir = join(process.cwd(), "data");
-for (const suffix of ["", "-shm", "-wal"]) {
-  await rm(join(dir, `e2e.db${suffix}`), { force: true });
+const url = process.env.E2E_DATABASE_URL;
+if (!url || !/e2e/.test(new URL(url).pathname)) {
+  console.error("E2E_DATABASE_URL ausente ou não aponta pra um banco *e2e*");
+  process.exit(1);
 }
+const client = new pg.Client({ connectionString: url });
+await client.connect();
+await client.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+await client.end();

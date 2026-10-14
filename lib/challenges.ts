@@ -31,35 +31,35 @@ const SELECT = `SELECT c.id, c.hackathonId, c.sponsor, c.sponsorId,
        LEFT JOIN sponsors s ON s.id = c.sponsorId`;
 
 // listagem pública: só ativos — desativado fica no banco (histórico/contrato)
-export function getChallenges(hackathonId: string): Challenge[] {
-  const rows = db
+export async function getChallenges(hackathonId: string): Promise<Challenge[]> {
+  const rows = await db
     .prepare(
       `${SELECT} WHERE c.hackathonId = ? AND c.active = 1
-       ORDER BY c.createdAt, c.rowid`,
+       ORDER BY c.createdAt, c.seq`,
     )
     .all(hackathonId) as Row[];
   return rows.map(toChallenge);
 }
 
 // inclui inativos — uso admin
-export function listChallenges(hackathonId: string): Challenge[] {
-  const rows = db
+export async function listChallenges(hackathonId: string): Promise<Challenge[]> {
+  const rows = await db
     .prepare(
       `${SELECT} WHERE c.hackathonId = ?
-       ORDER BY c.createdAt, c.rowid`,
+       ORDER BY c.createdAt, c.seq`,
     )
     .all(hackathonId) as Row[];
   return rows.map(toChallenge);
 }
 
-export function getChallenge(id: string): Challenge | null {
-  const row = db.prepare(`${SELECT} WHERE c.id = ?`).get(id) as
+export async function getChallenge(id: string): Promise<Challenge | null> {
+  const row = await db.prepare(`${SELECT} WHERE c.id = ?`).get(id) as
     | Row
     | undefined;
   return row ? toChallenge(row) : null;
 }
 
-export function createChallenge(
+export async function createChallenge(
   hackathonId: string,
   input: {
     sponsor?: string;
@@ -68,14 +68,14 @@ export function createChallenge(
     description?: string | null;
     prize?: string | null;
   },
-): Challenge {
+): Promise<Challenge> {
   const title = input.title?.trim() ?? "";
   if (!title) throw new Error("title obrigatório");
 
   let sponsorId: string | null = null;
   let sponsorName = input.sponsor?.trim() ?? "";
   if (input.sponsorId !== undefined && input.sponsorId !== null) {
-    const entity = getSponsor(String(input.sponsorId).trim());
+    const entity = await getSponsor(String(input.sponsorId).trim());
     if (!entity) throw new Error("sponsor não encontrado");
     sponsorId = entity.id;
     // sem nome textual, o display assume o nome da entidade
@@ -86,7 +86,7 @@ export function createChallenge(
   }
 
   const id = `chal-${randomUUID()}`;
-  db.prepare(
+  await db.prepare(
     `INSERT INTO challenges (id, hackathonId, sponsor, sponsorId, title, description, prize)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -98,7 +98,7 @@ export function createChallenge(
     input.description?.trim() || null,
     input.prize?.trim() || null,
   );
-  return getChallenge(id)!;
+  return (await getChallenge(id))!;
 }
 
 export type ChallengePatch = {
@@ -111,11 +111,11 @@ export type ChallengePatch = {
 };
 
 // update parcial: só os campos presentes são tocados; null limpa o campo
-export function updateChallenge(
+export async function updateChallenge(
   id: string,
   patch: ChallengePatch,
-): Challenge | null {
-  if (!getChallenge(id)) return null;
+): Promise<Challenge | null> {
+  if (!await getChallenge(id)) return null;
 
   const sets: string[] = [];
   const values: Record<string, unknown> = { id };
@@ -128,7 +128,7 @@ export function updateChallenge(
     if (patch.sponsorId === null) {
       sets.push("sponsorId = NULL");
     } else {
-      const entity = getSponsor(String(patch.sponsorId).trim());
+      const entity = await getSponsor(String(patch.sponsorId).trim());
       if (!entity) throw new Error("sponsor não encontrado");
       sets.push("sponsorId = @sponsorId");
       values.sponsorId = entity.id;
@@ -163,7 +163,7 @@ export function updateChallenge(
   }
 
   if (sets.length > 0) {
-    db.prepare(`UPDATE challenges SET ${sets.join(", ")} WHERE id = @id`).run(
+    await db.prepare(`UPDATE challenges SET ${sets.join(", ")} WHERE id = @id`).run(
       values,
     );
   }

@@ -15,13 +15,13 @@ import { register } from "@/lib/registrations";
 
 const HACK_ID = "hack-inova-alphaville-2026"; // seedado no bootstrap do db
 
-function makeMember(clerkId: string, extra: Partial<{
+async function makeMember(clerkId: string, extra: Partial<{
   bio: string;
   headline: string;
   skills: string;
   role: string;
-}> = {}): number {
-  db.prepare(
+}> = {}): Promise<number> {
+  await db.prepare(
     `INSERT INTO members (clerkId, username, email, bio, headline, skills, role)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -34,7 +34,7 @@ function makeMember(clerkId: string, extra: Partial<{
     extra.role ?? "member",
   );
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
@@ -56,11 +56,11 @@ describe("levelFor", () => {
 });
 
 describe("awardXp", () => {
-  it("acumula no membro", () => {
-    const id = makeMember("xp1");
-    awardXp(id, 50);
-    awardXp(id, 10);
-    const row = db.prepare("SELECT xp FROM members WHERE id=?").get(id) as {
+  it("acumula no membro", async () => {
+    const id = await makeMember("xp1");
+    await awardXp(id, 50);
+    await awardXp(id, 10);
+    const row = await db.prepare("SELECT xp FROM members WHERE id=?").get(id) as {
       xp: number;
     };
     expect(row.xp).toBe(60);
@@ -68,36 +68,36 @@ describe("awardXp", () => {
 });
 
 describe("cartinhas", () => {
-  it("serial é incremental e mint é idempotente", () => {
-    const a = makeMember("cardA");
-    const b = makeMember("cardB");
-    expect(mintCard(a, HACK_ID)).toBe(1);
-    expect(mintCard(b, HACK_ID)).toBe(2);
-    expect(mintCard(a, HACK_ID)).toBeNull();
-    expect(getCardSupply(HACK_ID)).toBe(2);
-    expect(getMemberCard(a, HACK_ID)?.serial).toBe(1);
+  it("serial é incremental e mint é idempotente", async () => {
+    const a = await makeMember("cardA");
+    const b = await makeMember("cardB");
+    expect(await mintCard(a, HACK_ID)).toBe(1);
+    expect(await mintCard(b, HACK_ID)).toBe(2);
+    expect(await mintCard(a, HACK_ID)).toBeNull();
+    expect(await getCardSupply(HACK_ID)).toBe(2);
+    expect((await getMemberCard(a, HACK_ID))?.serial).toBe(1);
   });
 
-  it("raridade das edições hack inova é curada", () => {
-    expect(getCardRarity("hack-inova-alphaville-2026")).toBe("raro");
-    expect(getCardRarity("hack-inova-unifacens-2026")).toBe("lendario");
-    expect(getCardRarity("hack-inova-puc-saude-2026")).toBe("epico");
+  it("raridade das edições hack inova é curada", async () => {
+    expect(await getCardRarity("hack-inova-alphaville-2026")).toBe("raro");
+    expect(await getCardRarity("hack-inova-unifacens-2026")).toBe("lendario");
+    expect(await getCardRarity("hack-inova-puc-saude-2026")).toBe("epico");
   });
 
-  it("evento externo minta como comum sob demanda", () => {
-    const a = makeMember("cardC");
-    db.prepare(
+  it("evento externo minta como comum sob demanda", async () => {
+    const a = await makeMember("cardC");
+    await db.prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
        VALUES ('ext-1','Ext','Org','2099-01-01','online','https://x.dev','[]')`,
     ).run();
-    mintCard(a, "ext-1");
-    expect(getCardRarity("ext-1")).toBe("comum");
+    await mintCard(a, "ext-1");
+    expect(await getCardRarity("ext-1")).toBe("comum");
   });
 
-  it("getMemberCards retorna a coleção com dados da edição", () => {
-    const a = makeMember("cardD");
-    mintCard(a, HACK_ID);
-    const cards = getMemberCards(a);
+  it("getMemberCards retorna a coleção com dados da edição", async () => {
+    const a = await makeMember("cardD");
+    await mintCard(a, HACK_ID);
+    const cards = await getMemberCards(a);
     expect(cards).toHaveLength(1);
     expect(cards[0].name).toContain("Hack Inova");
     expect(cards[0].serial).toBeGreaterThan(0);
@@ -105,46 +105,46 @@ describe("cartinhas", () => {
 });
 
 describe("badges", () => {
-  it("membro novo ganha pioneiro (id <= 50)", () => {
-    const id = makeMember("b1");
-    const badges = checkBadges(id).map((b) => b.id);
+  it("membro novo ganha pioneiro (id <= 50)", async () => {
+    const id = await makeMember("b1");
+    const badges = (await checkBadges(id)).map((b) => b.id);
     expect(badges).toContain("pioneiro");
     // segunda checagem não duplica
-    expect(checkBadges(id)).toHaveLength(0);
-    expect(getMemberBadges(id).map((b) => b.id)).toContain("pioneiro");
+    expect(await checkBadges(id)).toHaveLength(0);
+    expect((await getMemberBadges(id)).map((b) => b.id)).toContain("pioneiro");
   });
 
-  it("debut quando registra; veterano aos 3", () => {
-    const id = makeMember("b2");
-    register(id, HACK_ID);
-    expect(checkBadges(id).map((b) => b.id)).toContain("debut");
-    db.prepare(
+  it("debut quando registra; veterano aos 3", async () => {
+    const id = await makeMember("b2");
+    await register(id, HACK_ID);
+    expect((await checkBadges(id)).map((b) => b.id)).toContain("debut");
+    await db.prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
        VALUES ('h2','H2','O','2099-01-01','online','https://x','[]'),
               ('h3','H3','O','2099-01-01','online','https://x','[]')`,
     ).run();
-    register(id, "h2");
-    register(id, "h3");
-    expect(checkBadges(id).map((b) => b.id)).toContain("veterano");
+    await register(id, "h2");
+    await register(id, "h3");
+    expect((await checkBadges(id)).map((b) => b.id)).toContain("veterano");
   });
 
-  it("identidade exige bio+headline+skills e paga +25xp uma vez", () => {
-    const id = makeMember("b3", {
+  it("identidade exige bio+headline+skills e paga +25xp uma vez", async () => {
+    const id = await makeMember("b3", {
       bio: "dev",
       headline: "eng",
       skills: '["ts"]',
     });
-    const badges = checkBadges(id).map((b) => b.id);
+    const badges = (await checkBadges(id)).map((b) => b.id);
     expect(badges).toContain("identidade");
-    const xp1 = (db.prepare("SELECT xp FROM members WHERE id=?").get(id) as { xp: number }).xp;
+    const xp1 = (await db.prepare("SELECT xp FROM members WHERE id=?").get(id) as { xp: number }).xp;
     expect(xp1).toBe(25);
-    checkBadges(id);
-    const xp2 = (db.prepare("SELECT xp FROM members WHERE id=?").get(id) as { xp: number }).xp;
+    await checkBadges(id);
+    const xp2 = (await db.prepare("SELECT xp FROM members WHERE id=?").get(id) as { xp: number }).xp;
     expect(xp2).toBe(25);
   });
 
-  it("admin ganha organizador", () => {
-    const id = makeMember("b4", { role: "admin" });
-    expect(checkBadges(id).map((b) => b.id)).toContain("organizador");
+  it("admin ganha organizador", async () => {
+    const id = await makeMember("b4", { role: "admin" });
+    expect((await checkBadges(id)).map((b) => b.id)).toContain("organizador");
   });
 });

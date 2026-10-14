@@ -13,19 +13,19 @@ import {
 const HID = "hack-inova-alphaville-2026";
 const HID2 = "hack-inova-puc-saude-2026";
 
-function makeMember(clerkId: string): number {
-  db.prepare(
+async function makeMember(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
-beforeEach(() => {
-  db.prepare("DELETE FROM looking_for_team").run();
+beforeEach(async () => {
+  await db.prepare("DELETE FROM looking_for_team").run();
 });
 
 describe("validateBoardInput", () => {
@@ -78,9 +78,9 @@ describe("validateBoardInput", () => {
 });
 
 describe("upsertBoardEntry", () => {
-  it("cria com created=true e retorna entry com join do membro", () => {
-    const m = makeMember("tb1");
-    const { entry, created } = upsertBoardEntry(m, HID, {
+  it("cria com created=true e retorna entry com join do membro", async () => {
+    const m = await makeMember("tb1");
+    const { entry, created } = await upsertBoardEntry(m, HID, {
       skills: ["react"],
       need: "alguém de dados",
       note: null,
@@ -93,10 +93,10 @@ describe("upsertBoardEntry", () => {
     expect(entry.hackathonId).toBe(HID);
   });
 
-  it("re-anunciar atualiza (created=false), não duplica", () => {
-    const m = makeMember("tb2");
-    upsertBoardEntry(m, HID, { skills: [], need: "v1", note: null });
-    const { entry, created } = upsertBoardEntry(m, HID, {
+  it("re-anunciar atualiza (created=false), não duplica", async () => {
+    const m = await makeMember("tb2");
+    await upsertBoardEntry(m, HID, { skills: [], need: "v1", note: null });
+    const { entry, created } = await upsertBoardEntry(m, HID, {
       skills: ["node"],
       need: "v2 — designer",
       note: "nota",
@@ -107,7 +107,7 @@ describe("upsertBoardEntry", () => {
     expect(entry.note).toBe("nota");
     expect(
       (
-        db
+        await db
           .prepare(
             "SELECT COUNT(*) n FROM looking_for_team WHERE memberId = ? AND hackathonId = ?",
           )
@@ -116,12 +116,12 @@ describe("upsertBoardEntry", () => {
     ).toBe(1);
   });
 
-  it("re-anunciar reativa entry desativada", () => {
-    const m = makeMember("tb3");
-    upsertBoardEntry(m, HID, { skills: [], need: "v1", note: null });
-    deactivateBoardEntry(m, HID);
-    expect(getBoardEntry(m, HID)?.active).toBe(false);
-    const { entry, created } = upsertBoardEntry(m, HID, {
+  it("re-anunciar reativa entry desativada", async () => {
+    const m = await makeMember("tb3");
+    await upsertBoardEntry(m, HID, { skills: [], need: "v1", note: null });
+    await deactivateBoardEntry(m, HID);
+    expect((await getBoardEntry(m, HID))?.active).toBe(false);
+    const { entry, created } = await upsertBoardEntry(m, HID, {
       skills: [],
       need: "voltei",
       note: null,
@@ -132,58 +132,58 @@ describe("upsertBoardEntry", () => {
 });
 
 describe("listBoardEntries / countBoardEntries", () => {
-  it("lista só ativos da edição, ASC, com dados do membro", () => {
-    const a = makeMember("tb4");
-    const b = makeMember("tb5");
-    db.prepare("UPDATE members SET persona = 'dev', xp = 150, headline = 'front' WHERE id = ?").run(a);
-    upsertBoardEntry(a, HID, { skills: ["react"], need: "dados", note: null });
-    upsertBoardEntry(b, HID, { skills: [], need: "front", note: "oi" });
-    upsertBoardEntry(a, HID2, { skills: [], need: "outra edição", note: null });
-    deactivateBoardEntry(b, HID);
+  it("lista só ativos da edição, ASC, com dados do membro", async () => {
+    const a = await makeMember("tb4");
+    const b = await makeMember("tb5");
+    await db.prepare("UPDATE members SET persona = 'dev', xp = 150, headline = 'front' WHERE id = ?").run(a);
+    await upsertBoardEntry(a, HID, { skills: ["react"], need: "dados", note: null });
+    await upsertBoardEntry(b, HID, { skills: [], need: "front", note: "oi" });
+    await upsertBoardEntry(a, HID2, { skills: [], need: "outra edição", note: null });
+    await deactivateBoardEntry(b, HID);
 
-    const list = listBoardEntries(HID);
+    const list = await listBoardEntries(HID);
     expect(list).toHaveLength(1);
     expect(list[0].username).toBe("u_tb4");
     expect(list[0].persona).toBe("dev");
     expect(list[0].xp).toBe(150);
     expect(list[0].headline).toBe("front");
-    expect(countBoardEntries(HID)).toBe(1);
-    expect(countBoardEntries(HID2)).toBe(1);
+    expect(await countBoardEntries(HID)).toBe(1);
+    expect(await countBoardEntries(HID2)).toBe(1);
   });
 
-  it("ordena por createdAt ASC com desempate por id", () => {
-    const a = makeMember("tb6");
-    const b = makeMember("tb7");
-    upsertBoardEntry(a, HID, { skills: [], need: "primeiro", note: null });
-    upsertBoardEntry(b, HID, { skills: [], need: "segundo", note: null });
-    const list = listBoardEntries(HID);
+  it("ordena por createdAt ASC com desempate por id", async () => {
+    const a = await makeMember("tb6");
+    const b = await makeMember("tb7");
+    await upsertBoardEntry(a, HID, { skills: [], need: "primeiro", note: null });
+    await upsertBoardEntry(b, HID, { skills: [], need: "segundo", note: null });
+    const list = await listBoardEntries(HID);
     expect(list.map((e) => e.need)).toEqual(["primeiro", "segundo"]);
   });
 });
 
 describe("deactivateBoardEntry / setBoardEntryActive", () => {
-  it("deactivate é idempotente — sem entry não quebra", () => {
-    const m = makeMember("tb8");
-    expect(() => deactivateBoardEntry(m, HID)).not.toThrow();
-    upsertBoardEntry(m, HID, { skills: [], need: "x", note: null });
-    deactivateBoardEntry(m, HID);
-    deactivateBoardEntry(m, HID);
-    expect(getBoardEntry(m, HID)?.active).toBe(false);
-    expect(listBoardEntries(HID)).toHaveLength(0);
+  it("deactivate é idempotente — sem entry não quebra", async () => {
+    const m = await makeMember("tb8");
+    await expect(deactivateBoardEntry(m, HID)).resolves.not.toThrow();
+    await upsertBoardEntry(m, HID, { skills: [], need: "x", note: null });
+    await deactivateBoardEntry(m, HID);
+    await deactivateBoardEntry(m, HID);
+    expect((await getBoardEntry(m, HID))?.active).toBe(false);
+    expect(await listBoardEntries(HID)).toHaveLength(0);
   });
 
-  it("setBoardEntryActive liga/desliga por id; id inexistente → null", () => {
-    const m = makeMember("tb9");
-    const { entry } = upsertBoardEntry(m, HID, {
+  it("setBoardEntryActive liga/desliga por id; id inexistente → null", async () => {
+    const m = await makeMember("tb9");
+    const { entry } = await upsertBoardEntry(m, HID, {
       skills: [],
       need: "x",
       note: null,
     });
-    const off = setBoardEntryActive(entry.id, false);
+    const off = await setBoardEntryActive(entry.id, false);
     expect(off?.active).toBe(false);
-    expect(listBoardEntries(HID)).toHaveLength(0);
-    const on = setBoardEntryActive(entry.id, true);
+    expect(await listBoardEntries(HID)).toHaveLength(0);
+    const on = await setBoardEntryActive(entry.id, true);
     expect(on?.active).toBe(true);
-    expect(setBoardEntryActive(999999, false)).toBeNull();
+    expect(await setBoardEntryActive(999999, false)).toBeNull();
   });
 });

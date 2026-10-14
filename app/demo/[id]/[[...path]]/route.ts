@@ -10,8 +10,8 @@ const HOP = new Set([
   "host",
 ]);
 
-function tombstone(id: string) {
-  const d = getDeploy(id);
+async function tombstone(id: string) {
+  const d = await getDeploy(id);
   const repo = d?.repoUrl ?? "";
   return new Response(
     `<!doctype html><meta charset="utf-8"><body style="background:#0a0a0a;color:#eee;font-family:monospace;display:grid;place-items:center;min-height:100vh"><div>
@@ -25,7 +25,7 @@ function tombstone(id: string) {
 
 async function proxy(req: Request, ctx: Ctx) {
   const { id, path: parts } = await ctx.params;
-  const port = proxyTarget(id);
+  const port = await proxyTarget(id);
   if (!port) return tombstone(id);
 
   const url = new URL(req.url);

@@ -8,14 +8,14 @@ const csvField = (s: string) =>
 
 export async function GET(req: Request) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (member.role !== "admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  const subscribers = listSubscribers();
+  const subscribers = await listSubscribers();
   if (new URL(req.url).searchParams.get("format") === "csv") {
     const csv = [
       "email,createdAt",

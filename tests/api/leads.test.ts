@@ -5,8 +5,8 @@ import "@/lib/leads"; // schema próprio: tabela leads no :memory:
 // POST /api/leads — spec 022. Rota PÚBLICA (porta comercial, sem auth):
 // honeypot `website` → 201 sem gravar; válido → 201; dedupe → 200.
 
-beforeEach(() => {
-  db.prepare("DELETE FROM leads").run();
+beforeEach(async () => {
+  await db.prepare("DELETE FROM leads").run();
 });
 
 // spec 031: o limit é por IP (xff → 'anon'). Estes casos testam
@@ -23,8 +23,8 @@ const req = (body?: unknown) =>
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-const countLeads = () =>
-  (db.prepare("SELECT COUNT(*) n FROM leads").get() as { n: number }).n;
+const countLeads = async () =>
+  (await db.prepare("SELECT COUNT(*) n FROM leads").get() as { n: number }).n;
 
 describe("POST /api/leads — público", () => {
   it("lead válido → 201 com o lead criado", async () => {
@@ -43,7 +43,7 @@ describe("POST /api/leads — público", () => {
     expect(data.lead.email).toBe("devrel@oracle.com");
     expect(data.lead.interest).toBe("desafio");
     expect(data.lead.message).toBe("quero a jornada do paciente");
-    expect(countLeads()).toBe(1);
+    expect(await countLeads()).toBe(1);
   });
 
   it("400 sem company, e-mail inválido, interest fora da whitelist, sem body", async () => {
@@ -57,7 +57,7 @@ describe("POST /api/leads — público", () => {
     );
     expect((await POST(req({ company: "Co" }))).status).toBe(400);
     expect((await POST(req())).status).toBe(400);
-    expect(countLeads()).toBe(0);
+    expect(await countLeads()).toBe(0);
   });
 
   it("honeypot `website` preenchido → 201 silencioso sem gravar", async () => {
@@ -73,7 +73,7 @@ describe("POST /api/leads — público", () => {
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.ok).toBe(true);
-    expect(countLeads()).toBe(0);
+    expect(await countLeads()).toBe(0);
   });
 
   it("mesmo e-mail+empresa na janela → 200 idempotente, sem duplicar", async () => {
@@ -85,6 +85,6 @@ describe("POST /api/leads — público", () => {
     expect(second.status).toBe(200);
     const data = await second.json();
     expect(data.lead.company).toBe("Oracle");
-    expect(countLeads()).toBe(1);
+    expect(await countLeads()).toBe(1);
   });
 });

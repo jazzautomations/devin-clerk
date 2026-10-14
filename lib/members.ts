@@ -1,18 +1,11 @@
-import db, { ensureColumn } from "@/lib/db";
+import db from "@/lib/db";
 import { toLikePattern } from "@/lib/search";
 
 // migração idempotente — avatarUrl vive aqui e não no schema principal de
 // lib/db.ts (trabalho paralelo naquele arquivo)
-ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 // spec 032 — "campanhas" públicas contam só inscrições aprovadas (pedido
 // pendente não é campanha); guarda da coluna status — dona do schema é
 // lib/registrations, aqui garante pra quem importa members.ts direto
-ensureColumn(
-  "registrations",
-  "status",
-  "status TEXT NOT NULL DEFAULT 'approved'",
-);
-
 export type Member = {
   id: number;
   clerkId: string;
@@ -42,21 +35,21 @@ function toMember(row: MemberRow): Member {
   return { ...row, skills: JSON.parse(row.skills) };
 }
 
-export function getOrCreateMember(clerkUser: {
+export async function getOrCreateMember(clerkUser: {
   id: string;
   firstName: string | null;
   lastName: string | null;
   email: string;
   imageUrl?: string | null;
-}): Member {
-  const existing = db
+}): Promise<Member> {
+  const existing = await db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkUser.id) as MemberRow | undefined;
   if (existing) {
     // avatar é dado do Clerk: sync na materialização — truthy e diferente
     // atualiza; nulo preserva (leitura nunca apaga o que já foi gravado)
     if (clerkUser.imageUrl && clerkUser.imageUrl !== existing.avatarUrl) {
-      db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(
+      await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(
         clerkUser.imageUrl,
         existing.id,
       );
@@ -68,15 +61,15 @@ export function getOrCreateMember(clerkUser: {
   const base = clerkUser.email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase() || "hacker";
   let username = base;
   let i = 1;
-  while (db.prepare("SELECT 1 FROM members WHERE username = ?").get(username)) {
+  while (await db.prepare("SELECT 1 FROM members WHERE username = ?").get(username)) {
     username = `${base}${i++}`;
   }
 
   const isFirst =
-    (db.prepare("SELECT COUNT(*) AS n FROM members").get() as { n: number })
+    (await db.prepare("SELECT COUNT(*) AS n FROM members").get() as { n: number })
       .n === 0;
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO members (clerkId, username, name, email, role, avatarUrl)
      VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -88,19 +81,19 @@ export function getOrCreateMember(clerkUser: {
     clerkUser.imageUrl ?? null,
   );
   return toMember(
-    db.prepare("SELECT * FROM members WHERE clerkId = ?").get(clerkUser.id) as MemberRow,
+    await db.prepare("SELECT * FROM members WHERE clerkId = ?").get(clerkUser.id) as MemberRow,
   );
 }
 
-export function getMemberByUsername(username: string): Member | null {
-  const row = db
+export async function getMemberByUsername(username: string): Promise<Member | null> {
+  const row = await db
     .prepare("SELECT * FROM members WHERE username = ?")
     .get(username) as MemberRow | undefined;
   return row ? toMember(row) : null;
 }
 
-export function listMembers(limit = 60): Member[] {
-  const rows = db
+export async function listMembers(limit = 60): Promise<Member[]> {
+  const rows = await db
     .prepare(
       `SELECT m.*,
               (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id AND r.status = 'approved') AS campaigns,
@@ -115,25 +108,25 @@ export type LeaderboardSort = "xp" | "recent";
 
 // ranking público: xp desc com desempate determinístico por username;
 // "recent" ordena por entrada — ordem cronológica não é mérito
-export function listLeaderboard(
+export async function listLeaderboard(
   sort: LeaderboardSort = "xp",
   limit = 100,
   q?: string,
-): Member[] {
+): Promise<Member[]> {
   const orderBy =
     sort === "recent"
       ? "m.createdAt DESC, m.id DESC"
       : "m.xp DESC, m.username ASC";
   // ?q= (spec 023): username/name/headline/skills — LIKE com curinga escapado
-  // (toLikePattern); LIKE do sqlite já é case-insensitive pra ASCII
-  const rows = db
+  // (toLikePattern); lib/db traduz LIKE → ILIKE (case-insensitive como era no sqlite)
+  const rows = await db
     .prepare(
       `SELECT m.*,
               (SELECT COUNT(*) FROM member_badges mb WHERE mb.memberId = m.id) AS badges,
               (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id AND r.status = 'approved') AS campaigns,
               (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
        FROM members m
-       WHERE (@q IS NULL
+       WHERE (@q::text IS NULL
               OR m.username LIKE @q ESCAPE '\\'
               OR m.name LIKE @q ESCAPE '\\'
               OR m.headline LIKE @q ESCAPE '\\'
@@ -144,14 +137,14 @@ export function listLeaderboard(
   return rows.map(toMember);
 }
 
-export function getMemberByClerkId(clerkId: string): Member | null {
-  const row = db
+export async function getMemberByClerkId(clerkId: string): Promise<Member | null> {
+  const row = await db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkId) as MemberRow | undefined;
   return row ? toMember(row) : null;
 }
 
-export function updateMemberProfile(
+export async function updateMemberProfile(
   clerkId: string,
   patch: {
     name?: string;
@@ -164,8 +157,8 @@ export function updateMemberProfile(
     headline?: string;
     persona?: string;
   },
-): void {
-  db.prepare(
+): Promise<void> {
+  await db.prepare(
     `UPDATE members SET
        name = COALESCE(@name, name),
        bio = COALESCE(@bio, bio),

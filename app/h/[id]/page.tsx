@@ -66,7 +66,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) return { title: "edição não encontrada" };
   const date = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -93,7 +93,7 @@ export default async function HackathonPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) notFound();
 
   const now = new Date();
@@ -106,26 +106,31 @@ export default async function HackathonPage({
     new Date(h.registrationDeadline) < now;
 
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   // spec 032 — "inscrito" = approved; pending/rejected têm estado próprio
   // no CTA e não abrem os gates (time/board/mural) da página
-  const myStatus = member ? getRegistrationStatus(member.id, h.id) : null;
+  const myStatus = member ? await getRegistrationStatus(member.id, h.id) : null;
   const registered = myStatus === "approved";
   // spec 021 — time do próprio membro na edição (null = ainda não submeteu)
   const myTeam =
-    member && registered ? memberTeamFor(h.id, member.username) : null;
-  const attendees = getRegistrationsByHackathon(h.id);
-  const cardRarity = getCardRarity(h.id);
-  const cardSupply = getCardSupply(h.id);
-  const myCard = member ? getMemberCard(member.id, h.id) : null;
-  const archive = getArchive(h.id);
+    member && registered ? await memberTeamFor(h.id, member.username) : null;
+  const attendees = await getRegistrationsByHackathon(h.id);
+  const cardRarity = await getCardRarity(h.id);
+  const cardSupply = await getCardSupply(h.id);
+  const myCard = member ? await getMemberCard(member.id, h.id) : null;
+  const archive = await getArchive(h.id);
   const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
-  const challenges = getChallenges(h.id);
-  const boardEntries = listBoardEntries(h.id);
+  const challenges = await getChallenges(h.id);
+  const boardEntries = await listBoardEntries(h.id);
   const phase = editionPhase(h, now);
   const countdownTo = countdownTarget(h, now);
   const podium = archive.teams.filter((t) => t.placement >= 1 && t.placement <= 3);
   const field = archive.teams.filter((t) => t.placement === 0);
+  const latestDeploys = new Map(
+    await Promise.all(
+      archive.teams.map(async (t) => [t.id, await getLatestDeployForTeam(t.id)] as const),
+    ),
+  );
 
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -419,7 +424,7 @@ export default async function HackathonPage({
                       <DeployPanel
                         teamId={t.id}
                         hasRepo={!!t.project.repoUrl}
-                        initialDeploy={getLatestDeployForTeam(t.id)}
+                        initialDeploy={latestDeploys.get(t.id) ?? null}
                         canDeploy={
                           !!member &&
                           (member.role === "admin" ||
@@ -483,7 +488,7 @@ export default async function HackathonPage({
                       <DeployPanel
                         teamId={t.id}
                         hasRepo={!!t.project.repoUrl}
-                        initialDeploy={getLatestDeployForTeam(t.id)}
+                        initialDeploy={latestDeploys.get(t.id) ?? null}
                         canDeploy={
                           !!member &&
                           (member.role === "admin" ||
@@ -584,7 +589,7 @@ export default async function HackathonPage({
           {"// mural da edição"}
         </h2>
         <FeedSection
-          initialPosts={listPosts(50, member?.id ?? null, {
+          initialPosts={await listPosts(50, member?.id ?? null, {
             hackathonId: h.id,
           })}
           canPost={Boolean(member && registered)}

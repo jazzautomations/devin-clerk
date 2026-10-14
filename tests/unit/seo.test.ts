@@ -19,8 +19,8 @@ describe("SITE_URL / absoluteUrl", () => {
 });
 
 describe("buildSitemap", () => {
-  it("cobre rotas estáticas, edições /h/* e posts /blog/*", () => {
-    const urls = buildSitemap().map((e) => e.url);
+  it("cobre rotas estáticas, edições /h/* e posts /blog/*", async () => {
+    const urls = (await buildSitemap()).map((e) => e.url);
     for (const path of [
       "/",
       "/radar",

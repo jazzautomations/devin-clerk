@@ -11,7 +11,7 @@ export async function DELETE(
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -22,13 +22,13 @@ export async function DELETE(
     return Response.json({ error: "Not found" }, { status: 404 });
   }
   // o comentário tem que ser DESTE post — id alheio na URL é 404, não 403
-  const comment = db
+  const comment = await db
     .prepare("SELECT postId FROM post_comments WHERE id = ?")
     .get(cid) as { postId: number } | undefined;
   if (!comment || comment.postId !== postId) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  if (!deleteComment(cid, member)) {
+  if (!await deleteComment(cid, member)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   return Response.json({ ok: true });

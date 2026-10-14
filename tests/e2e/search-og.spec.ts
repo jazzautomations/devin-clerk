@@ -8,17 +8,15 @@ import { openE2eDb } from "./db";
 async function ensureSearchMember(request: APIRequestContext): Promise<void> {
   await request.get("/membros");
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  db.prepare(
+  await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email)
      VALUES ('e2e_search', 'e2e_search', 'e2e_search@t.dev')`,
   ).run();
-  db.prepare(
+  await db.prepare(
     `UPDATE members SET name = 'Busca E2E', headline = 'caçadora de edge cases',
        skills = '["rust","wasm"]', xp = 4242
      WHERE clerkId = 'e2e_search'`,
   ).run();
-  db.close();
 }
 
 test.describe("?q= — busca server-side nas listas públicas", () => {

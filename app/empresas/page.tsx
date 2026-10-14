@@ -53,16 +53,16 @@ const oferta = [
   },
 ];
 
-export default function EmpresasPage() {
+export default async function EmpresasPage() {
   // stats reais do banco — a prova social é o produto vivo, não promessa
   const members = (
-    db.prepare("SELECT COUNT(*) n FROM members").get() as { n: number }
+    await db.prepare("SELECT COUNT(*) n FROM members").get() as { n: number }
   ).n;
   const editions = (
-    db.prepare("SELECT COUNT(*) n FROM hackathons").get() as { n: number }
+    await db.prepare("SELECT COUNT(*) n FROM hackathons").get() as { n: number }
   ).n;
   const projects = (
-    db.prepare("SELECT COUNT(*) n FROM team_projects").get() as { n: number }
+    await db.prepare("SELECT COUNT(*) n FROM team_projects").get() as { n: number }
   ).n;
   const stats = [
     { n: members, label: "membros" },

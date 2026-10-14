@@ -39,8 +39,8 @@ function toHackathon(row: Row): Hackathon {
   };
 }
 
-function allActive(): Hackathon[] {
-  const rows = db
+async function allActive(): Promise<Hackathon[]> {
+  const rows = await db
     .prepare("SELECT * FROM hackathons WHERE active = 1")
     .all() as Row[];
   return rows.map(toHackathon);
@@ -58,8 +58,8 @@ export function isOver(h: Hackathon, now = new Date()): boolean {
   return !Number.isNaN(t) && t < now.getTime();
 }
 
-export function getOpenHackathons(now = new Date()): Hackathon[] {
-  return allActive()
+export async function getOpenHackathons(now = new Date()): Promise<Hackathon[]> {
+  return (await allActive())
     .filter((h) => !isOver(h, now))
     .sort(
       (a, b) =>
@@ -69,8 +69,8 @@ export function getOpenHackathons(now = new Date()): Hackathon[] {
 
 // arquivo = complemento exato da lista aberta: edição rolando não é
 // histórico; sem data de fim, startsAt passado é tudo que sabemos
-export function getPastHackathons(now = new Date()): Hackathon[] {
-  return allActive()
+export async function getPastHackathons(now = new Date()): Promise<Hackathon[]> {
+  return (await allActive())
     .filter((h) => isOver(h, now))
     .sort(
       (a, b) =>
@@ -81,8 +81,8 @@ export function getPastHackathons(now = new Date()): Hackathon[] {
 // busca textual do radar (?q=, spec 023) — substring case-insensitive sobre
 // nome/local/tags. A lista já é materializada em JS (tags são JSON), então
 // filtrar aqui é mais honesto que LIKE na coluna serializada
-export function searchHackathons(q: string, now = new Date()): Hackathon[] {
-  const list = getOpenHackathons(now);
+export async function searchHackathons(q: string, now = new Date()): Promise<Hackathon[]> {
+  const list = await getOpenHackathons(now);
   const needle = q.trim().toLowerCase();
   if (!needle) return list;
   return list.filter((h) =>
@@ -93,15 +93,15 @@ export function searchHackathons(q: string, now = new Date()): Hackathon[] {
   );
 }
 
-export function getHackathon(id: string): Hackathon | null {
-  const row = db
+export async function getHackathon(id: string): Promise<Hackathon | null> {
+  const row = await db
     .prepare("SELECT * FROM hackathons WHERE id = ?")
     .get(id) as Row | undefined;
   return row ? toHackathon(row) : null;
 }
 
-export function getTags(events?: Hackathon[]): string[] {
-  const list = events ?? getOpenHackathons();
+export async function getTags(events?: Hackathon[]): Promise<string[]> {
+  const list = events ?? await getOpenHackathons();
   return [...new Set(list.flatMap((h) => h.tags))].sort();
 }
 

@@ -15,7 +15,7 @@ Pipeline: coletar → classificar (fontes ruidosas) → deduplicar
 dupes antigas → sweep de expirados.
 
 Uso:
-  uv run --python .venv-scraper/bin/python scripts/scrape_radar.py
+  DATABASE_URL=postgres://… uv run --python .venv-scraper/bin/python scripts/scrape_radar.py
   npm run test:scrape  # testes
 
 Upsert por id estável: registros nunca são apagados. Eventos da
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
+import os
 import sys
 import time
 import unicodedata
@@ -36,7 +36,7 @@ from pathlib import Path
 import requests
 from dateutil import parser as dateparser
 
-DB = Path(__file__).resolve().parent.parent / "data" / "hackahub.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 NOW = datetime.now(timezone.utc)
 
 DEVPOST_MAX_PAGES = 5
@@ -209,28 +209,41 @@ def is_expired(row: dict, now: datetime | None = None) -> bool:
 
 # ---------- schema / persistência ----------
 
+class PgConn:
+    """Conexão Postgres com a cara do sqlite3 que o scraper usava: aceita
+    `?` e `@nome`, cita identificadores camelCase (mesma regra de lib/db.ts)."""
+
+    _tok = re.compile(r"'(?:[^']|'')*'|\"[^\"]*\"|\?|@[A-Za-z_]\w*|[A-Za-z_]\w*|.", re.S)
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    @classmethod
+    def translate(cls, sql: str, has_params: bool = True) -> str:
+        out = []
+        for t in cls._tok.findall(sql):
+            if t == "?":
+                out.append("%s")
+            elif t.startswith("@"):
+                out.append(f"%({t[1:]})s")
+            elif t[0].isalpha() and re.search("[a-z]", t) and re.search("[A-Z]", t):
+                out.append(f'"{t}"')
+            elif t == "%" and has_params:
+                out.append("%%")  # psycopg só interpola quando há params
+            else:
+                out.append(t)
+        return "".join(out)
+
+    def execute(self, sql: str, params=None):
+        return self.conn.execute(self.translate(sql, params is not None), params)
+
+    def commit(self) -> None:
+        self.conn.commit()
+
+
 def ensure_schema(conn) -> None:
-    """Cria a tabela se faltar e faz ALTERs idempotentes (pattern de lib/db.ts)."""
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS hackathons (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          organizer TEXT NOT NULL,
-          startsAt TEXT NOT NULL,
-          endsAt TEXT,
-          format TEXT NOT NULL CHECK (format IN ('online','presencial','hibrido')),
-          location TEXT,
-          registrationUrl TEXT NOT NULL,
-          registrationDeadline TEXT,
-          tags TEXT NOT NULL DEFAULT '[]',
-          active INTEGER NOT NULL DEFAULT 1
-        )"""
-    )
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(hackathons)")}
-    for col in ("source", "first_seen", "last_seen", "prize"):
-        if col not in cols:
-            conn.execute(f"ALTER TABLE hackathons ADD COLUMN {col} TEXT")
-    # backfill: linhas antigas ganham timestamps da migração
+    """Schema é das migrations (migrations/*.sql, aplicadas pelo app no boot).
+    Aqui só o backfill de timestamps em linhas antigas."""
     conn.execute(
         "UPDATE hackathons SET first_seen = ? WHERE first_seen IS NULL",
         (NOW.isoformat(),),
@@ -311,8 +324,8 @@ def sweep_expired(conn) -> int:
     cur = conn.execute(
         """UPDATE hackathons SET active=0
            WHERE source IS NOT NULL AND active=1
-             AND datetime(COALESCE(endsAt, registrationDeadline, startsAt))
-                 < datetime('now')"""
+             AND to_ts(COALESCE(endsAt, registrationDeadline, startsAt))
+                 < now()"""
     )
     return cur.rowcount
 
@@ -769,8 +782,10 @@ SOURCES = [
 
 
 def main() -> None:
-    conn = sqlite3.connect(DB)
-    conn.execute("PRAGMA journal_mode=WAL")
+    if not DATABASE_URL:
+        sys.exit("DATABASE_URL não definida (postgres://…)")
+    import psycopg
+    conn = PgConn(psycopg.connect(DATABASE_URL))
     ensure_schema(conn)
 
     collected: list[dict] = []

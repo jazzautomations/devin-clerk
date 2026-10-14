@@ -20,11 +20,11 @@ export type HackathonPatch = {
 
 // update parcial: só os campos presentes no patch são tocados;
 // null explícito limpa o campo (pra endsAt/location/deadline)
-export function updateHackathon(
+export async function updateHackathon(
   id: string,
   patch: HackathonPatch,
-): Hackathon | null {
-  if (!getHackathon(id)) return null;
+): Promise<Hackathon | null> {
+  if (!await getHackathon(id)) return null;
 
   const sets: string[] = [];
   const values: Record<string, unknown> = { id };
@@ -75,15 +75,15 @@ export function updateHackathon(
   }
 
   if (sets.length > 0) {
-    db.prepare(`UPDATE hackathons SET ${sets.join(", ")} WHERE id = @id`).run(
+    await db.prepare(`UPDATE hackathons SET ${sets.join(", ")} WHERE id = @id`).run(
       values,
     );
   }
   return getHackathon(id);
 }
 
-export function listSubscribers(): { email: string; createdAt: string }[] {
-  return db
+export async function listSubscribers(): Promise<{ email: string; createdAt: string }[]> {
+  return await db
     .prepare("SELECT email, createdAt FROM subscribers ORDER BY id DESC")
     .all() as { email: string; createdAt: string }[];
 }

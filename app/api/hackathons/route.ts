@@ -6,5 +6,5 @@ export async function GET() {
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  return Response.json({ hackathons: getOpenHackathons() });
+  return Response.json({ hackathons: await getOpenHackathons() });
 }

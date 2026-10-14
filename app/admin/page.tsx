@@ -23,7 +23,7 @@ export default async function AdminPage() {
   const { userId } = await auth();
   if (!userId) return null;
   const user = await currentUser();
-  const member = getOrCreateMember({
+  const member = await getOrCreateMember({
     id: userId,
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
@@ -32,7 +32,7 @@ export default async function AdminPage() {
   });
   if (member.role !== "admin") notFound();
 
-  const events = db
+  const events = await db
     .prepare(
       `SELECT h.*, COUNT(r.id) AS inscritos
        FROM hackathons h
@@ -58,34 +58,44 @@ export default async function AdminPage() {
 
   // inscritos por edição — server-side direto na lib (com e-mail, é tela admin)
   const registrantsByEvent = new Map(
-    events.map((e) => [e.id, listRegistrants(e.id)]),
+    await Promise.all(
+      events.map(async (e) => [e.id, await listRegistrants(e.id)] as const),
+    ),
   );
 
   // desafios por edição — inclui inativos (o admin gere o inventário)
   const challengesByEvent = new Map(
-    events.map((e) => [e.id, listChallenges(e.id)]),
+    await Promise.all(
+      events.map(async (e) => [e.id, await listChallenges(e.id)] as const),
+    ),
   );
 
   // board "procuro time" por edição — inclui inativos (moderação)
   const boardByEvent = new Map(
-    events.map((e) => [e.id, listAllBoardEntries(e.id)]),
+    await Promise.all(
+      events.map(async (e) => [e.id, await listAllBoardEntries(e.id)] as const),
+    ),
   );
 
   // arquivo da edição (times + materiais) — cadastro pós-evento, spec 015
-  const archiveByEvent = new Map(events.map((e) => [e.id, getArchive(e.id)]));
+  const archiveByEvent = new Map(
+    await Promise.all(
+      events.map(async (e) => [e.id, await getArchive(e.id)] as const),
+    ),
+  );
 
-  const subscribers = listSubscribers();
+  const subscribers = await listSubscribers();
 
   // CRM de marcas (spec 019) — cadastro único, vínculo nos desafios via API
-  const sponsors = listSponsors();
+  const sponsors = await listSponsors();
 
   // fila de prospecção (spec 022) — leads do /empresas, mais recente primeiro
-  const leads = listLeads();
+  const leads = await listLeads();
 
   // fila de curadoria (spec 026) — indicações do /radar, mais antiga primeiro
-  const submissions = listPendingSubmissions();
+  const submissions = await listPendingSubmissions();
 
-  const members = db
+  const members = await db
     .prepare(
       "SELECT username, name, email, role, createdAt FROM members ORDER BY id",
     )

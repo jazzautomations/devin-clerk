@@ -7,23 +7,14 @@ import { openE2eDb } from "./db";
 
 const MEMBER = "e2e_talent";
 
-// idempotente: garante coluna openTo (mesma migração de lib/talent.ts — o dev
-// server só a cria quando alguém importa a lib), membro opted-in e um time
-// campeão com projeto na 1ª edição
-function ensureTalent(): void {
+// idempotente: membro opted-in e um time campeão com projeto na 1ª edição
+async function ensureTalent(): Promise<void> {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  const cols = (
-    db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
-  ).map((c) => c.name);
-  if (!cols.includes("openTo")) {
-    db.exec("ALTER TABLE members ADD COLUMN openTo TEXT");
-  }
-  db.prepare(
+  await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email)
      VALUES ('e2e_talent', 'e2e_talent', 'e2e_talent@t.dev')`,
   ).run();
-  db.prepare(
+  await db.prepare(
     `UPDATE members SET name = 'Talento E2E', persona = 'dev',
        skills = '["typescript","react"]', github = 'e2etalent',
        xp = 9999, openTo = 'trampo,mentoria'
@@ -31,34 +22,33 @@ function ensureTalent(): void {
   ).run();
   // vincula ao time campeão do seed (não cria outro 1º lugar — um segundo
   // placement=1 quebraria o pódio único do arquivo, ver archive.spec.ts)
-  let team = db
+  let team = await db
     .prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?")
     .get("hack-inova-unifacens-2026", "One Day Hospital") as
     | { id: number }
     | undefined;
   if (!team) {
     // fallback p/ banco sem o seed do bootstrap
-    const res = db
+    const res = await db
       .prepare(
         "INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, 1)",
       )
       .run("hack-inova-unifacens-2026", "One Day Hospital");
     team = { id: Number(res.lastInsertRowid) };
-    db.prepare(
+    await db.prepare(
       "INSERT INTO team_projects (teamId, title, description) VALUES (?, ?, ?)",
     ).run(team.id, "One Day Hospital", "seed e2e");
   }
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
   ).run(team.id, MEMBER);
-  db.close();
 }
 
 test.describe("talento — diretório de quem constrói de verdade", () => {
   test("/talento é público: heading, chips openTo, prova de entrega", async ({
     page,
   }) => {
-    ensureTalent();
+    await ensureTalent();
     const res = await page.goto("/talento");
     expect(res?.status()).toBe(200);
     await expect(
@@ -88,7 +78,7 @@ test.describe("talento — diretório de quem constrói de verdade", () => {
   test("membro sem openTo não aparece — o diretório é opt-in", async ({
     page,
   }) => {
-    ensureTalent();
+    await ensureTalent();
     await page.goto("/talento");
     // jazzautomations existe no dev db sem openTo marcado
     await expect(page.getByText("jazzautomations")).toHaveCount(0);

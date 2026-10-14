@@ -46,7 +46,7 @@ export async function generateMetadata({
   params: Promise<{ username: string }>;
 }): Promise<Metadata> {
   const { username } = await params;
-  const member = getMemberByUsername(username);
+  const member = await getMemberByUsername(username);
   if (!member) return { title: "perfil não encontrado" };
   const name = member.name ?? `@${member.username}`;
   const description =
@@ -73,16 +73,16 @@ export default async function PublicProfilePage({
   params: Promise<{ username: string }>;
 }) {
   const { username } = await params;
-  const member = getMemberByUsername(username);
+  const member = await getMemberByUsername(username);
   if (!member) notFound();
 
-  const history = getRegistrationIds(member.id)
-    .map((id) => getHackathon(id))
-    .filter(Boolean);
-  const badges = getMemberBadges(member.id);
-  const cards = getMemberCards(member.id);
-  const projects = getMemberProjects(member.username);
-  const arc = getMemberArc(member.username);
+  const history = (
+    await Promise.all((await getRegistrationIds(member.id)).map((id) => getHackathon(id)))
+  ).filter(Boolean);
+  const badges = await getMemberBadges(member.id);
+  const cards = await getMemberCards(member.id);
+  const projects = await getMemberProjects(member.username);
+  const arc = await getMemberArc(member.username);
   const podiums = arc.filter(
     (e) => e.placement >= 1 && e.placement <= 3,
   ).length;

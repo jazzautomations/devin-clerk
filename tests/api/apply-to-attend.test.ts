@@ -20,16 +20,16 @@ const asUser = (id: string | null) =>
 const CURATED = "curada-api";
 const OPEN = "hack-inova-alphaville-2026";
 
-function memberIdOf(clerkId: string): number {
+async function memberIdOf(clerkId: string): Promise<number> {
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
-const xpOf = (id: number) =>
-  (db.prepare("SELECT xp FROM members WHERE id = ?").get(id) as { xp: number })
+const xpOf = async (id: number) =>
+  (await db.prepare("SELECT xp FROM members WHERE id = ?").get(id) as { xp: number })
     .xp;
 
 const req = (method: string, body?: unknown) =>
@@ -43,37 +43,37 @@ const regParams = (id: string) => Promise.resolve({ id });
 const reviewParams = (id: string, memberId: number | string) =>
   Promise.resolve({ id, memberId: String(memberId) });
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_adm','adm_032','adm@t.dev','admin')",
   ).run();
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES ('clerk_usr','usr_032','usr@t.dev')",
   ).run();
-  db.prepare(
+  await db.prepare(
     `INSERT OR IGNORE INTO hackathons
        (id, name, organizer, startsAt, format, registrationUrl, tags, requiresApproval)
      VALUES (?, 'Curada API', 'Hack Inova', '2099-06-01', 'online',
              'https://x.dev', '[]', 1)`,
   ).run(CURATED);
-  db.prepare("UPDATE hackathons SET requiresApproval = 1 WHERE id = ?").run(
+  await db.prepare("UPDATE hackathons SET requiresApproval = 1 WHERE id = ?").run(
     CURATED,
   );
-  db.prepare("UPDATE hackathons SET requiresApproval = 0 WHERE id = ?").run(
+  await db.prepare("UPDATE hackathons SET requiresApproval = 0 WHERE id = ?").run(
     OPEN,
   );
-  db.prepare("DELETE FROM registrations WHERE hackathonId IN (?, ?)").run(
+  await db.prepare("DELETE FROM registrations WHERE hackathonId IN (?, ?)").run(
     CURATED,
     OPEN,
   );
-  db.prepare("DELETE FROM member_cards WHERE hackathonId IN (?, ?)").run(
+  await db.prepare("DELETE FROM member_cards WHERE hackathonId IN (?, ?)").run(
     CURATED,
     OPEN,
   );
   // XP/badges acumulam por membro entre testes do mesmo banco — zera pra
   // cada caso afirmar a recompensa exata do fluxo
-  db.prepare("UPDATE members SET xp = 0").run();
-  db.prepare("DELETE FROM member_badges").run();
+  await db.prepare("UPDATE members SET xp = 0").run();
+  await db.prepare("DELETE FROM member_badges").run();
 });
 
 describe("POST /api/hackathons/[id]/register — edição curada", () => {
@@ -87,10 +87,10 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
     const data = await res.json();
     expect(data.status).toBe("pending");
     expect(data.registered).toBe(false);
-    const mid = memberIdOf("clerk_usr");
-    expect(getRegistrationStatus(mid, CURATED)).toBe("pending");
-    expect(getMemberCard(mid, CURATED)).toBeNull();
-    expect(xpOf(mid)).toBe(0);
+    const mid = await memberIdOf("clerk_usr");
+    expect(await getRegistrationStatus(mid, CURATED)).toBe("pending");
+    expect(await getMemberCard(mid, CURATED)).toBeNull();
+    expect(await xpOf(mid)).toBe(0);
   });
 
   it("re-POST pendente → 200 idempotente (não duplica nem promove)", async () => {
@@ -138,7 +138,7 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
     const res = await reg.DELETE(req("DELETE"), { params: regParams(CURATED) });
     expect(res.status).toBe(200);
     expect(
-      getRegistrationStatus(memberIdOf("clerk_usr"), CURATED),
+      await getRegistrationStatus(await memberIdOf("clerk_usr"), CURATED),
     ).toBeNull();
   });
 });
@@ -148,7 +148,7 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
     await reg.POST(req("POST"), { params: regParams(CURATED) });
-    const mid = memberIdOf("clerk_usr");
+    const mid = await memberIdOf("clerk_usr");
 
     asUser("clerk_adm");
     const { PATCH } = await import(
@@ -162,16 +162,16 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
     expect(data.status).toBe("approved");
     expect(data.rewarded).toBe(true);
     expect(data.cardSerial).toBeGreaterThan(0);
-    expect(getRegistrationStatus(mid, CURATED)).toBe("approved");
-    expect(xpOf(mid)).toBe(50);
-    expect(getMemberCard(mid, CURATED)).not.toBeNull();
+    expect(await getRegistrationStatus(mid, CURATED)).toBe("approved");
+    expect(await xpOf(mid)).toBe(50);
+    expect(await getMemberCard(mid, CURATED)).not.toBeNull();
   });
 
   it("admin recusa → 200 {status:'rejected'}; memberId sem inscrição → 404", async () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
     await reg.POST(req("POST"), { params: regParams(CURATED) });
-    const mid = memberIdOf("clerk_usr");
+    const mid = await memberIdOf("clerk_usr");
 
     asUser("clerk_adm");
     const { PATCH } = await import(
@@ -182,7 +182,7 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
     });
     expect(res.status).toBe(200);
     expect((await res.json()).status).toBe("rejected");
-    expect(getRegistrationStatus(mid, CURATED)).toBe("rejected");
+    expect(await getRegistrationStatus(mid, CURATED)).toBe("rejected");
     // já decidido → ainda existe a linha; membro sem inscrição → 404
     const nf = await PATCH(req("PATCH", { action: "approve" }), {
       params: reviewParams(CURATED, 999999),
@@ -235,14 +235,14 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
 describe("PATCH /api/admin/hackathons/[id] — flag requiresApproval", () => {
   it("admin liga a flag → 200 e persiste; não-booleano → 400", async () => {
     asUser("clerk_adm");
-    expect(getHackathon(OPEN)!.requiresApproval).toBe(false);
+    expect((await getHackathon(OPEN))!.requiresApproval).toBe(false);
     const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
     const res = await PATCH(req("PATCH", { requiresApproval: true }), {
       params: regParams(OPEN),
     });
     expect(res.status).toBe(200);
     expect((await res.json()).hackathon.requiresApproval).toBe(true);
-    expect(getHackathon(OPEN)!.requiresApproval).toBe(true);
+    expect((await getHackathon(OPEN))!.requiresApproval).toBe(true);
     const bad = await PATCH(req("PATCH", { requiresApproval: "sim" }), {
       params: regParams(OPEN),
     });

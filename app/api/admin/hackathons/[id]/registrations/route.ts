@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -16,8 +16,8 @@ export async function GET(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  if (!getHackathon(id)) {
+  if (!await getHackathon(id)) {
     return Response.json({ error: "Edição não encontrada" }, { status: 404 });
   }
-  return Response.json({ registrations: listRegistrants(id) });
+  return Response.json({ registrations: await listRegistrants(id) });
 }

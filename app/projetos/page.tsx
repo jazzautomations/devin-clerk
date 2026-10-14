@@ -47,16 +47,16 @@ export default async function ProjetosPage({
 
   // member logado alimenta votedByMe nos cards (placar destaca o próprio voto)
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
 
-  const projects = listProjects({
+  const projects = await listProjects({
     hackathonId,
     liveOnly,
     q: q || undefined,
     sort: sortVotes ? "votes" : "jury",
     meId: member?.id ?? null,
   });
-  const editions = listProjectEditions();
+  const editions = await listProjectEditions();
   const filtering = !!hackathonId || liveOnly || !!q;
 
   const chip = (active: boolean) =>

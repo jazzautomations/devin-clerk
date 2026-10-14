@@ -11,19 +11,19 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const HID = "hack-inova-alphaville-2026"; // edição futura ativa (seed)
 
-function memberId(clerkId: string, username?: string): number {
-  db.prepare(
+async function memberId(clerkId: string, username?: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, username ?? `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
-function registerMember(mid: number, hid = HID) {
-  db.prepare(
+async function registerMember(mid: number, hid = HID) {
+  await db.prepare(
     "INSERT OR IGNORE INTO registrations (memberId, hackathonId) VALUES (?, ?)",
   ).run(mid, hid);
 }
@@ -37,12 +37,12 @@ const req = (method: string, body?: unknown) =>
 
 const ctx = (id = HID) => ({ params: Promise.resolve({ id }) });
 
-beforeEach(() => {
+beforeEach(async () => {
   clerk.uid = "clerk_capitao";
   resetRateLimits(); // capitao soma >10 POSTs no arquivo; quota zera entre casos
-  db.prepare("DELETE FROM team_members").run();
-  db.prepare("DELETE FROM team_projects").run();
-  db.prepare("DELETE FROM teams").run();
+  await db.prepare("DELETE FROM team_members").run();
+  await db.prepare("DELETE FROM team_projects").run();
+  await db.prepare("DELETE FROM teams").run();
 });
 
 describe("GET /api/hackathons/[id]/team — meu time na edição", () => {
@@ -50,8 +50,8 @@ describe("GET /api/hackathons/[id]/team — meu time na edição", () => {
     const { GET, POST } = await import(
       "@/app/api/hackathons/[id]/team/route"
     );
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
     await POST(
       req("POST", {
         name: "GET Team",
@@ -65,8 +65,8 @@ describe("GET /api/hackathons/[id]/team — meu time na edição", () => {
     expect(anon.status).toBe(401);
 
     clerk.uid = "clerk_sem_time";
-    const mid2 = memberId("clerk_sem_time", "sem_time");
-    registerMember(mid2);
+    const mid2 = await memberId("clerk_sem_time", "sem_time");
+    await registerMember(mid2);
     const none = await GET(req("GET"), ctx());
     expect(none.status).toBe(404);
 
@@ -81,8 +81,8 @@ describe("GET /api/hackathons/[id]/team — meu time na edição", () => {
 
   it("404 — edição inexistente", async () => {
     const { GET } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
     const res = await GET(req("GET"), ctx("fantasma"));
     expect(res.status).toBe(404);
   });
@@ -91,14 +91,14 @@ describe("GET /api/hackathons/[id]/team — meu time na edição", () => {
 describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
   it("201 — cria time placement 0, autor dentro, +15xp, colegas inscritos", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
-    const midColega = memberId("clerk_colega", "colega_reg");
-    registerMember(midColega);
-    memberId("clerk_ghost_m", "sem_inscricao"); // membro sem registration
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
+    const midColega = await memberId("clerk_colega", "colega_reg");
+    await registerMember(midColega);
+    await memberId("clerk_ghost_m", "sem_inscricao"); // membro sem registration
 
     const before = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
         xp: number;
       }
     ).xp;
@@ -128,7 +128,7 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
     expect(data.xp).toBe("+15");
 
     const after = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
         xp: number;
       }
     ).xp;
@@ -137,8 +137,8 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
 
   it("201 — aceita videoUrl/logoUrl; 400 quando não-http(s) (spec 030)", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
     const res = await POST(
       req("POST", {
         name: "Time Mídia",
@@ -160,8 +160,8 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
       { title: "P", logoUrl: "ftp://img" },
     ].entries()) {
       clerk.uid = `clerk_bad_${i}`;
-      const badMid = memberId(`clerk_bad_${i}`, `bad_${i}`);
-      registerMember(badMid);
+      const badMid = await memberId(`clerk_bad_${i}`, `bad_${i}`);
+      await registerMember(badMid);
       const bad = await POST(req("POST", { name: `Bad ${i}`, project }), ctx());
       expect(bad.status).toBe(400);
     }
@@ -182,7 +182,7 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
   it("403 — membro não inscrito recebe 'inscreve-te primeiro'", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
     clerk.uid = "clerk_noreg";
-    memberId("clerk_noreg"); // sem registration
+    await memberId("clerk_noreg"); // sem registration
     const res = await POST(req("POST", { name: "X" }), ctx());
     expect(res.status).toBe(403);
     const { error } = await res.json();
@@ -191,16 +191,16 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
 
   it("404 — edição inexistente", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
     const res = await POST(req("POST", { name: "X" }), ctx("fantasma"));
     expect(res.status).toBe(404);
   });
 
   it("400 — sem name, projeto sem título, URL inválida", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
     for (const body of [
       {},
       { name: "  " },
@@ -212,7 +212,7 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
     }
     expect(
       (
-        db.prepare("SELECT COUNT(*) n FROM teams WHERE hackathonId = ?").get(HID) as {
+        await db.prepare("SELECT COUNT(*) n FROM teams WHERE hackathonId = ?").get(HID) as {
           n: number;
         }
       ).n,
@@ -221,8 +221,8 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
 
   it("409 — já tem time na edição; nome já usado", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
 
     const first = await POST(req("POST", { name: "Original" }), ctx());
     expect(first.status).toBe(201);
@@ -233,8 +233,8 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
 
     // outro membro, mesmo nome → 409
     clerk.uid = "clerk_copycat";
-    const mid2 = memberId("clerk_copycat", "copycat");
-    registerMember(mid2);
+    const mid2 = await memberId("clerk_copycat", "copycat");
+    await registerMember(mid2);
     const dupe = await POST(req("POST", { name: "Original" }), ctx());
     expect(dupe.status).toBe(409);
   });
@@ -243,8 +243,8 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
 describe("PATCH /api/hackathons/[id]/team — editar projeto do próprio time", () => {
   async function setupTeam() {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
-    const mid = memberId("clerk_capitao", "capitao");
-    registerMember(mid);
+    const mid = await memberId("clerk_capitao", "capitao");
+    await registerMember(mid);
     const res = await POST(
       req("POST", {
         name: "Patcháveis",
@@ -293,7 +293,7 @@ describe("PATCH /api/hackathons/[id]/team — editar projeto do próprio time", 
     const team = await setupTeam();
 
     clerk.uid = "clerk_stalker";
-    memberId("clerk_stalker", "stalker");
+    await memberId("clerk_stalker", "stalker");
     const forbidden = await PATCH(
       req("PATCH", { teamId: team.id, title: "hack" }),
       ctx(),
@@ -308,10 +308,10 @@ describe("PATCH /api/hackathons/[id]/team — editar projeto do próprio time", 
     expect(nf.status).toBe(404);
 
     // time de OUTRA edição → 404 (escopo da rota)
-    db.prepare(
+    await db.prepare(
       "INSERT INTO teams (hackathonId, name, placement) VALUES ('hack-inova-puc-saude-2026', 'Alheio', 0)",
     ).run();
-    const other = db
+    const other = await db
       .prepare(
         "SELECT id FROM teams WHERE hackathonId = 'hack-inova-puc-saude-2026' AND name = 'Alheio'",
       )

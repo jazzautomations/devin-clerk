@@ -4,32 +4,32 @@ import { createTeam, getProjectByTeamId } from "@/lib/archive";
 
 const HACK = "hack-inova-unifacens-2026";
 
-function makeMember(username: string): void {
-  db.prepare(
+async function makeMember(username: string): Promise<void> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(`clerk_${username}`, username, `${username}@t.dev`);
 }
 
-beforeEach(() => {
-  db.prepare("DELETE FROM team_members").run();
-  db.prepare("DELETE FROM team_projects").run();
-  db.prepare("DELETE FROM teams").run();
+beforeEach(async () => {
+  await db.prepare("DELETE FROM team_members").run();
+  await db.prepare("DELETE FROM team_projects").run();
+  await db.prepare("DELETE FROM teams").run();
 });
 
 describe("getProjectByTeamId — ficha pública do projeto", () => {
-  it("retorna null pra teamId inexistente", () => {
-    expect(getProjectByTeamId(999999)).toBeNull();
+  it("retorna null pra teamId inexistente", async () => {
+    expect(await getProjectByTeamId(999999)).toBeNull();
   });
 
-  it("retorna null pra time sem projeto cadastrado", () => {
-    const { team } = createTeam(HACK, { name: "SemProjeto", placement: 0 });
-    expect(getProjectByTeamId(team.id)).toBeNull();
+  it("retorna null pra time sem projeto cadastrado", async () => {
+    const { team } = await createTeam(HACK, { name: "SemProjeto", placement: 0 });
+    expect(await getProjectByTeamId(team.id)).toBeNull();
   });
 
-  it("carrega projeto + time + edição + membros vinculados", () => {
-    makeMember("devana");
-    makeMember("beto");
-    const { team } = createTeam(HACK, {
+  it("carrega projeto + time + edição + membros vinculados", async () => {
+    await makeMember("devana");
+    await makeMember("beto");
+    const { team } = await createTeam(HACK, {
       name: "ODH",
       placement: 1,
       memberUsernames: ["beto", "devana"],
@@ -41,7 +41,7 @@ describe("getProjectByTeamId — ficha pública do projeto", () => {
       },
     });
 
-    const page = getProjectByTeamId(team.id);
+    const page = await getProjectByTeamId(team.id);
     expect(page).not.toBeNull();
     expect(page!.teamId).toBe(team.id);
     expect(page!.teamName).toBe("ODH");
@@ -56,13 +56,13 @@ describe("getProjectByTeamId — ficha pública do projeto", () => {
     expect(page!.members).toEqual(["beto", "devana"]);
   });
 
-  it("projeto sem descrição/links volta com nulls — a página decide o empty state", () => {
-    const { team } = createTeam(HACK, {
+  it("projeto sem descrição/links volta com nulls — a página decide o empty state", async () => {
+    const { team } = await createTeam(HACK, {
       name: "Minimo",
       placement: 0,
       project: { title: "Só título" },
     });
-    const page = getProjectByTeamId(team.id);
+    const page = await getProjectByTeamId(team.id);
     expect(page).not.toBeNull();
     expect(page!.project.description).toBeNull();
     expect(page!.project.repoUrl).toBeNull();

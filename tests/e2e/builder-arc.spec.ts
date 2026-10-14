@@ -11,83 +11,81 @@ const MEMBER = "e2e_arc";
 // idempotente: membro + time campeão do seed (reusa o "One Day Hospital" —
 // um segundo placement=1 quebraria o pódio único do arquivo), time próprio
 // com projeto na PUC e inscrição solta no Anhembi
-function ensureArc(): void {
+async function ensureArc(): Promise<void> {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
 
-  db.prepare(
+  await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email)
      VALUES ('e2e_arc', 'e2e_arc', 'e2e_arc@t.dev')`,
   ).run();
-  db.prepare("UPDATE members SET name = 'Arc E2E' WHERE clerkId = 'e2e_arc'").run();
+  await db.prepare("UPDATE members SET name = 'Arc E2E' WHERE clerkId = 'e2e_arc'").run();
   const memberId = (
-    db.prepare("SELECT id FROM members WHERE username = ?").get(MEMBER) as {
+    await db.prepare("SELECT id FROM members WHERE username = ?").get(MEMBER) as {
       id: number;
     }
   ).id;
 
   // 1) campeão na Unifacens (time+projeto do seed de lib/db.ts)
-  let team = db
+  let team = await db
     .prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?")
     .get("hack-inova-unifacens-2026", "One Day Hospital") as
     | { id: number }
     | undefined;
   if (!team) {
     // fallback p/ banco sem o seed do bootstrap
-    const res = db
+    const res = await db
       .prepare(
         "INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, 1)",
       )
       .run("hack-inova-unifacens-2026", "One Day Hospital");
     team = { id: Number(res.lastInsertRowid) };
-    db.prepare(
+    await db.prepare(
       "INSERT INTO team_projects (teamId, title, description) VALUES (?, ?, ?)",
     ).run(team.id, "One Day Hospital", "seed e2e");
   }
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
   ).run(team.id, MEMBER);
 
   // 2) time sem pódio COM projeto na PUC — vínculo sem inscrição
-  let pucTeam = db
+  let pucTeam = await db
     .prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?")
     .get("hack-inova-puc-saude-2026", "E2E Arc Squad") as
     | { id: number }
     | undefined;
   if (!pucTeam) {
-    const res = db
+    const res = await db
       .prepare(
         "INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, 0)",
       )
       .run("hack-inova-puc-saude-2026", "E2E Arc Squad");
     pucTeam = { id: Number(res.lastInsertRowid) };
   }
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
   ).run(pucTeam.id, MEMBER);
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO team_projects (teamId, title) VALUES (?, ?)",
   ).run(pucTeam.id, "Arc Delivery");
 
   // 3) inscrição sem time no Anhembi — "participou"
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO registrations (memberId, hackathonId) VALUES (?, ?)",
   ).run(memberId, "hackinova-os-2-anhembi-2026");
 
   // membro-controle sem participação nenhuma (seção não deve renderizar)
-  db.prepare(
+  await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email)
      VALUES ('e2e_arc_zero', 'e2e_arc_zero', 'e2e_arc_zero@t.dev')`,
   ).run();
 
-  db.close();
 }
 
 test.describe("trajetória do builder — arco de edições no perfil", () => {
   test("perfil mostra a faixa com desfechos em ordem cronológica", async ({
     page,
   }) => {
-    ensureArc();
+    await ensureArc();
     const res = await page.goto(`/u/${MEMBER}`);
     expect(res?.status()).toBe(200);
 
@@ -119,7 +117,7 @@ test.describe("trajetória do builder — arco de edições no perfil", () => {
   });
 
   test("membro sem participação não renderiza a seção", async ({ page }) => {
-    ensureArc();
+    await ensureArc();
     const res = await page.goto("/u/e2e_arc_zero");
     expect(res?.status()).toBe(200);
     await expect(page.getByText("// trajetória")).toHaveCount(0);

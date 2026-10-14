@@ -26,8 +26,8 @@ export default async function Image({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const h = getHackathon(id);
-  const rarity = h ? getCardRarity(id) : "comum";
+  const h = await getHackathon(id);
+  const rarity = h ? await getCardRarity(id) : "comum";
   const accent = h ? RARITY_HEX[rarity] : appConfig.accent;
   const title = h?.name ?? appConfig.name;
   const detail = h

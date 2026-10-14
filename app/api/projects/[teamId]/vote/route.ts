@@ -10,7 +10,7 @@ type Ctx = { params: Promise<{ teamId: string }> };
 // time → 200 {voted, count}. Sem XP: voto é sinal, não moeda.
 export async function POST(req: Request, ctx: Ctx) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -21,8 +21,8 @@ export async function POST(req: Request, ctx: Ctx) {
   }
   const teamId = Number((await ctx.params).teamId);
   try {
-    const { voted } = toggleVote(member.id, teamId);
-    return Response.json({ voted, count: voteCountFor(teamId) });
+    const { voted } = await toggleVote(member.id, teamId);
+    return Response.json({ voted, count: await voteCountFor(teamId) });
   } catch (e) {
     if (e instanceof VoteError) {
       return Response.json({ error: e.message }, { status: e.status });

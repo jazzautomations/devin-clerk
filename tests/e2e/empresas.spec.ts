@@ -13,15 +13,13 @@ const xff = () => ({
   "x-forwarded-for": `10.${rand()}.${rand()}.${rand()}`,
 });
 
-const leadCount = (email: string) => {
+const leadCount = async (email: string) => {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
   const n = (
-    db.prepare("SELECT COUNT(*) n FROM leads WHERE email = ?").get(email) as
+    await db.prepare("SELECT COUNT(*) n FROM leads WHERE email = ?").get(email) as
       | { n: number }
       | undefined
   )?.n;
-  db.close();
   return n ?? 0;
 };
 
@@ -79,7 +77,7 @@ test.describe("/empresas — pitch pra marca", () => {
     await expect(page.getByText(/recebido/i)).toBeVisible({
       timeout: 10000,
     });
-    expect(leadCount(email)).toBe(1);
+    expect(await leadCount(email)).toBe(1);
   });
 
   test("landing aponta a linha comercial pra /empresas", async ({ page }) => {
@@ -122,7 +120,7 @@ test.describe("POST /api/leads — porta pública", () => {
       },
     });
     expect(bot.status()).toBe(201);
-    expect(leadCount(botEmail)).toBe(0);
+    expect(await leadCount(botEmail)).toBe(0);
 
     const email = `dup-${Date.now()}@empresa.dev`;
     const body = { company: "Dup Co", email, interest: "outro" };
@@ -132,7 +130,7 @@ test.describe("POST /api/leads — porta pública", () => {
     expect(
       (await request.post("/api/leads", { headers: xff(), data: body })).status(),
     ).toBe(200);
-    expect(leadCount(email)).toBe(1);
+    expect(await leadCount(email)).toBe(1);
   });
 });
 

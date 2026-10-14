@@ -9,17 +9,17 @@ vi.mock("@clerk/nextjs/server", () => ({
   currentUser: vi.fn(async () => null),
 }));
 
-function memberId(clerkId: string, role: "member" | "admin" = "member"): number {
-  db.prepare(
+async function memberId(clerkId: string, role: "member" | "admin" = "member"): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   if (role === "admin") {
-    db.prepare("UPDATE members SET role = 'admin' WHERE clerkId = ?").run(
+    await db.prepare("UPDATE members SET role = 'admin' WHERE clerkId = ?").run(
       clerkId,
     );
   }
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
@@ -27,19 +27,19 @@ function memberId(clerkId: string, role: "member" | "admin" = "member"): number 
 
 const del = () => new Request("http://t", { method: "DELETE" });
 
-const count = (sql: string, ...args: number[]) =>
-  (db.prepare(sql).get(...args) as { n: number }).n;
+const count = async (sql: string, ...args: number[]) =>
+  (await db.prepare(sql).get(...args) as { n: number }).n;
 
 let authorId: number;
 let postId: number;
 
-function seedPost(memberId: number, body = "post alvo"): number {
-  db.prepare("INSERT INTO posts (memberId, body) VALUES (?, ?)").run(
+async function seedPost(memberId: number, body = "post alvo"): Promise<number> {
+  await db.prepare("INSERT INTO posts (memberId, body) VALUES (?, ?)").run(
     memberId,
     body,
   );
   return (
-    db
+    await db
       .prepare(
         "SELECT id FROM posts WHERE memberId = ? ORDER BY id DESC LIMIT 1",
       )
@@ -47,12 +47,12 @@ function seedPost(memberId: number, body = "post alvo"): number {
   ).id;
 }
 
-function seedComment(pid: number, memberId: number, body = "alvo"): number {
-  db.prepare(
+async function seedComment(pid: number, memberId: number, body = "alvo"): Promise<number> {
+  await db.prepare(
     "INSERT INTO post_comments (postId, memberId, body) VALUES (?, ?, ?)",
   ).run(pid, memberId, body);
   return (
-    db
+    await db
       .prepare(
         "SELECT id FROM post_comments WHERE postId = ? ORDER BY id DESC LIMIT 1",
       )
@@ -60,10 +60,10 @@ function seedComment(pid: number, memberId: number, body = "alvo"): number {
   ).id;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   clerk.uid = "clerk_mod_author";
-  authorId = memberId("clerk_mod_author");
-  postId = seedPost(authorId);
+  authorId = await memberId("clerk_mod_author");
+  postId = await seedPost(authorId);
 });
 
 describe("DELETE /api/posts/[id]", () => {
@@ -97,44 +97,44 @@ describe("DELETE /api/posts/[id]", () => {
   it("403 — membro comum não apaga post alheio", async () => {
     const { DELETE } = await import("@/app/api/posts/[id]/route");
     clerk.uid = "clerk_mod_stranger";
-    memberId("clerk_mod_stranger");
+    await memberId("clerk_mod_stranger");
     const res = await DELETE(del(), {
       params: Promise.resolve({ id: String(postId) }),
     });
     expect(res.status).toBe(403);
-    expect(count("SELECT COUNT(*) n FROM posts WHERE id = ?", postId)).toBe(1);
+    expect(await count("SELECT COUNT(*) n FROM posts WHERE id = ?", postId)).toBe(1);
   });
 
   it("200 — autor apaga o próprio post com cascata", async () => {
     const { DELETE } = await import("@/app/api/posts/[id]/route");
-    const liker = memberId("clerk_mod_liker");
-    db.prepare("INSERT INTO likes (postId, memberId) VALUES (?, ?)").run(
+    const liker = await memberId("clerk_mod_liker");
+    await db.prepare("INSERT INTO likes (postId, memberId) VALUES (?, ?)").run(
       postId,
       liker,
     );
-    seedComment(postId, liker);
+    await seedComment(postId, liker);
 
     const res = await DELETE(del(), {
       params: Promise.resolve({ id: String(postId) }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(count("SELECT COUNT(*) n FROM posts WHERE id = ?", postId)).toBe(0);
-    expect(count("SELECT COUNT(*) n FROM likes WHERE postId = ?", postId)).toBe(0);
+    expect(await count("SELECT COUNT(*) n FROM posts WHERE id = ?", postId)).toBe(0);
+    expect(await count("SELECT COUNT(*) n FROM likes WHERE postId = ?", postId)).toBe(0);
     expect(
-      count("SELECT COUNT(*) n FROM post_comments WHERE postId = ?", postId),
+      await count("SELECT COUNT(*) n FROM post_comments WHERE postId = ?", postId),
     ).toBe(0);
   });
 
   it("200 — admin apaga post de terceiro", async () => {
     const { DELETE } = await import("@/app/api/posts/[id]/route");
     clerk.uid = "clerk_mod_admin";
-    memberId("clerk_mod_admin", "admin");
+    await memberId("clerk_mod_admin", "admin");
     const res = await DELETE(del(), {
       params: Promise.resolve({ id: String(postId) }),
     });
     expect(res.status).toBe(200);
-    expect(count("SELECT COUNT(*) n FROM posts WHERE id = ?", postId)).toBe(0);
+    expect(await count("SELECT COUNT(*) n FROM posts WHERE id = ?", postId)).toBe(0);
   });
 
   it("404 — deleção repetida (idempotente pro client, não-crash)", async () => {
@@ -153,8 +153,8 @@ describe("DELETE /api/posts/[id]", () => {
 describe("DELETE /api/posts/[id]/comments/[commentId]", () => {
   let commentId: number;
 
-  beforeEach(() => {
-    commentId = seedComment(postId, authorId);
+  beforeEach(async () => {
+    commentId = await seedComment(postId, authorId);
   });
 
   const call = async (pid: number | string, cid: number | string) => {
@@ -178,23 +178,23 @@ describe("DELETE /api/posts/[id]/comments/[commentId]", () => {
     expect((await call(postId, "abc")).status).toBe(404);
     expect((await call("abc", commentId)).status).toBe(404);
     // comentário existe mas é de outro post → a URL não bate → 404
-    const otherPost = seedPost(authorId, "outro post");
+    const otherPost = await seedPost(authorId, "outro post");
     expect((await call(otherPost, commentId)).status).toBe(404);
     expect(
-      count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", commentId),
+      await count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", commentId),
     ).toBe(1);
   });
 
   it("403 — membro comum não apaga comentário alheio (nem dono do post)", async () => {
     clerk.uid = "clerk_mod_stranger2";
-    memberId("clerk_mod_stranger2");
+    await memberId("clerk_mod_stranger2");
     expect((await call(postId, commentId)).status).toBe(403);
     // dono do post também não pode — só autor do comentário ou admin
-    const other = memberId("clerk_mod_commenter");
-    const foreign = seedComment(postId, other);
+    const other = await memberId("clerk_mod_commenter");
+    const foreign = await seedComment(postId, other);
     expect((await call(postId, foreign)).status).toBe(403);
     expect(
-      count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", foreign),
+      await count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", foreign),
     ).toBe(1);
   });
 
@@ -203,16 +203,16 @@ describe("DELETE /api/posts/[id]/comments/[commentId]", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(
-      count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", commentId),
+      await count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", commentId),
     ).toBe(0);
   });
 
   it("200 — admin apaga comentário alheio", async () => {
     clerk.uid = "clerk_mod_admin2";
-    memberId("clerk_mod_admin2", "admin");
+    await memberId("clerk_mod_admin2", "admin");
     expect((await call(postId, commentId)).status).toBe(200);
     expect(
-      count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", commentId),
+      await count("SELECT COUNT(*) n FROM post_comments WHERE id = ?", commentId),
     ).toBe(0);
   });
 });

@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   }
   const user = await currentUser();
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
-  const member = getOrCreateMember({
+  const member = await getOrCreateMember({
     id: userId,
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
@@ -33,14 +33,14 @@ export default async function DashboardPage() {
   });
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
-  const hackathons = getOpenHackathons(now);
+  const hackathons = await getOpenHackathons(now);
   const sessoes = hackathons.filter((h) => h.partner);
   const radar = hackathons.filter((h) => !h.partner);
-  const tags = getTags(hackathons);
-  const registeredIds = getRegistrationIds(member.id);
-  const past = getPastHackathons(now);
-  const badges = getMemberBadges(member.id);
-  const cards = getMemberCards(member.id);
+  const tags = await getTags(hackathons);
+  const registeredIds = await getRegistrationIds(member.id);
+  const past = await getPastHackathons(now);
+  const badges = await getMemberBadges(member.id);
+  const cards = await getMemberCards(member.id);
   const [nextFeature] = appConfig.upcomingFeatures;
 
   return (
@@ -98,7 +98,7 @@ export default async function DashboardPage() {
           comunidade — o que a galera tá construindo
         </h2>
         <FeedSection
-          initialPosts={listPosts(50, member.id)}
+          initialPosts={await listPosts(50, member.id)}
           me={member.username}
           isAdmin={member.role === "admin"}
         />

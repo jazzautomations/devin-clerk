@@ -20,11 +20,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  return Response.json({ entries: listBoardEntries(h.id) });
+  return Response.json({ entries: await listBoardEntries(h.id) });
 }
 
 export async function POST(
@@ -36,11 +36,11 @@ export async function POST(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -50,7 +50,7 @@ export async function POST(
     return limited;
   }
   // sem inscrição o board vira spam — FR-002
-  if (!getRegistrationIds(member.id).includes(h.id)) {
+  if (!(await getRegistrationIds(member.id)).includes(h.id)) {
     return Response.json({ error: "inscreve-te primeiro" }, { status: 403 });
   }
   const body = await req.json().catch(() => null);
@@ -63,10 +63,10 @@ export async function POST(
       { status: 400 },
     );
   }
-  const { entry, created } = upsertBoardEntry(member.id, h.id, input);
+  const { entry, created } = await upsertBoardEntry(member.id, h.id, input);
   if (created) {
-    awardXp(member.id, XP.teamBoard);
-    checkBadges(member.id);
+    await awardXp(member.id, XP.teamBoard);
+    await checkBadges(member.id);
   }
   return Response.json(
     { entry, created, xp: created ? `+${XP.teamBoard}` : null },
@@ -84,15 +84,15 @@ export async function DELETE(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  deactivateBoardEntry(member.id, h.id);
+  await deactivateBoardEntry(member.id, h.id);
   return Response.json({ active: false });
 }
 
@@ -102,7 +102,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -110,7 +110,7 @@ export async function PATCH(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
@@ -125,10 +125,10 @@ export async function PATCH(
       { status: 400 },
     );
   }
-  const target = getBoardEntryById(entryId);
+  const target = await getBoardEntryById(entryId);
   if (!target || target.hackathonId !== h.id) {
     return Response.json({ error: "Anúncio não encontrado" }, { status: 404 });
   }
-  const entry = setBoardEntryActive(entryId, b.active);
+  const entry = await setBoardEntryActive(entryId, b.active);
   return Response.json({ entry });
 }

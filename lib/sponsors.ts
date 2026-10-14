@@ -1,26 +1,9 @@
 import { randomUUID } from "node:crypto";
-import db, { ensureColumn } from "@/lib/db";
+import db from "@/lib/db";
 
 // schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
-db.exec(`CREATE TABLE IF NOT EXISTS sponsors (
-  id TEXT PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  url TEXT,
-  tier TEXT NOT NULL DEFAULT 'sponsor'
-    CHECK (tier IN ('apoio','sponsor','master')),
-  contactEmail TEXT,
-  notes TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-)`);
-
 // challenges ganha vínculo pra sponsors — ALTER idempotente.
 // sponsor TEXT segue NOT NULL como nome de exibição/fallback.
-ensureColumn("challenges", "sponsorId", "sponsorId TEXT");
-db.exec(
-  "CREATE INDEX IF NOT EXISTS idx_challenges_sponsor ON challenges(sponsorId)",
-);
-
 export const SPONSOR_TIERS = ["apoio", "sponsor", "master"] as const;
 export type SponsorTier = (typeof SPONSOR_TIERS)[number];
 
@@ -44,29 +27,29 @@ function toSponsor(row: Row): Sponsor {
   return { ...row, active: row.active === 1 };
 }
 
-export function getSponsor(id: string): Sponsor | null {
-  const row = db.prepare("SELECT * FROM sponsors WHERE id = ?").get(id) as
+export async function getSponsor(id: string): Promise<Sponsor | null> {
+  const row = await db.prepare("SELECT * FROM sponsors WHERE id = ?").get(id) as
     | Row
     | undefined;
   return row ? toSponsor(row) : null;
 }
 
 // inclui inativos — uso admin; ordena ativos primeiro
-export function listSponsors(): SponsorRow[] {
-  const rows = db
+export async function listSponsors(): Promise<SponsorRow[]> {
+  const rows = await db
     .prepare(
       `SELECT s.*,
         (SELECT COUNT(*) FROM challenges c WHERE c.sponsorId = s.id)
           AS challengeCount
        FROM sponsors s
-       ORDER BY s.active DESC, s.name COLLATE NOCASE`,
+       ORDER BY s.active DESC, lower(s.name)`,
     )
     .all() as (Row & { challengeCount: number })[];
   return rows.map((r) => ({ ...toSponsor(r), challengeCount: r.challengeCount }));
 }
 
-export function getSponsorForChallenge(challengeId: string): Sponsor | null {
-  const row = db
+export async function getSponsorForChallenge(challengeId: string): Promise<Sponsor | null> {
+  const row = await db
     .prepare(
       `SELECT s.* FROM sponsors s
        JOIN challenges c ON c.sponsorId = s.id
@@ -79,22 +62,22 @@ export function getSponsorForChallenge(challengeId: string): Sponsor | null {
 const opt = (v?: string | null) =>
   typeof v === "string" && v.trim() ? v.trim() : null;
 
-export function createSponsor(input: {
+export async function createSponsor(input: {
   name: string;
   url?: string | null;
   tier?: SponsorTier;
   contactEmail?: string | null;
   notes?: string | null;
-}): Sponsor {
+}): Promise<Sponsor> {
   const name = input.name?.trim() ?? "";
   if (!name) throw new Error("name obrigatório");
   const tier = input.tier ?? "sponsor";
   if (!SPONSOR_TIERS.includes(tier)) throw new Error("tier inválido");
-  if (db.prepare("SELECT 1 FROM sponsors WHERE name = ?").get(name)) {
+  if (await db.prepare("SELECT 1 FROM sponsors WHERE name = ?").get(name)) {
     throw new Error("já existe um sponsor com esse nome");
   }
   const id = `spon-${randomUUID()}`;
-  db.prepare(
+  await db.prepare(
     `INSERT INTO sponsors (id, name, url, tier, contactEmail, notes)
      VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -105,7 +88,7 @@ export function createSponsor(input: {
     opt(input.contactEmail),
     opt(input.notes),
   );
-  return getSponsor(id)!;
+  return (await getSponsor(id))!;
 }
 
 export type SponsorPatch = {
@@ -119,11 +102,11 @@ export type SponsorPatch = {
 
 // update parcial: só os campos presentes são tocados; null limpa o campo.
 // desativar nunca apaga — contrato encerrado ≠ histórico apagado
-export function updateSponsor(
+export async function updateSponsor(
   id: string,
   patch: SponsorPatch,
-): Sponsor | null {
-  if (!getSponsor(id)) return null;
+): Promise<Sponsor | null> {
+  if (!await getSponsor(id)) return null;
 
   const sets: string[] = [];
   const values: Record<string, unknown> = { id };
@@ -132,7 +115,7 @@ export function updateSponsor(
     const name = patch.name.trim();
     if (!name) throw new Error("name obrigatório");
     if (
-      db
+      await db
         .prepare("SELECT 1 FROM sponsors WHERE name = ? AND id != ?")
         .get(name, id)
     ) {
@@ -164,7 +147,7 @@ export function updateSponsor(
   }
 
   if (sets.length > 0) {
-    db.prepare(`UPDATE sponsors SET ${sets.join(", ")} WHERE id = @id`).run(
+    await db.prepare(`UPDATE sponsors SET ${sets.join(", ")} WHERE id = @id`).run(
       values,
     );
   }

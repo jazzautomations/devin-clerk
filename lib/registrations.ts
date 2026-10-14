@@ -1,31 +1,17 @@
-import db, { ensureColumn } from "@/lib/db";
+import db from "@/lib/db";
 import { XP, type Badge } from "@/lib/game";
 import { awardXp, checkBadges, mintCard } from "@/lib/xp";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
 // este módulo sem passar por members.ts
-ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
-
 // spec 032 — "pedir lugar" (apply to attend): edições curadas guardam a
 // inscrição como 'pending' e a recompensa só existe na aprovação do admin.
 // requiresApproval mora em hackathons; status/reviewedAt em registrations —
 // este arquivo é o dono do schema de inscrição (lib/db.ts não é tocado).
-ensureColumn(
-  "hackathons",
-  "requiresApproval",
-  "requiresApproval INTEGER NOT NULL DEFAULT 0",
-);
-ensureColumn(
-  "registrations",
-  "status",
-  "status TEXT NOT NULL DEFAULT 'approved'",
-);
-ensureColumn("registrations", "reviewedAt", "reviewedAt TEXT");
-
 export type RegistrationStatus = "pending" | "approved" | "rejected";
 
-export function editionRequiresApproval(hackathonId: string): boolean {
-  const row = db
+export async function editionRequiresApproval(hackathonId: string): Promise<boolean> {
+  const row = await db
     .prepare("SELECT requiresApproval FROM hackathons WHERE id = ?")
     .get(hackathonId) as { requiresApproval: number } | undefined;
   return row?.requiresApproval === 1;
@@ -36,34 +22,34 @@ export function editionRequiresApproval(hackathonId: string): boolean {
 // instantâneo em edição aberta, ou aprovação admin via reviewRegistration).
 // INSERT OR IGNORE preserva o status existente: re-pedido em 'pending' não
 // duplica, e em 'rejected' não reabre a fila — quem decide é o admin.
-export function register(
+export async function register(
   memberId: number,
   hackathonId: string,
-): { status: RegistrationStatus; created: boolean } {
-  const wants: RegistrationStatus = editionRequiresApproval(hackathonId)
+): Promise<{ status: RegistrationStatus; created: boolean }> {
+  const wants: RegistrationStatus = await editionRequiresApproval(hackathonId)
     ? "pending"
     : "approved";
-  const res = db
+  const res = await db
     .prepare(
       `INSERT OR IGNORE INTO registrations (memberId, hackathonId, status)
        VALUES (?, ?, ?)`,
     )
     .run(memberId, hackathonId, wants);
-  const stored = getRegistrationStatus(memberId, hackathonId) ?? wants;
+  const stored = await getRegistrationStatus(memberId, hackathonId) ?? wants;
   return { status: stored, created: res.changes > 0 };
 }
 
-export function unregister(memberId: number, hackathonId: string): void {
-  db.prepare(
+export async function unregister(memberId: number, hackathonId: string): Promise<void> {
+  await db.prepare(
     `DELETE FROM registrations WHERE memberId = ? AND hackathonId = ?`,
   ).run(memberId, hackathonId);
 }
 
-export function getRegistrationStatus(
+export async function getRegistrationStatus(
   memberId: number,
   hackathonId: string,
-): RegistrationStatus | null {
-  const row = db
+): Promise<RegistrationStatus | null> {
+  const row = await db
     .prepare(
       "SELECT status FROM registrations WHERE memberId = ? AND hackathonId = ?",
     )
@@ -73,8 +59,8 @@ export function getRegistrationStatus(
 
 // "inscrito" = approved — TODOS os gates (board 012, team 021, mural 028,
 // dashboard, perfil público) herdam daqui; pendente é candidato, não inscrito
-export function getRegistrationIds(memberId: number): string[] {
-  const rows = db
+export async function getRegistrationIds(memberId: number): Promise<string[]> {
+  const rows = await db
     .prepare(
       `SELECT hackathonId FROM registrations
        WHERE memberId = ? AND status = 'approved'`,
@@ -83,21 +69,21 @@ export function getRegistrationIds(memberId: number): string[] {
   return rows.map((r) => r.hackathonId);
 }
 
-export function getRegistrationsForMember(memberId: number): string[] {
+export async function getRegistrationsForMember(memberId: number): Promise<string[]> {
   return getRegistrationIds(memberId);
 }
 
 // lista PÚBLICA da edição (/h/[id] "inscritos" + contagem da arena) —
 // só aprovados aparecem e contam; pendente/rejeitado não vaza
-export function getRegistrationsByHackathon(
+export async function getRegistrationsByHackathon(
   hackathonId: string,
-): {
+): Promise<{
   username: string;
   name: string | null;
   avatarUrl: string | null;
   createdAt: string;
-}[] {
-  return db
+}[]> {
+  return await db
     .prepare(
       `SELECT m.username, m.name, m.avatarUrl, r.createdAt
        FROM registrations r JOIN members m ON m.id = r.memberId
@@ -115,13 +101,13 @@ export function getRegistrationsByHackathon(
 // a recompensa da inscrição efetivada — ÚNICO caminho de XP + carta +
 // badges de inscrição: o register instantâneo (edição aberta) e a
 // aprovação admin (edição curada) passam por aqui; pendente nunca chega
-export function completeRegistration(
+export async function completeRegistration(
   memberId: number,
   hackathonId: string,
-): { xp: string; cardSerial: number | null; newBadges: Badge[] } {
-  awardXp(memberId, XP.register);
-  const cardSerial = mintCard(memberId, hackathonId);
-  const newBadges = checkBadges(memberId);
+): Promise<{ xp: string; cardSerial: number | null; newBadges: Badge[] }> {
+  await awardXp(memberId, XP.register);
+  const cardSerial = await mintCard(memberId, hackathonId);
+  const newBadges = await checkBadges(memberId);
   return { xp: `+${XP.register}`, cardSerial, newBadges };
 }
 
@@ -141,15 +127,15 @@ export type ReviewResult =
 // 'rejected' (inclusive revogação de quem já era aprovado — carta/XP pagos
 // NÃO são estornados); a linha fica como registro honesto da decisão.
 // null = não existe inscrição pro par memberId+edição → a rota mapeia 404.
-export function reviewRegistration(
+export async function reviewRegistration(
   memberId: number,
   hackathonId: string,
   action: "approve" | "reject",
-): ReviewResult | null {
-  const status = getRegistrationStatus(memberId, hackathonId);
+): Promise<ReviewResult | null> {
+  const status = await getRegistrationStatus(memberId, hackathonId);
   if (status === null) return null;
   if (action === "reject") {
-    db.prepare(
+    await db.prepare(
       `UPDATE registrations
        SET status = 'rejected', reviewedAt = datetime('now')
        WHERE memberId = ? AND hackathonId = ?`,
@@ -165,21 +151,21 @@ export function reviewRegistration(
       newBadges: [],
     };
   }
-  db.prepare(
+  await db.prepare(
     `UPDATE registrations
      SET status = 'approved', reviewedAt = datetime('now')
      WHERE memberId = ? AND hackathonId = ?`,
   ).run(memberId, hackathonId);
-  const reward = completeRegistration(memberId, hackathonId);
+  const reward = await completeRegistration(memberId, hackathonId);
   return { status: "approved", rewarded: true, ...reward };
 }
 
 // versão operacional (admin): inclui e-mail + memberId + status da fila de
 // curadoria — nunca usar em rota pública. Pendentes primeiro: é a fila de
 // trabalho do organizador.
-export function listRegistrants(
+export async function listRegistrants(
   hackathonId: string,
-): {
+): Promise<{
   memberId: number;
   username: string;
   name: string | null;
@@ -187,8 +173,8 @@ export function listRegistrants(
   status: RegistrationStatus;
   createdAt: string;
   reviewedAt: string | null;
-}[] {
-  return db
+}[]> {
+  return await db
     .prepare(
       `SELECT r.memberId, m.username, m.name, m.email, r.status,
               r.createdAt, r.reviewedAt

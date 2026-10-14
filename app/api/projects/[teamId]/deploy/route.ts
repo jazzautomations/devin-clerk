@@ -15,12 +15,12 @@ type Ctx = { params: Promise<{ teamId: string }> };
 
 async function gate(ctx: Ctx) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) return { err: Response.json({ error: "Unauthorized" }, { status: 401 }) };
   const teamId = Number((await ctx.params).teamId);
-  if (!Number.isInteger(teamId) || !projectExists(teamId))
+  if (!Number.isInteger(teamId) || !await projectExists(teamId))
     return { err: Response.json({ error: "Projeto não encontrado" }, { status: 404 }) };
-  if (!canDeploy(member, teamId))
+  if (!await canDeploy(member, teamId))
     return { err: Response.json({ error: "Forbidden" }, { status: 403 }) };
   return { teamId };
 }
@@ -30,8 +30,8 @@ export async function POST(req: Request, ctx: Ctx) {
   if ("err" in g) return g.err;
   const body = await req.json().catch(() => ({}));
   try {
-    sweepDeploys();
-    const deploy = queueDeploy({
+    await sweepDeploys();
+    const deploy = await queueDeploy({
       teamId: g.teamId,
       repoUrl: body.repoUrl,
       startCommand: body.startCommand,
@@ -48,8 +48,8 @@ export async function POST(req: Request, ctx: Ctx) {
 export async function GET(_req: Request, ctx: Ctx) {
   const g = await gate(ctx);
   if ("err" in g) return g.err;
-  sweepDeploys();
-  const deploy = getLatestDeployForTeam(g.teamId);
+  await sweepDeploys();
+  const deploy = await getLatestDeployForTeam(g.teamId);
   return Response.json({
     deploy,
     url: deploy ? `/demo/${deploy.id}/` : null,
@@ -60,9 +60,9 @@ export async function GET(_req: Request, ctx: Ctx) {
 export async function DELETE(_req: Request, ctx: Ctx) {
   const g = await gate(ctx);
   if ("err" in g) return g.err;
-  const deploy = getDeployForTeam(g.teamId);
+  const deploy = await getDeployForTeam(g.teamId);
   if (!deploy)
     return Response.json({ error: "Nenhum deploy ativo" }, { status: 404 });
-  stopDeploy(deploy.id);
+  await stopDeploy(deploy.id);
   return Response.json({ ok: true });
 }

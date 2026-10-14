@@ -8,29 +8,27 @@ import { openE2eDb } from "./db";
 
 const MARKER = "post e2e — alvo de moderação";
 
-function ensurePost(): number {
+async function ensurePost(): Promise<number> {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES ('e2e_commenter', 'e2e_commenter', 'e2e@t.dev')",
   ).run();
-  const m = db
+  const m = await db
     .prepare("SELECT id FROM members WHERE clerkId = 'e2e_commenter'")
     .get() as { id: number };
-  let p = db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as
+  let p = await db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as
     | { id: number }
     | undefined;
   if (!p) {
-    db.prepare("INSERT INTO posts (memberId, body) VALUES (?, ?)").run(
+    await db.prepare("INSERT INTO posts (memberId, body) VALUES (?, ?)").run(
       m.id,
       MARKER,
     );
-    p = db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as {
+    p = await db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as {
       id: number;
     };
   }
   const id = p.id;
-  db.close();
   return id;
 }
 
@@ -38,7 +36,7 @@ test.describe("moderação — visitante não apaga nada", () => {
   test("DELETE /api/posts/[id] deslogado → 401 JSON, nunca redirect", async ({
     request,
   }) => {
-    const postId = ensurePost();
+    const postId = await ensurePost();
     const res = await request.delete(`/api/posts/${postId}`);
     expect(res.status()).toBe(401);
     expect(res.headers()["content-type"]).toContain("application/json");
@@ -49,14 +47,14 @@ test.describe("moderação — visitante não apaga nada", () => {
   });
 
   test("DELETE comentário deslogado → 401 JSON", async ({ request }) => {
-    const postId = ensurePost();
+    const postId = await ensurePost();
     const res = await request.delete(`/api/posts/${postId}/comments/1`);
     expect(res.status()).toBe(401);
     expect(res.headers()["content-type"]).toContain("application/json");
   });
 
   test("anon não vê controle de apagar no feed", async ({ page }) => {
-    ensurePost();
+    await ensurePost();
     await page.goto("/feed");
     const post = page.locator("li", { hasText: MARKER });
     await expect(post).toBeVisible();

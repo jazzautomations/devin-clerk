@@ -1,18 +1,10 @@
-import db, { ensureColumn } from "@/lib/db";
+import db from "@/lib/db";
 import type { Member } from "@/lib/members";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
 // este módulo sem passar por members.ts (ex.: testes unitários)
-ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
-
 // hackathonId = mural da edição (spec 028): NULL é post global do /feed —
 // ALTER guardado aqui mesmo, lib/db.ts continua intocado
-ensureColumn(
-  "posts",
-  "hackathonId",
-  "hackathonId TEXT REFERENCES hackathons(id)",
-);
-
 export type Post = {
   id: number;
   body: string;
@@ -44,11 +36,11 @@ const select = `SELECT p.id, p.body, p.link, p.createdAt, p.hackathonId,
 // edições com chip); {hackathonId} isola a edição; {global} só posts sem edição
 export type PostScope = { hackathonId: string } | { global: true };
 
-export function listPosts(
+export async function listPosts(
   limit = 50,
   meId: number | null = null,
   scope?: PostScope,
-): Post[] {
+): Promise<Post[]> {
   const where = scope
     ? "hackathonId" in scope
       ? "WHERE p.hackathonId = @h"
@@ -56,28 +48,28 @@ export function listPosts(
     : "";
   const params: Record<string, unknown> = { me: meId ?? -1, limit };
   if (scope && "hackathonId" in scope) params.h = scope.hackathonId;
-  return db
+  return (await db
     .prepare(`${select} ${where} ORDER BY p.id DESC LIMIT @limit`)
-    .all(params)
+    .all(params))
     .map((p) => ({ ...(p as Post), likedByMe: Boolean((p as Post).likedByMe) }));
 }
 
-export function createPost(
+export async function createPost(
   memberId: number,
   body: string,
   link?: string | null,
   hackathonId?: string | null,
-): Post {
+): Promise<Post> {
   const trimmed = body.trim().slice(0, 500);
   if (!trimmed) throw new Error("Post vazio");
   const url = link?.trim() || null;
   if (url && !/^https?:\/\//i.test(url)) throw new Error("Link inválido");
   // escopo é só persistido aqui — edição existe/ativa e inscrição do membro
   // são validados na rota, que tem os códigos HTTP (404/400/403)
-  db.prepare(
+  await db.prepare(
     "INSERT INTO posts (memberId, body, link, hackathonId) VALUES (?, ?, ?, ?)",
   ).run(memberId, trimmed, url, hackathonId?.trim() || null);
-  const post = db
+  const post = await db
     .prepare(`${select} ORDER BY p.id DESC LIMIT 1`)
     .get({ me: memberId }) as Post;
   post.likedByMe = false;
@@ -86,46 +78,46 @@ export function createPost(
 
 // moderação: autor apaga o seu, admin apaga qualquer um — a cascata é
 // transacional pra nunca deixar like/comentário órfão de post que não existe
-export function deletePost(postId: number, requester: Member): boolean {
-  const post = db
+export async function deletePost(postId: number, requester: Member): Promise<boolean> {
+  const post = await db
     .prepare("SELECT memberId FROM posts WHERE id = ?")
     .get(postId) as { memberId: number } | undefined;
   if (!post) return false;
   if (requester.role !== "admin" && post.memberId !== requester.id) {
     return false;
   }
-  db.transaction(() => {
-    db.prepare("DELETE FROM likes WHERE postId = ?").run(postId);
-    db.prepare("DELETE FROM post_comments WHERE postId = ?").run(postId);
-    db.prepare("DELETE FROM posts WHERE id = ?").run(postId);
+  await db.transaction(async () => {
+    await db.prepare("DELETE FROM likes WHERE postId = ?").run(postId);
+    await db.prepare("DELETE FROM post_comments WHERE postId = ?").run(postId);
+    await db.prepare("DELETE FROM posts WHERE id = ?").run(postId);
   })();
   return true;
 }
 
-export function deleteComment(commentId: number, requester: Member): boolean {
-  const comment = db
+export async function deleteComment(commentId: number, requester: Member): Promise<boolean> {
+  const comment = await db
     .prepare("SELECT memberId FROM post_comments WHERE id = ?")
     .get(commentId) as { memberId: number } | undefined;
   if (!comment) return false;
   if (requester.role !== "admin" && comment.memberId !== requester.id) {
     return false;
   }
-  db.prepare("DELETE FROM post_comments WHERE id = ?").run(commentId);
+  await db.prepare("DELETE FROM post_comments WHERE id = ?").run(commentId);
   return true;
 }
 
-export function toggleLike(postId: number, memberId: number): boolean {
-  const existing = db
+export async function toggleLike(postId: number, memberId: number): Promise<boolean> {
+  const existing = await db
     .prepare("SELECT 1 FROM likes WHERE postId = ? AND memberId = ?")
     .get(postId, memberId);
   if (existing) {
-    db.prepare("DELETE FROM likes WHERE postId = ? AND memberId = ?").run(
+    await db.prepare("DELETE FROM likes WHERE postId = ? AND memberId = ?").run(
       postId,
       memberId,
     );
     return false;
   }
-  db.prepare("INSERT INTO likes (postId, memberId) VALUES (?, ?)").run(
+  await db.prepare("INSERT INTO likes (postId, memberId) VALUES (?, ?)").run(
     postId,
     memberId,
   );

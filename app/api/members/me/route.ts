@@ -22,9 +22,9 @@ export async function PATCH(req: Request) {
     }
     openTo = body.openTo;
   }
-  const member = getMemberByClerkId(userId);
-  if (member && openTo !== undefined) setOpenTo(member.id, openTo);
-  updateMemberProfile(userId, {
+  const member = await getMemberByClerkId(userId);
+  if (member && openTo !== undefined) await setOpenTo(member.id, openTo);
+  await updateMemberProfile(userId, {
     name: typeof body.name === "string" ? body.name : undefined,
     bio: typeof body.bio === "string" ? body.bio : undefined,
     skills: Array.isArray(body.skills)
@@ -37,6 +37,6 @@ export async function PATCH(req: Request) {
     headline: typeof body.headline === "string" ? body.headline : undefined,
     persona: typeof body.persona === "string" ? body.persona : undefined,
   });
-  const newBadges = member ? checkBadges(member.id).map((b) => b.id) : [];
+  const newBadges = member ? (await checkBadges(member.id)).map((b) => b.id) : [];
   return Response.json({ ok: true, newBadges });
 }

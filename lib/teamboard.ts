@@ -1,21 +1,6 @@
 import db from "@/lib/db";
 
 // schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
-db.exec(`CREATE TABLE IF NOT EXISTS looking_for_team (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
-  skills TEXT NOT NULL DEFAULT '[]',
-  need TEXT NOT NULL,
-  note TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (memberId, hackathonId)
-)`);
-db.exec(
-  "CREATE INDEX IF NOT EXISTS idx_lft_hackathon ON looking_for_team(hackathonId, active)",
-);
-
 export type BoardEntry = {
   id: number;
   memberId: number;
@@ -95,9 +80,9 @@ export function validateBoardInput(b: {
 
 // board público da edição — cronológico, só ativos (edição passada vira
 // histórico: o dado fica, a UI decide se mostra o composer)
-export function listBoardEntries(hackathonId: string): BoardEntry[] {
+export async function listBoardEntries(hackathonId: string): Promise<BoardEntry[]> {
   return (
-    db
+    await db
       .prepare(
         `${select} WHERE l.hackathonId = ? AND l.active = 1
          ORDER BY l.createdAt ASC, l.id ASC`,
@@ -107,9 +92,9 @@ export function listBoardEntries(hackathonId: string): BoardEntry[] {
 }
 
 // visão admin: inclui inativos pra moderação (reativar entry escondida)
-export function listAllBoardEntries(hackathonId: string): BoardEntry[] {
+export async function listAllBoardEntries(hackathonId: string): Promise<BoardEntry[]> {
   return (
-    db
+    await db
       .prepare(
         `${select} WHERE l.hackathonId = ?
          ORDER BY l.active DESC, l.createdAt ASC, l.id ASC`,
@@ -118,9 +103,9 @@ export function listAllBoardEntries(hackathonId: string): BoardEntry[] {
   ).map(toEntry);
 }
 
-export function countBoardEntries(hackathonId: string): number {
+export async function countBoardEntries(hackathonId: string): Promise<number> {
   return (
-    db
+    await db
       .prepare(
         "SELECT COUNT(*) n FROM looking_for_team WHERE hackathonId = ? AND active = 1",
       )
@@ -129,29 +114,29 @@ export function countBoardEntries(hackathonId: string): number {
 }
 
 // o anúncio do próprio membro — qualquer estado (pra saber se reativa)
-export function getBoardEntry(
+export async function getBoardEntry(
   memberId: number,
   hackathonId: string,
-): BoardEntry | null {
-  const r = db
+): Promise<BoardEntry | null> {
+  const r = await db
     .prepare(`${select} WHERE l.memberId = ? AND l.hackathonId = ?`)
     .get(memberId, hackathonId) as Row | undefined;
   return r ? toEntry(r) : null;
 }
 
-export function getBoardEntryById(id: number): BoardEntry | null {
-  const r = db.prepare(`${select} WHERE l.id = ?`).get(id) as Row | undefined;
+export async function getBoardEntryById(id: number): Promise<BoardEntry | null> {
+  const r = await db.prepare(`${select} WHERE l.id = ?`).get(id) as Row | undefined;
   return r ? toEntry(r) : null;
 }
 
 // INSERT OR IGNORE: changes>0 = primeira vez (created → gate do XP);
 // conflito = re-anúncio → atualiza campos e reativa
-export function upsertBoardEntry(
+export async function upsertBoardEntry(
   memberId: number,
   hackathonId: string,
   input: BoardInput,
-): { entry: BoardEntry; created: boolean } {
-  const res = db
+): Promise<{ entry: BoardEntry; created: boolean }> {
+  const res = await db
     .prepare(
       `INSERT OR IGNORE INTO looking_for_team (memberId, hackathonId, skills, need, note, active)
        VALUES (?, ?, ?, ?, ?, 1)`,
@@ -159,7 +144,7 @@ export function upsertBoardEntry(
     .run(memberId, hackathonId, JSON.stringify(input.skills), input.need, input.note);
   const created = res.changes > 0;
   if (!created) {
-    db.prepare(
+    await db.prepare(
       `UPDATE looking_for_team SET skills = ?, need = ?, note = ?, active = 1
        WHERE memberId = ? AND hackathonId = ?`,
     ).run(
@@ -170,25 +155,25 @@ export function upsertBoardEntry(
       hackathonId,
     );
   }
-  return { entry: getBoardEntry(memberId, hackathonId)!, created };
+  return { entry: (await getBoardEntry(memberId, hackathonId))!, created };
 }
 
 // time formado → o membro desativa; idempotente (sem entry não é erro)
-export function deactivateBoardEntry(
+export async function deactivateBoardEntry(
   memberId: number,
   hackathonId: string,
-): void {
-  db.prepare(
+): Promise<void> {
+  await db.prepare(
     "UPDATE looking_for_team SET active = 0 WHERE memberId = ? AND hackathonId = ?",
   ).run(memberId, hackathonId);
 }
 
 // moderação admin — liga/desliga por id (entry abusiva esconde, não apaga)
-export function setBoardEntryActive(
+export async function setBoardEntryActive(
   entryId: number,
   active: boolean,
-): BoardEntry | null {
-  const res = db
+): Promise<BoardEntry | null> {
+  const res = await db
     .prepare("UPDATE looking_for_team SET active = ? WHERE id = ?")
     .run(active ? 1 : 0, entryId);
   if (res.changes === 0) return null;

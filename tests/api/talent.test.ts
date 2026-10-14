@@ -8,20 +8,20 @@ vi.mock("@clerk/nextjs/server", () => ({
   currentUser: vi.fn(async () => null),
 }));
 
-function memberId(clerkId: string): number {
-  db.prepare(
+async function memberId(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
-const openToOf = (id: number) =>
+const openToOf = async (id: number) =>
   (
-    db.prepare("SELECT openTo FROM members WHERE id = ?").get(id) as {
+    await db.prepare("SELECT openTo FROM members WHERE id = ?").get(id) as {
       openTo: string | null;
     }
   ).openTo;
@@ -36,11 +36,11 @@ const patch = (body: unknown) =>
 describe("PATCH /api/members/me — openTo (spec 014)", () => {
   it("aceita array da whitelist e persiste", async () => {
     clerk.uid = "clerk_talent";
-    const mid = memberId("clerk_talent");
+    const mid = await memberId("clerk_talent");
     const { PATCH } = await import("@/app/api/members/me/route");
     const res = await PATCH(patch({ openTo: ["trampo", "mentoria"] }));
     expect(res.status).toBe(200);
-    expect(openToOf(mid)).toBe("trampo,mentoria");
+    expect(await openToOf(mid)).toBe("trampo,mentoria");
   });
 
   it("400 — valor fora da whitelist", async () => {
@@ -59,24 +59,24 @@ describe("PATCH /api/members/me — openTo (spec 014)", () => {
 
   it("openTo ausente no PATCH preserva a coluna", async () => {
     clerk.uid = "clerk_talent2";
-    const mid = memberId("clerk_talent2");
+    const mid = await memberId("clerk_talent2");
     const { PATCH } = await import("@/app/api/members/me/route");
     await PATCH(patch({ openTo: ["freela"] }));
-    expect(openToOf(mid)).toBe("freela");
+    expect(await openToOf(mid)).toBe("freela");
     const res = await PATCH(patch({ bio: "mexeu só na bio" }));
     expect(res.status).toBe(200);
-    expect(openToOf(mid)).toBe("freela");
+    expect(await openToOf(mid)).toBe("freela");
   });
 
   it("[] limpa o opt-in — vira NULL e some de /talento", async () => {
     clerk.uid = "clerk_talent3";
-    const mid = memberId("clerk_talent3");
+    const mid = await memberId("clerk_talent3");
     const { PATCH } = await import("@/app/api/members/me/route");
     await PATCH(patch({ openTo: ["trampo"] }));
-    expect(openToOf(mid)).toBe("trampo");
+    expect(await openToOf(mid)).toBe("trampo");
     const res = await PATCH(patch({ openTo: [] }));
     expect(res.status).toBe(200);
-    expect(openToOf(mid)).toBeNull();
+    expect(await openToOf(mid)).toBeNull();
   });
 
   it("401 deslogado", async () => {

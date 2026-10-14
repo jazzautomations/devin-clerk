@@ -12,15 +12,13 @@ const xff = () => ({
   "x-forwarded-for": `10.${rand()}.${rand()}.${rand()}`,
 });
 
-const subsCount = (url: string) => {
+const subsCount = async (url: string) => {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
   const n = (
-    db
+    await db
       .prepare("SELECT COUNT(*) n FROM event_submissions WHERE url = ?")
       .get(url) as { n: number } | undefined
   )?.n;
-  db.close();
   return n ?? 0;
 };
 
@@ -52,7 +50,7 @@ test.describe("POST /api/submissions — público", () => {
       data: { name: "Hack E2E", url },
     });
     expect(ok.status()).toBe(201);
-    expect(subsCount(url)).toBe(1);
+    expect(await subsCount(url)).toBe(1);
 
     const botUrl = `https://e2e-bot-${Date.now()}.dev`;
     const bot = await request.post("/api/submissions", {
@@ -60,7 +58,7 @@ test.describe("POST /api/submissions — público", () => {
       data: { name: "Bot Hack", url: botUrl, company: "Spam Co" },
     });
     expect(bot.status()).toBe(201);
-    expect(subsCount(botUrl)).toBe(0);
+    expect(await subsCount(botUrl)).toBe(0);
   });
 
   test("inválido → 400; mesma url → 200 sem duplicar", async ({ request }) => {
@@ -80,7 +78,7 @@ test.describe("POST /api/submissions — público", () => {
       (await request.post("/api/submissions", { headers: xff(), data: body }))
         .status(),
     ).toBe(200);
-    expect(subsCount(url)).toBe(1);
+    expect(await subsCount(url)).toBe(1);
   });
 });
 

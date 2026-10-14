@@ -24,11 +24,11 @@ const normUsername = (u: unknown) =>
 
 // time do membro na edição (um membro = um time por edição — submitTeam
 // garante o invariante) — null quando não participa de nenhum
-export function memberTeamFor(
+export async function memberTeamFor(
   hackathonId: string,
   username: string,
-): ArchiveTeam | null {
-  const row = db
+): Promise<ArchiveTeam | null> {
+  const row = await db
     .prepare(
       `SELECT t.id FROM teams t
        JOIN team_members tm ON tm.teamId = t.id
@@ -36,7 +36,7 @@ export function memberTeamFor(
     )
     .get(hackathonId, username) as { id: number } | undefined;
   if (!row) return null;
-  return getArchive(hackathonId).teams.find((t) => t.id === row.id) ?? null;
+  return (await getArchive(hackathonId)).teams.find((t) => t.id === row.id) ?? null;
 }
 
 export type ProjectInput = {
@@ -94,7 +94,7 @@ function validateProject(input: unknown): {
 // condecoração do organizador (admin), nunca autoatribuição. O autor
 // entra automaticamente; colegas só entram se forem membros INSCRITOS
 // na edição e ainda sem time — o resto volta em ignoredUsernames.
-export function submitTeam(
+export async function submitTeam(
   hackathonId: string,
   member: { username: string },
   input: {
@@ -102,15 +102,15 @@ export function submitTeam(
     memberUsernames?: string[];
     project?: ProjectInput | null;
   },
-): { team: ArchiveTeam; ignoredUsernames: string[] } {
+): Promise<{ team: ArchiveTeam; ignoredUsernames: string[] }> {
   const name = String(input.name ?? "").trim();
   if (!name) throw new TeamError("nome do time obrigatório", 400);
   const project = validateProject(input.project);
 
-  if (memberTeamFor(hackathonId, member.username)) {
+  if (await memberTeamFor(hackathonId, member.username)) {
     throw new TeamError("tu já tens time nesta edição", 409);
   }
-  const nameTaken = db
+  const nameTaken = await db
     .prepare("SELECT 1 FROM teams WHERE hackathonId = ? AND name = ?")
     .get(hackathonId, name);
   if (nameTaken) {
@@ -132,14 +132,14 @@ export function submitTeam(
       continue;
     }
     const ok =
-      isRegistered.get(hackathonId, username) &&
-      !memberTeamFor(hackathonId, username);
+      await isRegistered.get(hackathonId, username) &&
+      !await memberTeamFor(hackathonId, username);
     if (ok) colegas.push(username);
     else ignoredUsernames.push(username);
   }
 
-  const tx = db.transaction(() => {
-    const res = db
+  const tx = db.transaction(async () => {
+    const res = await db
       .prepare(
         "INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, 0)",
       )
@@ -148,10 +148,10 @@ export function submitTeam(
     const link = db.prepare(
       "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
     );
-    link.run(teamId, member.username);
-    for (const u of colegas) link.run(teamId, u);
+    await link.run(teamId, member.username);
+    for (const u of colegas) await link.run(teamId, u);
     if (project) {
-      db.prepare(
+      await db.prepare(
         `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl, videoUrl, logoUrl)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
@@ -166,9 +166,9 @@ export function submitTeam(
     }
     return teamId;
   });
-  const teamId = tx();
+  const teamId = await tx();
 
-  const team = getArchive(hackathonId).teams.find((t) => t.id === teamId);
+  const team = (await getArchive(hackathonId)).teams.find((t) => t.id === teamId);
   if (!team) throw new TeamError("falha ao criar time", 500);
   return { team, ignoredUsernames };
 }
@@ -185,17 +185,17 @@ export type ProjectPatch = {
 // integrante edita (ou cria) o projeto do próprio time — upsert em
 // team_projects. String vazia limpa campo opcional; título nunca fica
 // vazio. Quem não é do time → 403; time inexistente → 404.
-export function updateTeamProject(
+export async function updateTeamProject(
   teamId: number,
   member: { username: string },
   patch: ProjectPatch,
-): ArchiveTeam {
-  const team = db
+): Promise<ArchiveTeam> {
+  const team = await db
     .prepare("SELECT id, hackathonId FROM teams WHERE id = ?")
     .get(teamId) as { id: number; hackathonId: string } | undefined;
   if (!team) throw new TeamError("time não encontrado", 404);
 
-  const isMember = db
+  const isMember = await db
     .prepare("SELECT 1 FROM team_members WHERE teamId = ? AND username = ?")
     .get(teamId, member.username);
   if (!isMember) throw new TeamError("só integrante edita o projeto", 403);
@@ -227,11 +227,11 @@ export function updateTeamProject(
     throw new TeamError("nenhum campo pra atualizar", 400);
   }
 
-  const exists = db
+  const exists = await db
     .prepare("SELECT 1 FROM team_projects WHERE teamId = ?")
     .get(teamId);
   if (exists) {
-    db.prepare(
+    await db.prepare(
       `UPDATE team_projects SET ${fields.map((f) => `${f.col} = ?`).join(", ")}
        WHERE teamId = ?`,
     ).run(...fields.map((f) => f.value), teamId);
@@ -240,7 +240,7 @@ export function updateTeamProject(
       fields.find((f) => f.col === col)?.value ?? null;
     const title = get("title");
     if (!title) throw new TeamError("título do projeto obrigatório", 400);
-    db.prepare(
+    await db.prepare(
       `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl, videoUrl, logoUrl)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
@@ -254,5 +254,5 @@ export function updateTeamProject(
     );
   }
 
-  return memberTeamFor(team.hackathonId, member.username)!;
+  return (await memberTeamFor(team.hackathonId, member.username))!;
 }

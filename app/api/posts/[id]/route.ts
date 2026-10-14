@@ -11,7 +11,7 @@ export async function DELETE(
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -20,13 +20,13 @@ export async function DELETE(
   if (!Number.isInteger(postId)) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const post = db
+  const post = await db
     .prepare("SELECT 1 FROM posts WHERE id = ?")
     .get(postId);
   if (!post) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  if (!deletePost(postId, member)) {
+  if (!await deletePost(postId, member)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   return Response.json({ ok: true });

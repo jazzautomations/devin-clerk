@@ -56,3 +56,6 @@ data/*.db-shm
 data/*.db-wal
 data/deploys/
 __pycache__/
+
+# worktrees/estado local do Claude Code
+.claude/

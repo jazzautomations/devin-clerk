@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -39,7 +39,7 @@ export async function POST(
     );
   }
 
-  const res = reviewSubmission(numId, action);
+  const res = await reviewSubmission(numId, action);
   if (!res) {
     return Response.json(
       { error: "Indicação não encontrada" },

@@ -56,7 +56,7 @@ type Row = {
   logoUrl: string | null;
 };
 
-export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
+export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectCard[]> {
   // default = pódio do júri (placement→edição recente); "votes" põe a escolha
   // do povo na frente, com o júri só desempatando — sinais separados
   const orderBy =
@@ -68,7 +68,7 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
       : `CASE WHEN t.placement = 0 THEN 99 ELSE t.placement END,
          h.startsAt DESC,
          t.id`;
-  const rows = db
+  const rows = await db
     .prepare(
       `SELECT t.id AS teamId, t.name AS teamName, t.placement,
               t.hackathonId, h.name AS hackathonName,
@@ -83,8 +83,8 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
        FROM teams t
        JOIN team_projects tp ON tp.teamId = t.id
        JOIN hackathons h ON h.id = t.hackathonId
-       WHERE (@h IS NULL OR t.hackathonId = @h)
-         AND (@q IS NULL
+       WHERE (@h::text IS NULL OR t.hackathonId = @h)
+         AND (@q::text IS NULL
               OR tp.title LIKE @q ESCAPE '\\'
               OR tp.description LIKE @q ESCAPE '\\'
               OR t.name LIKE @q ESCAPE '\\')
@@ -96,8 +96,8 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
       me: filter.meId ?? -1,
     }) as Row[];
 
-  const cards = rows.map((r) => {
-    const deploy = getLatestDeployForTeam(r.teamId);
+  const cards = await Promise.all(rows.map(async (r) => {
+    const deploy = await getLatestDeployForTeam(r.teamId);
     return {
       teamId: r.teamId,
       teamName: r.teamName,
@@ -117,16 +117,16 @@ export function listProjects(filter: ProjectFilter = {}): ProjectCard[] {
         logoUrl: r.logoUrl,
       },
     };
-  });
+  }));
 
   return filter.liveOnly ? cards.filter((c) => c.liveDeployId) : cards;
 }
 
 /** edições que têm pelo menos um projeto — chips do filtro ?h= */
-export function listProjectEditions(): { id: string; name: string }[] {
-  return db
+export async function listProjectEditions(): Promise<{ id: string; name: string }[]> {
+  return await db
     .prepare(
-      `SELECT DISTINCT h.id, h.name
+      `SELECT DISTINCT h.id, h.name, h.startsAt
        FROM teams t
        JOIN team_projects tp ON tp.teamId = t.id
        JOIN hackathons h ON h.id = t.hackathonId

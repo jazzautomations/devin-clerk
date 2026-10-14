@@ -8,12 +8,12 @@ vi.mock("@clerk/nextjs/server", () => ({
   currentUser: vi.fn(async () => null),
 }));
 
-function memberId(clerkId: string): number {
-  db.prepare(
+async function memberId(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
@@ -28,15 +28,15 @@ const postReq = (body: unknown) =>
 
 let postId: number;
 
-beforeEach(() => {
+beforeEach(async () => {
   clerk.uid = "clerk_commenter";
-  const m = memberId("clerk_commenter");
-  db.prepare("DELETE FROM post_comments").run();
-  db.prepare("INSERT INTO posts (memberId, body) VALUES (?, 'post alvo')").run(
+  const m = await memberId("clerk_commenter");
+  await db.prepare("DELETE FROM post_comments").run();
+  await db.prepare("INSERT INTO posts (memberId, body) VALUES (?, 'post alvo')").run(
     m,
   );
   postId = (
-    db
+    await db
       .prepare(
         "SELECT id FROM posts WHERE memberId = ? ORDER BY id DESC LIMIT 1",
       )
@@ -48,9 +48,9 @@ describe("GET /api/posts/[id]/comments — público", () => {
   it("retorna thread ASC sem login; 404 post inexistente e id inválido", async () => {
     const { GET } = await import("@/app/api/posts/[id]/comments/route");
     clerk.uid = null; // leitura é pública
-    db.prepare(
+    await db.prepare(
       "INSERT INTO post_comments (postId, memberId, body) VALUES (?, ?, 'um'), (?, ?, 'dois')",
-    ).run(postId, memberId("clerk_commenter"), postId, memberId("clerk_commenter"));
+    ).run(postId, await memberId("clerk_commenter"), postId, await memberId("clerk_commenter"));
 
     const res = await GET(new Request("http://t"), {
       params: Promise.resolve({ id: String(postId) }),
@@ -77,9 +77,9 @@ describe("GET /api/posts/[id]/comments — público", () => {
 describe("POST /api/posts/[id]/comments", () => {
   it("201 — cria comentário com autor e paga +5xp pro comentarista", async () => {
     const { POST } = await import("@/app/api/posts/[id]/comments/route");
-    const mid = memberId("clerk_commenter");
+    const mid = await memberId("clerk_commenter");
     const before = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
         xp: number;
       }
     ).xp;
@@ -94,7 +94,7 @@ describe("POST /api/posts/[id]/comments", () => {
     expect(comment.postId).toBe(postId);
 
     const after = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
         xp: number;
       }
     ).xp;
@@ -116,7 +116,7 @@ describe("POST /api/posts/[id]/comments", () => {
       expect(res.status).toBe(400);
     }
     const n = (
-      db
+      await db
         .prepare("SELECT COUNT(*) n FROM post_comments WHERE postId = ?")
         .get(postId) as { n: number }
     ).n;
@@ -153,8 +153,8 @@ describe("POST /api/posts/[id]/comments", () => {
 
 describe("commentCount na listagem", () => {
   it("GET /api/posts traz commentCount por post", async () => {
-    const mid = memberId("clerk_commenter");
-    db.prepare(
+    const mid = await memberId("clerk_commenter");
+    await db.prepare(
       "INSERT INTO post_comments (postId, memberId, body) VALUES (?, ?, 'x'), (?, ?, 'y'), (?, ?, 'z')",
     ).run(postId, mid, postId, mid, postId, mid);
     const { GET } = await import("@/app/api/posts/route");

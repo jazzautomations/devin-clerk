@@ -15,19 +15,10 @@ async function ensureOngoingEvents(
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
   await request.get("/radar");
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  const cols = (
-    db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]
-  ).map((c) => c.name);
-  for (const c of ["first_seen", "last_seen"]) {
-    if (!cols.includes(c)) {
-      db.exec(`ALTER TABLE hackathons ADD COLUMN ${c} TEXT`);
-    }
-  }
   const now = Date.now();
   const iso = (t: number) => new Date(t).toISOString();
   const day = 86_400_000;
-  db.prepare(
+  await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, registrationUrl,
         registrationDeadline, tags, active, source, first_seen, last_seen)
@@ -46,7 +37,7 @@ async function ensureOngoingEvents(
     iso(now),
     iso(now),
   );
-  db.prepare(
+  await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, registrationUrl,
         tags, active, source)
@@ -55,7 +46,6 @@ async function ensureOngoingEvents(
      ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt,
        endsAt = excluded.endsAt, active = 1`,
   ).run(OVER, iso(now - 10 * day), iso(now - 9 * day)); // já acabou
-  db.close();
 }
 
 test.describe("radar mostra eventos em andamento — spec 027", () => {

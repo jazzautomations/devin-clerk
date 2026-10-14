@@ -8,13 +8,11 @@ import { openE2eDb } from "./db";
 const HACK = "hack-inova-unifacens-2026"; // seed: One Day Hospital, 1º lugar
 
 // teamId real do seed — a ficha /p/[teamId] e a rota de voto dependem dele
-function seedTeamId(): number {
+async function seedTeamId(): Promise<number> {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  const t = db
+  const t = await db
     .prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?")
     .get(HACK, "One Day Hospital") as { id: number };
-  db.close();
   return t.id;
 }
 
@@ -45,7 +43,7 @@ test.describe("escolha do povo — voto da comunidade", () => {
   test("POST /api/projects/[teamId]/vote deslogado → 401 JSON", async ({
     request,
   }) => {
-    const res = await request.post(`/api/projects/${seedTeamId()}/vote`);
+    const res = await request.post(`/api/projects/${await seedTeamId()}/vote`);
     expect(res.status()).toBe(401);
     expect(res.headers()["content-type"]).toContain("application/json");
   });
@@ -53,7 +51,7 @@ test.describe("escolha do povo — voto da comunidade", () => {
   test("ficha /p/[teamId] tem o botão ▲ e o clique anon leva pro sign-in", async ({
     page,
   }) => {
-    await page.goto(`/p/${seedTeamId()}`);
+    await page.goto(`/p/${await seedTeamId()}`);
     const btn = page.getByRole("button", { name: /escolha do povo/i });
     await expect(btn).toBeVisible();
     // hydration race: o primeiro clique pode cair antes do hidratar no dev —

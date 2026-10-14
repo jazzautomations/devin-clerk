@@ -10,7 +10,7 @@ export default async function PerfilPage() {
     return null;
   }
   const user = await currentUser();
-  const member = getOrCreateMember({
+  const member = await getOrCreateMember({
     id: userId,
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
@@ -37,7 +37,7 @@ export default async function PerfilPage() {
           </Link>
         </p>
       </div>
-      <ProfileForm member={member} openTo={getOpenTo(member.id)} />
+      <ProfileForm member={member} openTo={await getOpenTo(member.id)} />
     </section>
   );
 }

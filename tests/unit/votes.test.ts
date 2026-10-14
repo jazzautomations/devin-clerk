@@ -16,182 +16,182 @@ import {
 const UNIFACENS = "hack-inova-unifacens-2026";
 const PUC = "hack-inova-puc-saude-2026";
 
-function memberId(username: string): number {
-  db.prepare(
+async function memberId(username: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(`clerk_${username}`, username, `${username}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE username = ?").get(username) as {
+    await db.prepare("SELECT id FROM members WHERE username = ?").get(username) as {
       id: number;
     }
   ).id;
 }
 
-function teamWithProject(
+async function teamWithProject(
   hackathonId: string,
   name: string,
   memberUsernames: string[] = [],
   placement = 0,
-): number {
-  return createTeam(hackathonId, {
+): Promise<number> {
+  return (await createTeam(hackathonId, {
     name,
     placement,
     memberUsernames,
     project: { title: `${name} app` },
-  }).team.id;
+  })).team.id;
 }
 
-beforeEach(() => {
-  db.exec("DELETE FROM votes");
-  db.exec("DELETE FROM team_members");
-  db.exec("DELETE FROM team_projects");
-  db.exec("DELETE FROM teams");
+beforeEach(async () => {
+  await db.exec("DELETE FROM votes");
+  await db.exec("DELETE FROM team_members");
+  await db.exec("DELETE FROM team_projects");
+  await db.exec("DELETE FROM teams");
 });
 
 describe("toggleVote — um voto por membro por projeto", () => {
-  it("liga e desliga: voted true → false, contagem sobe e desce", () => {
-    const voter = memberId("voter");
-    const teamId = teamWithProject(UNIFACENS, "Alvo");
+  it("liga e desliga: voted true → false, contagem sobe e desce", async () => {
+    const voter = await memberId("voter");
+    const teamId = await teamWithProject(UNIFACENS, "Alvo");
 
-    expect(toggleVote(voter, teamId)).toEqual({ voted: true });
-    expect(hasVoted(voter, teamId)).toBe(true);
-    expect(voteCountFor(teamId)).toBe(1);
+    expect(await toggleVote(voter, teamId)).toEqual({ voted: true });
+    expect(await hasVoted(voter, teamId)).toBe(true);
+    expect(await voteCountFor(teamId)).toBe(1);
 
-    expect(toggleVote(voter, teamId)).toEqual({ voted: false });
-    expect(hasVoted(voter, teamId)).toBe(false);
-    expect(voteCountFor(teamId)).toBe(0);
+    expect(await toggleVote(voter, teamId)).toEqual({ voted: false });
+    expect(await hasVoted(voter, teamId)).toBe(false);
+    expect(await voteCountFor(teamId)).toBe(0);
   });
 
-  it("PK (memberId, teamId) garante dedupe: sequência de toggles nunca passa de 1 voto", () => {
-    const voter = memberId("voter");
-    const teamId = teamWithProject(UNIFACENS, "Alvo");
+  it("PK (memberId, teamId) garante dedupe: sequência de toggles nunca passa de 1 voto", async () => {
+    const voter = await memberId("voter");
+    const teamId = await teamWithProject(UNIFACENS, "Alvo");
 
-    toggleVote(voter, teamId);
-    toggleVote(voter, teamId);
-    toggleVote(voter, teamId);
-    expect(voteCountFor(teamId)).toBe(1);
+    await toggleVote(voter, teamId);
+    await toggleVote(voter, teamId);
+    await toggleVote(voter, teamId);
+    expect(await voteCountFor(teamId)).toBe(1);
 
-    const rows = db
+    const rows = await db
       .prepare("SELECT COUNT(*) n FROM votes WHERE memberId = ? AND teamId = ?")
       .get(voter, teamId) as { n: number };
     expect(rows.n).toBe(1);
   });
 
-  it("membros diferentes somam no mesmo projeto", () => {
-    const a = memberId("ana");
-    const b = memberId("bia");
-    const teamId = teamWithProject(UNIFACENS, "Alvo");
-    toggleVote(a, teamId);
-    toggleVote(b, teamId);
-    expect(voteCountFor(teamId)).toBe(2);
+  it("membros diferentes somam no mesmo projeto", async () => {
+    const a = await memberId("ana");
+    const b = await memberId("bia");
+    const teamId = await teamWithProject(UNIFACENS, "Alvo");
+    await toggleVote(a, teamId);
+    await toggleVote(b, teamId);
+    expect(await voteCountFor(teamId)).toBe(2);
   });
 
-  it("403 — integrante não vota no próprio time (team_members por username)", () => {
-    memberId("dono");
-    const teamId = teamWithProject(UNIFACENS, "MeuTime", ["dono"]);
-    const dono = memberId("dono");
+  it("403 — integrante não vota no próprio time (team_members por username)", async () => {
+    await memberId("dono");
+    const teamId = await teamWithProject(UNIFACENS, "MeuTime", ["dono"]);
+    const dono = await memberId("dono");
 
-    expect(() => toggleVote(dono, teamId)).toThrowError(VoteError);
+    await expect(toggleVote(dono, teamId)).rejects.toThrowError(VoteError);
     try {
-      toggleVote(dono, teamId);
+      await toggleVote(dono, teamId);
     } catch (e) {
       expect((e as VoteError).status).toBe(403);
       expect((e as VoteError).message).toContain("próprio time");
     }
-    expect(voteCountFor(teamId)).toBe(0);
+    expect(await voteCountFor(teamId)).toBe(0);
   });
 
-  it("mas integrante vota normalmente no time dos outros", () => {
-    memberId("dev_a");
-    const meu = teamWithProject(UNIFACENS, "TimeA", ["dev_a"]);
-    const deles = teamWithProject(UNIFACENS, "TimeB");
-    const a = memberId("dev_a");
+  it("mas integrante vota normalmente no time dos outros", async () => {
+    await memberId("dev_a");
+    const meu = await teamWithProject(UNIFACENS, "TimeA", ["dev_a"]);
+    const deles = await teamWithProject(UNIFACENS, "TimeB");
+    const a = await memberId("dev_a");
 
-    expect(() => toggleVote(a, meu)).toThrowError(VoteError);
-    expect(toggleVote(a, deles)).toEqual({ voted: true });
+    await expect(toggleVote(a, meu)).rejects.toThrowError(VoteError);
+    expect(await toggleVote(a, deles)).toEqual({ voted: true });
   });
 
-  it("404 — teamId inexistente, e time sem projeto não é votável", () => {
-    const voter = memberId("voter");
-    expect(() => toggleVote(voter, 999999)).toThrowError(VoteError);
+  it("404 — teamId inexistente, e time sem projeto não é votável", async () => {
+    const voter = await memberId("voter");
+    await expect(toggleVote(voter, 999999)).rejects.toThrowError(VoteError);
     try {
-      toggleVote(voter, 999999);
+      await toggleVote(voter, 999999);
     } catch (e) {
       expect((e as VoteError).status).toBe(404);
     }
 
-    const semProjeto = createTeam(UNIFACENS, {
+    const semProjeto = (await createTeam(UNIFACENS, {
       name: "SemProjeto",
       placement: 0,
-    }).team.id;
-    expect(() => toggleVote(voter, semProjeto)).toThrowError(VoteError);
-    expect(voteCountFor(semProjeto)).toBe(0);
+    })).team.id;
+    await expect(toggleVote(voter, semProjeto)).rejects.toThrowError(VoteError);
+    expect(await voteCountFor(semProjeto)).toBe(0);
   });
 });
 
 describe("placar — voteCountFor / getVoteCounts", () => {
-  it("voteCountFor conta por teamId; getVoteCounts agrega listas", () => {
-    const a = memberId("ana");
-    const b = memberId("bia");
-    const t1 = teamWithProject(UNIFACENS, "Um");
-    const t2 = teamWithProject(PUC, "Dois");
-    const t3 = teamWithProject(PUC, "Tres");
+  it("voteCountFor conta por teamId; getVoteCounts agrega listas", async () => {
+    const a = await memberId("ana");
+    const b = await memberId("bia");
+    const t1 = await teamWithProject(UNIFACENS, "Um");
+    const t2 = await teamWithProject(PUC, "Dois");
+    const t3 = await teamWithProject(PUC, "Tres");
 
-    toggleVote(a, t1);
-    toggleVote(b, t1);
-    toggleVote(a, t2);
+    await toggleVote(a, t1);
+    await toggleVote(b, t1);
+    await toggleVote(a, t2);
 
-    expect(voteCountFor(t1)).toBe(2);
-    expect(voteCountFor(t3)).toBe(0);
+    expect(await voteCountFor(t1)).toBe(2);
+    expect(await voteCountFor(t3)).toBe(0);
 
-    const counts = getVoteCounts([t1, t2, t3]);
+    const counts = await getVoteCounts([t1, t2, t3]);
     expect(counts.get(t1)).toBe(2);
     expect(counts.get(t2)).toBe(1);
     expect(counts.get(t3) ?? 0).toBe(0);
-    expect(getVoteCounts([]).size).toBe(0);
+    expect((await getVoteCounts([])).size).toBe(0);
   });
 });
 
 describe("listProjects — placar do povo no índice", () => {
-  it("cards trazem voteCount e votedByMe (meId)", () => {
-    memberId("eu");
-    const eu = memberId("eu");
-    const outro = memberId("outro");
-    const t1 = teamWithProject(UNIFACENS, "Um");
-    const t2 = teamWithProject(UNIFACENS, "Dois");
-    toggleVote(eu, t1);
-    toggleVote(outro, t1);
-    toggleVote(outro, t2);
+  it("cards trazem voteCount e votedByMe (meId)", async () => {
+    await memberId("eu");
+    const eu = await memberId("eu");
+    const outro = await memberId("outro");
+    const t1 = await teamWithProject(UNIFACENS, "Um");
+    const t2 = await teamWithProject(UNIFACENS, "Dois");
+    await toggleVote(eu, t1);
+    await toggleVote(outro, t1);
+    await toggleVote(outro, t2);
 
     const anon = Object.fromEntries(
-      listProjects().map((c) => [c.teamId, c]),
+      (await listProjects()).map((c) => [c.teamId, c]),
     );
     expect(anon[t1].voteCount).toBe(2);
     expect(anon[t1].votedByMe).toBe(false); // anon nunca "votou"
 
     const mine = Object.fromEntries(
-      listProjects({ meId: eu }).map((c) => [c.teamId, c]),
+      (await listProjects({ meId: eu })).map((c) => [c.teamId, c]),
     );
     expect(mine[t1].votedByMe).toBe(true);
     expect(mine[t2].votedByMe).toBe(false);
     expect(mine[t2].voteCount).toBe(1);
   });
 
-  it('sort "votes" rankeia por votos desc — participante mais votado passa o campeão', () => {
-    const a = memberId("ana");
-    const b = memberId("bia");
-    const campeao = teamWithProject(UNIFACENS, "Campeao", [], 1);
-    const queridinho = teamWithProject(UNIFACENS, "Queridinho");
-    const zero = teamWithProject(UNIFACENS, "Zero");
+  it('sort "votes" rankeia por votos desc — participante mais votado passa o campeão', async () => {
+    const a = await memberId("ana");
+    const b = await memberId("bia");
+    const campeao = await teamWithProject(UNIFACENS, "Campeao", [], 1);
+    const queridinho = await teamWithProject(UNIFACENS, "Queridinho");
+    const zero = await teamWithProject(UNIFACENS, "Zero");
 
-    toggleVote(a, queridinho);
-    toggleVote(b, queridinho);
-    toggleVote(a, campeao);
+    await toggleVote(a, queridinho);
+    await toggleVote(b, queridinho);
+    await toggleVote(a, campeao);
 
-    const juryOrder = listProjects().map((c) => c.teamId);
+    const juryOrder = (await listProjects()).map((c) => c.teamId);
     expect(juryOrder[0]).toBe(campeao); // default segue sendo o júri
 
-    const votesOrder = listProjects({ sort: "votes" }).map((c) => c.teamId);
+    const votesOrder = (await listProjects({ sort: "votes" })).map((c) => c.teamId);
     expect(votesOrder[0]).toBe(queridinho);
     expect(votesOrder[1]).toBe(campeao);
     expect(votesOrder[2]).toBe(zero);

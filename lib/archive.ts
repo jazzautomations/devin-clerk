@@ -1,20 +1,11 @@
-import db, { ensureColumn } from "@/lib/db";
+import db from "@/lib/db";
 
 // spec 032 — o arco do builder conta só inscrições aprovadas (pendente é
 // candidato, não participação); guarda da coluna status — dona do schema é
 // lib/registrations, aqui garante pra quem importa archive.ts direto
-ensureColumn(
-  "registrations",
-  "status",
-  "status TEXT NOT NULL DEFAULT 'approved'",
-);
-
 // spec 030 — submissão rica (portal Colosseum): pitch em vídeo + logo do
 // projeto. Colunas chegam por ALTER guardado aqui mesmo — lib/db.ts fica
 // intocado
-ensureColumn("team_projects", "videoUrl", "videoUrl TEXT");
-ensureColumn("team_projects", "logoUrl", "logoUrl TEXT");
-
 export type TeamProject = {
   title: string;
   description: string | null;
@@ -46,8 +37,8 @@ export type EditionArchive = {
 
 const httpUrl = (u: string) => /^https?:\/\//i.test(u.trim());
 
-export function getArchive(hackathonId: string): EditionArchive {
-  const teams = db
+export async function getArchive(hackathonId: string): Promise<EditionArchive> {
+  const teams = await db
     .prepare(
       `SELECT id, name, placement FROM teams
        WHERE hackathonId = ?
@@ -62,25 +53,25 @@ export function getArchive(hackathonId: string): EditionArchive {
     "SELECT title, description, repoUrl, demoUrl, videoUrl, logoUrl FROM team_projects WHERE teamId = ?",
   );
 
-  const assets = db
+  const assets = await db
     .prepare(
       "SELECT id, type, url, caption FROM edition_assets WHERE hackathonId = ? ORDER BY id",
     )
     .all(hackathonId) as EditionAsset[];
 
   return {
-    teams: teams.map((t) => ({
+    teams: await Promise.all(teams.map(async (t) => ({
       ...t,
-      members: (memberStmt.all(t.id) as { username: string }[]).map(
+      members: (await memberStmt.all(t.id) as { username: string }[]).map(
         (m) => m.username,
       ),
-      project: (projectStmt.get(t.id) as TeamProject | undefined) ?? null,
-    })),
+      project: (await projectStmt.get(t.id) as TeamProject | undefined) ?? null,
+    }))),
     assets,
   };
 }
 
-export function createTeam(
+export async function createTeam(
   hackathonId: string,
   input: {
     name: string;
@@ -93,14 +84,14 @@ export function createTeam(
       demoUrl?: string | null;
     } | null;
   },
-): { team: ArchiveTeam; ignoredUsernames: string[] } {
+): Promise<{ team: ArchiveTeam; ignoredUsernames: string[] }> {
   const name = input.name.trim();
   if (!name) throw new Error("Nome do time obrigatório");
   const placement = Number.isInteger(input.placement)
     ? input.placement
     : 0;
 
-  const res = db
+  const res = await db
     .prepare(
       "INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, ?)",
     )
@@ -117,7 +108,7 @@ export function createTeam(
   for (const u of input.memberUsernames ?? []) {
     const username = String(u).trim().replace(/^@/, "").toLowerCase();
     if (!username) continue;
-    if (memberExists.get(username)) link.run(teamId, username);
+    if (await memberExists.get(username)) await link.run(teamId, username);
     else ignoredUsernames.push(username);
   }
 
@@ -126,7 +117,7 @@ export function createTeam(
     for (const u of [p.repoUrl, p.demoUrl]) {
       if (u && !httpUrl(u)) throw new Error("URL inválida");
     }
-    db.prepare(
+    await db.prepare(
       `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl)
        VALUES (?, ?, ?, ?, ?)`,
     ).run(
@@ -138,20 +129,20 @@ export function createTeam(
     );
   }
 
-  const team = getArchive(hackathonId).teams.find((t) => t.id === teamId)!;
+  const team = (await getArchive(hackathonId)).teams.find((t) => t.id === teamId)!;
   return { team, ignoredUsernames };
 }
 
-export function addAsset(
+export async function addAsset(
   hackathonId: string,
   input: { type: string; url: string; caption?: string | null },
-): EditionAsset {
+): Promise<EditionAsset> {
   if (!["foto", "slide", "material"].includes(input.type)) {
     throw new Error("type inválido — use foto, slide ou material");
   }
   const url = input.url?.trim() ?? "";
   if (!httpUrl(url)) throw new Error("URL inválida");
-  const res = db
+  const res = await db
     .prepare(
       "INSERT INTO edition_assets (hackathonId, type, url, caption) VALUES (?, ?, ?, ?)",
     )
@@ -173,8 +164,8 @@ export type MemberProject = {
   project: TeamProject | null;
 };
 
-export function getMemberProjects(username: string): MemberProject[] {
-  return db
+export async function getMemberProjects(username: string): Promise<MemberProject[]> {
+  return (await db
     .prepare(
       `SELECT t.hackathonId, h.name AS hackathonName, t.id AS teamId, t.name AS teamName,
               t.placement, tp.title, tp.description, tp.repoUrl, tp.demoUrl,
@@ -186,7 +177,7 @@ export function getMemberProjects(username: string): MemberProject[] {
        WHERE tm.username = ?
        ORDER BY h.startsAt DESC`,
     )
-    .all(username)
+    .all(username))
     .map((r) => {
       const row = r as {
         hackathonId: string;
@@ -236,8 +227,8 @@ export type MemberArcEntry = {
 // conta (admin arquiva quem competiu sem passar pelo register); inscrito+time
 // na mesma edição vira uma entrada só, com os dados do time. Membro em dois
 // times na edição (legado) pega o de melhor placement — determinístico.
-export function getMemberArc(username: string): MemberArcEntry[] {
-  const rows = db
+export async function getMemberArc(username: string): Promise<MemberArcEntry[]> {
+  const rows = await db
     .prepare(
       `WITH editions AS (
          SELECT r.hackathonId
@@ -301,8 +292,8 @@ export type ProjectPage = {
 };
 
 /** ficha pública do projeto (/p/[teamId]) — null quando o time ou o projeto não existem */
-export function getProjectByTeamId(teamId: number): ProjectPage | null {
-  const row = db
+export async function getProjectByTeamId(teamId: number): Promise<ProjectPage | null> {
+  const row = await db
     .prepare(
       `SELECT t.id AS teamId, t.name AS teamName, t.placement,
               t.hackathonId, h.name AS hackathonName,
@@ -331,7 +322,7 @@ export function getProjectByTeamId(teamId: number): ProjectPage | null {
   if (!row) return null;
 
   const members = (
-    db
+    await db
       .prepare(
         "SELECT username FROM team_members WHERE teamId = ? ORDER BY username",
       )

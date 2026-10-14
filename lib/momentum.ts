@@ -12,31 +12,31 @@ export type StatsMomentum = {
   events: number;
 };
 
-export function getStatsMomentum(now = new Date()): StatsMomentum {
+export async function getStatsMomentum(now = new Date()): Promise<StatsMomentum> {
   const params = {
     cutoff: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
     now: now.toISOString(),
   };
-  // datetime() normaliza os dois formatos gravados ("YYYY-MM-DD HH:MM:SS"
+  // to_ts() normaliza os dois formatos gravados ("YYYY-MM-DD HH:MM:SS"
   // do sqlite e ISO com offset do scraper) antes de comparar
-  const count = (sql: string) =>
-    (db.prepare(sql).get(params) as { n: number }).n;
+  const count = async (sql: string) =>
+    (await db.prepare(sql).get(params) as { n: number }).n;
   return {
-    members: count(
+    members: await count(
       `SELECT COUNT(*) n FROM members
-        WHERE datetime(createdAt) >= datetime(@cutoff)`,
+        WHERE to_ts(createdAt) >= to_ts(@cutoff)`,
     ),
-    posts: count(
+    posts: await count(
       `SELECT COUNT(*) n FROM posts
-        WHERE datetime(createdAt) >= datetime(@cutoff)`,
+        WHERE to_ts(createdAt) >= to_ts(@cutoff)`,
     ),
     // "+N" decora "hackathons abertos" → conta o que entrou na janela E
     // continua aberto (mesma COALESCE de isOver/getOpenHackathons)
-    events: count(
+    events: await count(
       `SELECT COUNT(*) n FROM hackathons
-        WHERE active = 1 AND datetime(first_seen) >= datetime(@cutoff)
-          AND datetime(COALESCE(endsAt, registrationDeadline, startsAt))
-              >= datetime(@now)`,
+        WHERE active = 1 AND to_ts(first_seen) >= to_ts(@cutoff)
+          AND to_ts(COALESCE(endsAt, registrationDeadline, startsAt))
+              >= to_ts(@now)`,
     ),
   };
 }

@@ -17,10 +17,10 @@ export async function POST(
   }
   const { id } = await params;
   const postId = Number(id);
-  if (!Number.isInteger(postId) || !db.prepare("SELECT 1 FROM posts WHERE id = ?").get(postId)) {
+  if (!Number.isInteger(postId) || !await db.prepare("SELECT 1 FROM posts WHERE id = ?").get(postId)) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -29,14 +29,14 @@ export async function POST(
   if (limited) {
     return limited;
   }
-  const liked = toggleLike(postId, member.id);
+  const liked = await toggleLike(postId, member.id);
   if (liked) {
-    const author = db
+    const author = await db
       .prepare("SELECT memberId FROM posts WHERE id = ?")
       .get(postId) as { memberId: number };
-    awardXp(author.memberId, XP.likeReceived);
-    checkBadges(author.memberId);
-    notify(author.memberId, {
+    await awardXp(author.memberId, XP.likeReceived);
+    await checkBadges(author.memberId);
+    await notify(author.memberId, {
       type: "like",
       actorUsername: member.username,
       text: `@${member.username} curtiu teu post`,
@@ -44,7 +44,7 @@ export async function POST(
     });
   }
   const likeCount = (
-    db.prepare("SELECT COUNT(*) n FROM likes WHERE postId = ?").get(postId) as {
+    await db.prepare("SELECT COUNT(*) n FROM likes WHERE postId = ?").get(postId) as {
       n: number;
     }
   ).n;

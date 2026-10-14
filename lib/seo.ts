@@ -34,7 +34,7 @@ const STATIC_ROUTES: { path: string; priority: number; freq: "weekly" | "daily" 
   { path: "/legal/privacidade", priority: 0.2, freq: "weekly" },
 ];
 
-export function buildSitemap(now = new Date()): MetadataRoute.Sitemap {
+export async function buildSitemap(now = new Date()): Promise<MetadataRoute.Sitemap> {
   const sitemap: MetadataRoute.Sitemap = STATIC_ROUTES.map((r) => ({
     url: absoluteUrl(r.path),
     changeFrequency: r.freq,
@@ -42,8 +42,8 @@ export function buildSitemap(now = new Date()): MetadataRoute.Sitemap {
   }));
 
   const editions = [
-    ...getOpenHackathons(now),
-    ...getPastHackathons(now),
+    ...await getOpenHackathons(now),
+    ...await getPastHackathons(now),
   ];
   for (const h of editions) {
     sitemap.push({
@@ -52,7 +52,7 @@ export function buildSitemap(now = new Date()): MetadataRoute.Sitemap {
       priority: 0.7,
     });
   }
-  for (const m of listMembers(500)) {
+  for (const m of await listMembers(500)) {
     sitemap.push({
       url: absoluteUrl(`/u/${m.username}`),
       changeFrequency: "weekly",

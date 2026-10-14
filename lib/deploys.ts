@@ -5,24 +5,6 @@ import path from "node:path";
 import db from "@/lib/db";
 
 // schema próprio (idempotente) — não edita lib/db.ts
-db.exec(`CREATE TABLE IF NOT EXISTS deploys (
-  id TEXT PRIMARY KEY,
-  teamId INTEGER NOT NULL,
-  repoUrl TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('queued','building','running','failed','stopped','expired')),
-  port INTEGER,
-  containerName TEXT,
-  expiresAt TEXT NOT NULL,
-  error TEXT,
-  createdAt TEXT NOT NULL,
-  updatedAt TEXT NOT NULL
-)`);
-db.exec(
-  "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-);
-db.exec("CREATE INDEX IF NOT EXISTS idx_deploys_team ON deploys(teamId)");
-db.exec("CREATE INDEX IF NOT EXISTS idx_deploys_status ON deploys(status)");
-
 export const DEPLOY_TTL_MS = 72 * 3600 * 1000;
 export const MAX_ACTIVE_DEPLOYS = 3;
 const DEPLOYS_DIR = path.join(process.cwd(), "data", "deploys");
@@ -57,57 +39,57 @@ export function validateRepoUrl(u: string): string | null {
   return null;
 }
 
-export function deploysEnabled(): boolean {
-  const row = db
+export async function deploysEnabled(): Promise<boolean> {
+  const row = await db
     .prepare("SELECT value FROM settings WHERE key = 'deploys_enabled'")
     .get() as { value: string } | undefined;
   return row?.value !== "0";
 }
 
-export function setDeploysEnabled(on: boolean) {
-  db.prepare(
+export async function setDeploysEnabled(on: boolean) {
+  await db.prepare(
     "INSERT INTO settings (key, value) VALUES ('deploys_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   ).run(on ? "1" : "0");
 }
 
-export function canDeploy(
+export async function canDeploy(
   member: { username: string; role: string } | null,
   teamId: number,
-): boolean {
+): Promise<boolean> {
   if (!member) return false;
   if (member.role === "admin") return true;
-  return !!db
+  return !!await db
     .prepare("SELECT 1 FROM team_members WHERE teamId = ? AND username = ?")
     .get(teamId, member.username);
 }
 
 /** fixture helper também usado nos testes: cria team + project mínimos */
-export function createProjectFixture(
+export async function createProjectFixture(
   hackathonId: string,
   opts: { name?: string; repoUrl?: string } = {},
-): number {
+): Promise<number> {
   const name = opts.name ?? `team-${crypto.randomBytes(3).toString("hex")}`;
-  const res = db
+  const res = await db
     .prepare("INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, 0)")
     .run(hackathonId, name);
   const teamId = Number(res.lastInsertRowid);
-  db.prepare(
+  await db.prepare(
     "INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl) VALUES (?, ?, '', ?, NULL)",
   ).run(teamId, `${name} app`, opts.repoUrl ?? "https://github.com/org/repo");
   return teamId;
 }
 
-export function getDeploy(id: string): Deploy | null {
+export async function getDeploy(id: string): Promise<Deploy | null> {
   return (
-    (db.prepare("SELECT * FROM deploys WHERE id = ?").get(id) as
+    (await db.prepare("SELECT * FROM deploys WHERE id = ?").get(id) as
       | Deploy
       | undefined) ?? null
   );
 }
 
-export function getDeployForTeam(teamId: number): Deploy | null {
+export async function getDeployForTeam(teamId: number): Promise<Deploy | null> {
   return (
-    (db
+    (await db
       .prepare(
         `SELECT * FROM deploys WHERE teamId = ?
          AND status IN ('queued','building','running')
@@ -118,9 +100,9 @@ export function getDeployForTeam(teamId: number): Deploy | null {
 }
 
 /** último deploy do projeto, qualquer status — o GET mostra stopped/failed */
-export function getLatestDeployForTeam(teamId: number): Deploy | null {
+export async function getLatestDeployForTeam(teamId: number): Promise<Deploy | null> {
   return (
-    (db
+    (await db
       .prepare(
         "SELECT * FROM deploys WHERE teamId = ? ORDER BY createdAt DESC LIMIT 1",
       )
@@ -128,8 +110,8 @@ export function getLatestDeployForTeam(teamId: number): Deploy | null {
   );
 }
 
-export function activeDeployCount(): number {
-  const r = db
+export async function activeDeployCount(): Promise<number> {
+  const r = await db
     .prepare(
       "SELECT COUNT(*) n FROM deploys WHERE status IN ('queued','building','running')",
     )
@@ -137,52 +119,52 @@ export function activeDeployCount(): number {
   return r.n;
 }
 
-export function listDeploys(): Deploy[] {
-  return db
+export async function listDeploys(): Promise<Deploy[]> {
+  return await db
     .prepare("SELECT * FROM deploys ORDER BY createdAt DESC LIMIT 100")
     .all() as Deploy[];
 }
 
-export function projectExists(teamId: number): boolean {
-  return !!db
+export async function projectExists(teamId: number): Promise<boolean> {
+  return !!await db
     .prepare("SELECT 1 FROM team_projects WHERE teamId = ?")
     .get(teamId);
 }
 
-export function projectRepoUrl(teamId: number): string | null {
-  const r = db
+export async function projectRepoUrl(teamId: number): Promise<string | null> {
+  const r = await db
     .prepare("SELECT repoUrl FROM team_projects WHERE teamId = ?")
     .get(teamId) as { repoUrl: string | null } | undefined;
   return r?.repoUrl ?? null;
 }
 
 /** valida e insere o deploy; o runner detached faz o resto */
-export function queueDeploy(input: {
+export async function queueDeploy(input: {
   teamId: number;
   repoUrl?: string;
   startCommand?: string;
   byUsername: string;
-}): Deploy {
-  if (!deploysEnabled()) throw new Error("Deploys desativados pelo admin");
-  if (!projectExists(input.teamId)) throw new Error("Projeto não encontrado");
-  if (getDeployForTeam(input.teamId))
+}): Promise<Deploy> {
+  if (!await deploysEnabled()) throw new Error("Deploys desativados pelo admin");
+  if (!await projectExists(input.teamId)) throw new Error("Projeto não encontrado");
+  if (await getDeployForTeam(input.teamId))
     throw new Error("Já existe um deploy ativo pra esse projeto");
-  if (activeDeployCount() >= MAX_ACTIVE_DEPLOYS)
+  if (await activeDeployCount() >= MAX_ACTIVE_DEPLOYS)
     throw new Error(`Limite de ${MAX_ACTIVE_DEPLOYS} demos simultâneas atingido`);
 
-  const repoUrl = (input.repoUrl ?? projectRepoUrl(input.teamId) ?? "").trim();
+  const repoUrl = (input.repoUrl ?? await projectRepoUrl(input.teamId) ?? "").trim();
   const invalid = validateRepoUrl(repoUrl);
   if (invalid) throw new Error(invalid);
 
   const id = crypto.randomBytes(6).toString("hex");
   const expiresAt = new Date(Date.now() + DEPLOY_TTL_MS).toISOString();
-  db.prepare(
+  await db.prepare(
     `INSERT INTO deploys (id, teamId, repoUrl, status, expiresAt, createdAt, updatedAt)
      VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
   ).run(id, input.teamId, repoUrl, expiresAt, now(), now());
 
   spawnRunner(id, input.startCommand);
-  return getDeploy(id)!;
+  return (await getDeploy(id))!;
 }
 
 function spawnRunner(deployId: string, startCommand?: string) {
@@ -201,10 +183,7 @@ function spawnRunner(deployId: string, startCommand?: string) {
     {
       detached: true,
       stdio: ["ignore", logFd, logFd],
-      env: {
-        ...process.env,
-        HACKAHUB_DB: process.env.HACKAHUB_DB ?? "data/hackahub.db",
-      },
+      env: process.env,
     },
   );
   child.unref();
@@ -218,8 +197,8 @@ function docker(args: string[]): string {
   }).trim();
 }
 
-export function stopDeploy(id: string, status: DeployStatus = "stopped") {
-  const d = getDeploy(id);
+export async function stopDeploy(id: string, status: DeployStatus = "stopped") {
+  const d = await getDeploy(id);
   if (!d) return;
   try {
     if (d.containerName) docker(["rm", "-f", d.containerName]);
@@ -227,21 +206,21 @@ export function stopDeploy(id: string, status: DeployStatus = "stopped") {
   } catch {
     /* container/imagem podem não existir — best-effort */
   }
-  db.prepare(
+  await db.prepare(
     "UPDATE deploys SET status = ?, updatedAt = ? WHERE id = ?",
   ).run(status, now(), id);
 }
 
 /** expira TTL e reconcilia containers mortos — roda a cada leitura */
-export function sweepDeploys() {
-  const active = db
+export async function sweepDeploys() {
+  const active = await db
     .prepare(
       "SELECT id, expiresAt, containerName, status FROM deploys WHERE status IN ('queued','building','running')",
     )
     .all() as Pick<Deploy, "id" | "expiresAt" | "containerName" | "status">[];
   for (const d of active) {
     if (new Date(d.expiresAt).getTime() < Date.now()) {
-      stopDeploy(d.id, "expired");
+      await stopDeploy(d.id, "expired");
       continue;
     }
     if (d.status === "running" && d.containerName) {
@@ -253,12 +232,12 @@ export function sweepDeploys() {
           d.containerName,
         ]);
         if (state !== "true") {
-          db.prepare(
+          await db.prepare(
             "UPDATE deploys SET status = 'failed', error = 'container morreu', updatedAt = ? WHERE id = ?",
           ).run(now(), d.id);
         }
       } catch {
-        db.prepare(
+        await db.prepare(
           "UPDATE deploys SET status = 'failed', error = 'container sumiu', updatedAt = ? WHERE id = ?",
         ).run(now(), d.id);
       }
@@ -266,9 +245,9 @@ export function sweepDeploys() {
   }
 }
 
-export function proxyTarget(id: string): number | null {
-  sweepDeploys();
-  const d = getDeploy(id);
+export async function proxyTarget(id: string): Promise<number | null> {
+  await sweepDeploys();
+  const d = await getDeploy(id);
   return d?.status === "running" && d.port ? d.port : null;
 }
 

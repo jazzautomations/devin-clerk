@@ -18,21 +18,21 @@ import {
   validateRepoUrl,
 } from "@/lib/deploys";
 
-function ensureMember(username: string, role = "member") {
-  db.prepare(
+async function ensureMember(username: string, role = "member") {
+  await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email, role)
      VALUES (?, ?, ?, ?)`,
   ).run(`clerk-${username}`, username, `${username}@x.dev`, role);
 }
 
-beforeEach(() => {
-  db.exec("DELETE FROM deploys");
-  db.exec("DELETE FROM team_members");
-  db.exec("DELETE FROM team_projects");
-  db.exec("DELETE FROM teams");
-  db.exec("DELETE FROM settings WHERE key = 'deploys_enabled'");
-  ensureMember("dev1");
-  ensureMember("boss", "admin");
+beforeEach(async () => {
+  await db.exec("DELETE FROM deploys");
+  await db.exec("DELETE FROM team_members");
+  await db.exec("DELETE FROM team_projects");
+  await db.exec("DELETE FROM teams");
+  await db.exec("DELETE FROM settings WHERE key = 'deploys_enabled'");
+  await ensureMember("dev1");
+  await ensureMember("boss", "admin");
 });
 
 describe("validateRepoUrl", () => {
@@ -47,67 +47,67 @@ describe("validateRepoUrl", () => {
 });
 
 describe("canDeploy", () => {
-  it("membro do time pode; estranho não; admin pode", () => {
-    const teamId = createProjectFixture("hack-inova-alphaville-2026");
-    db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(teamId, "dev1");
-    expect(canDeploy({ username: "dev1", role: "member" }, teamId)).toBe(true);
-    expect(canDeploy({ username: "boss", role: "admin" }, teamId)).toBe(true);
-    ensureMember("random");
-    expect(canDeploy({ username: "random", role: "member" }, teamId)).toBe(false);
+  it("membro do time pode; estranho não; admin pode", async () => {
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026");
+    await db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(teamId, "dev1");
+    expect(await canDeploy({ username: "dev1", role: "member" }, teamId)).toBe(true);
+    expect(await canDeploy({ username: "boss", role: "admin" }, teamId)).toBe(true);
+    await ensureMember("random");
+    expect(await canDeploy({ username: "random", role: "member" }, teamId)).toBe(false);
   });
 });
 
 describe("queueDeploy", () => {
-  it("cria deploy queued com TTL e repo do projeto", () => {
-    const teamId = createProjectFixture("hack-inova-alphaville-2026", {
+  it("cria deploy queued com TTL e repo do projeto", async () => {
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026", {
       repoUrl: "https://github.com/org/demo",
     });
-    db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(teamId, "dev1");
-    const d = queueDeploy({ teamId, byUsername: "dev1" });
+    await db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(teamId, "dev1");
+    const d = await queueDeploy({ teamId, byUsername: "dev1" });
     expect(d.status).toBe("queued");
     expect(d.repoUrl).toBe("https://github.com/org/demo");
     expect(new Date(d.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("rejeita segundo deploy ativo pro mesmo projeto", () => {
-    const teamId = createProjectFixture("hack-inova-alphaville-2026");
-    queueDeploy({ teamId, byUsername: "dev1" });
-    expect(() => queueDeploy({ teamId, byUsername: "dev1" })).toThrow(/já existe/i);
+  it("rejeita segundo deploy ativo pro mesmo projeto", async () => {
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026");
+    await queueDeploy({ teamId, byUsername: "dev1" });
+    await expect(queueDeploy({ teamId, byUsername: "dev1" })).rejects.toThrow(/já existe/i);
   });
 
-  it("rejeita quando quota global cheia", () => {
+  it("rejeita quando quota global cheia", async () => {
     for (let i = 0; i < 3; i++) {
-      const t = createProjectFixture("hack-inova-alphaville-2026", { name: `t${i}` });
-      db.prepare(
+      const t = await createProjectFixture("hack-inova-alphaville-2026", { name: `t${i}` });
+      await db.prepare(
         "INSERT INTO deploys (id, teamId, repoUrl, status, expiresAt, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?)",
       ).run(`d${i}`, t, "https://github.com/o/r", "running", new Date(Date.now() + 9e5).toISOString(), "x", "x");
     }
-    const teamId = createProjectFixture("hack-inova-alphaville-2026", { name: "extra" });
-    expect(() => queueDeploy({ teamId, byUsername: "dev1" })).toThrow(/limite/i);
-    expect(activeDeployCount()).toBe(3);
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026", { name: "extra" });
+    await expect(queueDeploy({ teamId, byUsername: "dev1" })).rejects.toThrow(/limite/i);
+    expect(await activeDeployCount()).toBe(3);
   });
 
-  it("kill-switch desligado bloqueia", () => {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('deploys_enabled','0')").run();
-    expect(deploysEnabled()).toBe(false);
-    const teamId = createProjectFixture("hack-inova-alphaville-2026");
-    expect(() => queueDeploy({ teamId, byUsername: "dev1" })).toThrow(/desativad/i);
+  it("kill-switch desligado bloqueia", async () => {
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('deploys_enabled','0')").run();
+    expect(await deploysEnabled()).toBe(false);
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026");
+    await expect(queueDeploy({ teamId, byUsername: "dev1" })).rejects.toThrow(/desativad/i);
   });
 });
 
 describe("sweep/stop", () => {
-  it("expira deploy vencido", () => {
-    const teamId = createProjectFixture("hack-inova-alphaville-2026");
-    db.prepare(
+  it("expira deploy vencido", async () => {
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026");
+    await db.prepare(
       "INSERT INTO deploys (id, teamId, repoUrl, status, expiresAt, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?)",
     ).run("old", teamId, "https://github.com/o/r", "running", new Date(Date.now() - 1000).toISOString(), "x", "x");
-    sweepDeploys();
-    expect(getDeploy("old")!.status).toBe("expired");
+    await sweepDeploys();
+    expect((await getDeploy("old"))!.status).toBe("expired");
   });
-  it("stopDeploy marca stopped", () => {
-    const teamId = createProjectFixture("hack-inova-alphaville-2026");
-    const d = queueDeploy({ teamId, byUsername: "dev1" });
-    stopDeploy(d.id);
-    expect(getDeploy(d.id)!.status).toBe("stopped");
+  it("stopDeploy marca stopped", async () => {
+    const teamId = await createProjectFixture("hack-inova-alphaville-2026");
+    const d = await queueDeploy({ teamId, byUsername: "dev1" });
+    await stopDeploy(d.id);
+    expect((await getDeploy(d.id))!.status).toBe("stopped");
   });
 });

@@ -10,13 +10,13 @@ import {
 // lib de leads — spec 022. Schema próprio no módulo (pattern deploys/sponsors),
 // o import acima já garante a tabela no :memory:.
 
-beforeEach(() => {
-  db.prepare("DELETE FROM leads").run();
+beforeEach(async () => {
+  await db.prepare("DELETE FROM leads").run();
 });
 
 describe("createLead — validação", () => {
-  it("cria com defaults: message null, createdAt ISO, created=true", () => {
-    const { lead, created } = createLead({
+  it("cria com defaults: message null, createdAt ISO, created=true", async () => {
+    const { lead, created } = await createLead({
       company: "Oracle",
       email: "DevRel@Oracle.com",
       interest: "desafio",
@@ -30,9 +30,9 @@ describe("createLead — validação", () => {
     expect(Date.parse(lead.createdAt)).not.toBeNaN();
   });
 
-  it("cria com message e cada interest da whitelist", () => {
+  it("cria com message e cada interest da whitelist", async () => {
     for (const interest of LEAD_INTERESTS) {
-      const { lead } = createLead({
+      const { lead } = await createLead({
         company: `Co ${interest}`,
         email: `${interest}@co.dev`,
         interest,
@@ -43,100 +43,96 @@ describe("createLead — validação", () => {
     }
   });
 
-  it("company obrigatória — vazio/branco/ausente lança erro", () => {
+  it("company obrigatória — vazio/branco/ausente lança erro", async () => {
     for (const company of ["", "   "]) {
-      expect(() =>
-        createLead({ company, email: "a@b.dev", interest: "outro" }),
-      ).toThrow();
+      await expect(createLead({ company, email: "a@b.dev", interest: "outro" }),
+      ).rejects.toThrow();
     }
-    expect(() =>
-      createLead({
+    await expect(createLead({
         company: undefined as never,
         email: "a@b.dev",
         interest: "outro",
       }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 
-  it("e-mail malformado lança erro", () => {
+  it("e-mail malformado lança erro", async () => {
     for (const email of ["", "sem-arroba", "a@b", "a b@c.dev", "@x.dev"]) {
-      expect(() =>
-        createLead({ company: "Co", email, interest: "outro" }),
-      ).toThrow();
+      await expect(createLead({ company: "Co", email, interest: "outro" }),
+      ).rejects.toThrow();
     }
   });
 
-  it("interest fora da whitelist lança erro", () => {
-    expect(() =>
-      createLead({
+  it("interest fora da whitelist lança erro", async () => {
+    await expect(createLead({
         company: "Co",
         email: "a@b.dev",
         interest: "parceria" as never,
       }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });
 
 describe("createLead — dedupe por (empresa, e-mail) na janela", () => {
-  it("mesmo e-mail+empresa dentro da janela retorna o existente, sem inserir", () => {
-    const first = createLead({
+  it("mesmo e-mail+empresa dentro da janela retorna o existente, sem inserir", async () => {
+    const first = await createLead({
       company: "Oracle",
       email: "a@oracle.com",
       interest: "desafio",
     });
-    const second = createLead({
+    const second = await createLead({
       company: "oracle", // case-insensitive no par
       email: "A@oracle.com",
       interest: "talento", // interesse diferente continua dedupe
     });
     expect(second.created).toBe(false);
     expect(second.lead.id).toBe(first.lead.id);
-    expect(listLeads()).toHaveLength(1);
+    expect(await listLeads()).toHaveLength(1);
   });
 
-  it("mesmo e-mail com empresa diferente cria lead novo", () => {
-    createLead({ company: "Oracle", email: "a@x.dev", interest: "outro" });
-    const { created, lead } = createLead({
+  it("mesmo e-mail com empresa diferente cria lead novo", async () => {
+    await createLead({ company: "Oracle", email: "a@x.dev", interest: "outro" });
+    const { created, lead } = await createLead({
       company: "Nubank",
       email: "a@x.dev",
       interest: "outro",
     });
     expect(created).toBe(true);
-    expect(listLeads()).toHaveLength(2);
+    expect(await listLeads()).toHaveLength(2);
     expect(lead.company).toBe("Nubank");
   });
 
-  it("fora da janela (createdAt mais antigo que 10min) cria lead novo", () => {
-    const first = createLead({
+  it("fora da janela (createdAt mais antigo que 10min) cria lead novo", async () => {
+    const first = await createLead({
       company: "Oracle",
       email: "a@oracle.com",
       interest: "desafio",
     });
     const stale = new Date(Date.now() - LEAD_DEDUPE_MS - 1000).toISOString();
-    db.prepare("UPDATE leads SET createdAt = ? WHERE id = ?").run(
+    await db.prepare("UPDATE leads SET createdAt = ? WHERE id = ?").run(
       stale,
       first.lead.id,
     );
-    const { created, lead } = createLead({
+    const { created, lead } = await createLead({
       company: "Oracle",
       email: "a@oracle.com",
       interest: "desafio",
     });
     expect(created).toBe(true);
     expect(lead.id).not.toBe(first.lead.id);
-    expect(listLeads()).toHaveLength(2);
+    expect(await listLeads()).toHaveLength(2);
   });
 });
 
 describe("listLeads", () => {
-  it("lista em ordem decrescente de chegada", () => {
-    createLead({ company: "A", email: "a@a.dev", interest: "outro" });
-    createLead({ company: "B", email: "b@b.dev", interest: "edicao" });
-    const list = listLeads();
+  it("lista em ordem decrescente de chegada", async () => {
+    await createLead({ company: "A", email: "a@a.dev", interest: "outro" });
+    await createLead({ company: "B", email: "b@b.dev", interest: "edicao" });
+    const list = await listLeads();
     expect(list.map((l) => l.company)).toEqual(["B", "A"]);
   });
 
-  it("banco vazio retorna lista vazia", () => {
-    expect(listLeads()).toEqual([]);
+  it("banco vazio retorna lista vazia", async () => {
+    expect(await listLeads()).toEqual([]);
   });
 });

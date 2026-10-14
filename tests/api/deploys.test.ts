@@ -29,8 +29,8 @@ const call =
   async (...a: A) =>
     (await fn(...a)) as Response;
 
-function member(username: string, role = "member") {
-  db.prepare(
+async function member(username: string, role = "member") {
+  await db.prepare(
     `INSERT OR IGNORE INTO members (clerkId, username, email, role)
      VALUES (?, ?, ?, ?)`,
   ).run(`clerk-${username}`, username, `${username}@x.dev`, role);
@@ -38,17 +38,17 @@ function member(username: string, role = "member") {
 }
 
 let teamId: number;
-beforeEach(() => {
+beforeEach(async () => {
   clerkUser = null;
-  db.exec("DELETE FROM deploys");
-  db.exec("DELETE FROM team_members");
-  db.exec("DELETE FROM team_projects");
-  db.exec("DELETE FROM teams");
-  db.exec("DELETE FROM settings WHERE key='deploys_enabled'");
-  teamId = createProjectFixture("hack-inova-alphaville-2026");
-  db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(teamId, "dev1");
-  member("dev1");
-  member("boss", "admin");
+  await db.exec("DELETE FROM deploys");
+  await db.exec("DELETE FROM team_members");
+  await db.exec("DELETE FROM team_projects");
+  await db.exec("DELETE FROM teams");
+  await db.exec("DELETE FROM settings WHERE key='deploys_enabled'");
+  teamId = await createProjectFixture("hack-inova-alphaville-2026");
+  await db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(teamId, "dev1");
+  await member("dev1");
+  await member("boss", "admin");
 });
 
 describe("POST /api/projects/[teamId]/deploy", () => {
@@ -58,7 +58,7 @@ describe("POST /api/projects/[teamId]/deploy", () => {
     expect(res.status).toBe(401);
   });
   it("403 membro de fora do time", async () => {
-    clerkUser = member("random2");
+    clerkUser = await member("random2");
     const { POST } = await import("@/app/api/projects/[teamId]/deploy/route");
     const res = await call(POST)(req("POST", {}), params(teamId));
     expect(res.status).toBe(403);

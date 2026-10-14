@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { submission, created } = createSubmission({
+    const { submission, created } = await createSubmission({
       name: b.name as string,
       url: b.url as string,
       startsAt: b.startsAt as string | undefined,
@@ -58,12 +58,12 @@ export async function POST(req: Request) {
 // nunca é pública: deslogado → 401, membro → 403.
 export async function GET() {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (member.role !== "admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  return Response.json({ submissions: listPendingSubmissions() });
+  return Response.json({ submissions: await listPendingSubmissions() });
 }

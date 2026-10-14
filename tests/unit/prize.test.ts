@@ -14,8 +14,8 @@ vi.mock("@clerk/nextjs/server", () => ({
 const HID = "prize-unit-test";
 const params = Promise.resolve({ id: HID });
 
-function makeHackathon(prize?: string | null): void {
-  db.prepare(
+async function makeHackathon(prize?: string | null): Promise<void> {
+  await db.prepare(
     `INSERT OR REPLACE INTO hackathons
        (id, name, organizer, startsAt, format, registrationUrl, tags, active, prize)
      VALUES (?, 'Prize Jam', 'Org', '2099-01-01T09:00:00-03:00', 'online',
@@ -23,34 +23,34 @@ function makeHackathon(prize?: string | null): void {
   ).run(HID, prize ?? null);
 }
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_admin','prize_admin','p@t.dev','admin')",
   ).run();
-  db.prepare("DELETE FROM hackathons WHERE id = ?").run(HID);
+  await db.prepare("DELETE FROM hackathons WHERE id = ?").run(HID);
 });
 
 describe("hackathons.prize — coluna e tipo", () => {
-  it("seed da Unifacens carrega o prêmio real divulgado (R$ 5 mil)", () => {
-    const h = getHackathon("hack-inova-unifacens-2026");
+  it("seed da Unifacens carrega o prêmio real divulgado (R$ 5 mil)", async () => {
+    const h = await getHackathon("hack-inova-unifacens-2026");
     expect(h?.prize).toBe("R$ 5 mil");
   });
 
-  it("edição sem prêmio retorna null e listagem carrega o campo", () => {
-    makeHackathon();
-    expect(getHackathon(HID)!.prize).toBeNull();
-    const up = getOpenHackathons();
+  it("edição sem prêmio retorna null e listagem carrega o campo", async () => {
+    await makeHackathon();
+    expect((await getHackathon(HID))!.prize).toBeNull();
+    const up = await getOpenHackathons();
     expect(up.find((h) => h.id === HID)?.prize).toBeNull();
   });
 
-  it("updateHackathon define, edita e limpa (null) o prêmio", () => {
-    makeHackathon();
-    expect(updateHackathon(HID, { prize: "R$ 42 mil" })?.prize).toBe(
+  it("updateHackathon define, edita e limpa (null) o prêmio", async () => {
+    await makeHackathon();
+    expect((await updateHackathon(HID, { prize: "R$ 42 mil" }))?.prize).toBe(
       "R$ 42 mil",
     );
-    expect(getHackathon(HID)!.prize).toBe("R$ 42 mil");
+    expect((await getHackathon(HID))!.prize).toBe("R$ 42 mil");
     // null explícito limpa — mesmo contrato de endsAt/location
-    expect(updateHackathon(HID, { prize: null })?.prize).toBeNull();
+    expect((await updateHackathon(HID, { prize: null }))?.prize).toBeNull();
   });
 });
 
@@ -63,25 +63,25 @@ describe("PATCH /api/admin/hackathons/[id] — prize", () => {
     });
 
   it("admin define/limpa prêmio → 200 e persiste", async () => {
-    makeHackathon();
+    await makeHackathon();
     const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
     const res = await PATCH(req({ prize: "R$ 10 mil" }), { params });
     expect(res.status).toBe(200);
     expect((await res.json()).hackathon.prize).toBe("R$ 10 mil");
-    expect(getHackathon(HID)!.prize).toBe("R$ 10 mil");
+    expect((await getHackathon(HID))!.prize).toBe("R$ 10 mil");
 
     const cleared = await PATCH(req({ prize: null }), { params });
     expect(cleared.status).toBe(200);
-    expect(getHackathon(HID)!.prize).toBeNull();
+    expect((await getHackathon(HID))!.prize).toBeNull();
   });
 
   it("400 em tipo errado de prize", async () => {
-    makeHackathon();
+    await makeHackathon();
     const { PATCH } = await import("@/app/api/admin/hackathons/[id]/route");
     for (const body of [{ prize: 5000 }, { prize: { v: 1 } }]) {
       const res = await PATCH(req(body), { params });
       expect(res.status).toBe(400);
     }
-    expect(getHackathon(HID)!.prize).toBeNull();
+    expect((await getHackathon(HID))!.prize).toBeNull();
   });
 });

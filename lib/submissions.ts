@@ -4,25 +4,6 @@ import { getHackathon, type Hackathon } from "@/lib/hackathons";
 // schema próprio (idempotente) — não edita lib/db.ts (pattern lib/leads.ts).
 // Terceira origem do radar: a comunidade indica, a curadoria decide — a
 // indicação nunca alimenta listagem pública direto.
-db.exec(`CREATE TABLE IF NOT EXISTS event_submissions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  url TEXT NOT NULL,
-  startsAt TEXT,
-  location TEXT,
-  format TEXT NOT NULL DEFAULT 'online'
-    CHECK (format IN ('online','presencial','hibrido')),
-  note TEXT,
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','approved','rejected')),
-  createdAt TEXT NOT NULL,
-  reviewedAt TEXT
-)`);
-db.exec(
-  `CREATE INDEX IF NOT EXISTS idx_event_submissions_url_recent
-   ON event_submissions(url, createdAt)`,
-);
-
 export type SubmissionFormat = "online" | "presencial" | "hibrido";
 export const SUBMISSION_FORMATS: SubmissionFormat[] = [
   "online",
@@ -65,14 +46,14 @@ function isHttpUrl(s: string): boolean {
   }
 }
 
-export function createSubmission(input: {
+export async function createSubmission(input: {
   name: string;
   url: string;
   startsAt?: string | null;
   location?: string | null;
   format?: string;
   note?: string | null;
-}): { submission: EventSubmission; created: boolean } {
+}): Promise<{ submission: EventSubmission; created: boolean }> {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   if (!name) throw new Error("nome do evento obrigatório");
 
@@ -98,7 +79,7 @@ export function createSubmission(input: {
 
   // dedupe por url (case-insensitive) em qualquer status — retry é no-op
   const cutoff = new Date(Date.now() - SUBMISSION_DEDUPE_MS).toISOString();
-  const existing = db
+  const existing = await db
     .prepare(
       `SELECT * FROM event_submissions
        WHERE lower(url) = lower(?) AND createdAt > ?
@@ -107,7 +88,7 @@ export function createSubmission(input: {
     .get(url, cutoff) as EventSubmission | undefined;
   if (existing) return { submission: existing, created: false };
 
-  const res = db
+  const res = await db
     .prepare(
       `INSERT INTO event_submissions
          (name, url, startsAt, location, format, note, status, createdAt)
@@ -122,13 +103,13 @@ export function createSubmission(input: {
       opt(input.note),
       new Date().toISOString(),
     );
-  const submission = getSubmission(Number(res.lastInsertRowid));
+  const submission = await getSubmission(Number(res.lastInsertRowid));
   if (!submission) throw new Error("falha ao gravar indicação");
   return { submission, created: true };
 }
 
-export function getSubmission(id: number): EventSubmission | null {
-  const row = db
+export async function getSubmission(id: number): Promise<EventSubmission | null> {
+  const row = await db
     .prepare("SELECT * FROM event_submissions WHERE id = ?")
     .get(id) as EventSubmission | undefined;
   return row ?? null;
@@ -136,8 +117,8 @@ export function getSubmission(id: number): EventSubmission | null {
 
 // fila de curadoria: só pending, mais antiga primeiro (FIFO — quem espera
 // mais é revisado primeiro)
-export function listPendingSubmissions(limit = 200): EventSubmission[] {
-  return db
+export async function listPendingSubmissions(limit = 200): Promise<EventSubmission[]> {
+  return await db
     .prepare(
       `SELECT * FROM event_submissions
        WHERE status = 'pending'
@@ -160,10 +141,10 @@ export function slugify(s: string): string {
 
 // id público da edição aprovada: nome + ano quando a data existe; conflito
 // ganha sufixo numérico (hackathon-ia-2026, hackathon-ia-2026-2…)
-export function uniqueHackathonId(
+export async function uniqueHackathonId(
   name: string,
   startsAt: string | null,
-): string {
+): Promise<string> {
   const year = startsAt ? new Date(startsAt).getFullYear() : NaN;
   let base = slugify(name);
   if (Number.isFinite(year) && !base.endsWith(`-${year}`)) {
@@ -172,7 +153,7 @@ export function uniqueHackathonId(
   if (!base) base = "evento-sem-data";
   let id = base;
   let n = 2;
-  while (getHackathon(id)) id = `${base}-${n++}`;
+  while (await getHackathon(id)) id = `${base}-${n++}`;
   return id;
 }
 
@@ -186,25 +167,25 @@ function organizerFromNote(note: string | null): string {
 // approve: a indicação vira edição ativa no radar (source='comunidade');
 // reject: só sai da fila. Revisão é terminal — já revisada → retorna como
 // está, sem duplicar hackathon.
-export function reviewSubmission(
+export async function reviewSubmission(
   id: number,
   action: "approve" | "reject",
-): { submission: EventSubmission; hackathon?: Hackathon } | null {
-  const submission = getSubmission(id);
+): Promise<{ submission: EventSubmission; hackathon?: Hackathon } | null> {
+  const submission = await getSubmission(id);
   if (!submission) return null;
   if (submission.status !== "pending") return { submission };
 
   const reviewedAt = new Date().toISOString();
   if (action === "reject") {
-    db.prepare(
+    await db.prepare(
       "UPDATE event_submissions SET status = 'rejected', reviewedAt = ? WHERE id = ?",
     ).run(reviewedAt, id);
-    return { submission: getSubmission(id) as EventSubmission };
+    return { submission: await getSubmission(id) as EventSubmission };
   }
 
-  const hackathonId = uniqueHackathonId(submission.name, submission.startsAt);
-  const tx = db.transaction(() => {
-    db.prepare(
+  const hackathonId = await uniqueHackathonId(submission.name, submission.startsAt);
+  const tx = db.transaction(async () => {
+    await db.prepare(
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, endsAt, format, location,
           registrationUrl, registrationDeadline, tags, active, source)
@@ -218,13 +199,13 @@ export function reviewSubmission(
       submission.location,
       submission.url,
     );
-    db.prepare(
+    await db.prepare(
       "UPDATE event_submissions SET status = 'approved', reviewedAt = ? WHERE id = ?",
     ).run(reviewedAt, id);
   });
-  tx();
+  await tx();
   return {
-    submission: getSubmission(id) as EventSubmission,
-    hackathon: getHackathon(hackathonId) ?? undefined,
+    submission: await getSubmission(id) as EventSubmission,
+    hackathon: await getHackathon(hackathonId) ?? undefined,
   };
 }

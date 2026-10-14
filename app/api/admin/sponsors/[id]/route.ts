@@ -15,7 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -23,7 +23,7 @@ export async function PATCH(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  if (!getSponsor(id)) {
+  if (!await getSponsor(id)) {
     return Response.json(
       { error: "Sponsor não encontrado" },
       { status: 404 },
@@ -69,7 +69,7 @@ export async function PATCH(
   }
 
   try {
-    const sponsor = updateSponsor(id, patch);
+    const sponsor = await updateSponsor(id, patch);
     return Response.json({ sponsor });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Erro");

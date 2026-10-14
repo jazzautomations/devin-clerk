@@ -4,7 +4,7 @@ import { deploysEnabled, setDeploysEnabled } from "@/lib/deploys";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member)
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (member.role !== "admin")
@@ -12,6 +12,6 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => ({}));
   if (typeof body.enabled !== "boolean")
     return Response.json({ error: "enabled boolean obrigatório" }, { status: 400 });
-  setDeploysEnabled(body.enabled);
-  return Response.json({ enabled: deploysEnabled() });
+  await setDeploysEnabled(body.enabled);
+  return Response.json({ enabled: await deploysEnabled() });
 }

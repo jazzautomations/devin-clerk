@@ -2,19 +2,6 @@ import db from "@/lib/db";
 import { isLeadInterest, type LeadInterest } from "@/lib/leadInterests";
 
 // schema próprio (idempotente) — não edita lib/db.ts (pattern lib/deploys.ts)
-db.exec(`CREATE TABLE IF NOT EXISTS leads (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  company TEXT NOT NULL,
-  email TEXT NOT NULL,
-  interest TEXT NOT NULL
-    CHECK (interest IN ('desafio','edicao','talento','outro')),
-  message TEXT,
-  createdAt TEXT NOT NULL
-)`);
-db.exec(
-  "CREATE INDEX IF NOT EXISTS idx_leads_recent ON leads(email, company, createdAt)",
-);
-
 // whitelist mora no módulo puro lib/leadInterests.ts (seguro pra client);
 // re-export pra quem só importa a lib
 export {
@@ -41,12 +28,12 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const opt = (v?: string | null) =>
   typeof v === "string" && v.trim() ? v.trim() : null;
 
-export function createLead(input: {
+export async function createLead(input: {
   company: string;
   email: string;
   interest: LeadInterest;
   message?: string | null;
-}): { lead: Lead; created: boolean } {
+}): Promise<{ lead: Lead; created: boolean }> {
   const company = typeof input.company === "string" ? input.company.trim() : "";
   if (!company) throw new Error("nome da empresa obrigatório");
 
@@ -59,7 +46,7 @@ export function createLead(input: {
 
   const normalized = email.toLowerCase();
   const cutoff = new Date(Date.now() - LEAD_DEDUPE_MS).toISOString();
-  const existing = db
+  const existing = await db
     .prepare(
       `SELECT * FROM leads
        WHERE lower(email) = lower(?) AND lower(company) = lower(?)
@@ -69,7 +56,7 @@ export function createLead(input: {
     .get(normalized, company, cutoff) as Lead | undefined;
   if (existing) return { lead: existing, created: false };
 
-  const res = db
+  const res = await db
     .prepare(
       `INSERT INTO leads (company, email, interest, message, createdAt)
        VALUES (?, ?, ?, ?, ?)`,
@@ -81,14 +68,14 @@ export function createLead(input: {
       opt(input.message),
       new Date().toISOString(),
     );
-  const lead = db
+  const lead = await db
     .prepare("SELECT * FROM leads WHERE id = ?")
     .get(Number(res.lastInsertRowid)) as Lead;
   return { lead, created: true };
 }
 
-export function listLeads(limit = 200): Lead[] {
-  return db
+export async function listLeads(limit = 200): Promise<Lead[]> {
+  return await db
     .prepare(
       "SELECT * FROM leads ORDER BY createdAt DESC, id DESC LIMIT ?",
     )

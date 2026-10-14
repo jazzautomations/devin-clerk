@@ -4,7 +4,7 @@ import { getMemberByClerkId } from "@/lib/members";
 
 export async function POST(req: Request) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member || member.role !== "admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if (!["online", "presencial", "hibrido"].includes(b.format)) {
     return Response.json({ error: "format inválido" }, { status: 400 });
   }
-  db.prepare(
+  await db.prepare(
     `INSERT OR REPLACE INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)
      VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, 1, @prize)`,

@@ -1,20 +1,6 @@
 import db from "@/lib/db";
 
 // schema próprio (idempotente) — não edita lib/db.ts; pattern de lib/deploys.ts
-db.exec(`CREATE TABLE IF NOT EXISTS notifications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  actorUsername TEXT,
-  type TEXT NOT NULL,
-  text TEXT NOT NULL,
-  href TEXT,
-  read INTEGER NOT NULL DEFAULT 0,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-)`);
-db.exec(
-  "CREATE INDEX IF NOT EXISTS idx_notifications_member_read ON notifications(memberId, read)",
-);
-
 export type Notification = {
   id: number;
   memberId: number;
@@ -38,7 +24,7 @@ const toNotification = (row: NotificationRow): Notification => ({
  * histórico, não FK). Nunca notifica a si mesmo: se o ator é o destinatário,
  * é skip silencioso — curtir o próprio post não é novidade.
  */
-export function notify(
+export async function notify(
   memberId: number,
   opts: {
     type: string;
@@ -46,14 +32,14 @@ export function notify(
     text: string;
     href?: string;
   },
-): void {
+): Promise<void> {
   if (opts.actorUsername) {
-    const target = db
+    const target = await db
       .prepare("SELECT username FROM members WHERE id = ?")
       .get(memberId) as { username: string } | undefined;
     if (target?.username === opts.actorUsername) return;
   }
-  db.prepare(
+  await db.prepare(
     `INSERT INTO notifications (memberId, actorUsername, type, text, href)
      VALUES (?, ?, ?, ?, ?)`,
   ).run(
@@ -65,11 +51,11 @@ export function notify(
   );
 }
 
-export function listNotifications(
+export async function listNotifications(
   memberId: number,
   limit = 50,
-): Notification[] {
-  const rows = db
+): Promise<Notification[]> {
+  const rows = await db
     .prepare(
       "SELECT * FROM notifications WHERE memberId = ? ORDER BY id DESC LIMIT ?",
     )
@@ -77,9 +63,9 @@ export function listNotifications(
   return rows.map(toNotification);
 }
 
-export function unreadCount(memberId: number): number {
+export async function unreadCount(memberId: number): Promise<number> {
   return (
-    db
+    await db
       .prepare(
         "SELECT COUNT(*) n FROM notifications WHERE memberId = ? AND read = 0",
       )
@@ -87,15 +73,15 @@ export function unreadCount(memberId: number): number {
   ).n;
 }
 
-export function markAllRead(memberId: number): void {
-  db.prepare("UPDATE notifications SET read = 1 WHERE memberId = ?").run(
+export async function markAllRead(memberId: number): Promise<void> {
+  await db.prepare("UPDATE notifications SET read = 1 WHERE memberId = ?").run(
     memberId,
   );
 }
 
 /** escopo por memberId — marcar a dos outros é no-op silencioso */
-export function markRead(id: number, memberId: number): void {
-  db.prepare(
+export async function markRead(id: number, memberId: number): Promise<void> {
+  await db.prepare(
     "UPDATE notifications SET read = 1 WHERE id = ? AND memberId = ?",
   ).run(id, memberId);
 }

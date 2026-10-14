@@ -26,25 +26,25 @@ export default async function RadarPage({
   let registeredIds: string[] = [];
   if (userId) {
     const user = await currentUser();
-    const member = getOrCreateMember({
+    const member = await getOrCreateMember({
       id: userId,
       firstName: user?.firstName ?? null,
       lastName: user?.lastName ?? null,
       email: user?.primaryEmailAddress?.emailAddress ?? "",
       imageUrl: user?.imageUrl ?? null,
     });
-    registeredIds = getRegistrationIds(member.id);
+    registeredIds = await getRegistrationIds(member.id);
   }
 
   const { q: rawQ } = await searchParams;
   const q = rawQ?.trim() ?? "";
   const now = new Date();
   const hackathons = q
-    ? searchHackathons(q, now)
-    : getOpenHackathons(now);
+    ? await searchHackathons(q, now)
+    : await getOpenHackathons(now);
   const sessoes = hackathons.filter((h) => h.partner);
   const radar = hackathons.filter((h) => !h.partner);
-  const tags = getTags(hackathons);
+  const tags = await getTags(hackathons);
 
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12">

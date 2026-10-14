@@ -26,92 +26,92 @@ function clerkUser(
   };
 }
 
-function makeMember(clerkId: string): number {
-  db.prepare(
+async function makeMember(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
 describe("avatars — sync do Clerk no getOrCreateMember", () => {
-  it("grava avatarUrl do imageUrl na criação", () => {
-    const m = getOrCreateMember(clerkUser("av1", IMG_A));
+  it("grava avatarUrl do imageUrl na criação", async () => {
+    const m = await getOrCreateMember(clerkUser("av1", IMG_A));
     expect(m.avatarUrl).toBe(IMG_A);
   });
 
-  it("cria com avatarUrl nulo quando Clerk não tem foto", () => {
-    const m = getOrCreateMember(clerkUser("av2"));
+  it("cria com avatarUrl nulo quando Clerk não tem foto", async () => {
+    const m = await getOrCreateMember(clerkUser("av2"));
     expect(m.avatarUrl).toBeNull();
   });
 
-  it("atualiza avatarUrl quando imageUrl muda", () => {
-    getOrCreateMember(clerkUser("av3", IMG_A));
-    const m = getOrCreateMember(clerkUser("av3", IMG_B));
+  it("atualiza avatarUrl quando imageUrl muda", async () => {
+    await getOrCreateMember(clerkUser("av3", IMG_A));
+    const m = await getOrCreateMember(clerkUser("av3", IMG_B));
     expect(m.avatarUrl).toBe(IMG_B);
-    const stored = db
+    const stored = await db
       .prepare("SELECT avatarUrl FROM members WHERE clerkId = 'av3'")
       .get() as { avatarUrl: string | null };
     expect(stored.avatarUrl).toBe(IMG_B);
   });
 
-  it("preenche avatarUrl tardio — membro antigo sem foto", () => {
-    getOrCreateMember(clerkUser("av4"));
-    const m = getOrCreateMember(clerkUser("av4", IMG_A));
+  it("preenche avatarUrl tardio — membro antigo sem foto", async () => {
+    await getOrCreateMember(clerkUser("av4"));
+    const m = await getOrCreateMember(clerkUser("av4", IMG_A));
     expect(m.avatarUrl).toBe(IMG_A);
   });
 
-  it("imageUrl nulo não apaga avatar gravado", () => {
-    getOrCreateMember(clerkUser("av5", IMG_A));
-    const m = getOrCreateMember(clerkUser("av5", null));
+  it("imageUrl nulo não apaga avatar gravado", async () => {
+    await getOrCreateMember(clerkUser("av5", IMG_A));
+    const m = await getOrCreateMember(clerkUser("av5", null));
     expect(m.avatarUrl).toBe(IMG_A);
   });
 });
 
 describe("avatars — joins expõem avatarUrl", () => {
-  it("listPosts retorna avatarUrl do autor", () => {
-    const id = makeMember("av6");
-    db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_A, id);
-    const post = createPost(id, "post com avatar");
+  it("listPosts retorna avatarUrl do autor", async () => {
+    const id = await makeMember("av6");
+    await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_A, id);
+    const post = await createPost(id, "post com avatar");
     expect(post.avatarUrl).toBe(IMG_A);
-    const found = listPosts(10).find((p) => p.id === post.id);
+    const found = (await listPosts(10)).find((p) => p.id === post.id);
     expect(found?.avatarUrl).toBe(IMG_A);
   });
 
-  it("listPosts retorna avatarUrl nulo pra membro sem foto", () => {
-    const id = makeMember("av7");
-    const post = createPost(id, "post sem avatar");
+  it("listPosts retorna avatarUrl nulo pra membro sem foto", async () => {
+    const id = await makeMember("av7");
+    const post = await createPost(id, "post sem avatar");
     expect(post.avatarUrl).toBeNull();
   });
 
-  it("listComments retorna avatarUrl do autor", () => {
-    const a = makeMember("av8");
-    const b = makeMember("av9");
-    db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_B, b);
-    const post = createPost(a, "alvo");
-    const c = createComment(post.id, b, "com cara");
+  it("listComments retorna avatarUrl do autor", async () => {
+    const a = await makeMember("av8");
+    const b = await makeMember("av9");
+    await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_B, b);
+    const post = await createPost(a, "alvo");
+    const c = await createComment(post.id, b, "com cara");
     expect(c.avatarUrl).toBe(IMG_B);
-    expect(listComments(post.id)[0].avatarUrl).toBe(IMG_B);
+    expect((await listComments(post.id))[0].avatarUrl).toBe(IMG_B);
   });
 
-  it("getRegistrationsByHackathon retorna avatarUrl do inscrito", () => {
-    const id = makeMember("av10");
-    db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_A, id);
-    register(id, "hack-inova-unifacens-2026");
-    const r = getRegistrationsByHackathon("hack-inova-unifacens-2026").find(
+  it("getRegistrationsByHackathon retorna avatarUrl do inscrito", async () => {
+    const id = await makeMember("av10");
+    await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_A, id);
+    await register(id, "hack-inova-unifacens-2026");
+    const r = (await getRegistrationsByHackathon("hack-inova-unifacens-2026")).find(
       (x) => x.username === "u_av10",
     );
     expect(r?.avatarUrl).toBe(IMG_A);
   });
 
-  it("listTalent retorna avatarUrl de quem tá open to", () => {
-    const id = makeMember("av11");
-    db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_B, id);
-    setOpenTo(id, ["trampo"]);
-    const t = listTalent(100).find((x) => x.username === "u_av11");
+  it("listTalent retorna avatarUrl de quem tá open to", async () => {
+    const id = await makeMember("av11");
+    await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_B, id);
+    await setOpenTo(id, ["trampo"]);
+    const t = (await listTalent(100)).find((x) => x.username === "u_av11");
     expect(t?.avatarUrl).toBe(IMG_B);
   });
 });

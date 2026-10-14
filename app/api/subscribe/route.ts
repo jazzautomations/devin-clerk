@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return Response.json({ error: "E-mail inválido" }, { status: 400 });
   }
-  db.prepare("INSERT OR IGNORE INTO subscribers (email) VALUES (?)").run(
+  await db.prepare("INSERT OR IGNORE INTO subscribers (email) VALUES (?)").run(
     email.toLowerCase(),
   );
   return Response.json({ ok: true });

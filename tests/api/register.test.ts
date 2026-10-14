@@ -12,12 +12,12 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const HACK_ID = "hack-inova-alphaville-2026";
 
-function makeMember() {
-  db.prepare(
+async function makeMember() {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run("clerk_api_1", "api1", "api1@t.dev");
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get("clerk_api_1") as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get("clerk_api_1") as {
       id: number;
     }
   ).id;
@@ -26,11 +26,11 @@ function makeMember() {
 const params = Promise.resolve({ id: HACK_ID });
 
 describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
-  beforeEach(() => {
-    db.prepare("DELETE FROM registrations").run();
-    db.prepare("DELETE FROM member_cards").run();
-    db.prepare("DELETE FROM member_badges").run();
-    makeMember();
+  beforeEach(async () => {
+    await db.prepare("DELETE FROM registrations").run();
+    await db.prepare("DELETE FROM member_cards").run();
+    await db.prepare("DELETE FROM member_badges").run();
+    await makeMember();
   });
 
   it("inscreve, paga +50xp, minta a carta №001 e concede badges", async () => {
@@ -71,7 +71,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
 
 describe("POST /api/posts — recompensa de criação", () => {
   it("cria post e paga +10xp; rejeita post vazio e link inválido", async () => {
-    makeMember();
+    await makeMember();
     const { POST } = await import("@/app/api/posts/route");
     const ok = await POST(
       new Request("http://t", {

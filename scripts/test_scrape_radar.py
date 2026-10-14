@@ -6,12 +6,32 @@ Uso:
   npm run test:scrape
 """
 
-import sqlite3
+import os
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scrape_radar as sr  # noqa: E402
+
+MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
+
+
+def _db():
+    """Schema descartável num Postgres real (DATABASE_URL), com as migrations
+    do app aplicadas — o scraper testa contra o mesmo schema de produção."""
+    import psycopg
+    raw = psycopg.connect(os.environ["DATABASE_URL"], autocommit=True)
+    schema = f"t_{uuid.uuid4().hex[:10]}"
+    raw.execute(f"CREATE SCHEMA {schema}")
+    raw.execute(f"SET search_path TO {schema}")
+    _SCHEMAS.append((raw, schema))
+    for f in sorted(MIGRATIONS.glob("*.sql")):
+        raw.execute(f.read_text())
+    return sr.PgConn(raw)
+
+
+_SCHEMAS: list = []
 
 
 def _row(**kw):
@@ -95,7 +115,7 @@ def test_is_hackathon():
 
 
 def test_upsert_expiration_and_timestamps():
-    conn = sqlite3.connect(":memory:")
+    conn = _db()
     sr.ensure_schema(conn)
     past = _row(id="p1", startsAt="2020-01-01T09:00:00",
                 endsAt="2020-01-02T18:00:00")
@@ -130,7 +150,7 @@ def test_upsert_expiration_and_timestamps():
 
 
 def test_community_key_blocks_scraped():
-    conn = sqlite3.connect(":memory:")
+    conn = _db()
     sr.ensure_schema(conn)
     conn.execute(
         "INSERT INTO hackathons (id, name, organizer, startsAt, format,"
@@ -143,7 +163,7 @@ def test_community_key_blocks_scraped():
 
 
 def test_stale_dupe_deactivated():
-    conn = sqlite3.connect(":memory:")
+    conn = _db()
     sr.ensure_schema(conn)
     # rodada antiga inseriu meetup-7; nova rodada trouxe o mesmo evento via devpost
     sr.upsert(conn, [_row(id="meetup-7", name="Hack X", source="meetup")])
@@ -202,7 +222,7 @@ def test_dedupe_fills_prize_from_loser():
 
 
 def test_upsert_stores_prize():
-    conn = sqlite3.connect(":memory:")
+    conn = _db()
     sr.ensure_schema(conn)
     sr.upsert(conn, [_row(id="pz", prize="$10,000")])
     assert conn.execute(
@@ -265,7 +285,7 @@ def test_is_expired_coalesce_boundary():
 def test_sweep_respects_registration_deadline():
     """spec 027 — o varredor usa a mesma COALESCE do radar: deadline de
     inscrição futuro protege evento com startsAt passado."""
-    conn = sqlite3.connect(":memory:")
+    conn = _db()
     sr.ensure_schema(conn)
     conn.execute(
         "INSERT INTO hackathons (id, name, organizer, startsAt, endsAt,"
@@ -288,7 +308,11 @@ def test_sweep_respects_registration_deadline():
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print(f"[pass] {fn.__name__}")
+    try:
+        for fn in fns:
+            fn()
+            print(f"[pass] {fn.__name__}")
+    finally:
+        for raw, schema in _SCHEMAS:
+            raw.execute(f"DROP SCHEMA {schema} CASCADE")
     print(f"\n{len(fns)} testes OK")

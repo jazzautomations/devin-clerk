@@ -11,48 +11,39 @@ const C1 = "comentário e2e: primeiro da thread";
 const C2 = "comentário e2e: resposta em sequência";
 
 // idempotente: garante membro + post + 2 comentários, sem duplicar em rerun
-function ensureThread(): number {
+async function ensureThread(): Promise<number> {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  db.exec(`CREATE TABLE IF NOT EXISTS post_comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    postId INTEGER NOT NULL REFERENCES posts(id),
-    memberId INTEGER NOT NULL REFERENCES members(id),
-    body TEXT NOT NULL,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-  );`);
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, name, persona) VALUES ('e2e_commenter', 'e2e_commenter', 'e2e@t.dev', 'E2E Bot', 'dev')",
   ).run();
-  const m = db
+  const m = await db
     .prepare("SELECT id FROM members WHERE clerkId = 'e2e_commenter'")
     .get() as { id: number };
-  let p = db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as
+  let p = await db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as
     | { id: number }
     | undefined;
   if (!p) {
-    db.prepare("INSERT INTO posts (memberId, body) VALUES (?, ?)").run(
+    await db.prepare("INSERT INTO posts (memberId, body) VALUES (?, ?)").run(
       m.id,
       MARKER,
     );
-    p = db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as {
+    p = await db.prepare("SELECT id FROM posts WHERE body = ?").get(MARKER) as {
       id: number;
     };
   }
   for (const body of [C1, C2]) {
-    const has = db
+    const has = await db
       .prepare(
         "SELECT 1 FROM post_comments WHERE postId = ? AND body = ?",
       )
       .get(p.id, body);
     if (!has) {
-      db.prepare(
+      await db.prepare(
         "INSERT INTO post_comments (postId, memberId, body) VALUES (?, ?, ?)",
       ).run(p.id, m.id, body);
     }
   }
   const id = p.id;
-  db.close();
   return id;
 }
 
@@ -80,7 +71,7 @@ async function expandThread(
 
 test.describe("comentários — conversa pública no feed", () => {
   test("anon vê a contagem e lê a thread expandida", async ({ page }) => {
-    ensureThread();
+    await ensureThread();
     await page.goto("/feed");
     const post = await expandThread(page);
     // thread pública: ordem cronológica, autor linkado pro perfil
@@ -94,7 +85,7 @@ test.describe("comentários — conversa pública no feed", () => {
   test("composer de comentário é oculto pra quem não tá logado", async ({
     page,
   }) => {
-    ensureThread();
+    await ensureThread();
     await page.goto("/feed");
     const post = await expandThread(page);
     await expect(post.getByText(C1)).toBeVisible();
@@ -103,7 +94,7 @@ test.describe("comentários — conversa pública no feed", () => {
   });
 
   test("POST deslogado → 401 JSON, nunca redirect", async ({ request }) => {
-    const postId = ensureThread();
+    const postId = await ensureThread();
     const res = await request.post(`/api/posts/${postId}/comments`, {
       data: { body: "oi" },
     });

@@ -13,31 +13,9 @@ async function ensureCuratedEdition(
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
   await request.get("/radar");
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  // a coluna nasce do ALTER guardado em lib/registrations; garante aqui
-  // caso o dev server ainda não tenha importado o módulo nesta sessão
-  const cols = (
-    db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]
-  ).map((c) => c.name);
-  if (!cols.includes("requiresApproval")) {
-    db.exec(
-      "ALTER TABLE hackathons ADD COLUMN requiresApproval INTEGER NOT NULL DEFAULT 0",
-    );
-  }
-  const regCols = (
-    db.prepare("PRAGMA table_info(registrations)").all() as { name: string }[]
-  ).map((c) => c.name);
-  if (!regCols.includes("status")) {
-    db.exec(
-      "ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
-    );
-  }
-  if (!regCols.includes("reviewedAt")) {
-    db.exec("ALTER TABLE registrations ADD COLUMN reviewedAt TEXT");
-  }
   const future = new Date(Date.now() + 30 * 86_400_000).toISOString();
   // organizer 'Hack Inova' → partner → inscrição inline (não link externo)
-  db.prepare(
+  await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, format, registrationUrl,
         tags, active, source, requiresApproval)
@@ -46,7 +24,6 @@ async function ensureCuratedEdition(
      ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt,
        active = 1, requiresApproval = 1`,
   ).run(CURATED, future);
-  db.close();
 }
 
 test.describe("edição curada — apply to attend (spec 032)", () => {

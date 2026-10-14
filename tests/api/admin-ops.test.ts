@@ -10,11 +10,11 @@ vi.mock("@clerk/nextjs/server", () => ({
 const HID = "admin-ops-api-test";
 const params = Promise.resolve({ id: HID });
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_admin','admin_ops','a@t.dev','admin')",
   ).run();
-  db.prepare(
+  await db.prepare(
     `INSERT OR REPLACE INTO hackathons
        (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -30,8 +30,8 @@ beforeEach(() => {
     null,
     "[]",
   );
-  db.prepare("DELETE FROM registrations WHERE hackathonId = ?").run(HID);
-  db.prepare("DELETE FROM subscribers").run();
+  await db.prepare("DELETE FROM registrations WHERE hackathonId = ?").run(HID);
+  await db.prepare("DELETE FROM subscribers").run();
 });
 
 const req = (url: string, method: string, body?: unknown) =>
@@ -55,7 +55,7 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.hackathon.name).toBe("Hack Ops Edição 2");
-    const h = getHackathon(HID)!;
+    const h = (await getHackathon(HID))!;
     expect(h.location).toBe("Sorocaba, SP");
     expect(h.tags).toEqual(["ia", "comunidade"]);
     expect(h.organizer).toBe("Hack Inova"); // campo não enviado intacto
@@ -68,7 +68,7 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
       { params },
     );
     expect(res.status).toBe(200);
-    expect(getHackathon(HID)!.active).toBe(false);
+    expect((await getHackathon(HID))!.active).toBe(false);
   });
 
   it("400: format inválido, name vazio, patch vazio, tags não-array", async () => {
@@ -86,7 +86,7 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
       expect(res.status).toBe(400);
     }
     // nada mudou
-    expect(getHackathon(HID)!.name).toBe("Hack Ops");
+    expect((await getHackathon(HID))!.name).toBe("Hack Ops");
   });
 
   it("404 edição inexistente", async () => {
@@ -101,15 +101,15 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
 
 describe("GET /api/admin/hackathons/[id]/registrations", () => {
   it("lista inscritos com username, name, email e createdAt", async () => {
-    db.prepare(
+    await db.prepare(
       "INSERT OR IGNORE INTO members (clerkId, username, name, email) VALUES ('c_insc','inscrito','Inscrito Silva','inscrito@t.dev')",
     ).run();
     const memberId = (
-      db.prepare("SELECT id FROM members WHERE username = 'inscrito'").get() as {
+      await db.prepare("SELECT id FROM members WHERE username = 'inscrito'").get() as {
         id: number;
       }
     ).id;
-    db.prepare(
+    await db.prepare(
       "INSERT INTO registrations (memberId, hackathonId) VALUES (?, ?)",
     ).run(memberId, HID);
 
@@ -146,7 +146,7 @@ describe("GET /api/admin/hackathons/[id]/registrations", () => {
 
 describe("GET /api/admin/subscribers", () => {
   it("retorna assinantes em JSON", async () => {
-    db.prepare("INSERT INTO subscribers (email) VALUES ('jane@x.dev')").run();
+    await db.prepare("INSERT INTO subscribers (email) VALUES ('jane@x.dev')").run();
     const { GET } = await import("@/app/api/admin/subscribers/route");
     const res = await GET(req("/api/admin/subscribers", "GET"));
     expect(res.status).toBe(200);
@@ -157,8 +157,8 @@ describe("GET /api/admin/subscribers", () => {
   });
 
   it("?format=csv retorna text/csv baixável com uma linha por assinante", async () => {
-    db.prepare("INSERT INTO subscribers (email) VALUES ('jane@x.dev')").run();
-    db.prepare("INSERT INTO subscribers (email) VALUES ('john@x.dev')").run();
+    await db.prepare("INSERT INTO subscribers (email) VALUES ('jane@x.dev')").run();
+    await db.prepare("INSERT INTO subscribers (email) VALUES ('john@x.dev')").run();
     const { GET } = await import("@/app/api/admin/subscribers/route");
     const res = await GET(req("/api/admin/subscribers?format=csv", "GET"));
     expect(res.status).toBe(200);

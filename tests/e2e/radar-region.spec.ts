@@ -12,7 +12,6 @@ async function ensureRegionEvents(request: APIRequestContext) {
   // bate /radar primeiro pra forçar o init/migrações do db no server
   await request.get("/radar");
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
   const day = 86_400_000;
   const future = new Date(Date.now() + 30 * day).toISOString();
   const insert = db.prepare(
@@ -23,10 +22,9 @@ async function ensureRegionEvents(request: APIRequestContext) {
      ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt,
        location = excluded.location, active = 1`,
   );
-  insert.run(PE, "E2E Recife Jam", future, "presencial", "Recife, PE");
-  insert.run(ONLINE, "E2E Online Jam", future, "online", null);
-  insert.run(EXTERIOR, "E2E Lisbon Jam", future, "presencial", "Lisboa, Portugal");
-  db.close();
+  await insert.run(PE, "E2E Recife Jam", future, "presencial", "Recife, PE");
+  await insert.run(ONLINE, "E2E Online Jam", future, "online", null);
+  await insert.run(EXTERIOR, "E2E Lisbon Jam", future, "presencial", "Lisboa, Portugal");
 }
 
 test.describe("radar — filtro por localização", () => {

@@ -12,18 +12,18 @@ export async function GET(req?: Request) {
   // spec 028: ?h=<id> recorta o mural da edição; sem ?h= agrega tudo
   // (posts de edição ficam no feed global, com chip)
   const { userId } = await auth();
-  const me = userId ? getMemberByClerkId(userId) : null;
+  const me = userId ? await getMemberByClerkId(userId) : null;
   const h = req ? new URL(req.url).searchParams.get("h") : null;
   if (h) {
-    const edition = getHackathon(h);
+    const edition = await getHackathon(h);
     if (!edition || !edition.active) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
     return Response.json({
-      posts: listPosts(50, me?.id ?? null, { hackathonId: edition.id }),
+      posts: await listPosts(50, me?.id ?? null, { hackathonId: edition.id }),
     });
   }
-  return Response.json({ posts: listPosts(50, me?.id ?? null) });
+  return Response.json({ posts: await listPosts(50, me?.id ?? null) });
 }
 
 export async function POST(req: Request) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const user = await currentUser();
-  const member = getOrCreateMember({
+  const member = await getOrCreateMember({
     id: userId,
     firstName: user?.firstName ?? null,
     lastName: user?.lastName ?? null,
@@ -56,14 +56,14 @@ export async function POST(req: Request) {
     if (typeof rawH !== "string") {
       return Response.json({ error: "hackathonId inválido" }, { status: 400 });
     }
-    const edition = getHackathon(rawH);
+    const edition = await getHackathon(rawH);
     if (!edition) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
     if (!edition.active) {
       return Response.json({ error: "edição inativa" }, { status: 400 });
     }
-    if (!getRegistrationIds(member.id).includes(edition.id)) {
+    if (!(await getRegistrationIds(member.id)).includes(edition.id)) {
       return Response.json(
         { error: "inscreve-te primeiro" },
         { status: 403 },
@@ -73,11 +73,11 @@ export async function POST(req: Request) {
   }
   let post;
   try {
-    post = createPost(member.id, body.body, body.link, hackathonId);
+    post = await createPost(member.id, body.body, body.link, hackathonId);
   } catch {
     return Response.json({ error: "Link inválido" }, { status: 400 });
   }
-  awardXp(member.id, XP.post);
-  checkBadges(member.id);
+  await awardXp(member.id, XP.post);
+  await checkBadges(member.id);
   return Response.json({ post }, { status: 201 });
 }

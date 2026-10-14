@@ -9,19 +9,19 @@ import {
 
 export async function GET() {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (member.role !== "admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  return Response.json({ sponsors: listSponsors() });
+  return Response.json({ sponsors: await listSponsors() });
 }
 
 export async function POST(req: Request) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     }
   }
   try {
-    const sponsor = createSponsor({
+    const sponsor = await createSponsor({
       name: b.name,
       url: typeof b.url === "string" ? b.url : null,
       tier: b.tier as SponsorTier | undefined,

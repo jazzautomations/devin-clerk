@@ -17,7 +17,7 @@ export default async function FeedPage() {
   let member = null;
   if (userId) {
     const user = await currentUser();
-    member = getOrCreateMember({
+    member = await getOrCreateMember({
       id: userId,
       firstName: user?.firstName ?? null,
       lastName: user?.lastName ?? null,
@@ -25,7 +25,7 @@ export default async function FeedPage() {
       imageUrl: user?.imageUrl ?? null,
     });
   }
-  const posts = listPosts(50, member?.id ?? null);
+  const posts = await listPosts(50, member?.id ?? null);
 
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-8 px-6 py-12">

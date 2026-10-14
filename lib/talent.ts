@@ -1,4 +1,4 @@
-import db, { ensureColumn } from "@/lib/db";
+import db from "@/lib/db";
 import { getMemberProjects } from "@/lib/archive";
 import {
   isOpenToValue,
@@ -12,16 +12,14 @@ export { OPEN_TO, isOpenToValue, parseOpenTo, type OpenToValue };
 
 // migração idempotente — openTo vive aqui e não no schema principal de
 // lib/db.ts (trabalho paralelo naquele arquivo)
-ensureColumn("members", "openTo", "openTo TEXT");
 // avatarUrl é de lib/members — mesmo guard aqui pra import isolado
-ensureColumn("members", "avatarUrl", "avatarUrl TEXT");
 
 /**
  * Grava o opt-in comercial do membro. Valida contra a whitelist (throw em
  * valor fora dela), deduplica, normaliza caixa. [] grava NULL — o membro
  * sai do diretório.
  */
-export function setOpenTo(memberId: number, values: string[]): OpenToValue[] {
+export async function setOpenTo(memberId: number, values: string[]): Promise<OpenToValue[]> {
   const clean: OpenToValue[] = [];
   for (const raw of values) {
     const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
@@ -29,15 +27,15 @@ export function setOpenTo(memberId: number, values: string[]): OpenToValue[] {
     if (!isOpenToValue(v)) throw new Error(`openTo inválido: ${v}`);
     if (!clean.includes(v)) clean.push(v);
   }
-  db.prepare("UPDATE members SET openTo = ? WHERE id = ?").run(
+  await db.prepare("UPDATE members SET openTo = ? WHERE id = ?").run(
     clean.length ? clean.join(",") : null,
     memberId,
   );
   return clean;
 }
 
-export function getOpenTo(memberId: number): OpenToValue[] {
-  const row = db
+export async function getOpenTo(memberId: number): Promise<OpenToValue[]> {
+  const row = await db
     .prepare("SELECT openTo FROM members WHERE id = ?")
     .get(memberId) as { openTo: string | null } | undefined;
   return parseOpenTo(row?.openTo);
@@ -67,8 +65,8 @@ export type TalentEntry = {
 // diretório público: só quem optou (openTo não nulo nem vazio), xp desc com
 // desempate por username — mérito primeiro, igual ao /membros. A prova
 // (projetos + melhor colocação) vem do arquivo real via getMemberProjects.
-export function listTalent(limit = 100): TalentEntry[] {
-  const rows = db
+export async function listTalent(limit = 100): Promise<TalentEntry[]> {
+  const rows = await db
     .prepare(
       `SELECT m.id, m.username, m.name, m.avatarUrl, m.headline, m.persona,
               m.skills, m.github, m.xp, m.openTo
@@ -90,8 +88,8 @@ export function listTalent(limit = 100): TalentEntry[] {
     openTo: string;
   }[];
 
-  return rows.map((r) => {
-    const delivered = getMemberProjects(r.username);
+  return Promise.all(rows.map(async (r) => {
+    const delivered = await getMemberProjects(r.username);
     const best = delivered
       .filter((p) => p.placement > 0)
       .sort((a, b) => a.placement - b.placement)[0];
@@ -115,5 +113,5 @@ export function listTalent(limit = 100): TalentEntry[] {
           }
         : null,
     };
-  });
+  }));
 }

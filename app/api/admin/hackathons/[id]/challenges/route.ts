@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -16,7 +16,7 @@ export async function POST(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  if (!getHackathon(id)) {
+  if (!await getHackathon(id)) {
     return Response.json({ error: "Edição não encontrada" }, { status: 404 });
   }
   const b = await req.json().catch(() => null);
@@ -31,7 +31,7 @@ export async function POST(
     );
   }
   try {
-    const challenge = createChallenge(id, {
+    const challenge = await createChallenge(id, {
       sponsor: typeof b.sponsor === "string" ? b.sponsor : undefined,
       sponsorId: typeof b.sponsorId === "string" ? b.sponsorId : undefined,
       title: b.title,

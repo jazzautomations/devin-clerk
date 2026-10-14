@@ -11,19 +11,19 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const HID = "hack-inova-alphaville-2026"; // edição futura e ativa (seed)
 
-function memberId(clerkId: string, role = "member"): number {
-  db.prepare(
+async function memberId(clerkId: string, role = "member"): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES (?, ?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`, role);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
-function registerMember(mid: number, hid = HID) {
-  db.prepare(
+async function registerMember(mid: number, hid = HID) {
+  await db.prepare(
     "INSERT OR IGNORE INTO registrations (memberId, hackathonId) VALUES (?, ?)",
   ).run(mid, hid);
 }
@@ -37,9 +37,9 @@ const req = (method: string, body?: unknown) =>
 
 const ctx = (id = HID) => ({ params: Promise.resolve({ id }) });
 
-beforeEach(() => {
+beforeEach(async () => {
   clerk.uid = "clerk_seeker";
-  db.prepare("DELETE FROM looking_for_team").run();
+  await db.prepare("DELETE FROM looking_for_team").run();
 });
 
 describe("GET /api/hackathons/[id]/team-board — público", () => {
@@ -48,9 +48,9 @@ describe("GET /api/hackathons/[id]/team-board — público", () => {
       "@/app/api/hackathons/[id]/team-board/route"
     );
     clerk.uid = null; // leitura pública
-    const m = memberId("clerk_poster");
-    registerMember(m);
-    db.prepare(
+    const m = await memberId("clerk_poster");
+    await registerMember(m);
+    await db.prepare(
       "INSERT INTO looking_for_team (memberId, hackathonId, skills, need) VALUES (?, ?, ?, ?)",
     ).run(m, HID, '["react"]', "busco dev back");
 
@@ -70,8 +70,8 @@ describe("GET /api/hackathons/[id]/team-board — público", () => {
     const { GET } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
-    const m = memberId("clerk_poster");
-    db.prepare(
+    const m = await memberId("clerk_poster");
+    await db.prepare(
       "INSERT INTO looking_for_team (memberId, hackathonId, need, active) VALUES (?, ?, 'off', 0)",
     ).run(m, HID);
     const res = await GET(req("GET"), ctx());
@@ -85,10 +85,10 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
-    const m = memberId("clerk_seeker");
-    registerMember(m);
+    const m = await memberId("clerk_seeker");
+    await registerMember(m);
     const before = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(m) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(m) as {
         xp: number;
       }
     ).xp;
@@ -104,7 +104,7 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     expect(entry.skills).toEqual(["react", "node"]);
 
     const after = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(m) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(m) as {
         xp: number;
       }
     ).xp;
@@ -118,7 +118,7 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     expect(j2.entry.need).toBe("agora front");
     expect(j2.entry.skills).toEqual([]); // skills substituídas
     const after2 = (
-      db.prepare("SELECT xp FROM members WHERE id = ?").get(m) as {
+      await db.prepare("SELECT xp FROM members WHERE id = ?").get(m) as {
         xp: number;
       }
     ).xp;
@@ -130,7 +130,7 @@ describe("POST /api/hackathons/[id]/team-board", () => {
       "@/app/api/hackathons/[id]/team-board/route"
     );
     clerk.uid = "clerk_noreg";
-    memberId("clerk_noreg"); // sem registration
+    await memberId("clerk_noreg"); // sem registration
     const res = await POST(req("POST", { need: "dados" }), ctx());
     expect(res.status).toBe(403);
     const { error } = await res.json();
@@ -154,8 +154,8 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
-    const m = memberId("clerk_seeker");
-    registerMember(m);
+    const m = await memberId("clerk_seeker");
+    await registerMember(m);
     const res = await POST(req("POST", { need: "x" }), ctx("nao-existe"));
     expect(res.status).toBe(404);
   });
@@ -164,8 +164,8 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
-    const m = memberId("clerk_seeker");
-    registerMember(m);
+    const m = await memberId("clerk_seeker");
+    await registerMember(m);
     for (const body of [
       {},
       { need: "" },
@@ -179,7 +179,7 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     }
     expect(
       (
-        db
+        await db
           .prepare("SELECT COUNT(*) n FROM looking_for_team WHERE memberId = ?")
           .get(m) as { n: number }
       ).n,
@@ -192,8 +192,8 @@ describe("DELETE /api/hackathons/[id]/team-board", () => {
     const { POST, GET, DELETE } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
-    const m = memberId("clerk_seeker");
-    registerMember(m);
+    const m = await memberId("clerk_seeker");
+    await registerMember(m);
     await POST(req("POST", { need: "dados" }), ctx());
 
     const res = await DELETE(req("DELETE"), ctx());
@@ -223,8 +223,8 @@ describe("PATCH /api/hackathons/[id]/team-board — moderação admin", () => {
     const { POST, PATCH } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
-    const m = memberId("clerk_seeker");
-    registerMember(m);
+    const m = await memberId("clerk_seeker");
+    await registerMember(m);
     const created = await (
       await POST(req("POST", { need: "dados" }), ctx())
     ).json();
@@ -238,7 +238,7 @@ describe("PATCH /api/hackathons/[id]/team-board — moderação admin", () => {
 
     // admin → 200
     clerk.uid = "clerk_admin";
-    memberId("clerk_admin", "admin");
+    await memberId("clerk_admin", "admin");
     const ok = await PATCH(
       req("PATCH", { entryId: created.entry.id, active: false }),
       ctx(),
@@ -248,11 +248,11 @@ describe("PATCH /api/hackathons/[id]/team-board — moderação admin", () => {
     expect(entry.active).toBe(false);
 
     // entry de outra edição → 404
-    const m2 = memberId("clerk_other");
-    db.prepare(
+    const m2 = await memberId("clerk_other");
+    await db.prepare(
       "INSERT INTO looking_for_team (memberId, hackathonId, need) VALUES (?, 'hack-inova-puc-saude-2026', 'x')",
     ).run(m2);
-    const other = db
+    const other = await db
       .prepare(
         "SELECT id FROM looking_for_team WHERE hackathonId = 'hack-inova-puc-saude-2026'",
       )

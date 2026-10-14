@@ -18,8 +18,8 @@ import { limitOrNull } from "@/lib/ratelimit";
 
 const toStatus = (e: unknown) => (e instanceof TeamError ? e.status : 400);
 
-function teamHackathonId(teamId: number): string | null {
-  const row = db
+async function teamHackathonId(teamId: number): Promise<string | null> {
+  const row = await db
     .prepare("SELECT hackathonId FROM teams WHERE id = ?")
     .get(teamId) as { hackathonId: string } | undefined;
   return row?.hackathonId ?? null;
@@ -35,15 +35,15 @@ export async function GET(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const team = memberTeamFor(h.id, member.username);
+  const team = await memberTeamFor(h.id, member.username);
   if (!team) {
     return Response.json({ error: "sem time nesta edição" }, { status: 404 });
   }
@@ -59,11 +59,11 @@ export async function POST(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -73,7 +73,7 @@ export async function POST(
     return limited;
   }
   // time é coisa de quem vai ao evento — mesmo gate do board (012)
-  if (!getRegistrationIds(member.id).includes(h.id)) {
+  if (!(await getRegistrationIds(member.id)).includes(h.id)) {
     return Response.json({ error: "inscreve-te primeiro" }, { status: 403 });
   }
   const b = await req.json().catch(() => null);
@@ -81,15 +81,15 @@ export async function POST(
     return Response.json({ error: "name obrigatório" }, { status: 400 });
   }
   try {
-    const { team, ignoredUsernames } = submitTeam(h.id, member, {
+    const { team, ignoredUsernames } = await submitTeam(h.id, member, {
       name: b.name,
       memberUsernames: Array.isArray(b.memberUsernames)
         ? b.memberUsernames
         : [],
       project: b.project ?? null,
     });
-    awardXp(member.id, XP.teamSubmit);
-    const newBadges = checkBadges(member.id);
+    await awardXp(member.id, XP.teamSubmit);
+    const newBadges = await checkBadges(member.id);
     return Response.json(
       {
         team,
@@ -119,11 +119,11 @@ export async function PATCH(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const h = getHackathon(id);
+  const h = await getHackathon(id);
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const member = getMemberByClerkId(userId);
+  const member = await getMemberByClerkId(userId);
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -136,11 +136,11 @@ export async function PATCH(
     return Response.json({ error: "teamId obrigatório" }, { status: 400 });
   }
   // escopo da rota: o time precisa pertencer a ESTA edição
-  if (teamHackathonId(teamId) !== h.id) {
+  if (await teamHackathonId(teamId) !== h.id) {
     return Response.json({ error: "Time não encontrado" }, { status: 404 });
   }
   try {
-    const team = updateTeamProject(teamId, member, {
+    const team = await updateTeamProject(teamId, member, {
       title: b.title,
       description: b.description,
       repoUrl: b.repoUrl,

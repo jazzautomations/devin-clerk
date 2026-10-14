@@ -15,7 +15,7 @@ export default async function Image({
   params: Promise<{ teamId: string }>;
 }) {
   const { teamId } = await params;
-  const page = /^\d+$/.test(teamId) ? getProjectByTeamId(Number(teamId)) : null;
+  const page = /^\d+$/.test(teamId) ? await getProjectByTeamId(Number(teamId)) : null;
   const title = page?.project.title ?? appConfig.name;
   const detail = page
     ? `${page.teamName} · ${page.hackathonName}`

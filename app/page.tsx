@@ -40,16 +40,16 @@ const pilares = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
   const now = new Date();
-  const upcoming = getOpenHackathons(now);
+  const upcoming = await getOpenHackathons(now);
   const sessoes = upcoming.filter((h) => h.partner);
-  const arquivo = getPastHackathons(now);
-  const memberCount = listMembers(100).length;
-  const postCount = listPosts(100).length;
+  const arquivo = await getPastHackathons(now);
+  const memberCount = (await listMembers(100)).length;
+  const postCount = (await listPosts(100)).length;
   // "+N · 30d" (spec 027): só onde há timestamp real — "edições no arquivo"
   // não tem data de entrada, então nunca mostra momentum
-  const momentum = getStatsMomentum(now);
+  const momentum = await getStatsMomentum(now);
 
   const stats = [
     { n: memberCount, label: "membros", delta: momentum.members },
@@ -59,6 +59,12 @@ export default function Home() {
   ];
   // leque do hero: as edições de verdade (arquivo + próximas), até 3
   const heroCards = [...arquivo, ...sessoes].slice(0, 3);
+  const heroMeta = await Promise.all(
+    heroCards.map(async (h) => ({
+      rarity: await getCardRarity(h.id),
+      supply: await getCardSupply(h.id),
+    })),
+  );
 
   return (
     <div className="relative overflow-x-clip">
@@ -113,8 +119,8 @@ export default function Home() {
                   name={h.name}
                   startsAt={h.startsAt}
                   location={h.location}
-                  rarity={getCardRarity(h.id)}
-                  supply={getCardSupply(h.id)}
+                  rarity={heroMeta[i].rarity}
+                  supply={heroMeta[i].supply}
                 />
               </div>
             ))}

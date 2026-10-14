@@ -16,12 +16,12 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const HID = "hack-inova-alphaville-2026"; // edição futura ativa (seed)
 
-function memberId(clerkId: string): number {
-  db.prepare(
+async function memberId(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
@@ -41,11 +41,11 @@ const leadReq = (ip: string, n: number) =>
 const post = () => new Request("http://t", { method: "POST" });
 const ctx = { params: Promise.resolve({ id: HID }) };
 
-beforeEach(() => {
+beforeEach(async () => {
   resetRateLimits();
   clerk.uid = "clerk_spam";
-  db.prepare("DELETE FROM leads").run();
-  db.prepare("DELETE FROM registrations").run();
+  await db.prepare("DELETE FROM leads").run();
+  await db.prepare("DELETE FROM registrations").run();
 });
 
 describe("POST /api/leads — 5/h por IP (rota pública)", () => {
@@ -64,7 +64,7 @@ describe("POST /api/leads — 5/h por IP (rota pública)", () => {
     expect(error).toContain(`${retry}s`);
     // o 6º não virou lead
     const n = (
-      db.prepare("SELECT COUNT(*) n FROM leads").get() as { n: number }
+      await db.prepare("SELECT COUNT(*) n FROM leads").get() as { n: number }
     ).n;
     expect(n).toBe(5);
     // e outro IP segue livre — o limite é por chave
@@ -96,8 +96,8 @@ describe("POST /api/hackathons/[id]/register — 10/h por member", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/register/route"
     );
-    memberId("clerk_spam");
-    memberId("clerk_livre");
+    await memberId("clerk_spam");
+    await memberId("clerk_livre");
     for (let i = 0; i < 10; i++) {
       const res = await POST(post(), ctx);
       expect(res.status).toBe(200);

@@ -15,17 +15,17 @@ vi.mock("@clerk/nextjs/server", () => ({
 const ED = "hack-inova-alphaville-2026"; // seed ativa
 const INACTIVE = "edicao-inativa-e2e";
 
-db.prepare(
+await db.prepare(
   `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, active)
    VALUES (?, 'Edição Inativa', 'T', '2030-01-01T00:00:00Z', 'online', 'https://t.dev', 0)`,
 ).run(INACTIVE);
 
-function memberId(clerkId: string): number {
-  db.prepare(
+async function memberId(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
@@ -38,14 +38,14 @@ const req = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
-beforeEach(() => {
+beforeEach(async () => {
   clerk.uid = "clerk_mural";
-  memberId("clerk_mural");
-  db.prepare("DELETE FROM likes").run();
-  db.prepare("DELETE FROM post_comments").run();
-  db.prepare("DELETE FROM posts").run();
-  db.prepare("DELETE FROM registrations WHERE memberId = ?").run(
-    memberId("clerk_mural"),
+  await memberId("clerk_mural");
+  await db.prepare("DELETE FROM likes").run();
+  await db.prepare("DELETE FROM post_comments").run();
+  await db.prepare("DELETE FROM posts").run();
+  await db.prepare("DELETE FROM registrations WHERE memberId = ?").run(
+    await memberId("clerk_mural"),
   );
 });
 
@@ -78,8 +78,8 @@ describe("POST /api/posts com hackathonId", () => {
   });
 
   it("201 — inscrito posta no mural; post traz hackathonId + hackathonName", async () => {
-    const mid = memberId("clerk_mural");
-    db.prepare(
+    const mid = await memberId("clerk_mural");
+    await db.prepare(
       "INSERT INTO registrations (memberId, hackathonId) VALUES (?, ?)",
     ).run(mid, ED);
     const { POST } = await import("@/app/api/posts/route");
@@ -104,8 +104,8 @@ describe("POST /api/posts com hackathonId", () => {
 
 describe("GET /api/posts?h=", () => {
   it("filtra pela edição; sem ?h= agrega global + edição", async () => {
-    const mid = memberId("clerk_mural");
-    db.prepare(
+    const mid = await memberId("clerk_mural");
+    await db.prepare(
       "INSERT INTO posts (memberId, body, hackathonId) VALUES (?, 'no mural', ?), (?, 'global', NULL)",
     ).run(mid, ED, mid);
     const { GET } = await import("@/app/api/posts/route");

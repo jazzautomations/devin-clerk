@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -22,7 +22,7 @@ export async function PATCH(
   }
 
   const { id, memberId } = await params;
-  if (!getHackathon(id)) {
+  if (!await getHackathon(id)) {
     return Response.json({ error: "Edição não encontrada" }, { status: 404 });
   }
   const targetId = Number(memberId);
@@ -45,7 +45,7 @@ export async function PATCH(
     );
   }
 
-  const res = reviewRegistration(targetId, id, action);
+  const res = await reviewRegistration(targetId, id, action);
   if (!res) {
     return Response.json(
       { error: "Inscrição não encontrada" },

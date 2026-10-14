@@ -12,12 +12,12 @@ vi.mock("@clerk/nextjs/server", () => ({
   currentUser: vi.fn(async () => null),
 }));
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_admin','admin_sub','a@t.dev','admin')",
   ).run();
-  db.prepare("DELETE FROM event_submissions").run();
-  db.prepare("DELETE FROM hackathons WHERE source = 'comunidade'").run();
+  await db.prepare("DELETE FROM event_submissions").run();
+  await db.prepare("DELETE FROM hackathons WHERE source = 'comunidade'").run();
 });
 
 // spec 031: POST /api/submissions limita 5/h por IP (xff → 'anon'). Os
@@ -36,8 +36,8 @@ const req = (method: string, body?: unknown) =>
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
-const countSubs = () =>
-  (db.prepare("SELECT COUNT(*) n FROM event_submissions").get() as {
+const countSubs = async () =>
+  (await db.prepare("SELECT COUNT(*) n FROM event_submissions").get() as {
     n: number;
   }).n;
 
@@ -66,7 +66,7 @@ describe("POST /api/submissions — porta pública", () => {
     expect(data.submission.status).toBe("pending");
     expect(data.submission.format).toBe("presencial");
     expect(data.submission.note).toBe("org: Uni X");
-    expect(countSubs()).toBe(1);
+    expect(await countSubs()).toBe(1);
   });
 
   it("400 sem name/url, url não-http(s), format inválido, sem body", async () => {
@@ -81,7 +81,7 @@ describe("POST /api/submissions — porta pública", () => {
       (await POST(req("POST", { ...base, format: "remoto" }))).status,
     ).toBe(400);
     expect((await POST(req("POST"))).status).toBe(400);
-    expect(countSubs()).toBe(0);
+    expect(await countSubs()).toBe(0);
   });
 
   it("honeypot `company` preenchido → 201 silencioso sem gravar", async () => {
@@ -95,7 +95,7 @@ describe("POST /api/submissions — porta pública", () => {
     );
     expect(res.status).toBe(201);
     expect((await res.json()).ok).toBe(true);
-    expect(countSubs()).toBe(0);
+    expect(await countSubs()).toBe(0);
   });
 
   it("mesma url em <24h → 200 idempotente sem duplicar", async () => {
@@ -105,7 +105,7 @@ describe("POST /api/submissions — porta pública", () => {
     const second = await POST(req("POST", { ...body, name: "Nome Diverso" }));
     expect(second.status).toBe(200);
     expect((await second.json()).deduped).toBe(true);
-    expect(countSubs()).toBe(1);
+    expect(await countSubs()).toBe(1);
   });
 });
 
@@ -135,7 +135,7 @@ describe("POST /api/admin/submissions/[id] — curadoria", () => {
     expect(data.submission.status).toBe("approved");
     expect(data.hackathon.id).toBe("hack-indicado-2027");
     expect(data.hackathon.active).toBe(true);
-    const row = db
+    const row = await db
       .prepare("SELECT source, organizer FROM hackathons WHERE id = ?")
       .get("hack-indicado-2027") as { source: string; organizer: string };
     expect(row.source).toBe("comunidade");
@@ -157,7 +157,7 @@ describe("POST /api/admin/submissions/[id] — curadoria", () => {
     expect((await res.json()).submission.status).toBe("rejected");
     expect(
       (
-        db
+        await db
           .prepare(
             "SELECT COUNT(*) n FROM hackathons WHERE source = 'comunidade'",
           )

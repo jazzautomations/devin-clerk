@@ -19,7 +19,7 @@ function parseTeamId(raw: string): number | null {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { teamId } = await params;
   const id = parseTeamId(teamId);
-  const data = id === null ? null : getProjectByTeamId(id);
+  const data = id === null ? null : await getProjectByTeamId(id);
   if (!data) return { title: `projeto não encontrado — ${appConfig.name}` };
   const description =
     data.project.description ??
@@ -39,16 +39,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProjectPage({ params }: Props) {
   const { teamId } = await params;
   const id = parseTeamId(teamId);
-  const data = id === null ? null : getProjectByTeamId(id);
+  const data = id === null ? null : await getProjectByTeamId(id);
   if (!data) notFound();
 
-  const deploy = getLatestDeployForTeam(data.teamId);
+  const deploy = await getLatestDeployForTeam(data.teamId);
   const live = deploy?.status === "running" ? deploy : null;
   const place = data.placement;
 
   // escolha do povo (spec 025): placar público; voto só logado e fora do time
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   const own = member !== null && data.members.includes(member.username);
 
   return (
@@ -148,8 +148,8 @@ export default async function ProjectPage({ params }: Props) {
       <div className="flex flex-col gap-2 border-t border-line pt-6">
         <VoteButton
           teamId={data.teamId}
-          initialCount={voteCountFor(data.teamId)}
-          initialVoted={member ? hasVoted(member.id, data.teamId) : false}
+          initialCount={await voteCountFor(data.teamId)}
+          initialVoted={member ? await hasVoted(member.id, data.teamId) : false}
           loggedIn={member !== null}
           own={own}
         />

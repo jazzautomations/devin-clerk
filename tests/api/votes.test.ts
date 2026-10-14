@@ -12,12 +12,12 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const UNIFACENS = "hack-inova-unifacens-2026";
 
-function memberId(clerkId: string): number {
-  db.prepare(
+async function memberId(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
@@ -32,20 +32,20 @@ const ctx = (teamId: number | string) => ({
 
 let projectTeamId: number;
 
-beforeEach(() => {
+beforeEach(async () => {
   clerk.uid = "clerk_voter";
-  memberId("clerk_voter"); // u_clerk_voter
-  memberId("clerk_owner"); // u_clerk_owner — integrante do time dono
-  db.exec("DELETE FROM votes");
-  db.exec("DELETE FROM team_members");
-  db.exec("DELETE FROM team_projects");
-  db.exec("DELETE FROM teams");
-  projectTeamId = createTeam(UNIFACENS, {
+  await memberId("clerk_voter"); // u_clerk_voter
+  await memberId("clerk_owner"); // u_clerk_owner — integrante do time dono
+  await db.exec("DELETE FROM votes");
+  await db.exec("DELETE FROM team_members");
+  await db.exec("DELETE FROM team_projects");
+  await db.exec("DELETE FROM teams");
+  projectTeamId = (await createTeam(UNIFACENS, {
     name: "Alvo",
     placement: 0,
     memberUsernames: ["u_clerk_owner"],
     project: { title: "Projeto Alvo" },
-  }).team.id;
+  })).team.id;
 });
 
 describe("POST /api/projects/[teamId]/vote", () => {
@@ -83,10 +83,10 @@ describe("POST /api/projects/[teamId]/vote", () => {
     const nf = await POST(post("999999"), ctx(999999));
     expect(nf.status).toBe(404);
 
-    const semProjeto = createTeam(UNIFACENS, {
+    const semProjeto = (await createTeam(UNIFACENS, {
       name: "SemProjeto",
       placement: 0,
-    }).team.id;
+    })).team.id;
     const np = await POST(post(String(semProjeto)), ctx(semProjeto));
     expect(np.status).toBe(404);
   });
@@ -101,7 +101,7 @@ describe("POST /api/projects/[teamId]/vote", () => {
     expect(error).toContain("próprio time");
 
     const n = (
-      db
+      await db
         .prepare("SELECT COUNT(*) n FROM votes WHERE teamId = ?")
         .get(projectTeamId) as { n: number }
     ).n;

@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth();
-  const member = userId ? getMemberByClerkId(userId) : null;
+  const member = userId ? await getMemberByClerkId(userId) : null;
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -16,7 +16,7 @@ export async function POST(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  if (!getHackathon(id)) {
+  if (!await getHackathon(id)) {
     return Response.json({ error: "Edição não encontrada" }, { status: 404 });
   }
   const b = await req.json().catch(() => null);
@@ -24,7 +24,7 @@ export async function POST(
     return Response.json({ error: "type e url obrigatórios" }, { status: 400 });
   }
   try {
-    const asset = addAsset(id, {
+    const asset = await addAsset(id, {
       type: b.type,
       url: b.url,
       caption: typeof b.caption === "string" ? b.caption : null,

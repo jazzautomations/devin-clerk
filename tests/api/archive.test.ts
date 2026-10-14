@@ -8,13 +8,13 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const HACK = "hack-inova-unifacens-2026";
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_admin','admin_t','a@t.dev','admin')",
   ).run();
-  db.prepare("DELETE FROM team_members").run();
-  db.prepare("DELETE FROM team_projects").run();
-  db.prepare("DELETE FROM teams").run();
+  await db.prepare("DELETE FROM team_members").run();
+  await db.prepare("DELETE FROM team_projects").run();
+  await db.prepare("DELETE FROM teams").run();
 });
 
 const post = (url: string, body: unknown) =>
@@ -26,7 +26,7 @@ const post = (url: string, body: unknown) =>
 
 describe("POST /api/admin/hackathons/[id]/teams", () => {
   it("admin cadastra time com projeto e membros → 201", async () => {
-    db.prepare(
+    await db.prepare(
       "INSERT OR IGNORE INTO members (clerkId, username, email) VALUES ('c1','dev_x','x@t.dev')",
     ).run();
     const { POST } = await import(

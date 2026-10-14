@@ -8,28 +8,32 @@ import { createPost, listPosts, toggleLike } from "@/lib/posts";
 const ED = "hack-inova-alphaville-2026";
 const ED2 = "hack-inova-puc-saude-2026";
 
-function makeMember(clerkId: string): number {
-  db.prepare(
+async function makeMember(clerkId: string): Promise<number> {
+  await db.prepare(
     "INSERT INTO members (clerkId, username, email) VALUES (?, ?, ?)",
   ).run(clerkId, `u_${clerkId}`, `${clerkId}@t.dev`);
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
 describe("posts.hackathonId — schema guardado", () => {
-  it("coluna existe via ALTER idempotente e default é NULL", () => {
+  it("coluna existe via ALTER idempotente e default é NULL", async () => {
     const cols = (
-      db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]
+      await db
+        .prepare(
+          "SELECT column_name AS name FROM information_schema.columns WHERE table_name = 'posts'",
+        )
+        .all() as { name: string }[]
     ).map((c) => c.name);
     expect(cols).toContain("hackathonId");
-    const m = makeMember("s0");
-    db.prepare("INSERT INTO posts (memberId, body) VALUES (?, 'legado')").run(
+    const m = await makeMember("s0");
+    await db.prepare("INSERT INTO posts (memberId, body) VALUES (?, 'legado')").run(
       m,
     );
-    const row = db
+    const row = await db
       .prepare("SELECT hackathonId FROM posts WHERE body = 'legado'")
       .get() as { hackathonId: string | null };
     expect(row.hackathonId).toBeNull();
@@ -37,59 +41,59 @@ describe("posts.hackathonId — schema guardado", () => {
 });
 
 describe("createPost escopado", () => {
-  it("persiste hackathonId e resolve hackathonName via join", () => {
-    const m = makeMember("s1");
-    const p = createPost(m, "demo saindo no mural", null, ED);
+  it("persiste hackathonId e resolve hackathonName via join", async () => {
+    const m = await makeMember("s1");
+    const p = await createPost(m, "demo saindo no mural", null, ED);
     expect(p.hackathonId).toBe(ED);
     expect(p.hackathonName).toBe("Hack Inova Alphaville");
   });
 
-  it("sem escopo = post global (hackathonId/hackathonName null)", () => {
-    const m = makeMember("s2");
-    const p = createPost(m, "post global");
+  it("sem escopo = post global (hackathonId/hackathonName null)", async () => {
+    const m = await makeMember("s2");
+    const p = await createPost(m, "post global");
     expect(p.hackathonId).toBeNull();
     expect(p.hackathonName).toBeNull();
   });
 });
 
 describe("listPosts com scope", () => {
-  it("omitido agrega global + edições; {hackathonId} isola; {global} filtra NULL", () => {
-    const m = makeMember("s3");
-    const g = createPost(m, "global s3");
-    const a = createPost(m, "mural alpha", null, ED);
-    const b = createPost(m, "mural puc", null, ED2);
+  it("omitido agrega global + edições; {hackathonId} isola; {global} filtra NULL", async () => {
+    const m = await makeMember("s3");
+    const g = await createPost(m, "global s3");
+    const a = await createPost(m, "mural alpha", null, ED);
+    const b = await createPost(m, "mural puc", null, ED2);
 
-    const all = listPosts(50);
+    const all = await listPosts(50);
     for (const id of [g.id, a.id, b.id]) {
       expect(all.some((p) => p.id === id)).toBe(true);
     }
 
-    const wall = listPosts(50, null, { hackathonId: ED });
+    const wall = await listPosts(50, null, { hackathonId: ED });
     expect(wall.length).toBeGreaterThan(0);
     expect(wall.every((p) => p.hackathonId === ED)).toBe(true);
     expect(wall.some((p) => p.id === a.id)).toBe(true);
     expect(wall.some((p) => p.id === g.id)).toBe(false);
     expect(wall.some((p) => p.id === b.id)).toBe(false);
 
-    const onlyGlobal = listPosts(50, null, { global: true });
+    const onlyGlobal = await listPosts(50, null, { global: true });
     expect(onlyGlobal.every((p) => p.hackathonId === null)).toBe(true);
     expect(onlyGlobal.some((p) => p.id === g.id)).toBe(true);
     expect(onlyGlobal.some((p) => p.id === a.id)).toBe(false);
   });
 
-  it("likedByMe/likeCount funcionam na listagem escopada", () => {
-    const a = makeMember("s4");
-    const b = makeMember("s5");
-    const post = createPost(a, "mural com like", null, ED);
-    toggleLike(post.id, b);
-    const wall = listPosts(50, b, { hackathonId: ED });
+  it("likedByMe/likeCount funcionam na listagem escopada", async () => {
+    const a = await makeMember("s4");
+    const b = await makeMember("s5");
+    const post = await createPost(a, "mural com like", null, ED);
+    await toggleLike(post.id, b);
+    const wall = await listPosts(50, b, { hackathonId: ED });
     const found = wall.find((p) => p.id === post.id);
     expect(found?.likedByMe).toBe(true);
     expect(found?.likeCount).toBe(1);
   });
 
-  it("edição sem posts retorna lista vazia", () => {
-    const wall = listPosts(50, null, { hackathonId: "hackinova-os-2-anhembi-2026" });
+  it("edição sem posts retorna lista vazia", async () => {
+    const wall = await listPosts(50, null, { hackathonId: "hackinova-os-2-anhembi-2026" });
     expect(wall).toEqual([]);
   });
 });

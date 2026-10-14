@@ -7,7 +7,7 @@ vi.mock("@clerk/nextjs/server", () => ({
   currentUser: vi.fn(async () => null),
 }));
 
-db.prepare(
+await db.prepare(
   "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_notadmin','notadm_sub','n@t.dev','member')",
 ).run();
 

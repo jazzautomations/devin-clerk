@@ -3,30 +3,11 @@
 // verdade (em vez do dump de fixtures e2e). Idempotente: INSERT OR IGNORE
 // por username/team — pode rodar de novo sem duplicar.
 //
-// Uso: node scripts/seed-demo.mjs   (ou npm run seed:demo)
+// Uso: DATABASE_URL=postgres://… npm run seed:demo
 // SÓ pra banco de dev/demo — nunca apontar isso pra produção.
-import Database from "better-sqlite3";
-import { join } from "node:path";
+import db from "@/lib/db";
 
-const db = new Database(process.env.HACKAHUB_DB ?? join(process.cwd(), "data", "hackahub.db"));
-
-// colunas que chegam por ALTER guardado nos libs — o seed pode rodar antes
-// do server importar tudo, então garante aqui (mesmo pattern dos libs)
-const has = (t, c) =>
-  db.prepare(`PRAGMA table_info(${t})`).all().some((r) => r.name === c);
-if (!has("members", "openTo")) db.exec("ALTER TABLE members ADD COLUMN openTo TEXT");
-if (!has("members", "persona")) db.exec("ALTER TABLE members ADD COLUMN persona TEXT");
-if (!has("members", "headline")) db.exec("ALTER TABLE members ADD COLUMN headline TEXT");
-if (!has("members", "skills")) db.exec("ALTER TABLE members ADD COLUMN skills TEXT NOT NULL DEFAULT '[]'");
-if (!has("members", "bio")) db.exec("ALTER TABLE members ADD COLUMN bio TEXT");
-if (!has("members", "xp")) db.exec("ALTER TABLE members ADD COLUMN xp INTEGER NOT NULL DEFAULT 0");
-for (const c of ["videoUrl", "logoUrl"]) {
-  if (!has("team_projects", c)) db.exec(`ALTER TABLE team_projects ADD COLUMN ${c} TEXT`);
-}
-if (!has("registrations", "status"))
-  db.exec("ALTER TABLE registrations ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'");
-if (!has("challenges", "sponsorId")) db.exec("ALTER TABLE challenges ADD COLUMN sponsorId TEXT");
-
+async function main() {
 const ALPHA = "hack-inova-alphaville-2026";
 const UNI = "hack-inova-unifacens-2026";
 const PUC = "hack-inova-puc-saude-2026";
@@ -105,14 +86,14 @@ const insVote = db.prepare(
   `INSERT OR IGNORE INTO votes (memberId, teamId) VALUES (?, ?)`,
 );
 
-const mid = (u) =>
-  db.prepare("SELECT id FROM members WHERE username = ?").get(u)?.id;
-const tid = (h, name) =>
-  db.prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?").get(h, name)?.id;
+const mid = async (u: string) =>
+  (await db.prepare("SELECT id FROM members WHERE username = ?").get(u))?.id;
+const tid = async (h: string, name: string) =>
+  (await db.prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?").get(h, name))?.id;
 
-db.transaction(() => {
+await db.transaction(async () => {
   // admin real primeiro — mantém role=admin pela recriação via clerkId
-  insMember.run({
+  await insMember.run({
     clerkId: ADMIN.clerkId, u: ADMIN.username, n: ADMIN.name,
     email: ADMIN.email, role: ADMIN.role, p: "organizador",
     h: "hack inova crew", b: "organização hackahub",
@@ -120,25 +101,26 @@ db.transaction(() => {
   });
 
   for (const m of members) {
-    insMember.run({
+    await insMember.run({
       clerkId: `demo_${m.u}`, u: m.u, n: m.n,
       email: `${m.u}@hackahub.dev`, role: "member", p: m.p,
       h: m.h, b: m.b, skills: JSON.stringify(m.skills), xp: m.xp, open: m.open,
     });
-    insBadge.run(mid(m.u), "pioneiro", "-20 days");
+    await insBadge.run(await mid(m.u), "pioneiro", "-20 days");
   }
-  insBadge.run(mid("jazzautomations"), "organizador", "-30 days");
+  await insBadge.run(await mid("jazzautomations"), "organizador", "-30 days");
 
   // inscrições aprovadas — alphaville é a próxima sessão
   const alphaRegs = ["marina.builds", "jao.ml", "vivi.found", "tais.data", "felipe.devops", "rafa.front", "luisa.ux", "caique.mobil", "bruno.pm", "jazzautomations"];
-  alphaRegs.forEach((u, i) => {
-    insReg.run(mid(u), ALPHA, `-${18 - i} days`);
-    insCard.run(mid(u), ALPHA, i + 1, `-${18 - i} days`);
-    insBadge.run(mid(u), "debut", `-${18 - i} days`);
+  alphaRegs.forEach(async (u, i) => {
+    await insReg.run(await mid(u), ALPHA, `-${18 - i} days`);
+    await insCard.run(await mid(u), ALPHA, i + 1, `-${18 - i} days`);
+    await insBadge.run(await mid(u), "debut", `-${18 - i} days`);
   });
 
   // arquivo das edições passadas — times com membros reais do seed
-  const archive = [
+  type Proj = { t: string; d: string; r: string; v?: string; demo?: string };
+  const archive: [string, string, number, string[], Proj][] = [
     [UNI, "VitaLink", 2, ["tais.data", "jao.ml"], { t: "VitaLink", d: "monitoramento de sinais vitais com alerta pra equipe de enfermagem", r: "https://github.com/hackahub/vitalink" }],
     [UNI, "PulsePay", 3, ["rafa.front", "bruno.pm"], { t: "PulsePay", d: "pagamento de plantão por biometria — sem fila no RH", r: "https://github.com/hackahub/pulsepay" }],
     [PUC, "Limiar", 1, ["vivi.found", "carol.bio", "felipe.devops"], { t: "Limiar", d: "triagem inteligente de PA — modelo de risco em 90s", r: "https://github.com/hackahub/limiar", v: "https://youtube.com/watch?v=limiar-pitch" }],
@@ -148,20 +130,20 @@ db.transaction(() => {
     [ANH, "Turno Certo", 2, ["felipe.devops", "tais.data"], { t: "Turno Certo", d: "escala de turno justa pra operação 24/7", r: "https://github.com/hackahub/turnocerto" }],
   ];
   for (const [h, team, place, us, proj] of archive) {
-    insTeam.run(h, team, place);
-    const id = tid(h, team);
-    for (const u of us) insTm.run(id, u);
-    insProj.run(id, proj.t, proj.d, proj.r, proj.demo ?? null, proj.v ?? null);
+    await insTeam.run(h, team, place);
+    const id = await tid(h, team);
+    for (const u of us) await insTm.run(id, u);
+    await insProj.run(id, proj.t, proj.d, proj.r, proj.demo ?? null, proj.v ?? null);
     for (const u of us) {
-      insReg.run(mid(u), h, "-40 days");
-      insBadge.run(mid(u), "debut", "-40 days");
+      await insReg.run(await mid(u), h, "-40 days");
+      await insBadge.run(await mid(u), "debut", "-40 days");
     }
   }
-  insBadge.run(mid("vivi.found"), "veterano", "-40 days");
-  insBadge.run(mid("marina.builds"), "veterano", "-40 days");
+  await insBadge.run(await mid("vivi.found"), "veterano", "-40 days");
+  await insBadge.run(await mid("marina.builds"), "veterano", "-40 days");
 
   // mural + feed — conteúdo que parece a comunidade falando
-  const posts = [
+  const posts: [string, string, string | null, string | null, string][] = [
     ["jazzautomations", "radar atualizado: 70+ hackathons abertos no brasil e no mundo, raspado das fontes oficiais. faltou algum? // indica um hackathon na página do radar", null, null, "-2 days"],
     ["jazzautomations", "recap da unifacens saiu no blog — o one day hospital foi apresentado na oracle sp depois do evento. é isso que a plataforma existe pra guardar.", "/blog", null, "-4 days"],
     ["vivi.found", "fechamos o limiar em 36h na puc — triagem de PA com modelo de risco. procurando quem manja de regulatório pra levar adiante", null, null, "-12 days"],
@@ -173,10 +155,10 @@ db.transaction(() => {
     ["pedro.vc", "vou no alphaville ver os pitches. times com demo viva sobem muito no meu caderno", null, ALPHA, "-6 hours"],
     ["bruno.pm", "desafio da edição é ia na saúde de novo ou abre escopo? montando backlog de ideias", null, ALPHA, "-2 hours"],
   ];
-  for (const [u, body, link, h, at] of posts) insPost.run(mid(u), body, link, h, at);
+  for (const [u, body, link, h, at] of posts) await insPost.run(await mid(u), body, link, h, at);
 
-  const pid = (bodyLike) =>
-    db.prepare("SELECT id FROM posts WHERE body LIKE ?").get(`%${bodyLike}%`)?.id;
+  const pid = async (bodyLike: string) =>
+    (await db.prepare("SELECT id FROM posts WHERE body LIKE ?").get(`%${bodyLike}%`))?.id;
   const comments = [
     ["radar atualizado", "amanda.mkt", "manda o link do devpost que eu rodo curadoria semanal"],
     ["deploy tool", "felipe.devops", "container isolado com read-only — agora sim dá pra abrir demo pública sem medo"],
@@ -185,38 +167,47 @@ db.transaction(() => {
     ["desafio da edição", "jazzautomations", "ia na saúde confirmado, patrocínio fechando essa semana"],
     ["recap da unifacens", "caique.mobil", "o demo day na oracle foi absurdo. próxima edição eu to dentro"],
   ];
-  for (const [key, u, body] of comments) insComment.run(pid(key), mid(u), body, "-5 hours");
+  for (const [key, u, body] of comments) await insComment.run(await pid(key), await mid(u), body, "-5 hours");
 
   // likes espalhados — prova social leve
-  const likePairs = [
+  const likePairs: [string, string[]][] = [
     ["deploy tool", ["vivi.found", "marina.builds", "felipe.devops", "rafa.front"]],
     ["recap da unifacens", ["jao.ml", "tais.data", "prof.andre"]],
     ["fecha time", ["luisa.ux", "bruno.pm"]],
     ["radar atualizado", ["vivi.found", "amanda.mkt", "pedro.vc"]],
   ];
-  for (const [key, us] of likePairs) for (const u of us) insLike.run(pid(key), mid(u));
+  for (const [key, us] of likePairs) for (const u of us) await insLike.run(await pid(key), await mid(u));
 
   // procuro time
-  insLft.run(mid("tais.data"), ALPHA, JSON.stringify(["python", "ml", "dados"]), "front + produto", "time quase fechado, falta quem desenhe a jornada");
-  insLft.run(mid("bruno.pm"), ALPHA, JSON.stringify(["produto", "pitch", "sql"]), "devs", "ideia validada com 2 hospitais, falta quem construa");
-  insLft.run(mid("caique.mobil"), ALPHA, JSON.stringify(["flutter", "go"]), "ml", "app mobile pronto, preciso de modelo");
+  await insLft.run(await mid("tais.data"), ALPHA, JSON.stringify(["python", "ml", "dados"]), "front + produto", "time quase fechado, falta quem desenhe a jornada");
+  await insLft.run(await mid("bruno.pm"), ALPHA, JSON.stringify(["produto", "pitch", "sql"]), "devs", "ideia validada com 2 hospitais, falta quem construa");
+  await insLft.run(await mid("caique.mobil"), ALPHA, JSON.stringify(["flutter", "go"]), "ml", "app mobile pronto, preciso de modelo");
 
   // sponsors reais das edições + link nos challenges
-  insSponsor.run("oracle", "Oracle", "https://www.oracle.com", "master");
-  insSponsor.run("enterprise-x", "Enterprise X Ventures", "https://www.enterprisex.vc", "sponsor");
-  db.prepare("UPDATE challenges SET sponsorId = 'oracle' WHERE sponsor LIKE 'Oracle%'").run();
-  db.prepare("UPDATE challenges SET sponsorId = 'enterprise-x' WHERE sponsor LIKE '%Enterprise%'").run();
+  await insSponsor.run("oracle", "Oracle", "https://www.oracle.com", "master");
+  await insSponsor.run("enterprise-x", "Enterprise X Ventures", "https://www.enterprisex.vc", "sponsor");
+  await db.prepare("UPDATE challenges SET sponsorId = 'oracle' WHERE sponsor LIKE 'Oracle%'").run();
+  await db.prepare("UPDATE challenges SET sponsorId = 'enterprise-x' WHERE sponsor LIKE '%Enterprise%'").run();
 
   // escolha do povo — alguns votos nos projetos do arquivo
   for (const [h, name] of [[UNI, "VitaLink"], [PUC, "Limiar"], [PUC, "Fila Zero"], [ANH, "Atlas Urbana"]]) {
-    const id = tid(h, name);
-    for (const u of ["marina.builds", "jao.ml", "rafa.front", "jazzautomations"]) insVote.run(mid(u), id);
+    const id = await tid(h, name);
+    for (const u of ["marina.builds", "jao.ml", "rafa.front", "jazzautomations"]) await insVote.run(await mid(u), id);
   }
 })();
 
 console.log("seed ok:", {
-  members: db.prepare("SELECT COUNT(*) n FROM members").get().n,
-  posts: db.prepare("SELECT COUNT(*) n FROM posts").get().n,
-  teams: db.prepare("SELECT COUNT(*) n FROM teams").get().n,
-  regs: db.prepare("SELECT COUNT(*) n FROM registrations").get().n,
+  members: (await db.prepare("SELECT COUNT(*) n FROM members").get())?.n,
+  posts: (await db.prepare("SELECT COUNT(*) n FROM posts").get())?.n,
+  teams: (await db.prepare("SELECT COUNT(*) n FROM teams").get())?.n,
+  regs: (await db.prepare("SELECT COUNT(*) n FROM registrations").get())?.n,
 });
+}
+
+main().then(
+  () => process.exit(0),
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  },
+);

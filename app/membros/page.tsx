@@ -31,7 +31,7 @@ export default async function MembrosPage({
   const { sort, q: rawQ } = await searchParams;
   const q = rawQ?.trim() ?? "";
   const mode: LeaderboardSort = sort === "recent" ? "recent" : "xp";
-  const members = listLeaderboard(mode, 100, q);
+  const members = await listLeaderboard(mode, 100, q);
   const isXp = mode === "xp";
 
   const chip = (active: boolean) =>

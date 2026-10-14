@@ -15,37 +15,19 @@ const CHAL_ID = "e2e-chal-sponsored";
 
 // idempotente: garante tabela sponsors + coluna sponsorId + vínculo,
 // espelhando o schema de lib/sponsors.ts (o dev server também cria no import)
-function ensureLinkedChallenge() {
+async function ensureLinkedChallenge() {
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  db.exec(`CREATE TABLE IF NOT EXISTS sponsors (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    url TEXT,
-    tier TEXT NOT NULL DEFAULT 'sponsor'
-      CHECK (tier IN ('apoio','sponsor','master')),
-    contactEmail TEXT,
-    notes TEXT,
-    active INTEGER NOT NULL DEFAULT 1,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-  )`);
-  const cols = (
-    db.prepare("PRAGMA table_info(challenges)").all() as { name: string }[]
-  ).map((c) => c.name);
-  if (!cols.includes("sponsorId")) {
-    db.exec("ALTER TABLE challenges ADD COLUMN sponsorId TEXT");
-  }
-  db.prepare(
+  await db.prepare(
     `INSERT INTO sponsors (id, name, url, tier, active)
      VALUES ('e2e-sponsor', ?, ?, 'master', 1)
      ON CONFLICT(id) DO UPDATE SET name = excluded.name,
        url = excluded.url, tier = 'master', active = 1`,
   ).run(SPONSOR_NAME, SPONSOR_URL);
-  const has = db
+  const has = await db
     .prepare("SELECT 1 FROM challenges WHERE id = ?")
     .get(CHAL_ID);
   if (!has) {
-    db.prepare(
+    await db.prepare(
       `INSERT INTO challenges (id, hackathonId, sponsor, title, prize, sponsorId, active)
        VALUES (?, ?, ?, ?, ?, 'e2e-sponsor', 1)`,
     ).run(
@@ -56,19 +38,18 @@ function ensureLinkedChallenge() {
       "vaga + badge master",
     );
   } else {
-    db.prepare(
+    await db.prepare(
       `UPDATE challenges SET sponsorId = 'e2e-sponsor', sponsor = ?, active = 1
        WHERE id = ?`,
     ).run(SPONSOR_NAME, CHAL_ID);
   }
-  db.close();
 }
 
 test.describe("sponsors — CRM de marcas na página pública", () => {
   test("desafio vinculado mostra nome do sponsor como link + chip de tier", async ({
     page,
   }) => {
-    ensureLinkedChallenge();
+    await ensureLinkedChallenge();
     await page.goto(`/h/${HID}`);
     await expect(page.getByText(/desafios patrocinados/i)).toBeVisible();
     // marca é link externo pro site do sponsor — inventário clicável
@@ -97,7 +78,7 @@ test.describe("sponsors — CRM de marcas na página pública", () => {
   test("APIs de sponsor trancadas sem login → 401 JSON", async ({
     request,
   }) => {
-    ensureLinkedChallenge();
+    await ensureLinkedChallenge();
     const get = await request.get("/api/admin/sponsors");
     expect(get.status()).toBe(401);
     expect(get.headers()["content-type"]).toContain("application/json");

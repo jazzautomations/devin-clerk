@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { lead, created } = createLead({
+    const { lead, created } = await createLead({
       company: b.company,
       email: b.email,
       interest: b.interest as LeadInterest,

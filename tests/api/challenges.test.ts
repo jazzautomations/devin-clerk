@@ -8,11 +8,11 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const PUC = "hack-inova-puc-saude-2026";
 
-beforeEach(() => {
-  db.prepare(
+beforeEach(async () => {
+  await db.prepare(
     "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_admin','admin_t','a@t.dev','admin')",
   ).run();
-  db.prepare("DELETE FROM challenges WHERE id NOT LIKE 'seed-%'").run();
+  await db.prepare("DELETE FROM challenges WHERE id NOT LIKE 'seed-%'").run();
 });
 
 const req = (method: string, body?: unknown) =>
@@ -97,7 +97,7 @@ describe("PATCH /api/admin/challenges/[challengeId]", () => {
     expect(data.challenge.prize).toBe("R$5k");
     expect(data.challenge.active).toBe(false);
     // saiu da listagem pública mas não foi apagado
-    const row = db
+    const row = await db
       .prepare("SELECT active FROM challenges WHERE id = ?")
       .get(id) as { active: number };
     expect(row.active).toBe(0);

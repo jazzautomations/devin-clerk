@@ -7,11 +7,11 @@ import { getOpenTo, listTalent, parseOpenTo, setOpenTo } from "@/lib/talent";
 const HACK_A = "hack-inova-unifacens-2026"; // "Hackathon Inova AI × Payment Shift"
 const HACK_B = "hack-inova-puc-saude-2026"; // "Hackathon de IA na Saúde — PUC Consolação"
 
-function makeMember(
+async function makeMember(
   clerkId: string,
   extra: Partial<{ username: string; xp: number }> = {},
-): number {
-  db.prepare(
+): Promise<number> {
+  await db.prepare(
     `INSERT INTO members (clerkId, username, email, xp)
      VALUES (?, ?, ?, ?)`,
   ).run(
@@ -21,22 +21,22 @@ function makeMember(
     extra.xp ?? 0,
   );
   return (
-    db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
+    await db.prepare("SELECT id FROM members WHERE clerkId = ?").get(clerkId) as {
       id: number;
     }
   ).id;
 }
 
-function linkTeam(
+async function linkTeam(
   username: string,
   hackathonId: string,
   teamName: string,
   placement: number,
-): void {
-  const res = db
+): Promise<void> {
+  const res = await db
     .prepare("INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, ?)")
     .run(hackathonId, teamName, placement);
-  db.prepare(
+  await db.prepare(
     "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
   ).run(Number(res.lastInsertRowid), username);
 }
@@ -54,32 +54,32 @@ describe("parseOpenTo", () => {
 });
 
 describe("setOpenTo", () => {
-  it("grava a whitelist e lê de volta via getOpenTo", () => {
-    const id = makeMember("tal-1");
-    setOpenTo(id, ["trampo", "mentoria"]);
-    expect(getOpenTo(id)).toEqual(["trampo", "mentoria"]);
+  it("grava a whitelist e lê de volta via getOpenTo", async () => {
+    const id = await makeMember("tal-1");
+    await setOpenTo(id, ["trampo", "mentoria"]);
+    expect(await getOpenTo(id)).toEqual(["trampo", "mentoria"]);
   });
 
-  it("deduplica e normaliza caixa/espaços", () => {
-    const id = makeMember("tal-2");
-    setOpenTo(id, [" Trampo ", "trampo", "FREELA"]);
-    expect(getOpenTo(id)).toEqual(["trampo", "freela"]);
+  it("deduplica e normaliza caixa/espaços", async () => {
+    const id = await makeMember("tal-2");
+    await setOpenTo(id, [" Trampo ", "trampo", "FREELA"]);
+    expect(await getOpenTo(id)).toEqual(["trampo", "freela"]);
   });
 
-  it("rejeita valor fora da whitelist e não grava nada", () => {
-    const id = makeMember("tal-3");
-    setOpenTo(id, ["trampo"]);
-    expect(() => setOpenTo(id, ["famoso"])).toThrow();
-    expect(() => setOpenTo(id, ["trampo", "famoso"])).toThrow();
-    expect(getOpenTo(id)).toEqual(["trampo"]); // lista anterior intacta
+  it("rejeita valor fora da whitelist e não grava nada", async () => {
+    const id = await makeMember("tal-3");
+    await setOpenTo(id, ["trampo"]);
+    await expect(setOpenTo(id, ["famoso"])).rejects.toThrow();
+    await expect(setOpenTo(id, ["trampo", "famoso"])).rejects.toThrow();
+    expect(await getOpenTo(id)).toEqual(["trampo"]); // lista anterior intacta
   });
 
-  it("[] limpa pra NULL — o membro sai do diretório", () => {
-    const id = makeMember("tal-4");
-    setOpenTo(id, ["freela"]);
-    setOpenTo(id, []);
-    expect(getOpenTo(id)).toEqual([]);
-    const row = db
+  it("[] limpa pra NULL — o membro sai do diretório", async () => {
+    const id = await makeMember("tal-4");
+    await setOpenTo(id, ["freela"]);
+    await setOpenTo(id, []);
+    expect(await getOpenTo(id)).toEqual([]);
+    const row = await db
       .prepare("SELECT openTo FROM members WHERE id = ?")
       .get(id) as { openTo: string | null };
     expect(row.openTo).toBeNull();
@@ -87,28 +87,28 @@ describe("setOpenTo", () => {
 });
 
 describe("listTalent", () => {
-  it("lista só quem tem openTo preenchido — NULL e '' ficam fora", () => {
-    const in_ = makeMember("tal-in");
-    setOpenTo(in_, ["trampo"]);
-    makeMember("tal-null"); // openTo NULL por default
-    const empty = makeMember("tal-empty");
-    db.prepare("UPDATE members SET openTo = '' WHERE id = ?").run(empty);
+  it("lista só quem tem openTo preenchido — NULL e '' ficam fora", async () => {
+    const in_ = await makeMember("tal-in");
+    await setOpenTo(in_, ["trampo"]);
+    await makeMember("tal-null"); // openTo NULL por default
+    const empty = await makeMember("tal-empty");
+    await db.prepare("UPDATE members SET openTo = '' WHERE id = ?").run(empty);
 
-    const usernames = listTalent().map((t) => t.username);
+    const usernames = (await listTalent()).map((t) => t.username);
     expect(usernames).toContain("u_tal-in");
     expect(usernames).not.toContain("u_tal-null");
     expect(usernames).not.toContain("u_tal-empty");
   });
 
-  it("ordena por xp desc com desempate determinístico por username", () => {
-    const hi = makeMember("tal-hi", { xp: 900, username: "tal_zhi" });
-    const lo = makeMember("tal-lo", { xp: 10, username: "tal_alo" });
-    const tie = makeMember("tal-tie", { xp: 900, username: "tal_atie" });
-    setOpenTo(hi, ["trampo"]);
-    setOpenTo(lo, ["freela"]);
-    setOpenTo(tie, ["mentoria"]);
+  it("ordena por xp desc com desempate determinístico por username", async () => {
+    const hi = await makeMember("tal-hi", { xp: 900, username: "tal_zhi" });
+    const lo = await makeMember("tal-lo", { xp: 10, username: "tal_alo" });
+    const tie = await makeMember("tal-tie", { xp: 900, username: "tal_atie" });
+    await setOpenTo(hi, ["trampo"]);
+    await setOpenTo(lo, ["freela"]);
+    await setOpenTo(tie, ["mentoria"]);
 
-    const usernames = listTalent().map((t) => t.username);
+    const usernames = (await listTalent()).map((t) => t.username);
     expect(usernames.indexOf("tal_zhi")).toBeLessThan(
       usernames.indexOf("tal_alo"),
     );
@@ -118,13 +118,13 @@ describe("listTalent", () => {
     );
   });
 
-  it("traz openTo parseado, skills, contagem de projetos e melhor colocação com edição", () => {
-    const id = makeMember("tal-best", { xp: 50, username: "tal_best" });
-    setOpenTo(id, ["cofundador", "freela"]);
-    linkTeam("tal_best", HACK_B, "Time Segundo", 2);
-    linkTeam("tal_best", HACK_A, "Time Campeao", 1);
+  it("traz openTo parseado, skills, contagem de projetos e melhor colocação com edição", async () => {
+    const id = await makeMember("tal-best", { xp: 50, username: "tal_best" });
+    await setOpenTo(id, ["cofundador", "freela"]);
+    await linkTeam("tal_best", HACK_B, "Time Segundo", 2);
+    await linkTeam("tal_best", HACK_A, "Time Campeao", 1);
 
-    const t = listTalent().find((x) => x.username === "tal_best")!;
+    const t = (await listTalent()).find((x) => x.username === "tal_best")!;
     expect(t.openTo).toEqual(["cofundador", "freela"]);
     expect(t.projects).toBe(2);
     expect(t.best).toEqual({
@@ -134,17 +134,17 @@ describe("listTalent", () => {
     });
   });
 
-  it("membro sem pódio tem best null e continua no diretório", () => {
-    const id = makeMember("tal-nopodium", { username: "tal_nop" });
-    setOpenTo(id, ["mentoria"]);
-    linkTeam("tal_nop", HACK_A, "Time Participante", 0);
+  it("membro sem pódio tem best null e continua no diretório", async () => {
+    const id = await makeMember("tal-nopodium", { username: "tal_nop" });
+    await setOpenTo(id, ["mentoria"]);
+    await linkTeam("tal_nop", HACK_A, "Time Participante", 0);
 
-    const t = listTalent().find((x) => x.username === "tal_nop")!;
+    const t = (await listTalent()).find((x) => x.username === "tal_nop")!;
     expect(t.projects).toBe(1);
     expect(t.best).toBeNull();
   });
 
-  it("respeita o limite", () => {
-    expect(listTalent(1)).toHaveLength(1);
+  it("respeita o limite", async () => {
+    expect(await listTalent(1)).toHaveLength(1);
   });
 });

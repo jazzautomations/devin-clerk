@@ -1,287 +1,334 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { hackathons as seed, pastHackathons as pastSeed } from "@/data/hackathons";
+import { seedDatabase } from "@/lib/seed";
 
-const dir = join(process.cwd(), "data");
-const dbPath = process.env.HACKAHUB_DB ?? join(dir, "hackahub.db");
-if (dbPath !== ":memory:") mkdirSync(dir, { recursive: true });
+// Camada de dados em Postgres. Mantém a forma do antigo better-sqlite3
+// (`db.prepare(sql).get/all/run`, `db.exec`, `db.transaction`) só que
+// assíncrona, pra o resto do app migrar trocando chamada por `await`.
+// O SQL do app continua escrito no estilo que já existia; `toPostgres`
+// traduz o pouco de dialeto SQLite que sobrou (placeholders, OR IGNORE,
+// datetime('now'), LIKE) e cita identificadores camelCase.
+//
+// Driver: DATABASE_URL → node-postgres (staging/prod/e2e). Sem ela →
+// PGlite em memória (Postgres real em WASM, um por processo — é o que os
+// testes unitários usam, cada arquivo do vitest ganha banco limpo).
 
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
+type Row = Record<string, unknown>;
+type Param = unknown;
+type QueryResult = { rows: Row[]; rowCount: number };
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS hackathons (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  organizer TEXT NOT NULL,
-  startsAt TEXT NOT NULL,
-  endsAt TEXT,
-  format TEXT NOT NULL CHECK (format IN ('online','presencial','hibrido')),
-  location TEXT,
-  registrationUrl TEXT NOT NULL,
-  registrationDeadline TEXT,
-  tags TEXT NOT NULL DEFAULT '[]',
-  active INTEGER NOT NULL DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS members (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  clerkId TEXT UNIQUE NOT NULL,
-  username TEXT UNIQUE NOT NULL,
-  name TEXT,
-  email TEXT NOT NULL,
-  bio TEXT,
-  skills TEXT NOT NULL DEFAULT '[]',
-  github TEXT,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS registrations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
-  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (memberId, hackathonId)
-);
-
-CREATE TABLE IF NOT EXISTS subscribers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT UNIQUE NOT NULL,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS posts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  body TEXT NOT NULL,
-  link TEXT,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS likes (
-  postId INTEGER NOT NULL REFERENCES posts(id),
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  PRIMARY KEY (postId, memberId)
-);
-
-CREATE TABLE IF NOT EXISTS member_badges (
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  badgeId TEXT NOT NULL,
-  awardedAt TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (memberId, badgeId)
-);
-
-CREATE TABLE IF NOT EXISTS cards (
-  hackathonId TEXT PRIMARY KEY REFERENCES hackathons(id),
-  rarity TEXT NOT NULL DEFAULT 'comum'
-    CHECK (rarity IN ('comum','raro','epico','lendario'))
-);
-
-CREATE TABLE IF NOT EXISTS member_cards (
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  hackathonId TEXT NOT NULL REFERENCES cards(hackathonId),
-  serial INTEGER NOT NULL,
-  awardedAt TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (memberId, hackathonId)
-);
-
-CREATE TABLE IF NOT EXISTS teams (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
-  name TEXT NOT NULL,
-  placement INTEGER NOT NULL DEFAULT 0,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (hackathonId, name)
-);
-
-CREATE TABLE IF NOT EXISTS team_members (
-  teamId INTEGER NOT NULL REFERENCES teams(id),
-  username TEXT NOT NULL,
-  PRIMARY KEY (teamId, username)
-);
-
-CREATE TABLE IF NOT EXISTS team_projects (
-  teamId INTEGER PRIMARY KEY REFERENCES teams(id),
-  title TEXT NOT NULL,
-  description TEXT,
-  repoUrl TEXT,
-  demoUrl TEXT
-);
-
-CREATE TABLE IF NOT EXISTS edition_assets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
-  type TEXT NOT NULL CHECK (type IN ('foto','slide','material')),
-  url TEXT NOT NULL,
-  caption TEXT,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS challenges (
-  id TEXT PRIMARY KEY,
-  hackathonId TEXT NOT NULL REFERENCES hackathons(id),
-  sponsor TEXT NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT,
-  prize TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS post_comments (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  postId INTEGER NOT NULL REFERENCES posts(id),
-  memberId INTEGER NOT NULL REFERENCES members(id),
-  body TEXT NOT NULL,
-  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`);
-
-// migrações leves — ALTER TABLE idempotente pra bancos já existentes.
-// ensureColumn é race-safe: `next build` coleta page-data em workers
-// paralelos e libs irmãs guardam as mesmas colunas — dois workers podem
-// ler o PRAGMA antes do ALTER um do outro. "duplicate column" aqui é
-// idempotência, não erro (SQLite não tem ADD COLUMN IF NOT EXISTS).
-export function ensureColumn(table: string, column: string, ddl: string) {
-  const cols = (
-    db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
-  ).map((c) => c.name);
-  if (cols.includes(column)) return;
-  try {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
-  } catch (e) {
-    if (!(e instanceof Error && /duplicate column name/i.test(e.message))) {
-      throw e;
-    }
-  }
+interface Executor {
+  query(sql: string, params: Param[]): Promise<QueryResult>;
+  exec(sql: string): Promise<void>;
 }
 
-const memberCols = (
-  db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
-).map((c) => c.name);
-for (const col of ["linkedin", "twitter", "website", "headline", "persona"]) {
-  ensureColumn("members", col, `${col} TEXT`);
+interface Driver extends Executor {
+  transaction<T>(fn: (tx: Executor) => Promise<T>): Promise<T>;
 }
-if (!memberCols.includes("role")) {
-  ensureColumn("members", "role", "role TEXT NOT NULL DEFAULT 'member'");
-  // primeiro membro da plataforma é admin (bootstrap da operação)
-  db.exec(`UPDATE members SET role = 'admin' WHERE id = 1`);
+
+export type RunResult = { changes: number; lastInsertRowid: number | undefined };
+
+export interface Statement {
+  get<T = Row>(...params: Param[]): Promise<T | undefined>;
+  all<T = Row>(...params: Param[]): Promise<T[]>;
+  run(...params: Param[]): Promise<RunResult>;
 }
-ensureColumn("hackathons", "source", "source TEXT");
-// display string da fonte/curadoria ("$138,000", "R$ 5 mil") — spec 024
-ensureColumn("hackathons", "prize", "prize TEXT");
-// first_seen/last_seen são gravados pelo scraper (spec 005), mas a coluna
-// precisa existir em banco que nunca rodou scrape — o momentum "+N · 30d"
-// da landing conta por first_seen (spec 027). Sem backfill aqui: NULL =
-// "não sabemos quando entrou", e o scraper preenche quando roda.
-ensureColumn("hackathons", "first_seen", "first_seen TEXT");
-ensureColumn("hackathons", "last_seen", "last_seen TEXT");
-ensureColumn("posts", "link", "link TEXT");
-ensureColumn("members", "xp", "xp INTEGER NOT NULL DEFAULT 0");
 
-const insert = db.prepare(`
-  INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)
-  VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active, @prize)
-`);
-const backfillPrize = db.prepare(
-  // OR IGNORE não alcança bancos existentes — preenche só o vazio,
-  // nunca sobrescreve prêmio posto à mão pelo admin
-  "UPDATE hackathons SET prize = @prize WHERE id = @id AND prize IS NULL",
-);
-const seedAll = db.transaction(() => {
-  for (const h of [...seed, ...pastSeed]) {
-    insert.run({
-      ...h,
-      endsAt: h.endsAt ?? null,
-      location: h.location ?? null,
-      registrationDeadline: h.registrationDeadline ?? null,
-      tags: JSON.stringify(h.tags),
-      active: h.active ? 1 : 0,
-      prize: h.prize ?? null,
-    });
-    if (h.prize) backfillPrize.run({ id: h.id, prize: h.prize });
-  }
-});
-seedAll();
+// ---------- tradução de dialeto ----------
 
-const seedIds = [...seed, ...pastSeed].map((h) => h.id);
-db.prepare(
-  `UPDATE hackathons SET active = 0
-   WHERE source IS NULL
-     AND id NOT IN (SELECT value FROM json_each(?))
-     AND id NOT IN (SELECT hackathonId FROM registrations)`,
-).run(JSON.stringify(seedIds));
-
-// card colecionável por edição — raridade das edições Hack Inova é curadoria;
-// eventos raspados mintam 'comum' sob demanda no register
-const cardRarity: Record<string, string> = {
-  "hack-inova-unifacens-2026": "lendario", // a 1ª edição — peça de arquivo
-  "hack-inova-puc-saude-2026": "epico",
-  "hackinova-os-2-anhembi-2026": "epico",
-  "hack-inova-alphaville-2026": "raro",
+// PK de cada tabela usada com INSERT OR REPLACE (vira ON CONFLICT … DO UPDATE)
+const REPLACE_KEYS: Record<string, string[]> = {
+  hackathons: ["id"],
+  team_projects: ["teamId"],
+  settings: ["key"],
 };
-const seedCard = db.prepare(
-  "INSERT OR IGNORE INTO cards (hackathonId, rarity) VALUES (?, ?)",
-);
-for (const id of seedIds) {
-  seedCard.run(id, cardRarity[id] ?? "comum");
+
+const IDENT = /[A-Za-z_][A-Za-z0-9_]*/y;
+
+export function toPostgres(
+  sql: string,
+  params: Param[],
+): { text: string; values: Param[] } {
+  // bind nomeado (@x, :x, $x) quando o único argumento é um objeto simples
+  const named =
+    params.length === 1 &&
+    params[0] !== null &&
+    typeof params[0] === "object" &&
+    !Array.isArray(params[0]) &&
+    !(params[0] instanceof Date);
+  const bag = named ? (params[0] as Record<string, Param>) : null;
+  const values: Param[] = [];
+  const namedIndex = new Map<string, number>();
+  let positional = 0;
+  let out = "";
+
+  for (let i = 0; i < sql.length; ) {
+    const c = sql[i];
+    if (c === "'" || c === '"') {
+      // literal ou identificador já citado: copia até o fechamento ('' escapa)
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === c) {
+          if (sql[j + 1] === c) j += 2;
+          else break;
+        } else j++;
+      }
+      out += sql.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    if (c === "-" && sql[i + 1] === "-") {
+      const j = sql.indexOf("\n", i);
+      i = j === -1 ? sql.length : j;
+      continue;
+    }
+    if (c === "?") {
+      values.push(normalize(params[positional++]));
+      out += `$${values.length}`;
+      i++;
+      continue;
+    }
+    if (
+      bag &&
+      (c === "@" || c === ":" || c === "$") &&
+      /[A-Za-z_]/.test(sql[i + 1] ?? "") &&
+      !(c === ":" && sql[i - 1] === ":")
+    ) {
+      IDENT.lastIndex = i + 1;
+      const name = IDENT.exec(sql)![0];
+      let idx = namedIndex.get(name);
+      if (idx === undefined) {
+        values.push(normalize(bag[name]));
+        idx = values.length;
+        namedIndex.set(name, idx);
+      }
+      out += `$${idx}`;
+      i += 1 + name.length;
+      continue;
+    }
+    if (/[A-Za-z_]/.test(c) && !/[A-Za-z0-9_$]/.test(sql[i - 1] ?? "")) {
+      IDENT.lastIndex = i;
+      const word = IDENT.exec(sql)![0];
+      // camelCase (tem minúscula e maiúscula) = identificador nosso → cita.
+      // Palavra-chave SQL é toda maiúscula; função é toda minúscula.
+      out += /[a-z]/.test(word) && /[A-Z]/.test(word) ? `"${word}"` : word;
+      i += word.length;
+      continue;
+    }
+    out += c;
+    i++;
+  }
+
+  let text = out
+    .replace(/datetime\(\s*'now'\s*\)/gi, "sqlite_now()")
+    .replace(/datetime\(\s*'now'\s*,/gi, "sqlite_now(")
+    .replace(/\bNOT\s+LIKE\b/g, "NOT ILIKE")
+    .replace(/(?<!NOT )\bLIKE\b/g, "ILIKE");
+
+  const ignore = /^\s*INSERT\s+OR\s+IGNORE\s+INTO\b/i;
+  const replace = /^\s*INSERT\s+OR\s+REPLACE\s+INTO\s+("?)(\w+)\1\s*\(([^)]*)\)/i;
+  const m = text.match(replace);
+  if (m) {
+    const table = m[2];
+    const cols = m[3].split(",").map((s) => s.trim().replace(/"/g, ""));
+    const keys = REPLACE_KEYS[table];
+    if (!keys) throw new Error(`INSERT OR REPLACE sem chave conhecida: ${table}`);
+    const set = cols
+      .filter((col) => !keys.includes(col))
+      .map((col) => `"${col}" = EXCLUDED."${col}"`)
+      .join(", ");
+    text = appendClause(
+      text.replace(/^\s*INSERT\s+OR\s+REPLACE\s+INTO/i, "INSERT INTO"),
+      `ON CONFLICT (${keys.map((k) => `"${k}"`).join(", ")}) ` +
+        (set ? `DO UPDATE SET ${set}` : "DO NOTHING"),
+    );
+  } else if (ignore.test(text)) {
+    text = appendClause(text.replace(ignore, "INSERT INTO"), "ON CONFLICT DO NOTHING");
+  }
+
+  return { text, values };
 }
 
-// seed do arquivo: pódio público da Unifacens (dado real divulgado);
-// o resto entra pelo admin quando os organizadores cadastrarem
-const seedTeams = db.transaction(() => {
-  db.prepare(
-    `INSERT OR IGNORE INTO teams (hackathonId, name, placement)
-     VALUES ('hack-inova-unifacens-2026', 'One Day Hospital', 1)`,
-  ).run();
-  const team = db
-    .prepare(
-      "SELECT id FROM teams WHERE hackathonId = ? AND name = ?",
-    )
-    .get("hack-inova-unifacens-2026", "One Day Hospital") as
-    | { id: number }
-    | undefined;
-  if (team) {
-    db.prepare(
-      `INSERT OR IGNORE INTO team_projects (teamId, title, description)
-       VALUES (?, ?, ?)`,
-    ).run(
-      team.id,
-      "One Day Hospital",
-      "Vencedora da 1ª edição — solução de saúde apresentada depois na Oracle SP",
+function appendClause(sql: string, clause: string): string {
+  const trimmed = sql.trim().replace(/;$/, "");
+  const ret = trimmed.search(/\bRETURNING\b/i);
+  return ret === -1
+    ? `${trimmed} ${clause}`
+    : `${trimmed.slice(0, ret)}${clause} ${trimmed.slice(ret)}`;
+}
+
+function normalize(v: Param): Param {
+  if (v === undefined) return null;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  return v;
+}
+
+// ---------- drivers ----------
+
+async function pgDriver(url: string): Promise<Driver> {
+  const pg = await import("pg");
+  const { Pool, types } = pg.default ?? pg;
+  // COUNT/SUM voltam bigint/numeric; o app (e o SQLite) sempre tratou como number
+  types.setTypeParser(20, (v: string) => Number(v));
+  types.setTypeParser(1700, (v: string) => Number(v));
+  const pool = new Pool({ connectionString: url, max: Number(process.env.DB_POOL_MAX ?? 10) });
+  const wrap = (c: { query: typeof pool.query }): Executor => ({
+    async query(sql, params) {
+      const r = await c.query(sql, params as unknown[]);
+      return { rows: r.rows, rowCount: r.rowCount ?? 0 };
+    },
+    async exec(sql) {
+      await c.query(sql);
+    },
+  });
+  return {
+    ...wrap(pool),
+    async transaction(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await fn(wrap(client as never));
+        await client.query("COMMIT");
+        return result;
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
+  };
+}
+
+async function pgliteDriver(): Promise<Driver> {
+  const { PGlite, types } = await import("@electric-sql/pglite");
+  const parsers = {
+    [types.INT8]: (v: string) => Number(v),
+    [types.NUMERIC]: (v: string) => Number(v),
+  };
+  const lite = new PGlite({ parsers });
+  type Q = { query: (s: string, p?: unknown[]) => Promise<{ rows: unknown[]; affectedRows?: number }>; exec: (s: string) => Promise<unknown> };
+  const wrap = (c: Q): Executor => ({
+    async query(sql, params) {
+      const r = await c.query(sql, params as unknown[]);
+      return { rows: r.rows as Row[], rowCount: r.affectedRows ?? r.rows.length };
+    },
+    async exec(sql) {
+      await c.exec(sql);
+    },
+  });
+  return {
+    ...wrap(lite as unknown as Q),
+    transaction: (fn) => lite.transaction((tx) => fn(wrap(tx as unknown as Q))),
+  };
+}
+
+// ---------- migrations + seed (uma vez por processo) ----------
+
+const MIGRATIONS_DIR = join(process.cwd(), "migrations");
+
+async function migrate(d: Driver) {
+  await d.transaction(async (tx) => {
+    // trava entre processos (vários workers do build / instâncias subindo juntas)
+    await tx.query("SELECT pg_advisory_xact_lock(7262201)", []);
+    await tx.exec(
+      `CREATE TABLE IF NOT EXISTS schema_migrations (
+         name TEXT PRIMARY KEY,
+         applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+    );
+    const done = new Set(
+      (await tx.query("SELECT name FROM schema_migrations", [])).rows.map(
+        (r) => r.name as string,
+      ),
+    );
+    for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort()) {
+      if (done.has(file)) continue;
+      await tx.exec(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+      await tx.query("INSERT INTO schema_migrations (name) VALUES ($1)", [file]);
+    }
+  });
+}
+
+const g = globalThis as unknown as { __hackahubDb?: Promise<Driver> };
+
+function driver(): Promise<Driver> {
+  g.__hackahubDb ??= (async () => {
+    const url = process.env.DATABASE_URL || undefined;
+    const d = url ? await pgDriver(url) : await pgliteDriver();
+    await migrate(d);
+    await seedDatabase(makeApi(async () => d, new AsyncLocalStorage()));
+    return d;
+  })();
+  return g.__hackahubDb;
+}
+
+// ---------- API pública ----------
+
+const IDENTITY_TABLES = new Set([
+  "members", "registrations", "subscribers", "posts", "teams", "edition_assets",
+  "post_comments", "leads", "event_submissions", "notifications", "looking_for_team",
+]);
+
+function makeApi(getDriver: () => Promise<Driver>, als: AsyncLocalStorage<Executor>) {
+  const executor = async (): Promise<Executor> => als.getStore() ?? (await getDriver());
+
+  async function run(sql: string, params: Param[]): Promise<{ rows: Row[]; rowCount: number }> {
+    const { text, values } = toPostgres(sql, params);
+    const ex = await executor();
+    const isInsert = /^\s*INSERT\b/i.test(text);
+    const finalText = isInsert && !/\bRETURNING\b/i.test(text) ? `${text} RETURNING *` : text;
+    const r = await ex.query(finalText, values);
+    if (isInsert) await syncIdentity(ex, text);
+    return r;
+  }
+
+  // INSERT com id explícito não avança a identity (o SQLite fazia max+1 sozinho)
+  async function syncIdentity(ex: Executor, text: string) {
+    const m = text.match(/^\s*INSERT\s+INTO\s+"?(\w+)"?\s*\(([^)]*)\)/i);
+    if (!m || !IDENTITY_TABLES.has(m[1])) return;
+    if (!m[2].split(",").some((c) => c.trim().replace(/"/g, "") === "id")) return;
+    await ex.query(
+      `SELECT setval(pg_get_serial_sequence('${m[1]}', 'id'),
+              GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${m[1]}), 1))`,
+      [],
     );
   }
-});
-seedTeams();
 
-// desafios patrocinados — o inventário de monetização (participante nunca
-// paga; quem paga é a marca que lança o desafio). seeds = patrocínio real
-// divulgado das edições; o resto entra pelo admin
-const seedChallenge = db.prepare(
-  `INSERT OR IGNORE INTO challenges (id, hackathonId, sponsor, title, description, prize)
-   VALUES (@id, @hackathonId, @sponsor, @title, @description, @prize)`,
-);
-const seedChallenges = db.transaction(() => {
-  seedChallenge.run({
-    id: "seed-puc-jornada-paciente",
-    hackathonId: "hack-inova-puc-saude-2026",
-    sponsor: "Oracle",
-    title: "Jornada do paciente",
-    description:
-      "A edição rodou 7 desafios da jornada do paciente — do agendamento ao pós-consulta — com contexto e dados da Oracle.",
-    prize: "créditos OCI + visita Oracle Innovation Center",
-  });
-  seedChallenge.run({
-    id: "seed-unifacens-ia-saude",
-    hackathonId: "hack-inova-unifacens-2026",
-    sponsor: "Oracle + Enterprise X Ventures",
-    title: "IA aplicada à saúde",
-    description:
-      "Desafio aberto de IA pra saúde na 1ª edição — o projeto vencedor (One Day Hospital) foi apresentado depois na Oracle SP.",
-    prize: "R$5k em consultoria + créditos OCI",
-  });
-});
-seedChallenges();
+  return {
+    prepare(sql: string): Statement {
+      return {
+        async get<T>(...params: Param[]) {
+          return (await run(sql, params)).rows[0] as T | undefined;
+        },
+        async all<T>(...params: Param[]) {
+          return (await run(sql, params)).rows as T[];
+        },
+        async run(...params: Param[]) {
+          const r = await run(sql, params);
+          const id = r.rows[0]?.id;
+          return {
+            changes: r.rowCount,
+            lastInsertRowid: typeof id === "number" ? id : undefined,
+          };
+        },
+      };
+    },
+    async exec(sql: string) {
+      await (await executor()).exec(toPostgres(sql, []).text);
+    },
+    // fn roda numa transação; chamadas a db.* dentro dela usam a mesma conexão
+    transaction<A extends unknown[], T>(fn: (...args: A) => Promise<T>) {
+      return async (...args: A): Promise<T> => {
+        if (als.getStore()) return fn(...args);
+        return (await getDriver()).transaction((tx) => als.run(tx, () => fn(...args)));
+      };
+    },
+  };
+}
+
+export type Db = ReturnType<typeof makeApi>;
+
+const db: Db = makeApi(driver, new AsyncLocalStorage());
 
 export default db;

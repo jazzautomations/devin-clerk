@@ -11,14 +11,7 @@ async function ensurePrizeEvent(request: APIRequestContext): Promise<void> {
   // bate /radar primeiro pra forçar o init/migrações do db no dev server
   await request.get("/radar");
   const db = openE2eDb();
-  db.pragma("busy_timeout = 5000");
-  const cols = (
-    db.prepare("PRAGMA table_info(hackathons)").all() as { name: string }[]
-  ).map((c) => c.name);
-  if (!cols.includes("prize")) {
-    db.exec("ALTER TABLE hackathons ADD COLUMN prize TEXT");
-  }
-  db.prepare(
+  await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, format, registrationUrl, tags,
         active, source, prize)
@@ -26,7 +19,6 @@ async function ensurePrizeEvent(request: APIRequestContext): Promise<void> {
              'online', 'https://e2e.dev/jam', '[]', 1, 'e2e', ?)
      ON CONFLICT(id) DO UPDATE SET prize = excluded.prize, active = 1`,
   ).run(HID, PRIZE);
-  db.close();
 }
 
 test.describe("prêmio nos cards — spec 024", () => {
