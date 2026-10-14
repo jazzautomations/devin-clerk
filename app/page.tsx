@@ -45,9 +45,15 @@ export default async function Home() {
   const proxima = upcoming.find((h) => h.partner) ?? null;
   // Hack Inova primeiro, depois hackathons do Brasil por data (sem gringo
   // online e sem o que fecha em menos de 48h — lib/radar.ts)
-  const abertos = landingList(upcoming, now, 8);
-  const primaryHref = proxima ? `/h/${proxima.id}` : "/radar";
-  const primaryLabel = proxima ? "Quero participar" : "Ver hackathons abertos";
+  // loop de curiosidade: a landing mostra uma amostra; o radar completo é
+  // de quem tem conta (a contagem do resto é real)
+  const todosAbertos = landingList(upcoming, now, 500);
+  const abertos = todosAbertos.slice(0, 4);
+  const restantes = todosAbertos.length - abertos.length;
+  // sem edição anunciada, a próxima é surpresa: quem deixa o e-mail fica
+  // sabendo primeiro (decisão do dono, 14/10/2026)
+  const primaryHref = proxima ? `/h/${proxima.id}` : "#proxima";
+  const primaryLabel = proxima ? "Quero participar" : "Quero saber da próxima edição";
 
   return (
     <div className="-mb-24 overflow-x-clip">
@@ -83,6 +89,35 @@ export default async function Home() {
         </section>
       </div>
 
+      {!proxima && (
+        <section id="proxima" aria-labelledby="proxima-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pb-16 sm:px-6" data-testid="landing-proxima-em-breve">
+          <div className="grid gap-6 bg-foreground p-7 text-background sm:p-9 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-12">
+            <div className="flex flex-col gap-3">
+              <p className="pix text-[20px] leading-none text-band">PRÓXIMA EDIÇÃO HACK INOVA</p>
+              <h2 id="proxima-title" className="text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.95] font-extrabold tracking-[-0.04em]">
+                Em breve.
+              </h2>
+              <p className="max-w-[42ch] text-[15.5px] leading-relaxed text-[#b8cdc0]">
+                Data, cidade e desafios saem primeiro pra quem está na comunidade. Quando a edição abrir, você recebe
+                o aviso aqui dentro e no seu e-mail.
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-3 lg:items-end">
+              <Show when="signed-out">
+                <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+                  <button className="btn min-h-[52px]! bg-band! px-6! text-foreground!" data-testid="landing-proxima-signup">
+                    criar conta e ficar sabendo →
+                  </button>
+                </SignUpButton>
+              </Show>
+              <Show when="signed-in">
+                <p className="font-mono text-[14px] text-band">você já está dentro. O aviso chega no seu painel.</p>
+              </Show>
+            </div>
+          </div>
+        </section>
+      )}
+
       {abertos.length > 0 && (
         <section id="abertos" aria-labelledby="abertos-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 sm:px-6">
           <div className="flex items-end justify-between gap-4 border-b-2 border-line pb-3">
@@ -94,6 +129,29 @@ export default async function Home() {
             </Link>
           </div>
           <EditionRows hackathons={abertos} testId="landing-proximas" now={now} />
+          {restantes > 0 && (
+            <div
+              className="flex flex-col items-start justify-between gap-4 border-b-2 border-line bg-mint px-2 py-5 sm:flex-row sm:items-center"
+              data-testid="landing-radar-trancado"
+            >
+              <p className="text-[clamp(1.1rem,2vw,1.35rem)] font-extrabold tracking-[-0.02em]">
+                +{restantes} {restantes === 1 ? "hackathon aberto" : "hackathons abertos"} no Brasil.
+                <span className="block text-[15px] font-normal text-[#2b2b2b]">
+                  O radar completo, por estado, fica dentro da plataforma.
+                </span>
+              </p>
+              <Show when="signed-out">
+                <SignUpButton mode="modal" forceRedirectUrl="/radar">
+                  <button className="btn min-h-[48px]! shrink-0 px-5!">ver o radar completo →</button>
+                </SignUpButton>
+              </Show>
+              <Show when="signed-in">
+                <Link href="/radar" className="btn min-h-[48px]! shrink-0 px-5!">
+                  ver o radar completo →
+                </Link>
+              </Show>
+            </div>
+          )}
         </section>
       )}
 

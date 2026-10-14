@@ -2,6 +2,7 @@ import { isSafeLink, updateHackathon, type HackathonPatch } from "@/lib/admin";
 import db from "@/lib/db";
 import { requireEditionManager } from "@/lib/editionAuth";
 import { getPublishBlockers } from "@/lib/editionChecklist";
+import { announceEditionLaunch } from "@/lib/editionLaunch";
 import { EventTimeError, normalizeEventTime, parseEventTime } from "@/lib/eventTime";
 import { shiftSchedule } from "@/lib/schedule";
 
@@ -154,5 +155,8 @@ export async function PATCH(
     hackathon: await updateHackathon(id, patch),
     schedule: b.shiftSchedule === true && delta ? await shiftSchedule(id, delta, member.id) : null,
   }))();
-  return Response.json({ hackathon, schedule });
+  // edição da Hack Inova entrando no ar pela primeira vez: a comunidade inteira
+  // fica sabendo (notificação + fila de e-mail). Idempotente.
+  const launch = patch.active === true && !before.active ? await announceEditionLaunch(id) : null;
+  return Response.json({ hackathon, schedule, launch });
 }
