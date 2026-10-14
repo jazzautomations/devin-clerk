@@ -170,3 +170,15 @@ describe("integração com o banco — region gravada chega na lista da landing"
     expect(ids.slice(0, firstRadar).every((id) => open.find((h) => h.id === id)?.partner)).toBe(true);
   });
 });
+
+describe("edição da casa gravada pelo app", () => {
+  it("source 'seed' ou 'painel' conta como brasileira, igual a sem fonte", () => {
+    for (const source of [null, "seed", "painel"]) {
+      const h = ev(`casa-${source}`, { source, format: "online", name: "Edition One" });
+      expect(radarRegion(h)).toBe("online-br");
+    }
+    expect(radarRegion(ev("gringo", { source: "devpost", format: "online", name: "Edition One" }))).toBe(
+      "online-mundo",
+    );
+  });
+});

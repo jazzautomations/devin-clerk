@@ -26,8 +26,9 @@ export type RadarEvent = {
   source?: string | null;
 };
 
-// fontes brasileiras: Sympla, Doity, curadoria, indicação, admin e a casa
-const BR_SOURCES = new Set(["sympla", "doity", "curadoria", "comunidade", "admin", "meetup"]);
+// fontes brasileiras: Sympla, Doity, curadoria, indicação, terceiro posto no
+// admin e a casa (sem fonte, seed ou painel)
+const BR_SOURCES = new Set(["sympla", "doity", "curadoria", "comunidade", "admin", "meetup", "seed", "painel"]);
 // português sem confundir com espanhol (que não tem ã/õ nem "ção")
 const PT_RE = /[ãõ]|ç[ãõ]|\b(dos|das|nas|nos|pra|você|edição|inscriç\w*|maratona|soluç\w*|inovaç\w*|tecnologia|saúde|educação)\b/i;
 

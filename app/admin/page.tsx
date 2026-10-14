@@ -48,7 +48,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
               (SELECT COUNT(*)::int FROM registrations r
                 WHERE r.hackathonId = h.id AND r.status = 'pending') AS pendentes,
               (SELECT COUNT(*)::int FROM schedule_items si WHERE si.hackathonId = h.id) AS "scheduleItems",
-              (h.organizer ILIKE 'hack inova%' OR h.source IN ('admin', 'seed')
+              (h.organizer ILIKE 'hack inova%' OR h.source IN ('painel', 'seed')
                 OR EXISTS (SELECT 1 FROM edition_roles er WHERE er.hackathonId = h.id)) AS "ours"
        FROM hackathons h
        WHERE (@q = '' OR lower(h.name) LIKE @like ESCAPE '\\' OR h.id LIKE @like ESCAPE '\\')

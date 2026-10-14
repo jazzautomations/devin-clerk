@@ -6,6 +6,8 @@ import { useState } from "react";
 // Nova edição: só o essencial (endereço, nome, datas e local). Ela nasce como
 // rascunho e o resto (prazo, vagas, curadoria, equipe) fica no checklist do
 // painel da edição, pra onde a pessoa vai logo depois de criar.
+// Evento de outro organizador (bloco recolhido) vai direto pro radar, com o
+// link oficial e o prêmio, e a busca do /admin abre nele.
 export function CreateEventForm() {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
@@ -28,10 +30,15 @@ export function CreateEventForm() {
         startsAt: f.get("startsAt"),
         endsAt: f.get("endsAt") || undefined,
         location: f.get("location") || undefined,
+        organizer: f.get("organizer") || undefined,
+        format: f.get("format") || undefined,
+        registrationUrl: f.get("registrationUrl") || undefined,
+        prize: f.get("prize") || undefined,
       }),
     }).catch(() => null);
     if (res?.ok) {
-      router.push(`/admin/h/${id}`);
+      const data = await res.json().catch(() => null);
+      router.push(data?.radar ? `/admin?q=${encodeURIComponent(id)}` : `/admin/h/${id}`);
       return;
     }
     const data = await res?.json().catch(() => null);
@@ -85,6 +92,41 @@ export function CreateEventForm() {
           placeholder="Unipe Alphaville, SP"
         />
       </label>
+      <details className="border-t border-line pt-3 sm:col-span-2">
+        <summary className="min-h-11 cursor-pointer py-2 font-mono text-xs text-muted hover:text-foreground">
+          evento de outro organizador? ponha no radar
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <p className="font-mono text-xs text-muted sm:col-span-2">
+            Com outro organizador, o evento entra no ar direto no radar. Vazio, é uma edição da Hack Inova.
+          </p>
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-xs text-muted">organizador</span>
+            <input name="organizer" className={input} placeholder="Prefeitura de Sorocaba" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-xs text-muted">formato</span>
+            <select name="format" defaultValue="presencial" className={input}>
+              <option value="presencial">presencial</option>
+              <option value="online">online</option>
+              <option value="hibrido">híbrido</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-xs text-muted">link oficial da inscrição</span>
+            <input
+              name="registrationUrl"
+              type="url"
+              className={input}
+              placeholder="https://www.sympla.com.br/evento/..."
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-xs text-muted">prêmio (opcional)</span>
+            <input name="prize" className={input} placeholder="R$ 15 mil" />
+          </label>
+        </div>
+      </details>
       <div className="flex flex-wrap items-center gap-4 sm:col-span-2">
         <button
           type="submit"
@@ -96,7 +138,7 @@ export function CreateEventForm() {
         <span role="status" className={status === "error" ? "font-mono text-xs text-orange" : "sr-only"}>
           {status === "error" ? error : ""}
         </span>
-        <span className="font-mono text-xs text-muted">a edição nasce como rascunho; você publica pelo painel</span>
+        <span className="font-mono text-xs text-muted">edição da Hack Inova nasce como rascunho; você publica pelo painel</span>
       </div>
     </form>
   );

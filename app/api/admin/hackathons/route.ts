@@ -7,10 +7,13 @@ import { getMemberByClerkId } from "@/lib/members";
 const FORMATS = ["online", "presencial", "hibrido"];
 const bad = (error: string) => Response.json({ error }, { status: 400 });
 
-// Cria uma edição nova (admin global). Nasce como rascunho (active = 0): só a
-// equipe vê, até o organizador publicar pela visão geral. Nunca sobrescreve:
-// endereço já usado é 409 e a edição existente fica intacta. source='admin'
-// marca a origem — o seed só mexe nas linhas dele (source='seed').
+// Cria uma edição (admin global). Nunca sobrescreve: endereço já usado é 409
+// e a edição existente fica intacta. Dois casos, pelo organizador:
+//   - edição da casa (sem organizador ou Hack Inova): source='painel', nasce
+//     como rascunho (active = 0) e o organizador publica pela visão geral;
+//   - evento de terceiro posto à mão no radar: source='admin' e já entra no
+//     ar, como era no feat-r-radar (lib/radar.ts e o scraper tratam assim).
+// O seed só mexe nas linhas dele (source='seed').
 export async function POST(req: Request) {
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
@@ -49,13 +52,16 @@ export async function POST(req: Request) {
     throw e;
   }
 
+  const organizer = str("organizer") || "Hack Inova";
+  const house = organizer.toLowerCase().includes("hack inova");
+
   const created = await db
     .prepare(
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline,
           tags, active, source, prize)
        VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl,
-               @registrationDeadline, @tags, 0, 'admin', @prize)
+               @registrationDeadline, @tags, @active, @source, @prize)
        ON CONFLICT (id) DO NOTHING
        RETURNING id`,
     )
@@ -63,7 +69,9 @@ export async function POST(req: Request) {
       id,
       name,
       // o HackaHub é a casa da Hack Inova: sem organizador informado, é ela
-      organizer: str("organizer") || "Hack Inova",
+      organizer,
+      active: house ? 0 : 1,
+      source: house ? "painel" : "admin",
       startsAt,
       endsAt,
       format,
@@ -79,5 +87,5 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
-  return Response.json({ ok: true, id }, { status: 201 });
+  return Response.json({ ok: true, id, radar: !house }, { status: 201 });
 }

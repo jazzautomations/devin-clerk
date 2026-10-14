@@ -184,22 +184,49 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
 describe("POST /api/admin/hackathons (nova edição)", () => {
   const novo = { id: "pacote-b-nova-2027", name: "Hack Nova", startsAt: "2027-03-10T09:00", location: "Sorocaba" };
 
-  it("nasce rascunho, com origem 'admin' e data no horário de Brasília", async () => {
+  it("edição da casa nasce rascunho, com origem 'painel' e data no horário de Brasília", async () => {
     const { POST } = await import("@/app/api/admin/hackathons/route");
     as(await member("admin"));
     await db.prepare("DELETE FROM hackathons WHERE id = ?").run(novo.id);
     const res = await POST(req("POST", novo));
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ ok: true, id: novo.id });
+    expect(await res.json()).toEqual({ ok: true, id: novo.id, radar: false });
     const row = await db
       .prepare("SELECT active, source, startsAt, organizer, registrationUrl FROM hackathons WHERE id = ?")
       .get(novo.id);
     expect(row).toEqual({
       active: 0,
-      source: "admin",
+      source: "painel",
       startsAt: "2027-03-10T09:00:00-03:00",
       organizer: "Hack Inova",
       registrationUrl: `/h/${novo.id}`,
+    });
+  });
+
+  it("evento de terceiro vai direto pro radar com origem 'admin', link e prêmio", async () => {
+    const { POST } = await import("@/app/api/admin/hackathons/route");
+    as(await member("admin"));
+    const id = "pacote-b-terceiro-2027";
+    await db.prepare("DELETE FROM hackathons WHERE id = ?").run(id);
+    const res = await POST(
+      req("POST", {
+        ...novo,
+        id,
+        organizer: "Prefeitura de Sorocaba",
+        registrationUrl: "https://www.sympla.com.br/evento/x",
+        prize: "R$ 15 mil",
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true, id, radar: true });
+    expect(
+      await db.prepare("SELECT active, source, organizer, registrationUrl, prize FROM hackathons WHERE id = ?").get(id),
+    ).toEqual({
+      active: 1,
+      source: "admin",
+      organizer: "Prefeitura de Sorocaba",
+      registrationUrl: "https://www.sympla.com.br/evento/x",
+      prize: "R$ 15 mil",
     });
   });
 
