@@ -1,19 +1,16 @@
 import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { HackathonFeed } from "@/components/HackathonFeed";
+import { HackathonCard } from "@/components/HackathonCard";
+import { RadarFeed } from "@/components/RadarFeed";
 import { SubmitEventForm } from "@/components/SubmitEventForm";
-import {
-  getOpenHackathons,
-  getTags,
-  searchHackathons,
-} from "@/lib/hackathons";
+import { getOpenHackathons, searchHackathons } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
 
 export const metadata: Metadata = {
   title: "radar",
   description:
-    "Hackathons abertos no Brasil e no mundo — sessões Hack Inova com inscrição pelo HackaHub e o radar curado das fontes oficiais.",
+    "Hackathons abertos, com o Brasil na frente: edições Hack Inova com inscrição pelo HackaHub e eventos das fontes oficiais.",
   alternates: { canonical: "/radar" },
 };
 
@@ -44,7 +41,6 @@ export default async function RadarPage({
     : await getOpenHackathons(now);
   const sessoes = hackathons.filter((h) => h.partner);
   const radar = hackathons.filter((h) => !h.partner);
-  const tags = await getTags(hackathons);
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6">
@@ -56,8 +52,8 @@ export default async function RadarPage({
           Hackathons abertos
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Os da comunidade com inscrição pelo HackaHub, e o resto do cenário
-          curado do Brasil e do mundo — raspado das fontes oficiais.
+          Primeiro o que rola no Brasil, por estado. Depois o que dá pra fazer
+          online. A lista é atualizada todo dia.
         </p>
         <form action="/radar" className="mt-1 flex gap-2">
           <input
@@ -88,27 +84,25 @@ export default async function RadarPage({
           <h2 className="font-mono text-xs tracking-[0.06em] text-accent uppercase">
             sessões hack inova — inscrição direta
           </h2>
-          <HackathonFeed
-            hackathons={sessoes}
-            tags={[]}
-            now={now.toISOString()}
-            registeredIds={registeredIds}
-          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sessoes.map((h) => (
+              <HackathonCard
+                key={h.id}
+                hackathon={h}
+                now={now}
+                registered={registeredIds.includes(h.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
       {!(q && hackathons.length === 0) && (
-        <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
-            radar — brasil + mundo
-          </h2>
-          <HackathonFeed
-            hackathons={radar}
-            tags={tags}
-            now={now.toISOString()}
-            registeredIds={registeredIds}
-          />
-        </div>
+        <RadarFeed
+          hackathons={radar}
+          now={now.toISOString()}
+          registeredIds={registeredIds}
+        />
       )}
 
       {/* terceiro canal do radar (spec 026): a comunidade indica, a

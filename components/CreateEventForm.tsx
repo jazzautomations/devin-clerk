@@ -25,6 +25,8 @@ export function CreateEventForm() {
         endsAt: f.get("endsAt") || undefined,
         format: f.get("format"),
         location: f.get("location") || undefined,
+        registrationUrl: f.get("registrationUrl") || undefined,
+        prize: f.get("prize") || undefined,
         registrationDeadline: f.get("registrationDeadline") || undefined,
         tags: String(f.get("tags") ?? "")
           .split(",")
@@ -104,6 +106,16 @@ export function CreateEventForm() {
           className={input}
           placeholder="Unipe Alphaville, SP"
         />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-xs text-muted">
+          link oficial (vazio = inscrição pelo HackaHub)
+        </span>
+        <input name="registrationUrl" type="url" className={input} placeholder="https://www.sympla.com.br/evento/..." />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-xs text-muted">prêmio (opcional)</span>
+        <input name="prize" className={input} placeholder="R$ 15 mil" />
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">

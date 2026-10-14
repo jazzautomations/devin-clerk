@@ -170,7 +170,8 @@ export function HackathonCard({
       </dl>
 
       <div className="flex flex-wrap gap-2">
-        {hackathon.tags.map((tag) => (
+        {/* "premio-…" é tag técnica do scraper; o prêmio já tem a linha dele */}
+        {hackathon.tags.filter((t) => !t.startsWith("premio-")).map((tag) => (
           <span
             key={tag}
             className="border-[1.5px] border-line px-2 py-0.5 font-mono text-[12px] text-muted"
