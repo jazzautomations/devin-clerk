@@ -32,6 +32,8 @@ import { listPosts } from "@/lib/posts";
 import { CardArt } from "@/components/CardArt";
 import { TicketLink } from "@/components/TicketLink";
 import { EditionAnnouncements } from "@/components/EditionAnnouncements";
+import { ScheduleNowNext } from "@/components/ScheduleNowNext";
+import { ANON_VIEWER, listVisibleScheduleItems } from "@/lib/schedule";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -162,6 +164,8 @@ export default async function HackathonPage({
     getEditionCapacity(h.id),
     member && myStatus === "waitlist" ? getWaitlistPosition(member.id, h.id) : Promise.resolve(null),
   ]);
+  // roadmap 037 #4 — itens abertos da programação viram subEvent no JSON-LD
+  const publicSchedule = await listVisibleScheduleItems(h.id, ANON_VIEWER);
   // numeração das seções na ordem em que aparecem (as condicionais pulam)
   let secN = 0;
   const nextK = () => String(++secN).padStart(2, "0");
@@ -170,7 +174,7 @@ export default async function HackathonPage({
     <div className="overflow-x-clip">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: jsonLd(eventJsonLd(h)) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(eventJsonLd(h, publicSchedule)) }}
       />
 
       {/* faixa do evento — data, formato e local em pixel */}
@@ -245,6 +249,7 @@ export default async function HackathonPage({
         {/* coluna principal */}
         <div className="flex min-w-0 flex-col gap-14">
           {member && <EditionAnnouncements hackathonId={h.id} member={member} />}
+          {!past && <ScheduleNowNext hackathonId={h.id} member={member} now={now} compact />}
           {!past && countdownTo && (
             <div data-testid="arena-strip" className="window dark hard">
               <div className="tbar">

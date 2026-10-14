@@ -84,7 +84,12 @@ export function jsonLd(data: Record<string, unknown>): string {
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
-export function eventJsonLd(h: Hackathon): Record<string, unknown> {
+/** item publicado e aberto da programação (lib/schedule) — UTC "YYYY-MM-DD HH:MM:SS" */
+export type SubEventInput = { id: number; title: string; startsAt: string; endsAt: string; room: string };
+
+const utcIso = (t: string) => `${t.replace(" ", "T")}Z`;
+
+export function eventJsonLd(h: Hackathon, subEvents: SubEventInput[] = []): Record<string, unknown> {
   const online = h.format === "online";
   return {
     "@context": "https://schema.org",
@@ -106,6 +111,23 @@ export function eventJsonLd(h: Hackathon): Record<string, unknown> {
       url: SITE_URL,
     },
     url: absoluteUrl(`/h/${h.id}`),
+    ...(subEvents.length
+      ? {
+          subEvent: subEvents.map((s) => ({
+            "@type": "Event",
+            name: s.title,
+            startDate: utcIso(s.startsAt),
+            endDate: utcIso(s.endsAt),
+            eventAttendanceMode: online
+              ? "https://schema.org/OnlineEventAttendanceMode"
+              : "https://schema.org/OfflineEventAttendanceMode",
+            location: online
+              ? { "@type": "VirtualLocation", url: absoluteUrl(`/h/${h.id}/programacao`) }
+              : { "@type": "Place", name: [s.room, h.location].filter(Boolean).join(" · ") || "Online" },
+            url: absoluteUrl(`/h/${h.id}/programacao#item-${s.id}`),
+          })),
+        }
+      : {}),
   };
 }
 

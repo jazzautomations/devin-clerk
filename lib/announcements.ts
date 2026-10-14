@@ -19,11 +19,15 @@ export const CHANNELS = ["inapp", "email", "whatsapp"] as const;
 export type Channel = (typeof CHANNELS)[number];
 export type DeliveryStatus = "queued" | "sent" | "failed" | "skipped";
 
-export const AUDIENCE_LABEL: Record<Audience, string> = {
+/** 'lista' = destinatários explícitos (aviso automático da programação, 011) */
+export type StoredAudience = Audience | "lista";
+
+export const AUDIENCE_LABEL: Record<StoredAudience, string> = {
   todos: "todos os inscritos",
   aprovados: "só aprovados",
   presentes: "só quem fez check-in",
   time: "um time",
+  lista: "os afetados (mudança na programação)",
 };
 
 export const MAX_ATTEMPTS = 3;
@@ -128,8 +132,10 @@ export async function fanOut(announcementId: number): Promise<number> {
   return db.transaction(async () => {
     const a = await db
       .prepare("SELECT hackathonId, audience, teamId FROM announcements WHERE id = ?")
-      .get<{ hackathonId: string; audience: Audience; teamId: number | null }>(announcementId);
+      .get<{ hackathonId: string; audience: StoredAudience; teamId: number | null }>(announcementId);
     if (!a) throw new Error("aviso não encontrado");
+    // 'lista' nasce com as deliveries prontas (publishToMembers)
+    if (a.audience === "lista") return 0;
     const recipients = await recipientsFor(a.hackathonId, a.audience, a.teamId);
     let created = 0;
     const insert = db.prepare(
@@ -164,6 +170,47 @@ export async function publishAnnouncement(
       )
       .get<{ id: number }>(hackathonId, input.audience, input.teamId, input.title, input.body, createdBy);
     const queued = await fanOut(row!.id);
+    return { id: row!.id, queued };
+  })();
+}
+
+/**
+ * Aviso pra uma lista explícita de membros (audience 'lista'). Mesmo
+ * caminho de entrega do resto — deliveries 'queued' por canal, o worker
+ * envia — só que o público é decidido por quem chama (ex.: só os mentores
+ * afetados por uma mudança de programação).
+ */
+export async function publishToMembers(
+  hackathonId: string,
+  createdBy: number | null,
+  content: { title: string; body: string },
+  memberIds: number[],
+): Promise<{ id: number; queued: number }> {
+  return db.transaction(async () => {
+    const row = await db
+      .prepare(
+        `INSERT INTO announcements (hackathonId, audience, title, body, createdBy)
+         VALUES (?, 'lista', ?, ?, ?) RETURNING id`,
+      )
+      .get<{ id: number }>(hackathonId, content.title, content.body, createdBy);
+    const ids = [...new Set(memberIds)];
+    const rows = ids.length
+      ? await db
+          .prepare(
+            `SELECT id AS memberId, email, phone, whatsappOptIn FROM members
+             WHERE id = ANY(?::int[]) ORDER BY id`,
+          )
+          .all<RecipientRow>(`{${ids.join(",")}}`)
+      : [];
+    const insert = db.prepare(
+      `INSERT OR IGNORE INTO deliveries (announcementId, memberId, channel) VALUES (?, ?, ?)`,
+    );
+    let queued = 0;
+    for (const r of rows) {
+      for (const ch of channelsFor({ ...r, whatsappOptIn: r.whatsappOptIn === 1 })) {
+        queued += (await insert.run(row!.id, r.memberId, ch)).changes;
+      }
+    }
     return { id: row!.id, queued };
   })();
 }
@@ -311,7 +358,7 @@ const zero = (): Counts => ({ queued: 0, sent: 0, failed: 0, skipped: 0 });
 
 export type AdminAnnouncement = {
   id: number;
-  audience: Audience;
+  audience: StoredAudience;
   teamName: string | null;
   title: string;
   body: string;
