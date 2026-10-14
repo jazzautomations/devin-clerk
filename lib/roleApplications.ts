@@ -9,6 +9,13 @@ import {
   validateAnswers,
 } from "@/lib/registrationForm";
 import { getEditionRoles, grantEditionRole, type EditionRole } from "@/lib/roles";
+import {
+  APPLICATION_KINDS,
+  KIND_LABEL,
+  KIND_ROLE,
+  type ApplicationKind,
+  type ApplicationStatus,
+} from "@/lib/applicationKinds";
 
 // Frente E (spec 033) — candidatura por tipo numa edição. Além de se
 // inscrever como participante, a pessoa se candidata pra ajudar: voluntário,
@@ -25,32 +32,15 @@ import { getEditionRoles, grantEditionRole, type EditionRole } from "@/lib/roles
 // - candidatura recusada não bloqueia nada e não reabre (decisão é final);
 // - a pessoa pode se candidatar a mais de um tipo; o organizador decide.
 
-export const APPLICATION_KINDS = ["voluntario", "mentor", "jurado"] as const;
-export type ApplicationKind = (typeof APPLICATION_KINDS)[number];
-export type ApplicationStatus = "pending" | "approved" | "rejected";
-
-/** papel concedido na aprovação: voluntário faz check-in (staff) */
-export const KIND_ROLE: Record<ApplicationKind, EditionRole> = {
-  voluntario: "staff",
-  mentor: "mentor",
-  jurado: "jurado",
-};
-
-export const KIND_LABEL: Record<ApplicationKind, string> = {
-  voluntario: "voluntário",
-  mentor: "mentor",
-  jurado: "jurado",
-};
-
-export const KIND_PITCH: Record<ApplicationKind, string> = {
-  voluntario: "Credenciamento, check-in e o corre do dia.",
-  mentor: "Destrava os times com o que você sabe.",
-  jurado: "Avalia os projetos pela rubrica da edição.",
-};
-
-export function isApplicationKind(v: unknown): v is ApplicationKind {
-  return typeof v === "string" && (APPLICATION_KINDS as readonly string[]).includes(v);
-}
+export {
+  APPLICATION_KINDS,
+  KIND_LABEL,
+  KIND_PITCH,
+  KIND_ROLE,
+  isApplicationKind,
+  type ApplicationKind,
+  type ApplicationStatus,
+} from "@/lib/applicationKinds";
 
 // ---------- tipos abertos ----------
 

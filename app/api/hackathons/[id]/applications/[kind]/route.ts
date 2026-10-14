@@ -1,12 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
-import { getMemberByClerkId } from "@/lib/members";
+import { getMemberByClerkId, type Member } from "@/lib/members";
 import { limitOrNull } from "@/lib/ratelimit";
 import {
   applyForRole,
   getMyApplications,
   isApplicationKind,
   withdrawApplication,
+  type ApplicationKind,
   type ApplyError,
 } from "@/lib/roleApplications";
 
@@ -27,7 +28,9 @@ const STATUS: Record<ApplyError, number> = {
   invalid_answer: 400,
 };
 
-async function resolve(ctx: Ctx) {
+type Resolved = { res: Response } | { member: Member; hackathonId: string; kind: ApplicationKind };
+
+async function resolve(ctx: Ctx): Promise<Resolved> {
   const { userId } = await auth();
   if (!userId) return { res: Response.json({ error: "Unauthorized" }, { status: 401 }) };
   const { id, kind } = await ctx.params;

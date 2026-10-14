@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { EditionQuestion, QuestionKind } from "@/lib/registrationForm";
+import type { Audience, EditionQuestion, QuestionKind } from "@/lib/registrationForm";
 
 const KINDS: { value: QuestionKind; label: string }[] = [
   { value: "short_text", label: "texto curto" },
@@ -36,11 +36,13 @@ export function QuestionEditor({
   questions,
   answered,
   capacity,
+  audience = "participante",
 }: {
   hackathonId: string;
   questions: EditionQuestion[];
   answered: Record<number, number>;
   capacity: number | null;
+  audience?: Audience;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(empty);
@@ -76,7 +78,7 @@ export function QuestionEditor({
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (await call(base, "POST", toPayload(draft))) setDraft(empty);
+    if (await call(base, "POST", { ...toPayload(draft), audience })) setDraft(empty);
   }
 
   async function saveEdit(id: number) {
@@ -98,8 +100,11 @@ export function QuestionEditor({
   const active = questions.filter((q) => !q.archived);
   const archived = questions.filter((q) => q.archived);
 
+  const participant = audience === "participante";
+
   return (
     <div className="flex flex-col gap-10">
+      {participant && (
       <form onSubmit={saveCapacity} className="flex flex-col gap-2 border-[1.5px] border-line p-4">
         <label htmlFor="capacity" className="font-mono text-[12px] tracking-widest text-muted uppercase">
           vagas da edição
@@ -123,12 +128,14 @@ export function QuestionEditor({
           primeiro da fila sobe sozinho.
         </p>
       </form>
+      )}
 
       <section className="flex flex-col gap-4">
         <h2 className="text-[22px] font-extrabold tracking-[-0.02em]">Perguntas ({active.length})</h2>
         <p className="text-[14px] text-muted">
-          Nome, e-mail e GitHub já vêm do perfil, não precisa perguntar. Sem perguntas, a inscrição é 1 clique
-          (com a caixa de aceite).
+          {participant
+            ? "Nome, e-mail e GitHub já vêm do perfil, não precisa perguntar. Sem perguntas, a inscrição é 1 clique (com a caixa de aceite)."
+            : "Nome, e-mail e GitHub já vêm do perfil. Pergunte o que ajuda a decidir: área, disponibilidade, experiência. Sem perguntas, a candidatura é só o aceite."}
         </p>
         {active.length === 0 && (
           <p className="border-[1.5px] border-dashed border-line p-4 font-mono text-[13px] text-muted">

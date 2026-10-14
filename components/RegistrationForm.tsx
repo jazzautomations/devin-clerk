@@ -7,26 +7,47 @@ import type { EditionQuestion } from "@/lib/registrationForm";
 
 type Value = string | string[] | boolean | undefined;
 
+// códigos de erro das APIs de inscrição/candidatura → texto pra pessoa
+const ERROR_TEXT: Record<string, string> = {
+  consent_required: "marque o aceite dos termos pra concluir",
+  kind_closed: "esse tipo de candidatura fechou nesta edição",
+  conflict_participant: "você está inscrito como participante nesta edição; quem compete não ajuda na mesma",
+  duplicate: "você já se candidatou a esse tipo nesta edição",
+  already_has_role: "você já tem esse papel nesta edição",
+  edition_over: "edição encerrada",
+};
+
+export function errorText(code: string): string {
+  if (code.startsWith("conflict_role:")) {
+    return "você se candidatou pra ajudar nesta edição; quem ajuda não se inscreve como participante na mesma";
+  }
+  return ERROR_TEXT[code] ?? code;
+}
+
 const field =
   "w-full rounded-[6px] border-[1.5px] border-line bg-background px-3 py-2.5 text-[16px] text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 // spec 033 US1 — formulário de inscrição da edição. Mobile-first: uma coluna,
 // campos de 16px (sem zoom no iOS), escolhas como alvos grandes de toque.
 // O que já está no perfil (nome, e-mail, GitHub) só aparece como resumo.
+// Frente E: o mesmo formulário serve a candidatura (voluntário/mentor/
+// jurado) — `target` troca endpoint, texto do botão e destino.
 export function RegistrationForm({
   hackathonId,
   questions,
   consentText,
   signedIn,
-  requiresApproval,
-  full,
+  requiresApproval = false,
+  full = false,
+  target,
 }: {
   hackathonId: string;
   questions: EditionQuestion[];
   consentText: string;
   signedIn: boolean;
-  requiresApproval: boolean;
-  full: boolean;
+  requiresApproval?: boolean;
+  full?: boolean;
+  target?: { submitUrl: string; cta: string; pagePath: string };
 }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<number, Value>>({});
@@ -45,20 +66,30 @@ export function RegistrationForm({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/hackathons/${hackathonId}/register`, {
+      const res = await fetch(target?.submitUrl ?? `/api/hackathons/${hackathonId}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consent: true, answers: values }),
       });
       if (res.status === 401) {
-        router.push(`/sign-in?redirect_url=${encodeURIComponent(`/h/${hackathonId}/inscricao`)}`);
+        router.push(`/sign-in?redirect_url=${encodeURIComponent(target?.pagePath ?? `/h/${hackathonId}/inscricao`)}`);
         return;
       }
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         const qid = typeof data?.questionId === "number" ? data.questionId : null;
-        setError({ text: typeof data?.error === "string" ? data.error : "não deu certo, tente de novo", questionId: qid });
+        const text =
+          typeof data?.message === "string"
+            ? data.message
+            : typeof data?.error === "string"
+              ? errorText(data.error)
+              : "não deu certo, tente de novo";
+        setError({ text, questionId: qid });
         if (qid) document.getElementById(`q-${qid}`)?.scrollIntoView({ block: "center" });
+        return;
+      }
+      if (target) {
+        router.refresh();
         return;
       }
       router.push(`/h/${hackathonId}?inscricao=${data?.status ?? "ok"}`);
@@ -68,7 +99,9 @@ export function RegistrationForm({
     }
   }
 
-  const cta = full
+  const cta = target
+    ? target.cta
+    : full
     ? "entrar na fila de espera"
     : requiresApproval
       ? "enviar pedido de lugar"
@@ -173,7 +206,7 @@ export function RegistrationForm({
 
       {error && error.questionId === null && (
         <p role="alert" className="font-mono text-[13px] text-orange">
-          {error.text === "consent_required" ? "marque o aceite dos termos pra concluir" : error.text}
+          {error.text}
         </p>
       )}
 

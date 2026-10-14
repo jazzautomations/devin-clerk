@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RegistrationStatus } from "@/lib/registrations";
-import { ConsentBox } from "@/components/RegistrationForm";
+import { ConsentBox, errorText } from "@/components/RegistrationForm";
 
 type Status = RegistrationStatus | null;
 
@@ -81,6 +81,8 @@ export function RegisterButton({
         router.refresh();
       } else if (data?.error === "consent_required") {
         setError("marque o aceite acima pra se inscrever");
+      } else if (res.status === 409 && typeof data?.error === "string") {
+        setError(errorText(data.error));
       } else if (res.status === 400 && formHref) {
         router.push(formHref);
       }

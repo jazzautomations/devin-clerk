@@ -7,6 +7,7 @@ import { getMemberByClerkId } from "@/lib/members";
 import { getEditionCapacity, getRegistrationStatus, getWaitlistPosition } from "@/lib/registrations";
 import { consentPurpose, listQuestions } from "@/lib/registrationForm";
 import { RegistrationForm } from "@/components/RegistrationForm";
+import { KIND_LABEL, getMyApplications, type ApplicationKind } from "@/lib/roleApplications";
 
 export async function generateMetadata({ params }: PageProps<"/h/[id]/inscricao">): Promise<Metadata> {
   const { id } = await params;
@@ -32,12 +33,15 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
   const closed = isOver(h, now) || (h.registrationDeadline !== null && new Date(h.registrationDeadline) < now);
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
-  const [questions, purpose, cap, status] = await Promise.all([
+  const [questions, purpose, cap, status, myApps] = await Promise.all([
     listQuestions(h.id),
     consentPurpose(h.id),
     getEditionCapacity(h.id),
     member ? getRegistrationStatus(member.id, h.id) : Promise.resolve(null),
+    member ? getMyApplications(member.id, h.id) : Promise.resolve({}),
   ]);
+  // frente E — candidato pendente/aprovado a voluntário/mentor/jurado não compete
+  const helping = (Object.entries(myApps) as [ApplicationKind, string][]).find(([, st]) => st !== "rejected");
   const position = member && status === "waitlist" ? await getWaitlistPosition(member.id, h.id) : null;
   const full = !h.requiresApproval && cap.remaining === 0;
 
@@ -78,6 +82,13 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
             voltar pra edição
           </Link>
         </section>
+      ) : helping ? (
+        <p className="border-[1.5px] border-line p-5 text-[15px] text-muted" data-testid="register-blocked-helper">
+          {`Você se candidatou como ${KIND_LABEL[helping[0]]} nesta edição. Quem ajuda não se inscreve como participante na mesma — se quiser trocar de lado, retire a candidatura pendente (ou fale com a organização) antes.`}{" "}
+          <Link href={`/h/${h.id}/candidatura/${helping[0]}`} className="text-accent underline">
+            ver candidatura
+          </Link>
+        </p>
       ) : closed ? (
         <p className="border-[1.5px] border-line p-5 font-mono text-[14px] text-muted">inscrições encerradas</p>
       ) : (

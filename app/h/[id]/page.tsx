@@ -32,6 +32,14 @@ import { listPosts } from "@/lib/posts";
 import { CardArt } from "@/components/CardArt";
 import { TicketLink } from "@/components/TicketLink";
 import { EditionAnnouncements } from "@/components/EditionAnnouncements";
+import {
+  KIND_LABEL,
+  KIND_PITCH,
+  getMyApplications,
+  getOpenKinds,
+  type ApplicationKind,
+  type ApplicationStatus,
+} from "@/lib/roleApplications";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -156,12 +164,19 @@ export default async function HackathonPage({
   const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(startDate);
   const canRegister = !past && !closed && h.partner;
   // spec 033 US1/FR-009 — formulário da edição, aceite LGPD e vagas
-  const [hasForm, consent, cap, myPosition] = await Promise.all([
+  const [hasForm, consent, cap, myPosition, helpKinds, myApps] = await Promise.all([
     canRegister ? hasActiveQuestions(h.id) : Promise.resolve(false),
     canRegister ? consentPurpose(h.id) : Promise.resolve(null),
     getEditionCapacity(h.id),
     member && myStatus === "waitlist" ? getWaitlistPosition(member.id, h.id) : Promise.resolve(null),
+    // frente E — "Quer ajudar?": tipos de candidatura abertos pela organização
+    !past && h.partner ? getOpenKinds(h.id) : Promise.resolve([] as ApplicationKind[]),
+    member ? getMyApplications(member.id, h.id) : Promise.resolve({} as Partial<Record<ApplicationKind, ApplicationStatus>>),
   ]);
+  // quem se candidatou pra ajudar (pendente/aprovado) não compete na mesma edição
+  const helping = (Object.entries(myApps) as [ApplicationKind, ApplicationStatus][]).find(
+    ([, st]) => st !== "rejected",
+  );
   // numeração das seções na ordem em que aparecem (as condicionais pulam)
   let secN = 0;
   const nextK = () => String(++secN).padStart(2, "0");
@@ -565,6 +580,11 @@ export default async function HackathonPage({
               <div className="tbody gap-3 p-5!">
                 <p className="text-[11px]">INSCRIÇÕES ABERTAS</p>
                 <div className="pix -mt-2 text-[46px] leading-[0.85]">ENTRAR</div>
+                {helping && myStatus === null ? (
+                  <p className="text-[14px] leading-snug text-mint" data-testid="register-blocked-helper">
+                    {`você se candidatou como ${KIND_LABEL[helping[0]]} — quem ajuda não se inscreve como participante na mesma edição`}
+                  </p>
+                ) : (
                 <div className="[&_button]:w-full">
                   <RegisterButton
                     hackathonId={h.id}
@@ -576,6 +596,7 @@ export default async function HackathonPage({
                     waitlistPosition={myPosition}
                   />
                 </div>
+                )}
                 {!member && (
                   <p className="text-[13px] leading-snug text-mint">
                     {"vai pedir login — é o cadastro único do hackahub, não um Google Form"}
@@ -594,6 +615,45 @@ export default async function HackathonPage({
             >
               inscrever no site oficial ↗
             </a>
+          )}
+
+          {helpKinds.length > 0 && (
+            <section data-testid="help-cta" className="flex flex-col gap-3 border-[1.5px] border-line p-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-[22px] leading-none font-extrabold tracking-[-0.03em]">Quer ajudar?</h2>
+                <p className="text-[13px] text-muted">
+                  A organização está recebendo candidaturas. Quem ajuda não compete na mesma edição.
+                </p>
+              </div>
+              <ul className="flex flex-col">
+                {helpKinds.map((k) => {
+                  const st = myApps[k];
+                  return (
+                    <li key={k} className="flex items-center justify-between gap-3 border-t border-line py-3">
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-bold first-letter:uppercase">{KIND_LABEL[k]}</p>
+                        <p className="text-[13px] leading-snug text-muted">{KIND_PITCH[k]}</p>
+                      </div>
+                      <Link
+                        href={`/h/${h.id}/candidatura/${k}`}
+                        className={`shrink-0 rounded-[6px] border-[1.5px] px-3 py-2 font-mono text-[12px] font-semibold whitespace-nowrap ${
+                          st ? "border-line text-muted" : "border-accent text-accent hover:bg-accent hover:text-background"
+                        }`}
+                        aria-label={`candidatar-se como ${KIND_LABEL[k]}`}
+                      >
+                        {st === "pending"
+                          ? "em análise"
+                          : st === "approved"
+                            ? "aprovada"
+                            : st === "rejected"
+                              ? "não aprovada"
+                              : "candidatar-se"}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           )}
 
           <dl className="border-b border-line">
