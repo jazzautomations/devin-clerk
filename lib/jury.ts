@@ -1,5 +1,7 @@
 import db from "@/lib/db";
 import { canManageEdition, getEditionRoles } from "@/lib/roles";
+import { challengesByTeam, ELIGIBLE_SQL, judgedVersions, type JudgedVersion } from "@/lib/entries";
+import { categoryCandidates, listCategories, pickWinners, replaceWinners } from "@/lib/prizes";
 
 // Júri com rubrica (spec 033 US5, FR-006). Notas são guardadas por critério e
 // o ranking é sempre calculado na hora (média ponderada das médias por
@@ -7,6 +9,10 @@ import { canManageEdition, getEditionRoles } from "@/lib/roles";
 // oculto até jury_results ter a linha da edição; publicar grava o pódio em
 // teams.placement, que é o que o arquivo da edição já lê. O voto popular
 // (lib/votes) é outro sinal e não entra aqui.
+//
+// spec 034 — edição com prazo de entrega: só time ENVIADO/TRAVADO entra no
+// júri (atribuição, ranking, categorias); o jurado avalia o snapshot da
+// versão do prazo. Edição sem prazo segue como antes (todo time).
 
 export class JuryError extends Error {
   status: number;
@@ -19,7 +25,7 @@ export class JuryError extends Error {
 type Actor = { id: number; role: string };
 
 export type Criterion = { id: number; label: string; weight: number; position: number };
-export type JuryTeam = { id: number; name: string; title: string | null; members: string[] };
+export type JuryTeam = { id: number; name: string; title: string | null; members: string[]; finalist: boolean };
 export type Judge = { memberId: number; username: string; name: string | null };
 export type ScoreRow = { judgeMemberId: number; teamId: number; criterionId: number; score: number };
 
@@ -179,17 +185,18 @@ export async function listJudges(hackathonId: string): Promise<Judge[]> {
 export async function listJuryTeams(hackathonId: string): Promise<JuryTeam[]> {
   const rows = await db
     .prepare(
-      `SELECT t.id, t.name, p.title,
+      `SELECT t.id, t.name, p.title, t.finalist,
               COALESCE(string_agg(tm.username, ',' ORDER BY tm.username), '') AS members
        FROM teams t
+       JOIN hackathons h ON h.id = t.hackathonId
        LEFT JOIN team_projects p ON p.teamId = t.id
        LEFT JOIN team_members tm ON tm.teamId = t.id
-       WHERE t.hackathonId = ?
-       GROUP BY t.id, t.name, p.title
+       WHERE t.hackathonId = ? AND ${ELIGIBLE_SQL("t")}
+       GROUP BY t.id, t.name, p.title, t.finalist
        ORDER BY t.name`,
     )
-    .all<{ id: number; name: string; title: string | null; members: string }>(hackathonId);
-  return rows.map((r) => ({ ...r, members: r.members ? r.members.split(",") : [] }));
+    .all<{ id: number; name: string; title: string | null; members: string; finalist: number }>(hackathonId);
+  return rows.map((r) => ({ ...r, finalist: r.finalist === 1, members: r.members ? r.members.split(",") : [] }));
 }
 
 /** jurado é integrante do time? (team_members guarda username, não id) */
@@ -216,6 +223,10 @@ export async function assignJudge(hackathonId: string, judgeMemberId: number, te
     throw new JuryError("essa pessoa não é jurada da edição");
   }
   if (!(await teamInEdition(hackathonId, teamId))) throw new JuryError("time não encontrado", 404);
+  const eligible = await db
+    .prepare(`SELECT 1 FROM teams t JOIN hackathons h ON h.id = t.hackathonId WHERE t.id = ? AND ${ELIGIBLE_SQL("t")}`)
+    .get(teamId);
+  if (!eligible) throw new JuryError("time sem entrega enviada não vai pro júri", 409);
   if (await hasConflict(teamId, judgeMemberId)) {
     throw new JuryError("conflito de interesse: jurado é do time", 409);
   }
@@ -230,15 +241,24 @@ export async function unassignJudge(hackathonId: string, judgeMemberId: number, 
     .run(hackathonId, judgeMemberId, teamId);
 }
 
-/** todo jurado × todo time, pulando conflito de interesse; idempotente */
-export async function assignAll(hackathonId: string): Promise<{ created: number; conflicts: number }> {
+/**
+ * todo jurado × todo time elegível (enviado/travado quando a edição tem
+ * prazo), pulando conflito de interesse; idempotente. finalistsOnly = rodada
+ * final só com finalistas.
+ */
+export async function assignAll(
+  hackathonId: string,
+  opts: { finalistsOnly?: boolean } = {},
+): Promise<{ created: number; conflicts: number }> {
+  const scope = `${ELIGIBLE_SQL("t")}${opts.finalistsOnly ? " AND t.finalist = 1" : ""}`;
   const conflicts = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM edition_roles er
        JOIN members m ON m.id = er.memberId
        JOIN team_members tm ON tm.username = m.username
        JOIN teams t ON t.id = tm.teamId AND t.hackathonId = er.hackathonId
-       WHERE er.hackathonId = ? AND er.role = 'jurado'`,
+       JOIN hackathons h ON h.id = t.hackathonId
+       WHERE er.hackathonId = ? AND er.role = 'jurado' AND ${scope}`,
     )
     .get<{ n: number }>(hackathonId);
   const res = await db
@@ -248,7 +268,8 @@ export async function assignAll(hackathonId: string): Promise<{ created: number;
        FROM edition_roles er
        JOIN members m ON m.id = er.memberId
        JOIN teams t ON t.hackathonId = er.hackathonId
-       WHERE er.hackathonId = ? AND er.role = 'jurado'
+       JOIN hackathons h ON h.id = t.hackathonId
+       WHERE er.hackathonId = ? AND er.role = 'jurado' AND ${scope}
          AND NOT EXISTS (SELECT 1 FROM team_members tm WHERE tm.teamId = t.id AND tm.username = m.username)
        ON CONFLICT DO NOTHING`,
     )
@@ -267,7 +288,12 @@ export async function listAssignments(hackathonId: string) {
 
 // ---------- notas ----------
 
-export type JudgeAssignment = JuryTeam & { scores: Record<number, number>; comment: string | null };
+export type JudgeAssignment = JuryTeam & {
+  scores: Record<number, number>;
+  comment: string | null;
+  /** versão que o jurado avalia (snapshot do prazo); null = edição sem fluxo de entrega */
+  judged: JudgedVersion | null;
+};
 
 /** o que o jurado enxerga: só os times atribuídos a ele e só as notas dele */
 export async function judgeAssignments(hackathonId: string, judgeMemberId: number): Promise<JudgeAssignment[]> {
@@ -277,6 +303,7 @@ export async function judgeAssignments(hackathonId: string, judgeMemberId: numbe
       .all<{ teamId: number }>(hackathonId, judgeMemberId)).map((r) => r.teamId),
   );
   const teams = (await listJuryTeams(hackathonId)).filter((t) => assigned.has(t.id));
+  const versions = await judgedVersions(hackathonId);
   const mine = await db
     .prepare(
       `SELECT s.teamId, s.criterionId, s.score, s.comment FROM scores s
@@ -291,6 +318,7 @@ export async function judgeAssignments(hackathonId: string, judgeMemberId: numbe
       ...t,
       scores: Object.fromEntries(rows.map((s) => [s.criterionId, s.score])),
       comment: rows.find((s) => s.comment)?.comment ?? null,
+      judged: versions.get(t.id) ?? null,
     };
   });
 }
@@ -375,7 +403,7 @@ export async function juryProgress(hackathonId: string): Promise<JuryProgress> {
   };
 }
 
-export async function getRanking(hackathonId: string): Promise<RankingRow[]> {
+async function rankingInputs(hackathonId: string) {
   const [teams, criteria, scores] = await Promise.all([
     listJuryTeams(hackathonId),
     listCriteria(hackathonId),
@@ -387,6 +415,11 @@ export async function getRanking(hackathonId: string): Promise<RankingRow[]> {
       )
       .all<ScoreRow>(hackathonId),
   ]);
+  return { teams, criteria, scores };
+}
+
+export async function getRanking(hackathonId: string): Promise<RankingRow[]> {
+  const { teams, criteria, scores } = await rankingInputs(hackathonId);
   return computeRanking(teams, criteria, scores);
 }
 
@@ -410,13 +443,27 @@ export async function rankingFor(actor: Actor | null, hackathonId: string): Prom
   return getRanking(hackathonId);
 }
 
-/** grava jury_results e o pódio (rank 1–3, empate divide) em teams.placement */
+/**
+ * grava jury_results, o pódio (rank 1–3, empate divide) em teams.placement e
+ * os vencedores de cada categoria de prêmio (ranking recalculado só entre os
+ * candidatos da categoria: desafio = quem marcou; finalistsOnly = finalistas)
+ */
 export async function publishResults(hackathonId: string, byMemberId: number | null) {
-  const ranking = await getRanking(hackathonId);
+  const { teams, criteria, scores } = await rankingInputs(hackathonId);
+  const ranking = computeRanking(teams, criteria, scores);
   const podium = ranking
     .filter((r) => r.rank !== null && r.rank <= 3)
     .map((r) => ({ teamId: r.teamId, placement: r.rank! }));
+  const [categories, byTeam] = await Promise.all([listCategories(hackathonId), challengesByTeam(hackathonId)]);
+  const winners = categories.flatMap((c) => {
+    const candidates = categoryCandidates(c, teams, byTeam);
+    return pickWinners(computeRanking(candidates, criteria, scores), c.places).map((w) => ({
+      categoryId: c.id,
+      ...w,
+    }));
+  });
   await db.transaction(async () => {
+    await replaceWinners(hackathonId, winners);
     await db.prepare("UPDATE teams SET placement = 0 WHERE hackathonId = ?").run(hackathonId);
     for (const p of podium) {
       await db.prepare("UPDATE teams SET placement = ? WHERE id = ?").run(p.placement, p.teamId);
@@ -428,5 +475,5 @@ export async function publishResults(hackathonId: string, byMemberId: number | n
       )
       .run(hackathonId, byMemberId);
   })();
-  return { podium };
+  return { podium, winners };
 }

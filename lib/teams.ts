@@ -1,5 +1,13 @@
 import db from "@/lib/db";
 import { getArchive, type ArchiveTeam } from "@/lib/archive";
+import {
+  assertEvaluatedEditable,
+  deadlinePassed,
+  EntryError,
+  formatBrt,
+  getSubmissionSettings,
+  parseDbTime,
+} from "@/lib/entries";
 
 // spec 021 — submissão self-service: o inscrito cria o próprio time+projeto
 // na edição. Reusa as tabelas de 003 (teams/team_members/team_projects +
@@ -107,6 +115,14 @@ export async function submitTeam(
   if (!name) throw new TeamError("nome do time obrigatório", 400);
   const project = validateProject(input.project);
 
+  // spec 034 — prazo de formação de times (e entrega já travada) fecham a porta
+  const settings = await getSubmissionSettings(hackathonId);
+  const formation = parseDbTime(settings?.teamFormationDeadline);
+  if (formation && Date.now() > formation.getTime()) {
+    throw new TeamError(`formação de times encerrada em ${formatBrt(settings!.teamFormationDeadline)}`, 409);
+  }
+  if (deadlinePassed(settings)) throw new TeamError("prazo de entrega encerrado", 409);
+
   if (await memberTeamFor(hackathonId, member.username)) {
     throw new TeamError("tu já tens time nesta edição", 409);
   }
@@ -117,11 +133,12 @@ export async function submitTeam(
     throw new TeamError(`já existe um time "${name}" nesta edição`, 409);
   }
 
-  // colegas: normaliza/dedup, exige inscrição na edição e nenhum time ainda
+  // colegas: normaliza/dedup, exige inscrição APROVADA na edição (spec 034:
+  // integrante só aprovado) e nenhum time ainda
   const isRegistered = db.prepare(
     `SELECT 1 FROM registrations r
      JOIN members m ON m.id = r.memberId
-     WHERE r.hackathonId = ? AND m.username = ?`,
+     WHERE r.hackathonId = ? AND m.username = ? AND r.status = 'approved'`,
   );
   const ignoredUsernames: string[] = [];
   const colegas: string[] = [];
@@ -199,6 +216,14 @@ export async function updateTeamProject(
     .prepare("SELECT 1 FROM team_members WHERE teamId = ? AND username = ?")
     .get(teamId, member.username);
   if (!isMember) throw new TeamError("só integrante edita o projeto", 403);
+  // spec 034 — depois do prazo o projeto trava aqui também (senão este
+  // PATCH antigo vira porta dos fundos da entrega)
+  try {
+    await assertEvaluatedEditable(teamId);
+  } catch (e) {
+    if (e instanceof EntryError) throw new TeamError(e.message, e.status);
+    throw e;
+  }
 
   const fields: { col: string; value: string | null }[] = [];
   if (patch.title !== undefined) {
