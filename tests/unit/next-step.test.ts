@@ -88,6 +88,9 @@ describe("nextStep — inscrição em andamento", () => {
     expect(s.key).toBe("aguardando");
     expect(s.action).toBeNull();
     expect(s.involved).toBe(true);
+    // e-mail pode estar desligado (auditoria 041): a tela não promete canal
+    expect(s.detail).toBe("a resposta da curadoria aparece aqui na página");
+    expect(s.detail).not.toMatch(/e-mail/);
   });
   it("fila mostra a posição", () => {
     const s = nextStep(f({ signedIn: true, status: "waitlist", waitlistPosition: 3 }));

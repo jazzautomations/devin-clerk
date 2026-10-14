@@ -211,7 +211,7 @@ export function nextStep(f: NextStepFacts): NextStep {
       return step("inscrever", "inscricao", "Inscrições abertas", { label: "fazer inscrição", href: form }, login ?? "formulário curto da edição");
     }
     case "pending":
-      return step("aguardando", "inscricao", "Pedido em análise", null, "a curadoria responde por e-mail e aqui na página");
+      return step("aguardando", "inscricao", "Pedido em análise", null, "a resposta da curadoria aparece aqui na página");
     case "waitlist":
       return step(
         "fila",
