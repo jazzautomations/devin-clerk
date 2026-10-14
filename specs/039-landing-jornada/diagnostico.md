@@ -157,3 +157,19 @@ O `/dashboard` não junta nada disso por edição.
 | 1 | Descobre | card "Pra marcas" no grid da landing, rodapé | escondido entre rotas |
 | 2 | Entende a oferta | `/empresas` | fala de desafio, radar e talento; **não cita relatório automático, opt-in por QR nem NPS**, que existem desde a frente O |
 | 3 | Contato | formulário de lead em `/empresas` | ok; admin só vê se abrir o `/admin` (sem notificação) |
+
+## 4. Acesso e primeiro uso (adendo, pedido do dono em 14/10)
+
+- **Tudo aberto.** Antes, só `/dashboard`, `/perfil` e `/admin` pediam
+  login (`proxy.ts` com denylist). Radar, feed, membros, talento, projetos,
+  blog, perfis completos, inscritos e mural de cada edição abriam pra
+  qualquer um, e a própria plataforma fazia o papel de vitrine. A landing não
+  precisava explicar nada porque dava pra entrar em tudo, e por isso mesmo não
+  explicava: não havia motivo pra criar conta.
+- **Sem primeiro uso.** Quem criava conta caía no `/dashboard` (o "feed" com
+  compositor de post) sem dizer quem é nem o que quer. Perfil vazio, sem
+  cidade/instituição (que a hora complementar pede), sem caminho por
+  intenção (participar, organizar, mentorar, patrocinar).
+- Correção (spec 039): allowlist de rotas públicas, teaser da edição e
+  cartões mínimos de perfil/projeto pra divulgação, landing com as telas de
+  dentro, e onboarding de 3 passos em `/bem-vindo`.
