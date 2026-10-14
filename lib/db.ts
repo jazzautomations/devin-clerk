@@ -25,6 +25,7 @@ interface Executor {
 
 interface Driver extends Executor {
   transaction<T>(fn: (tx: Executor) => Promise<T>): Promise<T>;
+  close?(): Promise<void>;
 }
 
 export type RunResult = { changes: number; lastInsertRowid: number | undefined };
@@ -172,7 +173,22 @@ async function pgDriver(url: string): Promise<Driver> {
   // COUNT/SUM voltam bigint/numeric; o app (e o SQLite) sempre tratou como number
   types.setTypeParser(20, (v: string) => Number(v));
   types.setTypeParser(1700, (v: string) => Number(v));
-  const pool = new Pool({ connectionString: url, max: Number(process.env.DB_POOL_MAX ?? 10) });
+  // timeouts: banco pausado ou disco cheio não responde (não recusa), e sem
+  // limite a request fica pendurada até o Caddy desistir; transação
+  // esquecida seguraria lock pra sempre
+  const pool = new Pool({
+    connectionString: url,
+    max: Number(process.env.DB_POOL_MAX ?? 10),
+    connectionTimeoutMillis: 5_000,
+    statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 15_000),
+    idle_in_transaction_session_timeout: 30_000,
+    application_name: process.env.DB_APP_NAME ?? "hackahub",
+  });
+  // erro num client ocioso (container do Postgres reiniciou) é emitido no
+  // pool; sem listener ele derruba o processo inteiro
+  pool.on("error", (e) => {
+    console.error(JSON.stringify({ evt: "pg_pool_error", ts: new Date().toISOString(), msg: e.message }));
+  });
   const wrap = (c: { query: typeof pool.query }): Executor => ({
     async query(sql, params) {
       const r = await c.query(sql, params as unknown[]);
@@ -184,18 +200,26 @@ async function pgDriver(url: string): Promise<Driver> {
   });
   return {
     ...wrap(pool),
+    close: () => pool.end(),
     async transaction(fn) {
       const client = await pool.connect();
+      // conexão que falhou no ROLLBACK está morta: release(err) descarta em
+      // vez de devolver ao pool pra próxima request herdar
+      let broken: Error | undefined;
       try {
         await client.query("BEGIN");
         const result = await fn(wrap(client as never));
         await client.query("COMMIT");
         return result;
       } catch (e) {
-        await client.query("ROLLBACK");
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackErr) {
+          broken = rollbackErr as Error;
+        }
         throw e;
       } finally {
-        client.release();
+        client.release(broken);
       }
     },
   };
@@ -231,6 +255,9 @@ const MIGRATIONS_DIR = join(process.cwd(), "migrations");
 async function migrate(d: Driver) {
   await d.transaction(async (tx) => {
     // trava entre processos (vários workers do build / instâncias subindo juntas)
+    // migration grande ou espera pelo lock de outra instância não pode cair
+    // no statement_timeout do pool
+    await tx.exec("SET LOCAL statement_timeout = 0");
     await tx.query("SELECT pg_advisory_xact_lock(7262201)", []);
     await tx.exec(
       `CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -256,10 +283,21 @@ function driver(): Promise<Driver> {
   g.__hackahubDb ??= (async () => {
     const url = process.env.DATABASE_URL || undefined;
     const d = url ? await pgDriver(url) : await pgliteDriver();
-    await migrate(d);
-    await seedDatabase(makeApi(async () => d, new AsyncLocalStorage()));
+    try {
+      await migrate(d);
+      await seedDatabase(makeApi(async () => d, new AsyncLocalStorage()));
+    } catch (e) {
+      await d.close?.().catch(() => {});
+      throw e;
+    }
     return d;
-  })();
+  })().catch((e) => {
+    // boot com o Postgres ainda subindo (ECONNREFUSED): sem isso a promessa
+    // rejeitada ficava guardada e o processo vivo devolvia 503 pra sempre;
+    // a próxima chamada tenta de novo
+    g.__hackahubDb = undefined;
+    throw e;
+  });
   return g.__hackahubDb;
 }
 
