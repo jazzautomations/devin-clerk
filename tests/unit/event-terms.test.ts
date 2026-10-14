@@ -449,3 +449,18 @@ describe("LGPD — export e exclusão cobrem os termos", () => {
     expect(await getRegistrationStatus(m, PAST)).toBe("approved");
   });
 });
+
+describe("plataforma sem menor (decisão do dono, 14/10/2026)", () => {
+  it("sem HACKAHUB_ALLOW_MINORS o piso é 18: recusa 16 e valor antigo abaixo vale 18", async () => {
+    const prev = process.env.HACKAHUB_ALLOW_MINORS;
+    delete process.env.HACKAHUB_ALLOW_MINORS;
+    try {
+      const { minAgeFloor, validateTermsPatch } = await import("@/lib/eventTerms");
+      expect(minAgeFloor()).toBe(18);
+      expect(validateTermsPatch({ minAge: 16 }).ok).toBe(false);
+      expect(validateTermsPatch({ minAge: 18 }).ok).toBe(true);
+    } finally {
+      process.env.HACKAHUB_ALLOW_MINORS = prev;
+    }
+  });
+});

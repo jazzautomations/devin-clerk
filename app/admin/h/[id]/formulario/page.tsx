@@ -8,7 +8,7 @@ import { KIND_LABEL } from "@/lib/applicationKinds";
 import { getOpenKinds } from "@/lib/roleApplications";
 import { QuestionEditor } from "@/components/QuestionEditor";
 import { EventTermsEditor } from "@/components/EventTermsEditor";
-import { getEditionTerms } from "@/lib/eventTerms";
+import { getEditionTerms, minAgeFloor } from "@/lib/eventTerms";
 
 const AUDIENCE_LABEL: Record<Audience, string> = { participante: "participante", ...KIND_LABEL };
 
@@ -99,6 +99,7 @@ export default async function FormularioPage({ params, searchParams }: PageProps
           dietEnabled={terms.dietEnabled}
           conductText={terms.conductText}
           conductVersion={terms.conductVersion}
+          minFloor={minAgeFloor()}
         />
       )}
     </div>

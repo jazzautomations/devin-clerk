@@ -16,8 +16,11 @@ export function EventTermsEditor({
   dietEnabled: initialDiet,
   conductText: initialText,
   conductVersion,
+  minFloor = 18,
 }: {
   hackathonId: string;
+  /** piso da plataforma (lib/eventTerms minAgeFloor): 18 sem HACKAHUB_ALLOW_MINORS */
+  minFloor?: number;
   minAge: number;
   dietEnabled: boolean;
   conductText: string;
@@ -64,14 +67,14 @@ export function EventTermsEditor({
         <span className={label}>idade mínima na data do evento</span>
         <input
           type="number"
-          min={14}
+          min={minFloor}
           max={99}
           inputMode="numeric"
           className={`${field} sm:max-w-32`}
           value={minAge}
           onChange={(e) => setMinAge(e.target.value)}
         />
-        {age < 18 && age >= 14 && (
+        {age < 18 && age >= minFloor && (
           <span className="border-[1.5px] border-orange p-3 text-[13px] leading-snug text-orange" data-testid="minors-warning">
             Edição com menor de 18 exige nome, e-mail e aceite do responsável na inscrição (o responsável recebe e-mail).
             Antes de abrir, tenha parecer jurídico (ECA Digital, Lei 15.211/2025), 1 adulto pra cada 15 menores e

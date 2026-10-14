@@ -21,8 +21,14 @@ import { absoluteUrl } from "@/lib/seo";
 // idade no evento, nunca a data. Quem fica abaixo da mínima não grava nada.
 
 export const DEFAULT_MIN_AGE = 18;
-export const MIN_AGE_FLOOR = 14;
 export const ADULT_AGE = 18;
+/** decisão do dono (14/10/2026): o HackaHub não trabalha com menor. A edição
+ * só aceita idade mínima abaixo de 18 com HACKAHUB_ALLOW_MINORS=on (o fluxo do
+ * responsável continua no código, testado, pra quando houver parecer jurídico) */
+export const MINORS_FLOOR = 14;
+export function minAgeFloor(): number {
+  return process.env.HACKAHUB_ALLOW_MINORS === "on" ? MINORS_FLOOR : ADULT_AGE;
+}
 const MAX_CONDUCT = 20_000;
 const MIN_CONDUCT = 80;
 
@@ -82,7 +88,8 @@ export async function getEditionTerms(hackathonId: string): Promise<EditionTerms
       )
       .get<{ version: number; text: string }>(hackathonId),
   ]);
-  const minAge = cfg?.minAge ?? DEFAULT_MIN_AGE;
+  // valor antigo abaixo do piso (edição criada antes da trava) vale o piso
+  const minAge = Math.max(cfg?.minAge ?? DEFAULT_MIN_AGE, minAgeFloor());
   return {
     hackathonId,
     minAge,
@@ -117,8 +124,9 @@ export function validateTermsPatch(raw: unknown): { ok: true; value: TermsPatch 
   const out: TermsPatch = {};
   if (b.minAge !== undefined) {
     const n = Number(b.minAge);
-    if (!Number.isInteger(n) || n < MIN_AGE_FLOOR || n > 99) {
-      return { ok: false, error: `idade mínima entre ${MIN_AGE_FLOOR} e 99` };
+    const floor = minAgeFloor();
+    if (!Number.isInteger(n) || n < floor || n > 99) {
+      return { ok: false, error: `idade mínima entre ${floor} e 99` };
     }
     out.minAge = n;
   }
