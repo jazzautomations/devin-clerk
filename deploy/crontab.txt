@@ -14,7 +14,8 @@ H=/home/ubuntu/hackahub
 
 # backup diário dos dois bancos (+ offsite); também corta log grande
 0 6 * * *     bash $H/ops/backup.sh >> $H/logs/backup.log 2>&1
-# restore drill semanal: prod no domingo, stage na quarta (grava LAST_DRILL_OK)
+# restore drill semanal: prod no domingo, stage na quarta (grava LAST_DRILL_OK-<banco>;
+# o health e o monitor olham só o de prod)
 30 6 * * 0    bash $H/ops/restore-drill.sh "" hackahub >> $H/logs/drill.log 2>&1
 30 6 * * 3    bash $H/ops/restore-drill.sh "" hackahub_stage >> $H/logs/drill.log 2>&1
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
 import { GET } from "@/app/api/health/route";
-import { deepHealth, readCronFails, readVersion } from "@/lib/health";
+import { DRILL_STAMP, deepHealth, readCronFails, readVersion } from "@/lib/health";
 
 const get = (q = "") => GET(new Request(`http://t/api/health${q}`));
 
@@ -39,6 +39,18 @@ describe("/api/health", () => {
     expect(j.cronFails).toEqual({ "deliveries-prod": 4 });
     expect(j.diskPct).toBeGreaterThan(0);
     expect(j.diskPct).toBeLessThanOrEqual(100);
+  });
+
+  it("drill de stage em dia não esconde drill de prod atrasado", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "drill-"));
+    const now = Date.now();
+    // stage passou ontem (quarta), prod falha há 3 semanas
+    writeFileSync(join(dir, "LAST_DRILL_OK-hackahub_stage"), new Date(now - 24 * 3_600_000).toISOString());
+    writeFileSync(join(dir, DRILL_STAMP), new Date(now - 21 * 24 * 3_600_000).toISOString());
+    vi.stubEnv("HACKAHUB_BACKUP_DIR", dir);
+    const deep = await deepHealth(now);
+    expect(DRILL_STAMP).toBe("LAST_DRILL_OK-hackahub");
+    expect(deep.drillAgeH).toBeGreaterThan(192);
   });
 
   it("fila parada aparece em minutos desde o aviso mais antigo", async () => {

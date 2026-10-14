@@ -2,8 +2,10 @@
 # Prova que o backup restaura: carrega o dump mais recente (ou o dado) num
 # banco descartável, confere checksum, conta as linhas de TODAS as tabelas e
 # compara com a origem, e apaga tudo. O banco de origem nunca é tocado (só
-# leitura pra comparar). No sucesso grava ~/hackahub-backups/LAST_DRILL_OK,
-# que o /api/health?deep=1 expõe pro monitor externo (alerta com > 8 dias).
+# leitura pra comparar). No sucesso grava ~/hackahub-backups/LAST_DRILL_OK-<banco>.
+# O /api/health?deep=1 expõe só o de prod (LAST_DRILL_OK-hackahub) pro monitor
+# externo (alerta com > 8 dias): o drill do stage não pode esconder um drill
+# de prod que falha.
 #   bash restore-drill.sh [dir-do-backup] [banco-origem=hackahub]
 set -euo pipefail
 ROOT=/home/ubuntu/hackahub-backups
@@ -36,5 +38,5 @@ printf '%s\n' "$GOT" | grep -q '^schema_migrations=[1-9]' || { echo "sem schema_
 echo "restaurado: $NT tabelas"
 # diferenças contra a origem (a origem pode ter crescido desde o backup)
 diff <(printf '%s\n' "$GOT") <(printf '%s\n' "$ORIG") | sed -n 's/^</  backup: /p; s/^>/  agora:  /p' || true
-date -u +%FT%TZ > "$ROOT/LAST_DRILL_OK"
+date -u +%FT%TZ > "$ROOT/LAST_DRILL_OK-$SRC"
 echo "drill ok: $(basename "$SET")/$SRC.dump em $(( $(date +%s) - START ))s"

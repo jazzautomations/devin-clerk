@@ -64,6 +64,9 @@ async function oldestQueuedMin(table: "deliveries" | "ticket_emails", now: numbe
   return r?.oldest ? Math.max(0, Math.round((now - utcMs(r.oldest)) / 60_000)) : null;
 }
 
+/** Carimbo gravado pelo deploy/restore-drill.sh quando o drill de prod passa. */
+export const DRILL_STAMP = "LAST_DRILL_OK-hackahub";
+
 export type DeepHealth = {
   backupAgeH: number | null;
   drillAgeH: number | null;
@@ -82,7 +85,9 @@ export async function deepHealth(now = Date.now()): Promise<DeepHealth> {
   ]);
   return {
     backupAgeH: stampAgeH(join(backups, "LAST_OK"), now),
-    drillAgeH: stampAgeH(join(backups, "LAST_DRILL_OK"), now),
+    // só o drill de prod: o de stage (quarta) não pode renovar o carimbo
+    // e esconder um drill de prod que falha todo domingo
+    drillAgeH: stampAgeH(join(backups, DRILL_STAMP), now),
     oldestQueuedDeliveryMin,
     oldestQueuedTicketMin,
     diskPct: diskPct(),

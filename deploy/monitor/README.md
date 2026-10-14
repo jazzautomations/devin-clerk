@@ -31,7 +31,7 @@ imprime uma linha `ok versão=…`. Pra ver o alerta chegar, rode uma vez com
 |---|---|
 | `site` | 2 verificações seguidas sem `"ok":true` (site fora ou banco fora) |
 | `backup` | `backupAgeH` ausente ou acima de 26 h |
-| `drill` | `drillAgeH` acima de 8 dias |
+| `drill` | `drillAgeH` (só o drill de prod) acima de 8 dias, ou nenhum drill de prod registrado |
 | `fila` | aviso ou ingresso na fila há mais de 15 min |
 | `disco` | `diskPct` em 85% ou mais |
 | `cron` | algum `/api/cron/*` com 3 falhas seguidas (`cronFails`) |

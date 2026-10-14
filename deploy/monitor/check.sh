@@ -3,7 +3,7 @@
 #   */2 * * * * bash ~/hackahub-monitor/check.sh >> ~/hackahub-monitor/check.log 2>&1
 # Lê https://<site>/api/health?deep=1 e manda zap pelo Evolution quando:
 #   - o site não responde ou o banco está fora (2 falhas seguidas)
-#   - backup com mais de 26 h, ou restore drill com mais de 8 dias
+#   - backup com mais de 26 h, ou restore drill de prod com mais de 8 dias (ou nenhum)
 #   - fila de avisos/ingressos parada há mais de 15 min
 #   - disco em 85% ou mais
 #   - algum cron com 3 falhas seguidas
@@ -53,7 +53,10 @@ gt() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a != "null" && a != "" && a+0 > b+0
 
 B=$(j '.backupAgeH'); D=$(j '.drillAgeH'); Q1=$(j '.oldestQueuedDeliveryMin'); Q2=$(j '.oldestQueuedTicketMin'); DK=$(j '.diskPct')
 if [ "$B" = null ] || gt "$B" 26; then raise backup 1 "último backup há ${B} h (limite 26 h)"; else raise backup 0 ""; fi
-if gt "$D" 192; then raise drill 1 "último restore drill há ${D} h (limite 8 dias)"; else raise drill 0 ""; fi
+# drillAgeH é só o drill de prod; sem carimbo também alerta (rode um drill
+# de prod à mão logo depois de instalar, pra não alertar até o domingo)
+if [ "$D" = null ]; then raise drill 1 "nenhum restore drill de prod registrado"
+elif gt "$D" 192; then raise drill 1 "último restore drill de prod há ${D} h (limite 8 dias)"; else raise drill 0 ""; fi
 if gt "$Q1" 15 || gt "$Q2" 15; then raise fila 1 "fila parada: avisos ${Q1} min, ingressos ${Q2} min"; else raise fila 0 ""; fi
 if gt "$DK" 84; then raise disco 1 "disco da VPS em ${DK}%"; else raise disco 0 ""; fi
 CF=$(j '[.cronFails | to_entries[] | select(.value >= 3) | "\(.key)=\(.value)"] | join(" ")')
