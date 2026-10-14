@@ -3,6 +3,7 @@ import { getMemberByClerkId, updateMemberProfile } from "@/lib/members";
 import { checkBadges } from "@/lib/xp";
 import { isOpenToValue } from "@/lib/openTo";
 import { setOpenTo } from "@/lib/talent";
+import { applyContactPatch, parseContactPatch } from "@/lib/contact";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
@@ -22,7 +23,19 @@ export async function PATCH(req: Request) {
     }
     openTo = body.openTo;
   }
+  // spec 033 FR-010 — telefone + opt-in de WhatsApp: valida antes de gravar
+  // qualquer coisa (400 não deixa perfil salvo pela metade)
+  const contact = parseContactPatch(body);
+  if ("error" in contact) {
+    return Response.json({ error: contact.error }, { status: 400 });
+  }
   const member = await getMemberByClerkId(userId);
+  if (member) {
+    const applied = await applyContactPatch(member.id, contact);
+    if ("error" in applied) {
+      return Response.json({ error: applied.error }, { status: 400 });
+    }
+  }
   if (member && openTo !== undefined) await setOpenTo(member.id, openTo);
   await updateMemberProfile(userId, {
     name: typeof body.name === "string" ? body.name : undefined,

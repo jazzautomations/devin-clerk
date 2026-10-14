@@ -3,6 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { getOrCreateMember } from "@/lib/members";
 import { getOpenTo } from "@/lib/talent";
 import { ProfileForm } from "@/components/ProfileForm";
+import { getContactPrefs } from "@/lib/contact";
 
 export default async function PerfilPage() {
   const { userId } = await auth();
@@ -17,6 +18,11 @@ export default async function PerfilPage() {
     email: user?.primaryEmailAddress?.emailAddress ?? "",
     imageUrl: user?.imageUrl ?? null,
   });
+
+  const [openTo, contact] = await Promise.all([
+    getOpenTo(member.id),
+    getContactPrefs(member.id),
+  ]);
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
@@ -37,7 +43,7 @@ export default async function PerfilPage() {
           </Link>
         </p>
       </div>
-      <ProfileForm member={member} openTo={await getOpenTo(member.id)} />
+      <ProfileForm member={member} openTo={openTo} contact={contact} />
     </section>
   );
 }

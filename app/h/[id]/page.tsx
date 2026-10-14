@@ -31,6 +31,7 @@ import { FeedSection } from "@/components/FeedSection";
 import { listPosts } from "@/lib/posts";
 import { CardArt } from "@/components/CardArt";
 import { TicketLink } from "@/components/TicketLink";
+import { EditionAnnouncements } from "@/components/EditionAnnouncements";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -243,6 +244,7 @@ export default async function HackathonPage({
       <div className="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:gap-14">
         {/* coluna principal */}
         <div className="flex min-w-0 flex-col gap-14">
+          {member && <EditionAnnouncements hackathonId={h.id} member={member} />}
           {!past && countdownTo && (
             <div data-testid="arena-strip" className="window dark hard">
               <div className="tbar">
