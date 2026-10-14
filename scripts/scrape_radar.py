@@ -22,8 +22,11 @@ Uso:
   DATABASE_URL=postgres://… uv run --python .venv-scraper/bin/python scripts/scrape_radar.py
   npm run test:scrape  # pytest (fixtures em scripts/fixtures/radar)
 
-Upsert por id estável: registros nunca são apagados. Eventos da
-comunidade (sem `source`) nunca são alterados nem desativados aqui.
+Upsert por id estável: registros nunca são apagados. Edições da casa
+(sem `source`, ou gravadas pelo app: 'seed' e 'painel') nunca são alteradas
+nem desativadas aqui. Indicação aprovada ('comunidade') e evento de terceiro
+posto à mão no admin ('admin') não são reclassificados nem trocados por
+raspado, mas saem do ar quando acabam, como o resto do radar.
 """
 
 from __future__ import annotations
@@ -225,8 +228,14 @@ PLACEHOLDER_ORG = {"", "nill", "nil", "null", "none", "n/a", "na", "-",
 
 STRICT_SOURCES = {"meetup", "sympla", "doity", "luma"}
 NATIVE_SOURCES = {"devpost", "taikai", "ethglobal", "mlh"}
+# Edições da casa, com página e inscrição no HackaHub: linhas antigas sem
+# source, o seed (lib/seed.ts → 'seed') e o painel (POST
+# /api/admin/hackathons → 'painel'). O scraper não mexe nelas em nada.
+EDITION_SOURCES = ("seed", "painel")
+EDITION_WHERE = "(source IS NULL OR source IN ({}))".format(
+    ", ".join(f"'{s}'" for s in EDITION_SOURCES))
 # fontes da casa: nunca reclassificadas nem desativadas como dupe
-HOUSE_SOURCES = {"curadoria", "comunidade", "admin"}
+HOUSE_SOURCES = {"curadoria", "comunidade", "admin", *EDITION_SOURCES}
 
 MIN_PRIZE_USD = 200
 DEVPOST_MIN_REGISTRATIONS = 10
@@ -335,7 +344,8 @@ PT_RE = re.compile(
     r"(?i)[ãõ]|ç[ãõ]|\b(dos|das|nas|nos|pra|você|edição|inscriç\w*|"
     r"maratona|soluç\w*|inovaç\w*|tecnologia|saúde|educação)\b"
 )
-BR_SOURCES = {"sympla", "doity", "curadoria", "comunidade", "admin", "meetup"}
+BR_SOURCES = {"sympla", "doity", "curadoria", "comunidade", "admin", "meetup",
+              *EDITION_SOURCES}
 
 
 def is_br_location(loc: str | None) -> bool:
@@ -454,13 +464,15 @@ def upsert(conn, rows: list[dict]) -> int:
     return n
 
 
-# linhas que o scraper nunca mexe por dedupe: edições da casa (source NULL),
-# indicação aprovada (comunidade) e evento posto à mão no admin
-HOUSE_WHERE = "(source IS NULL OR source IN ('comunidade', 'admin'))"
+# linhas que o scraper nunca mexe por dedupe: edições da casa
+# (EDITION_WHERE), indicação aprovada (comunidade) e evento de terceiro posto
+# à mão no admin
+HOUSE_WHERE = "(source IS NULL OR source IN ({}))".format(
+    ", ".join(f"'{s}'" for s in ("comunidade", "admin", *EDITION_SOURCES)))
 
 
 def filter_vs_existing(conn, rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Raspado cuja chave já existe na casa (source NULL, comunidade, admin)
+    """Raspado cuja chave já existe na casa (HOUSE_WHERE)
     é skipado — o evento da casa é autoridade, e inserir criaria dupe."""
     community = {
         dedupe_key({"name": n, "startsAt": s})
@@ -513,7 +525,7 @@ def reclassify_existing(conn) -> tuple[int, int]:
     off = filled = 0
     rows = conn.execute(
         "SELECT id, name, organizer, format, location, prize, source, region"
-        " FROM hackathons WHERE active=1 AND source IS NOT NULL"
+        f" FROM hackathons WHERE active=1 AND NOT {EDITION_WHERE}"
     ).fetchall()
     for rid, name, org, fmt, loc, prize, src, region in rows:
         row = {"id": rid, "name": name, "organizer": org, "format": fmt,
@@ -536,10 +548,11 @@ def reclassify_existing(conn) -> tuple[int, int]:
 
 def sweep_expired(conn) -> int:
     """Externos encerrados → active=0 (spec 027: COALESCE com deadline de
-    inscrição — mesmo critério do radar). Comunidade (source NULL) intacta."""
+    inscrição — mesmo critério do radar). Edições da casa (EDITION_WHERE)
+    ficam no ar depois de acabar: página, resultado e certificados."""
     cur = conn.execute(
-        """UPDATE hackathons SET active=0
-           WHERE source IS NOT NULL AND active=1
+        f"""UPDATE hackathons SET active=0
+           WHERE NOT {EDITION_WHERE} AND active=1
              AND to_ts(COALESCE(endsAt, registrationDeadline, startsAt))
                  < now()"""
     )
@@ -1346,12 +1359,12 @@ def main() -> None:
           f" | região preenchida: {n_reg}")
     ext, ext_on = conn.execute(
         "SELECT COUNT(*), COALESCE(SUM(active),0) FROM hackathons"
-        " WHERE source IS NOT NULL"
+        f" WHERE NOT {EDITION_WHERE}"
     ).fetchone()
     print(f"\nRadar externo no banco: {ext} linhas, {ext_on} ativas")
     for region, n in conn.execute(
         "SELECT COALESCE(region, '?'), COUNT(*) FROM hackathons"
-        " WHERE active=1 AND source IS NOT NULL"
+        f" WHERE active=1 AND NOT {EDITION_WHERE}"
         "   AND to_ts(COALESCE(endsAt, registrationDeadline, startsAt)) >= now()"
         " GROUP BY 1 ORDER BY 1"
     ):

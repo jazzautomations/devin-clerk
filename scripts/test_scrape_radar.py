@@ -608,6 +608,49 @@ def test_doity_fixture():
     assert "Maratona de Inovação" in ev["description"]
 
 
+def test_house_sources_untouched():
+    """Edições da casa (source NULL, 'seed' do seed, 'painel' do painel)
+    ficam no ar depois de acabar e bloqueiam raspado com a mesma chave.
+    Evento de terceiro posto à mão ('admin') e indicação ('comunidade')
+    também bloqueiam raspado, mas saem do ar quando acabam."""
+    conn = _db()
+    sr.ensure_schema(conn)
+    house = ("casa-null", "casa-seed", "casa-painel")
+    for rid, src in (("casa-null", None), ("casa-seed", "seed"),
+                     ("casa-painel", "painel"), ("terceiro-admin", "admin"),
+                     ("indicacao", "comunidade"), ("ext-velho", "devpost")):
+        conn.execute(
+            "INSERT INTO hackathons (id, name, organizer, startsAt, endsAt,"
+            " format, registrationUrl, active, source) VALUES"
+            " (?, ?, 'Casa', '2020-01-01T09:00:00-03:00',"
+            " '2020-01-02T18:00:00-03:00', 'presencial', 'https://x.dev', 1, ?)",
+            (rid, f"Hack {rid}", src))
+    assert sr.sweep_expired(conn) == 3
+    for rid in house:
+        assert conn.execute(
+            f"SELECT active FROM hackathons WHERE id='{rid}'").fetchone()[0] == 1
+    for rid in ("terceiro-admin", "indicacao", "ext-velho"):
+        assert conn.execute(
+            f"SELECT active FROM hackathons WHERE id='{rid}'").fetchone()[0] == 0
+
+    for rid in (*house, "terceiro-admin", "indicacao"):
+        scraped = _row(id=f"mlh-{rid}", name=f"HACK  {rid}",
+                       startsAt="2020-01-01T12:00:00Z", source="mlh")
+        kept, skipped = sr.filter_vs_existing(conn, [scraped])
+        assert kept == [] and len(skipped) == 1, rid
+
+    winners, _ = sr.dedupe([_row(id="devpost-77", name="hack casa-painel",
+                                 startsAt="2020-01-01T12:00:00Z")])
+    assert sr.deactivate_stale_dupes(conn, winners) == 0
+    assert sr.exclude_rejected(
+        conn, [({"id": rid}, "nao-hackathon") for rid in house]) == 0
+    sr.reclassify_existing(conn)
+    for rid in house:
+        assert conn.execute(
+            f"SELECT active, region FROM hackathons WHERE id='{rid}'"
+        ).fetchone() == (1, None)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     try:
