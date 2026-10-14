@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 // Direitos do titular no /perfil: baixar os dados e excluir a conta.
 export function PrivacyPanel() {
+  const router = useRouter();
   const [typed, setTyped] = useState("");
   const [state, setState] = useState<"idle" | "deleting" | "error">("idle");
 
@@ -14,7 +16,10 @@ export function PrivacyPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirm: "excluir" }),
     });
-    if (res.ok) window.location.href = "/";
+    if (res.ok) {
+      router.push("/");
+      router.refresh();
+    }
     else setState("error");
   }
 
