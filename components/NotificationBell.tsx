@@ -45,16 +45,30 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // fetch no mount — setState só em callback de promise (padrão fetch-in-effect)
+  // fetch no mount + a cada minuto + ao voltar pra aba + quando outra tela
+  // (página /notificacoes) marca como lida — o header vive entre navegações
+  // e o contador não pode ficar parado no valor do primeiro carregamento.
+  // setState só em callback de promise (padrão fetch-in-effect)
   useEffect(() => {
     let stale = false;
-    fetchNotifications().then((body) => {
-      if (stale || !body) return;
-      setNotifications(body.notifications ?? []);
-      setUnread(body.unread ?? 0);
-    });
+    const refresh = () =>
+      fetchNotifications().then((body) => {
+        if (stale || !body) return;
+        setNotifications(body.notifications ?? []);
+        setUnread(body.unread ?? 0);
+      });
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    const onFocus = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("hackahub:notifications", refresh);
     return () => {
       stale = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("hackahub:notifications", refresh);
     };
   }, []);
 
@@ -105,6 +119,7 @@ export function NotificationBell() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: n.id }),
+      keepalive: true, // o clique navega na sequência — o POST não pode morrer junto
     }).catch(() => null);
     setNotifications((ns) =>
       ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
@@ -117,7 +132,7 @@ export function NotificationBell() {
     <div ref={rootRef} className="relative flex items-center">
       <button
         type="button"
-        aria-label="notificações"
+        aria-label={unread > 0 ? `notificações (${unread} não lidas)` : "notificações"}
         aria-expanded={open}
         onClick={toggle}
         className="relative py-1 text-muted transition hover:text-accent"
@@ -143,7 +158,7 @@ export function NotificationBell() {
                 onClick={readAll}
                 className="text-[12px] text-accent hover:underline"
               >
-                marcar tudo lido
+                marcar todas como lidas
               </button>
             )}
           </div>
@@ -183,6 +198,13 @@ export function NotificationBell() {
               ))}
             </ul>
           )}
+          <Link
+            href="/notificacoes"
+            onClick={() => setOpen(false)}
+            className="block border-t border-line px-3 py-2 text-center text-[12px] text-accent hover:underline"
+          >
+            ver todas
+          </Link>
         </div>
       )}
     </div>

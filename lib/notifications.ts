@@ -78,6 +78,24 @@ export async function markAllRead(memberId: number): Promise<void> {
   );
 }
 
+/** só caminho interno ("/x", nunca "//host" nem esquema) — o open não vira redirect aberto */
+export function safeHref(href: string | null): string {
+  return href && href.startsWith("/") && !href.startsWith("//") && !href.startsWith("/\\")
+    ? href
+    : "/notificacoes";
+}
+
+/**
+ * Abrir uma notificação = marcar como lida + destino. null quando a
+ * notificação não é do membro (não vaza nem o href de outra pessoa).
+ */
+export async function openNotification(id: number, memberId: number): Promise<string | null> {
+  const row = await db
+    .prepare("UPDATE notifications SET read = 1 WHERE id = ? AND memberId = ? RETURNING href")
+    .get<{ href: string | null }>(id, memberId);
+  return row ? safeHref(row.href) : null;
+}
+
 /** escopo por memberId — marcar a dos outros é no-op silencioso */
 export async function markRead(id: number, memberId: number): Promise<void> {
   await db.prepare(
