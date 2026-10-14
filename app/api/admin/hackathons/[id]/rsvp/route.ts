@@ -4,6 +4,7 @@ import {
   getRsvpFunnel,
   listRsvpRows,
   rsvpCsv,
+  RsvpConfigError,
   setRsvpConfig,
   validateRsvpConfig,
   type RsvpConfig,
@@ -39,6 +40,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
-  const { promoted } = await setRsvpConfig(id, cfg);
-  return Response.json({ config: cfg, promoted });
+  const acceptOverCapacity = (body as { acceptOverCapacity?: unknown } | null)?.acceptOverCapacity === true;
+  try {
+    const { promoted } = await setRsvpConfig(id, cfg, { acceptOverCapacity });
+    return Response.json({ config: cfg, promoted });
+  } catch (e) {
+    if (e instanceof RsvpConfigError) return Response.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
 }

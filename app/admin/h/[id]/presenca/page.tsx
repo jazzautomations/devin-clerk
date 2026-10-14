@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getHackathon } from "@/lib/hackathons";
+import { effectiveCapacity, getEditionCapacity } from "@/lib/registrations";
 import { canManageEdition } from "@/lib/roles";
 import { currentMember } from "@/lib/session";
 import { formatDbTime } from "@/lib/format";
@@ -10,13 +12,15 @@ import {
   getRsvpFunnel,
   listRsvpRows,
   RSVP_STATE_LABEL,
+  rsvpEmailReady,
   rsvpWindows,
   type RsvpRow,
 } from "@/lib/rsvp";
 import { RsvpConfigForm, RsvpResendButton } from "@/components/RsvpConfigForm";
 
-// Aba presença (migration 012): configura o RSVP anti-no-show, mostra o
-// funil aprovados → confirmados → recusaram → expiraram → presentes,
+// Aba presença (migration 012): configura a confirmação de presença, mostra
+// o funil aprovados → confirmaram → aguardando → recusaram → expiraram →
+// presentes (a definição única do funil; a visão geral só linka pra cá),
 // reenvio individual e export. Só organizador/admin.
 
 const STATE_CLASS: Record<RsvpRow["state"], string> = {
@@ -31,13 +35,21 @@ export default async function PresencaPage({ params }: PageProps<"/admin/h/[id]/
   const { id } = await params;
   const member = await currentMember();
   if (!(await canManageEdition(member, id))) notFound();
-  const [h, config, funnel, rows] = await Promise.all([
+  const [h, config, funnel, rows, cap] = await Promise.all([
     getHackathon(id),
     getRsvpConfig(id),
     getRsvpFunnel(id),
     listRsvpRows(id),
+    getEditionCapacity(id),
   ]);
   if (!h || !config) notFound();
+  const emailReady = rsvpEmailReady();
+  const effective = effectiveCapacity({
+    capacity: cap.capacity,
+    rsvpEnabled: config.enabled ? 1 : 0,
+    overbookPercent: config.overbookPercent,
+  });
+  const over = effective !== null && cap.approved > effective ? cap.approved - effective : 0;
   const w = rsvpWindows(h.startsAt, config);
   const steps: { label: string; value: number; hint?: string }[] = [
     { label: "aprovados", value: funnel.approved },
@@ -55,11 +67,30 @@ export default async function PresencaPage({ params }: PageProps<"/admin/h/[id]/
         <div className="flex flex-col gap-1">
           <h2 className="text-[1.6rem] leading-none font-extrabold tracking-[-0.03em]">Confirmação de presença</h2>
           <p className="max-w-2xl text-[14px] text-muted">
-            Evento grátis costuma ter metade de comparecimento. Com o RSVP, quem não vai devolve a vaga e a fila anda
-            sozinha. Lembretes de véspera (D-1) e de 2 horas antes vão só pra quem confirmou.
+            Evento grátis costuma ter metade de comparecimento. Com a confirmação, quem não vai devolve a vaga e a fila
+            anda sozinha. Os lembretes da véspera e de 2 horas antes vão só pra quem confirmou.
           </p>
         </div>
-        <RsvpConfigForm hackathonId={id} initial={config} />
+        <p className="font-mono text-[13px]" data-testid="presenca-capacity">
+          {cap.capacity === null ? "vagas sem limite" : `capacidade: ${cap.capacity} vagas`} · {cap.approved}{" "}
+          {cap.approved === 1 ? "aprovado" : "aprovados"} ·{" "}
+          <Link href={`/admin/h/${id}/edicao`} className="text-accent underline-offset-4 hover:underline">
+            mudar vagas →
+          </Link>
+        </p>
+        {over > 0 && (
+          <p className="border-[1.5px] border-orange p-3 text-[14px]" data-testid="presenca-over">
+            Há {cap.approved} aprovados para {effective} lugares ({over} a mais). Ninguém perde a vaga sozinho: confira
+            se a sala comporta ou aumente as vagas.
+          </p>
+        )}
+        {!emailReady && (
+          <p className="border-[1.5px] border-line bg-chrome p-3 text-[14px]" data-testid="presenca-no-email">
+            O e-mail da plataforma ainda não está configurado. Sem ele o convite não chega fora do site, então não dá
+            pra ligar a confirmação de presença por enquanto.
+          </p>
+        )}
+        <RsvpConfigForm hackathonId={id} initial={config} emailReady={emailReady} />
         {w ? (
           <ul className="grid gap-x-6 gap-y-1 font-mono text-[13px] sm:grid-cols-2" data-testid="rsvp-windows">
             <li>convite: {formatSp(w.opensAt)}</li>
@@ -94,11 +125,17 @@ export default async function PresencaPage({ params }: PageProps<"/admin/h/[id]/
         <div className="flex flex-wrap items-baseline justify-between gap-3 border-t-2 border-line pt-5">
           <h2 className="text-[1.6rem] leading-none font-extrabold tracking-[-0.03em]">Pessoas</h2>
           <a href={`/api/admin/hackathons/${id}/rsvp?format=csv`} className="btn rounded-[6px]">
-            exportar csv ↓
+            baixar planilha ↓
           </a>
         </div>
         {rows.length === 0 ? (
-          <p className="border-[1.5px] border-dashed border-line p-5 font-mono text-[13px] text-muted">ninguém aprovado ainda</p>
+          <p className="border-[1.5px] border-dashed border-line p-5 font-mono text-[13px] text-muted">
+            ninguém aprovado ainda. Aprove inscrições na aba{" "}
+            <Link href={`/admin/h/${id}/inscritos`} className="text-accent underline underline-offset-4">
+              inscritos
+            </Link>
+            .
+          </p>
         ) : (
           <ul className="border-b border-line">
             {rows.map((r, i) => (

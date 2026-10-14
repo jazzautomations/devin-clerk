@@ -5,28 +5,47 @@ import { useRouter } from "next/navigation";
 
 type Config = { enabled: boolean; opensDaysBefore: number; deadlineDaysBefore: number; overbookPercent: number };
 
-// aba presença — liga/desliga o RSVP e ajusta as janelas e a sobrevenda
-export function RsvpConfigForm({ hackathonId, initial }: { hackathonId: string; initial: Config }) {
+// aba presença — liga/desliga a confirmação de presença e ajusta as janelas
+// e quantos aprovar a mais. Sem e-mail configurado não dá pra ligar (o
+// servidor recusa; aqui a caixa já vem travada).
+export function RsvpConfigForm({
+  hackathonId,
+  initial,
+  emailReady = true,
+}: {
+  hackathonId: string;
+  initial: Config;
+  emailReady?: boolean;
+}) {
   const router = useRouter();
   const [cfg, setCfg] = useState<Config>(initial);
   const [state, setState] = useState<{ kind: "idle" | "saving" | "done" | "error"; msg?: string }>({ kind: "idle" });
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    setState({ kind: "saving" });
+  async function put(body: Config & { acceptOverCapacity?: boolean }) {
     const res = await fetch(`/api/admin/hackathons/${hackathonId}/rsvp`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cfg),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setState({ kind: "error", msg: data.error ?? "erro ao salvar" });
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    return { res, data: (await res?.json().catch(() => null)) ?? {} };
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setState({ kind: "saving" });
+    let { res, data } = await put(cfg);
+    // 409: a capacidade ficaria abaixo de quem já está aprovado — só segue
+    // com a confirmação explícita do organizador
+    if (res?.status === 409 && window.confirm(`${data.error ?? "A capacidade ficaria abaixo dos aprovados."}\n\nSalvar assim mesmo?`)) {
+      ({ res, data } = await put({ ...cfg, acceptOverCapacity: true }));
+    }
+    if (!res?.ok) {
+      setState({ kind: "error", msg: typeof data.error === "string" ? data.error : "Não deu pra salvar. Tente de novo." });
       return;
     }
     setState({
       kind: "done",
-      msg: data.promoted ? `salvo — ${data.promoted} saíram da fila com a sobrevenda` : "salvo",
+      msg: data.promoted ? `salvo · ${data.promoted} saíram da fila` : "salvo",
     });
     router.refresh();
   }
@@ -42,6 +61,7 @@ export function RsvpConfigForm({ hackathonId, initial }: { hackathonId: string; 
         <input
           type="checkbox"
           checked={cfg.enabled}
+          disabled={!emailReady && !cfg.enabled}
           onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })}
           className="mt-1 size-4 accent-[#047a43]"
         />
@@ -62,23 +82,24 @@ export function RsvpConfigForm({ hackathonId, initial }: { hackathonId: string; 
           <input type="number" min={0} max={59} value={cfg.deadlineDaysBefore} onChange={num("deadlineDaysBefore")} className={field} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="font-mono text-[12px] text-muted uppercase">sobrevenda (%)</span>
+          <span className="font-mono text-[12px] text-muted uppercase">aprovar a mais (%)</span>
           <input type="number" min={0} max={100} value={cfg.overbookPercent} onChange={num("overbookPercent")} className={field} />
         </label>
       </div>
       <p className="text-[13px] text-muted">
-        Sobrevenda aprova acima da capacidade (ex.: 100 vagas + 20% = 120 aprovados) contando com quem recusa ou não
-        confirma. Só vale com o RSVP ligado; a página pública continua mostrando as vagas reais.
+        Aprovar a mais passa da capacidade (ex.: 100 vagas + 20% = 120 aprovados), contando com quem recusa ou não
+        confirma. Só vale com a confirmação de presença ligada; a página pública continua mostrando as vagas reais.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" className="btn rounded-[6px]" disabled={state.kind === "saving"}>
           {state.kind === "saving" ? "salvando…" : "salvar"}
         </button>
-        {state.msg && (
-          <span role="status" className={`font-mono text-[13px] ${state.kind === "error" ? "text-orange" : "text-accent"}`}>
-            {state.msg}
-          </span>
-        )}
+        <span
+          role="status"
+          className={state.msg ? `font-mono text-[13px] ${state.kind === "error" ? "text-orange" : "text-accent"}` : "sr-only"}
+        >
+          {state.msg ?? ""}
+        </span>
       </div>
     </form>
   );
@@ -96,7 +117,7 @@ export function RsvpResendButton({ hackathonId, memberId }: { hackathonId: strin
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    setMsg(res.ok ? "reenviado" : (data.error ?? "erro"));
+    setMsg(res.ok ? "reenviado" : typeof data.error === "string" ? data.error : "não deu pra reenviar");
   }
   return (
     <span className="flex flex-wrap items-center gap-2">
@@ -108,7 +129,9 @@ export function RsvpResendButton({ hackathonId, memberId }: { hackathonId: strin
       >
         {busy ? "…" : "reenviar"}
       </button>
-      {msg && <span className="font-mono text-[11px] text-muted">{msg}</span>}
+      <span role="status" className={msg ? "font-mono text-[11px] text-muted" : "sr-only"}>
+        {msg ?? ""}
+      </span>
     </span>
   );
 }

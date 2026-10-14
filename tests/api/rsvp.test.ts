@@ -49,7 +49,7 @@ beforeEach(async () => {
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, rsvpEnabled)
        VALUES (?, 'RSVP API', 'Hack Inova', ?, 'presencial', 'https://x.dev', 1)
-       ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt`,
+       ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, capacity = NULL`,
     )
     .run(H, future(5).toISOString());
 });
@@ -98,8 +98,38 @@ describe("/api/admin/hackathons/[id]/rsvp", () => {
     expect((await PUT(req("PUT", cfg), ctx())).status).toBe(403);
   });
 
+  it("400 ao ligar sem e-mail configurado; 409 se a capacidade ficar abaixo dos aprovados (auditoria 041)", async () => {
+    const { PUT } = await import("@/app/api/admin/hackathons/[id]/rsvp/route");
+    as(await member({ edition: "organizador" }));
+    vi.stubEnv("RESEND_API_KEY", "");
+    const noMail = await PUT(req("PUT", cfg), ctx());
+    expect(noMail.status).toBe(400);
+    expect((await noMail.json()).error).toMatch(/e-mail/);
+    // desligar continua possível sem e-mail
+    expect((await PUT(req("PUT", { ...cfg, enabled: false }), ctx())).status).toBe(200);
+
+    vi.stubEnv("RESEND_API_KEY", "re_teste");
+    await db.prepare("DELETE FROM registrations WHERE hackathonId = ?").run(H);
+    // 10 vagas + 10% = 11 lugares, com 11 aprovados; tirar a sobra deixa 1 a mais
+    await db.prepare("UPDATE hackathons SET capacity = 10 WHERE id = ?").run(H);
+    for (let i = 0; i < 11; i++) await member({ status: "approved" });
+    expect((await PUT(req("PUT", cfg), ctx())).status).toBe(200);
+    const over = await PUT(req("PUT", { ...cfg, overbookPercent: 0 }), ctx());
+    expect(over.status).toBe(409);
+    expect((await over.json()).error).toMatch(/11 aprovadas/);
+    const kept = await db.prepare("SELECT \"overbookPercent\" AS o FROM hackathons WHERE id = ?").get(H);
+    expect(kept).toEqual({ o: 10 });
+    // confirmando, salva e ninguém é desaprovado
+    expect((await PUT(req("PUT", { ...cfg, overbookPercent: 0, acceptOverCapacity: true }), ctx())).status).toBe(200);
+    const n = await db
+      .prepare("SELECT COUNT(*)::int AS n FROM registrations WHERE hackathonId = ? AND status = 'approved'")
+      .get(H);
+    expect(n).toEqual({ n: 11 });
+  });
+
   it("200 organizador configura, vê funil e exporta CSV; 400 com config inválida", async () => {
     const { GET, PUT } = await import("@/app/api/admin/hackathons/[id]/rsvp/route");
+    vi.stubEnv("RESEND_API_KEY", "re_teste");
     as(await member({ edition: "organizador" }));
     expect((await PUT(req("PUT", { ...cfg, deadlineDaysBefore: 9 }), ctx())).status).toBe(400);
     expect((await PUT(req("PUT", "{"), ctx())).status).toBe(400);

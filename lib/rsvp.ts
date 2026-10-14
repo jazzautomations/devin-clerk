@@ -5,8 +5,9 @@ import { emailDriver } from "@/lib/notify/email";
 import { whatsappDriver } from "@/lib/notify/whatsapp";
 import { normalizeBrPhone } from "@/lib/notify/phone";
 import type { DriverEnv, SendOutcome } from "@/lib/notify/types";
-import { refillFromWaitlist, unregister } from "@/lib/registrations";
+import { effectiveCapacity, refillFromWaitlist, unregister } from "@/lib/registrations";
 import { absoluteUrl } from "@/lib/seo";
+import { parseEventTime, spParts, spWallTime } from "@/lib/eventTime";
 import {
   renderRsvpEmail,
   renderRsvpWhatsapp,
@@ -68,48 +69,14 @@ const DAY = 24 * HOUR;
 export const sqlTime = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
 export const fromSqlTime = (s: string) => new Date(`${s.replace(" ", "T")}Z`);
 
-const partsFmt = new Intl.DateTimeFormat("en-US", {
-  timeZone: RSVP_TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hourCycle: "h23",
-});
+// parser único das datas da edição (lib/eventTime): valor sem fuso é
+// horário de Brasília, data pura é 09:00 em Brasília. A função SQL to_ts
+// (migration 019) segue a mesma regra.
+export { spWallTime };
 
-function spParts(d: Date): { y: number; m: number; d: number; hh: number; mm: number; ss: number } {
-  const p = Object.fromEntries(partsFmt.formatToParts(d).map((x) => [x.type, x.value]));
-  return { y: +p.year, m: +p.month, d: +p.day, hh: +p.hour % 24, mm: +p.minute, ss: +p.second };
-}
-
-/** diferença (ms) entre o relógio de Brasília e UTC naquele instante */
-function spOffset(d: Date): number {
-  const p = spParts(d);
-  return Date.UTC(p.y, p.m - 1, p.d, p.hh, p.mm, p.ss) - Math.floor(d.getTime() / 1000) * 1000;
-}
-
-/** instante de um horário de parede em Brasília (dia pode "transbordar": d=0, d=-3…) */
-export function spWallTime(y: number, m: number, d: number, hh = 0, mm = 0, ss = 0): Date {
-  const guess = Date.UTC(y, m - 1, d, hh, mm, ss);
-  const first = guess - spOffset(new Date(guess));
-  return new Date(guess - spOffset(new Date(first)));
-}
-
-/**
- * startsAt vem em formatos diferentes: ISO com fuso ("2026-11-14T09:00:00-03:00"),
- * texto do banco sem fuso ("2026-11-14 12:00:00" = UTC, convenção do schema)
- * ou só a data ("2027-01-01" = 09:00 em Brasília, horário típico de abertura).
- */
+/** startsAt → instante. Mesmo parser de lib/eventTime (e do to_ts no banco). */
 export function parseEventStart(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const dateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnly) return spWallTime(+dateOnly[1], +dateOnly[2], +dateOnly[3], 9, 0, 0);
-  const t = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s)
-    ? new Date(`${s.replace(" ", "T")}Z`)
-    : new Date(s);
-  return Number.isNaN(t.getTime()) ? null : t;
+  return parseEventTime(s);
 }
 
 export type RsvpWindows = {
@@ -203,24 +170,76 @@ export function validateRsvpConfig(raw: unknown): RsvpConfig {
     }
     return n;
   };
-  if (typeof b.enabled !== "boolean") throw new Error("enabled deve ser true ou false");
+  if (typeof b.enabled !== "boolean") throw new Error("diga se a confirmação de presença fica ligada ou desligada");
   const opensDaysBefore = int(b.opensDaysBefore, "abertura (dias antes)", 1, 60);
   const deadlineDaysBefore = int(b.deadlineDaysBefore, "prazo (dias antes)", 0, 59);
   if (deadlineDaysBefore >= opensDaysBefore) {
     throw new Error("o prazo tem que ser depois da abertura (menos dias antes do evento)");
   }
-  const overbookPercent = int(b.overbookPercent, "sobrevenda (%)", 0, 100);
+  const overbookPercent = int(b.overbookPercent, "aprovar a mais (%)", 0, 100);
   return { enabled: b.enabled, opensDaysBefore, deadlineDaysBefore, overbookPercent };
 }
 
-/** salva e, se a sobrevenda aumentou a capacidade efetiva, a fila anda na hora */
-export async function setRsvpConfig(hackathonId: string, cfg: RsvpConfig): Promise<{ promoted: number }> {
-  await db
-    .prepare(
-      `UPDATE hackathons SET rsvpEnabled = ?, rsvpOpensDaysBefore = ?, rsvpDeadlineDaysBefore = ?,
-         overbookPercent = ? WHERE id = ?`,
-    )
-    .run(cfg.enabled ? 1 : 0, cfg.opensDaysBefore, cfg.deadlineDaysBefore, cfg.overbookPercent, hackathonId);
+export class RsvpConfigError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 409,
+  ) {
+    super(message);
+  }
+}
+
+/** o convite do RSVP só chega fora do site se o e-mail da plataforma estiver ligado */
+export function rsvpEmailReady(env: DriverEnv = process.env): boolean {
+  return emailDriver(env).name !== "log";
+}
+
+/**
+ * Salva e, se a sobrevenda aumentou a capacidade efetiva, a fila anda na hora.
+ * Recusa (400) ligar o RSVP sem e-mail configurado: sem convite fora do site,
+ * a pessoa perderia a vaga sem saber. Recusa (409) deixar a capacidade efetiva
+ * abaixo de quem já está aprovado, a menos que o organizador confirme
+ * (acceptOverCapacity) — ninguém é desaprovado sozinho.
+ */
+export async function setRsvpConfig(
+  hackathonId: string,
+  cfg: RsvpConfig,
+  opts: { env?: DriverEnv; acceptOverCapacity?: boolean } = {},
+): Promise<{ promoted: number }> {
+  if (cfg.enabled && !rsvpEmailReady(opts.env ?? process.env)) {
+    throw new RsvpConfigError(
+      "O e-mail da plataforma ainda não está configurado. Sem ele o convite de confirmação não chega e quem não abrir o site perde a vaga. Fale com quem administra o HackaHub.",
+      400,
+    );
+  }
+  await db.transaction(async () => {
+    const ed = await db
+      .prepare("SELECT capacity FROM hackathons WHERE id = ? FOR UPDATE")
+      .get<{ capacity: number | null }>(hackathonId);
+    const cap = effectiveCapacity({
+      capacity: ed?.capacity ?? null,
+      rsvpEnabled: cfg.enabled ? 1 : 0,
+      overbookPercent: cfg.overbookPercent,
+    });
+    if (cap !== null && !opts.acceptOverCapacity) {
+      const row = await db
+        .prepare("SELECT COUNT(*)::int AS n FROM registrations WHERE hackathonId = ? AND status = 'approved'")
+        .get<{ n: number }>(hackathonId);
+      const approved = Number(row?.n ?? 0);
+      if (approved > cap) {
+        throw new RsvpConfigError(
+          `Com essa configuração cabem ${cap} pessoas e já há ${approved} aprovadas (${approved - cap} a mais). Ninguém perde a vaga sozinho; confirme se quer salvar assim mesmo.`,
+          409,
+        );
+      }
+    }
+    await db
+      .prepare(
+        `UPDATE hackathons SET rsvpEnabled = ?, rsvpOpensDaysBefore = ?, rsvpDeadlineDaysBefore = ?,
+           overbookPercent = ? WHERE id = ?`,
+      )
+      .run(cfg.enabled ? 1 : 0, cfg.opensDaysBefore, cfg.deadlineDaysBefore, cfg.overbookPercent, hackathonId);
+  })();
   const promoted = await refillFromWaitlist(hackathonId);
   return { promoted: promoted.length };
 }
@@ -578,6 +597,8 @@ export type ProcessRsvpResult = {
   editions: number;
   invited: number;
   expired: number;
+  /** prazo vencido sem convite entregue por e-mail/WhatsApp: segue pendente */
+  held: number;
   promoted: number;
   d1: number;
   h2: number;
@@ -588,6 +609,7 @@ const emptyResult = (): ProcessRsvpResult => ({
   editions: 0,
   invited: 0,
   expired: 0,
+  held: 0,
   promoted: 0,
   d1: 0,
   h2: 0,
@@ -598,6 +620,7 @@ function addResult(a: ProcessRsvpResult, b: ProcessRsvpResult) {
   a.editions += b.editions;
   a.invited += b.invited;
   a.expired += b.expired;
+  a.held += b.held;
   a.promoted += b.promoted;
   a.d1 += b.d1;
   a.h2 += b.h2;
@@ -642,17 +665,25 @@ async function processEdition(hackathonId: string, now: Date, env: DriverEnv): P
   const drivers: Drivers = { email: emailDriver(env), whatsapp: whatsappDriver(env) };
 
   // 1. prazo vencido → libera vaga (antes de convidar: quem sobe da fila
-  //    nesta rodada já recebe o convite no passo 2)
+  //    nesta rodada já recebe o convite no passo 2). Só expira quem recebeu
+  //    o convite por e-mail ou WhatsApp: com o envio desligado ou falhando,
+  //    a pessoa só teria o aviso dentro do site e perderia a vaga sem saber.
+  //    Essas ficam pendentes e entram na conta de `held`.
   if (t < w.start.getTime()) {
     const due = await db
       .prepare(
-        `SELECT id FROM registrations
-         WHERE hackathonId = ? AND status = 'approved' AND rsvpStatus = 'pending'
-           AND to_ts(rsvpDeadlineAt) <= to_ts(?)
-         ORDER BY id`,
+        `SELECT r.id,
+                EXISTS (SELECT 1 FROM rsvp_messages m
+                        WHERE m.registrationId = r.id AND m.kind IN ('invite', 'resend')
+                          AND m.channel IN ('email', 'whatsapp') AND m.status = 'sent') AS "reached"
+         FROM registrations r
+         WHERE r.hackathonId = ? AND r.status = 'approved' AND r.rsvpStatus = 'pending'
+           AND to_ts(r.rsvpDeadlineAt) <= to_ts(?)
+         ORDER BY r.id`,
       )
-      .all<{ id: number }>(hackathonId, sqlTime(now));
-    for (const r of due) {
+      .all<{ id: number; reached: boolean }>(hackathonId, sqlTime(now));
+    out.held += due.filter((r) => !r.reached).length;
+    for (const r of due.filter((x) => x.reached)) {
       const res = await releaseRegistration(r.id, "expired", now);
       if (res.ok && !res.already) {
         out.expired++;

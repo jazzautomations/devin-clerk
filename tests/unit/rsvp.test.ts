@@ -137,7 +137,7 @@ describe("janelas no fuso de Brasília", () => {
       /prazo/,
     );
     expect(() => validateRsvpConfig({ enabled: true, opensDaysBefore: 7, deadlineDaysBefore: 3, overbookPercent: 101 })).toThrow();
-    expect(() => validateRsvpConfig({ opensDaysBefore: 7 })).toThrow(/enabled/);
+    expect(() => validateRsvpConfig({ opensDaysBefore: 7 })).toThrow(/ligada ou desligada/);
   });
 });
 
@@ -281,8 +281,28 @@ describe("confirmar / recusar pelo link", () => {
   });
 });
 
+// e-mail ligado (Resend de mentira): o convite sai como `sent`
+const MAILENV = { RESEND_API_KEY: "re_teste" };
+function stubResend() {
+  vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ id: "ok" }), { status: 200 }));
+}
+
 describe("expiração no fim do D-3", () => {
+  it("sem e-mail configurado ninguém expira: o convite só ficou no site (auditoria 041)", async () => {
+    await edition(H, { capacity: 1 });
+    const quiet = await member("Sumido");
+    const q = await reg(quiet, "approved");
+    const wait = await member("Na Fila");
+    await reg(wait, "waitlist", H, "2026-10-01 10:00:00");
+    await processRsvp(OPENS, { env: NOENV });
+    const r = await processRsvp(DEADLINE, { env: NOENV });
+    expect(r).toMatchObject({ expired: 0, held: 1, promoted: 0 });
+    expect((await regRow(q))!.rsvpStatus).toBe("pending");
+    expect(await regOf(wait)).toMatchObject({ status: "waitlist" });
+  });
+
   it("pendente expira, libera vaga, fila anda e o promovido é convidado; confirmado fica; rodar de novo é no-op", async () => {
+    stubResend();
     await edition(H, { capacity: 2 });
     const quiet = await member("Sumido");
     const sure = await member("Firme");
@@ -290,18 +310,19 @@ describe("expiração no fim do D-3", () => {
     const s = await reg(sure, "approved");
     const wait = await member("Na Fila");
     await reg(wait, "waitlist", H, "2026-10-01 10:00:00");
-    await processRsvp(OPENS, { env: NOENV });
+    await processRsvp(OPENS, { env: MAILENV });
     await respondRsvp(rsvpToken(s, DEADLINE), "confirm", at("2026-11-10T12:00:00Z"), NOENV);
 
-    expect((await processRsvp(at("2026-11-12T02:59:00Z"), { env: NOENV })).expired).toBe(0);
-    const r = await processRsvp(DEADLINE, { env: NOENV });
+    expect((await processRsvp(at("2026-11-12T02:59:00Z"), { env: MAILENV })).expired).toBe(0);
+    const r = await processRsvp(DEADLINE, { env: MAILENV });
     expect(r).toMatchObject({ expired: 1, promoted: 1, invited: 1 });
     expect(await regRow(q)).toBeUndefined();
     expect((await regRow(s))!.rsvpStatus).toBe("confirmed");
     expect(await regOf(wait)).toMatchObject({ status: "approved", rsvpStatus: "pending", rsvpDeadlineAt: "2026-11-13 03:00:00" });
     expect(await db.prepare("SELECT outcome FROM rsvp_releases WHERE memberId = ?").get(quiet)).toEqual({ outcome: "expired" });
 
-    expect(await processRsvp(DEADLINE, { env: NOENV })).toMatchObject({ expired: 0, invited: 0, promoted: 0 });
+    expect(await processRsvp(DEADLINE, { env: MAILENV })).toMatchObject({ expired: 0, invited: 0, promoted: 0 });
+    vi.unstubAllGlobals();
     const funnel = await getRsvpFunnel(H);
     expect(funnel).toMatchObject({ approved: 3, invited: 3, confirmed: 1, pending: 1, expired: 1, declined: 0 });
   });
