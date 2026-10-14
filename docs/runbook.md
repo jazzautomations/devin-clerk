@@ -346,7 +346,7 @@ radar (antes o seed desativava no boot seguinte).
 
 - ~~Domínio + DNS~~ feito 14/10: A `hackahub` → 64.181.217.112 e CNAMEs do Clerk na Vercel (time jazzautomations-projects).
 - ~~Clerk produção~~ feito 14/10: app `devin-clerk` (app_3KfPwFLzP7FbETFuvIOMfO8DmNb) na conta jazzautomations@gmail.com, instância prod no domínio, chaves live em `prod.env`. CLI linkado em `~/hackahub-clerk` na VPS (`npx clerk deploy status`). O CLI não roda no notebook (CPU sem AVX → SIGILL).
-- Login com Google em produção: desligado (`connection_oauth_google.enabled=false` na prod) até ter Client ID/Secret do Google Cloud; aí `clerk deploy` de novo e religar.
+- ~~Login com Google~~ feito 14/10: cliente OAuth "HackaHub Clerk" no Google Cloud (conta jazzautomations), redirect `https://clerk.hackahub.jazzautomations.com.br/v1/oauth_callback`, aplicado com `npx clerk config patch --instance prod --file ~/hackahub-secrets/google-oauth.json` em `~/hackahub-clerk`. O app precisa estar **publicado** (Público → Publicar) pra qualquer conta Google entrar.
 - `HACKAHUB_ADMIN_EMAILS` em stage/prod: definir quem é admin.
 - Provedor de e-mail (Resend) + SPF/DKIM/DMARC no domínio.
 - Número de WhatsApp da Hack Inova na Evolution.
