@@ -8,61 +8,79 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Workshop starter app
+# HackaHub
 
-A small Next.js (App Router, TypeScript, Tailwind v4) app shell used in the "Add auth with Clerk by prompting Devin" workshop. Each attendee turns it into their own app idea: they give Devin a name and a one-line description, and Devin brands the app, adds Clerk, and fills in a "Coming soon" page. It starts with **no authentication**.
+A plataforma onde a **Hack Inova** organiza as edições dela (inscrição sem
+Google Forms, avisos sem grupo de WhatsApp, check-in, júri, certificado) e a
+rede/vitrine dos hackathons no Brasil. Produto e escopo: `specs/000-prd.md` e
+`specs/033-hackinova-ops/spec.md` (a spec vigente). Copy e UI em PT-BR, tom
+direto, sem emoji na UI.
 
-## Commands
+Stack: Next.js 16 (App Router, `proxy.ts` no lugar de middleware), React 19,
+Tailwind v4, Clerk, Postgres.
 
-- Install: `npm install`
-- Dev server: `npm run dev` (http://localhost:3000)
-- Public link to the dev server: `npm run share` (see "Sharing the app")
-- Lint: `npm run lint`
-- Typecheck: `npm run typecheck`
-- Build: `npm run build`
+## Comandos
 
-Run lint, typecheck and build before opening a PR.
+- `npm run lint` · `npm run typecheck` · `npm run build`
+- `npm test` — Vitest (unit + API). Sem `DATABASE_URL` usa PGlite em memória
+  (Postgres real em WASM, banco limpo por arquivo de teste).
+- `npm run test:e2e` — Playwright contra `next start` buildado. Precisa de
+  `E2E_DATABASE_URL` (banco cujo nome contém `e2e`; o `pretest:e2e` zera ele)
+  e aceita `E2E_PORT` (default 3100).
+- `npm run seed:demo` — comunidade de mentira pra dev (nunca em produção).
 
-## Layout
+Gate de merge: lint, typecheck, build, vitest e e2e verdes; 390px sem scroll
+horizontal nas rotas novas.
 
-- `app.config.ts` — app `name`, `description`, `emoji`, `accent` color and `upcomingFeatures` (the "Coming soon" list). Branding and the feature list live here, not in components.
-- `app/page.tsx` — public landing page that pitches the app. Must stay public.
-- `app/dashboard/page.tsx` — the "Coming soon" page for signed-in users: a greeting plus one card per `upcomingFeatures` entry, and a "Keep building" hint pointing at the next feature. Keep that hint.
-- `app/api/roadmap/route.ts` — returns `upcomingFeatures` as JSON.
-- `components/Header.tsx` — top nav; `{/* AUTH CONTROLS GO HERE */}` marks where sign-in / user controls belong.
-- `docs/` and `workshop/` — the attendee walkthrough and facilitator material. Don't modify them for app changes.
+## Dados (`lib/db.ts`)
 
-## Planning requests
+- `db.prepare(sql).get/all/run(...)`, `db.exec`, `db.transaction(fn)` — tudo
+  **async** (`await`). `get<T>()`/`all<T>()` aceitam o tipo da linha.
+- SQL no estilo do código existente: `?` posicional ou `@nome` com objeto;
+  identificadores camelCase sem aspas (a camada cita); `INSERT OR IGNORE` e
+  `datetime('now')` são traduzidos. Postgres de verdade por baixo: `GROUP BY`
+  estrito, `EXISTS(...)` devolve boolean, parâmetro em contexto sem tipo
+  (`? IS NULL`) precisa de cast (`?::text IS NULL`).
+- Schema **só** em `migrations/NNN_*.sql` (aplicadas no boot, em ordem, com
+  lock). Nunca `CREATE`/`ALTER` em módulo de lib nem em teste. Identificadores
+  camelCase entre aspas na migration. Datas são TEXT `YYYY-MM-DD HH:MM:SS`
+  UTC (`DEFAULT sqlite_now()`); `to_ts(text)` compara datas.
+- `lib/seed.ts` = dados de base idempotentes (edições Hack Inova).
+- Nada de `.map(async …)` solto: `await Promise.all(...)`. Nada de busca de
+  dado dentro do JSX: calcule antes do `return`.
 
-- When the user asks for a plan, or asks to change a plan, reply with the plan and stop. Don't edit files, install packages or run commands (including the Clerk CLI) until the user explicitly approves, e.g. by saying "approved". Feedback on a plan is not approval: reply with the full updated plan and wait again.
+## Auth e papéis
 
-## Customizing the app
+- `proxy.ts` protege `/dashboard`, `/perfil`, `/admin`. API de membro devolve
+  `401 {"error":"Unauthorized"}` deslogado (nunca redirect).
+- `lib/session.ts` → `currentMember()`. `auth()` sempre com `await`;
+  `firstName` pode ser `null`.
+- Admin global: `members.role = 'admin'`, vem de `HACKAHUB_ADMIN_EMAILS`.
+- Papéis por edição (`lib/roles.ts`): organizador, staff, mentor, jurado.
+  `hasEditionRole(member, hackathonId, role)` — admin e organizador valem
+  por todos. Convite por e-mail (`inviteToEdition`).
+- Painel da edição: `/admin/h/[id]` (layout com abas por papel). Feature de
+  operação de evento ganha aba própria em `/admin/h/[id]/<aba>`.
 
-- When the user gives an app name and description, update `app.config.ts`: use their name and description as written (fix only typos), choose a fitting emoji and accent color, and write 4–6 `upcomingFeatures` that follow from the description. Each one should be concrete and small enough to build in one Devin session. Titles under 5 words, descriptions one sentence.
-- Adjust the landing page copy to fit the app if needed, but keep it one screen and keep the call to action pointing at `/dashboard`.
-- When a feature from `upcomingFeatures` gets built, remove it from the list and link to it from the header.
+## UI
 
-## Adding Clerk (rules)
+Sistema visual da Hack Inova (`app/globals.css`): papel `#fefefe`, tinta
+`#0c0c0c`, verde de ação `#047a43`, menta `#d8f4e5`, laranja de foco/erro
+`#ba3919`; Archivo nos títulos, JetBrains Mono em dados/labels, VT323 (`.pix`)
+só como acento. Fios de 1–1.5px, raio 0 (6px em botão/campo), sem gradiente,
+sem glow. Use os tokens (`bg-background`, `text-muted`, `border-line`,
+`text-accent`) e as classes existentes (`.window`, `.tbar`, `.btn`, `.chip`,
+`.tag`). Componente client só quando precisa de interação.
 
-- Set up Clerk with the Clerk CLI: `npx -y clerk@latest init`. It works without a Clerk account ("accountless"): it creates a claimable development app, writes keys to `.env.local`, installs `@clerk/nextjs`, wraps the app in `<ClerkProvider>`, and adds `proxy.ts` plus sign-in / sign-up routes. Don't hand-write that setup unless the CLI failed.
-- Never ask the user to paste Clerk keys, never print `.env.local`, and never commit `.env*` files (except `.env.example`) or the `.clerk/` folder.
-- This project is on Next.js 16, so the Clerk middleware file is `proxy.ts` (not `middleware.ts`).
-- `auth()` from `@clerk/nextjs/server` is async — always `await auth()`.
-- Use Clerk's prebuilt components (`SignInButton`, `SignUpButton`, `UserButton`, `Show`, `SignIn`, `SignUp`, `UserProfile`) and style them with the `appearance` prop, using the accent color from `app.config.ts`.
-- API routes (e.g. `/api/roadmap`) should return `401` JSON when signed out rather than redirecting.
-- After setup, run `npx -y clerk@latest doctor` and fix what it reports.
-- New Clerk apps only collect email + password at sign-up, so `user.firstName` can be `null`. Fall back to something sensible (e.g. the part of the email before `@`).
-- Sign-up may show a "Verify you are human" (Cloudflare) check that automated browsers can't pass. Don't try to bypass it, and don't ask the user to sign up in your own browser: the user tests sign-up at the public link (see "Sharing the app").
-- To test sign-up without a real inbox, use an email containing `+clerk_test` (e.g. `jane+clerk_test@example.com`) and the verification code `424242`.
+## Ambiente de desenvolvimento
 
-## Sharing the app
+O notebook do dono é lento; build e testes rodam na VPS
+`ssh ubuntu@64.181.217.112`, cada um numa pasta própria (`~/hackahub-*`).
+Na mesma máquina rodam outros produtos (asyn-settlement, cachorro, oneiro,
+pocketful): **não toque** em serviços, containers, Caddy, systemd ou pastas
+que não sejam a sua. Builds com `nice -n 10`. Segredos de dev ficam em
+`~/hackahub-secrets` (nunca imprimir, nunca commitar `.env*`/`.clerk/`).
 
-- Clerk sign-in doesn't work in the built-in Devin browser preview, so don't share one. Instead, with the dev server running on port 3000, run `npm run share` in a separate shell and keep it running. It starts a Cloudflare quick tunnel (no account needed) and prints a public `https://<random>.trycloudflare.com` link; send that link to the user.
-- `next.config.ts` allows `*.trycloudflare.com` in `allowedDevOrigins` so the dev server's scripts load through the link. Keep it.
-- The link is public while the tunnel runs, and changes every time `npm run share` restarts. If you restart it, send the new link and say the old one no longer works. Don't put the link in commits or PRs.
-- Before sending the link, check it yourself with `curl`: `/` returns 200, `/dashboard` redirects to an `https://` sign-in URL, and `/api/roadmap` returns 401. Then tell the user what you checked and that the sign-up test is theirs to do in their own browser.
+## Commits
 
-## Claiming the Clerk app
-
-- When the user asks to claim their Clerk app, run `npx -y clerk@latest open --print`. It prints a one-time claim URL (`https://dashboard.clerk.com/apps/claim?...`). Send it only to the user in this chat: it works like a password, so never put it in files, commits, PRs or logs.
-- After the user claims it, the keys in `.env.local` stay the same and the running app keeps working. The claim page then asks the user to paste the keys into `.env.local`: tell them to click "Otherwise skip" instead, and never ask them to send you the keys. Settings such as password rules are changed by the user in the Clerk Dashboard.
+Mensagem em PT-BR focada no porquê. Sem push.
