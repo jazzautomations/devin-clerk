@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { processDeliveries } from "@/lib/announcements";
+import { processTicketEmails } from "@/lib/ticketEmail";
 
 // spec 033 US2 — cron reprocessa a fila de entregas (falha transitória com
 // backoff, até 3 tentativas). Protegido por Authorization: Bearer
@@ -18,5 +19,8 @@ function authorized(req: Request): boolean {
 
 export async function POST(req: Request) {
   if (!authorized(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  return Response.json(await processDeliveries(200));
+  // o e-mail do ingresso (QR na aprovação) usa a mesma passada do cron
+  const deliveries = await processDeliveries(200);
+  const tickets = await processTicketEmails(200);
+  return Response.json({ ...deliveries, tickets });
 }

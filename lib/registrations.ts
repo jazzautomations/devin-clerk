@@ -2,6 +2,7 @@ import db from "@/lib/db";
 import { XP, type Badge } from "@/lib/game";
 import { awardXp, checkBadges, mintCard } from "@/lib/xp";
 import { notify } from "@/lib/notifications";
+import { queueTicketEmail } from "@/lib/ticketEmail";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
 // este módulo sem passar por members.ts
@@ -89,6 +90,7 @@ async function fillFromWaitlist(hackathonId: string, capacity: number | null): P
       )
       .get<{ promotedAt: string }>(next.id);
     await completeRegistration(next.memberId, hackathonId);
+    await queueTicketEmail(next.memberId, hackathonId);
     const m = await db
       .prepare("SELECT username, email FROM members WHERE id = ?")
       .get<{ username: string; email: string }>(next.memberId);
@@ -212,6 +214,8 @@ export async function register(
          VALUES (?, ?, ?, CASE WHEN ?::text = 'waitlist' THEN datetime('now') END)`,
       )
       .run(memberId, hackathonId, wants, wants);
+    // inscrição direta em edição aberta: aprovada na hora → e-mail com o QR
+    if (wants === "approved") await queueTicketEmail(memberId, hackathonId);
     return {
       status: wants,
       created: true,
@@ -366,6 +370,7 @@ export async function reviewRegistration(
        WHERE memberId = ? AND hackathonId = ?`,
     ).run(memberId, hackathonId);
     const reward = await completeRegistration(memberId, hackathonId);
+    await queueTicketEmail(memberId, hackathonId);
     return { status: "approved", rewarded: true, ...reward };
   })();
 }

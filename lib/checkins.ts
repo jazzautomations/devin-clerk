@@ -99,7 +99,10 @@ export async function checkIn(
     return { ok: false, reason: reg.status, username: reg.username, name: reg.name };
   }
   const res = await db
-    .prepare(`INSERT OR IGNORE INTO checkins (registrationId, byMemberId) VALUES (?, ?)`)
+    .prepare(
+      `INSERT OR IGNORE INTO checkins (registrationId, byMemberId, via, syncedAt)
+       VALUES (?, ?, 'online', datetime('now'))`,
+    )
     .run(reg.id, byMemberId);
   const row = await db
     .prepare("SELECT at FROM checkins WHERE registrationId = ?")
