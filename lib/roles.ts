@@ -39,6 +39,27 @@ export async function hasEditionRole(
   return roles.includes("organizador") || roles.includes(role);
 }
 
+/** spec 039 — edições em que o membro é da equipe (atalho no /dashboard) */
+export async function listMyEditionRoles(
+  memberId: number,
+): Promise<{ hackathonId: string; hackathonName: string; startsAt: string; roles: EditionRole[] }[]> {
+  const rows = await db
+    .prepare(
+      `SELECT er.hackathonId, h.name AS "hackathonName", h.startsAt, er.role
+       FROM edition_roles er JOIN hackathons h ON h.id = er.hackathonId
+       WHERE er.memberId = ? AND h.active = 1
+       ORDER BY h.startsAt DESC, er.role`,
+    )
+    .all<{ hackathonId: string; hackathonName: string; startsAt: string; role: EditionRole }>(memberId);
+  const out = new Map<string, { hackathonId: string; hackathonName: string; startsAt: string; roles: EditionRole[] }>();
+  for (const r of rows) {
+    const cur = out.get(r.hackathonId) ?? { hackathonId: r.hackathonId, hackathonName: r.hackathonName, startsAt: r.startsAt, roles: [] };
+    cur.roles.push(r.role);
+    out.set(r.hackathonId, cur);
+  }
+  return [...out.values()];
+}
+
 export async function canManageEdition(actor: Actor | null, hackathonId: string) {
   return hasEditionRole(actor, hackathonId, "organizador");
 }
