@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getPost, listPosts, parsePost, renderMarkdown } from "@/lib/blog";
+import { getPost, listPosts, parsePost, renderMarkdown, renderUserMarkdown } from "@/lib/blog";
 
 function blogDir(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "blog-"));
@@ -152,5 +152,27 @@ describe("renderMarkdown — renderer mínimo", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain('href="javascript');
+  });
+});
+
+describe("links de conteúdo de usuário (achado markdown-link-barra-invertida)", () => {
+  it("[x](/\\evil.com) não vira href (o navegador leria //evil.com)", () => {
+    const html = renderMarkdown("[x](/\\evil.com/login)");
+    expect(html).not.toContain("<a ");
+    expect(html).toContain("x");
+  });
+
+  it("//evil.com também não vira href", () => {
+    expect(renderMarkdown("[x](//evil.com)")).not.toContain("<a ");
+  });
+
+  it("caminho interno normal continua link", () => {
+    expect(renderMarkdown("[edição](/h/abc)")).toContain('<a href="/h/abc">');
+  });
+
+  it("todo link de usuário sai com rel ugc, interno ou externo", () => {
+    const html = renderUserMarkdown("[a](/h/abc) e [b](https://x.dev)");
+    expect(html).toContain('<a href="/h/abc" rel="nofollow ugc">');
+    expect(html).toContain('<a href="https://x.dev" target="_blank" rel="nofollow ugc noopener noreferrer">');
   });
 });

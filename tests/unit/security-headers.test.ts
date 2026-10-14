@@ -13,3 +13,27 @@ describe("headers de segurança (next.config)", () => {
     expect(nextConfig.poweredByHeader).toBe(false);
   });
 });
+
+describe("headers de plataforma (pacote A da auditoria)", () => {
+  it("CSP em modo relatório, sem quebrar nada enquanto não tem nonce", async () => {
+    const rules = await nextConfig.headers!();
+    const h = Object.fromEntries(rules.find((r) => r.source === "/:path*")!.headers.map((x) => [x.key, x.value]));
+    expect(h["Content-Security-Policy"]).toBeUndefined();
+    const csp = h["Content-Security-Policy-Report-Only"];
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("clerk");
+  });
+
+  it("fora do domínio de produção toda resposta sai com noindex", async () => {
+    // vitest roda sem NEXT_PUBLIC_SITE_URL de produção
+    const rules = await nextConfig.headers!();
+    const h = Object.fromEntries(rules.find((r) => r.source === "/:path*")!.headers.map((x) => [x.key, x.value]));
+    expect(h["X-Robots-Tag"]).toContain("noindex");
+  });
+
+  it("PGlite e pg fora do bundle; build standalone", () => {
+    expect(nextConfig.serverExternalPackages).toEqual(expect.arrayContaining(["@electric-sql/pglite", "pg"]));
+    expect(nextConfig.output).toBe("standalone");
+  });
+});

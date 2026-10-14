@@ -98,13 +98,15 @@ test.describe("seo — metadata e dados estruturados", () => {
     expect(xml).not.toContain("/radar");
   });
 
-  test("/robots.txt libera a raiz, bloqueia a área logada e aponta o sitemap", async ({ request }) => {
+  // o e2e roda fora do domínio de produção: robots fecha tudo e toda
+  // resposta sai com noindex (as regras de produção estão no vitest de seo)
+  test("/robots.txt fora de produção fecha o site pro crawler", async ({ request }) => {
     const res = await request.get("/robots.txt");
     expect(res.status()).toBe(200);
     const body = await res.text();
-    expect(body).toContain("Allow: /");
-    expect(body).toContain("Disallow: /dashboard");
-    expect(body.toLowerCase()).toContain("sitemap:");
+    expect(body).toContain("Disallow: /");
+    expect(body).not.toContain("Allow: /");
+    expect(res.headers()["x-robots-tag"]).toContain("noindex");
   });
 
   test("OG image padrão responde imagem", async ({ page, request }) => {

@@ -6,6 +6,7 @@ import {
   getPastHackathons,
   type Hackathon,
 } from "@/lib/hackathons";
+import { isProductionSite } from "@/lib/site";
 
 // Camada de SEO (spec 009): base URL única, sitemap/robots e JSON-LD.
 // NEXT_PUBLIC_SITE_URL em produção; placeholder explícito em dev/preview.
@@ -51,7 +52,12 @@ export async function buildSitemap(now = new Date()): Promise<MetadataRoute.Site
   return sitemap;
 }
 
-export function buildRobots(): MetadataRoute.Robots {
+export function buildRobots(siteUrl: string = SITE_URL): MetadataRoute.Robots {
+  // stage e preview são públicos (Clerk dev aceita qualquer cadastro): fora
+  // do domínio de produção nada é indexável
+  if (!isProductionSite(siteUrl)) {
+    return { rules: { userAgent: "*", disallow: "/" } };
+  }
   return {
     // a plataforma logada nem é rastreável (redireciona pro cadastro); o
     // disallow evita o crawler gastar requisição nela
