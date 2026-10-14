@@ -109,7 +109,7 @@ describe("nextStep — aprovado, antes e durante o evento", () => {
     const s = nextStep(approved({ rsvp: { href: "/rsvp/tok", deadline: "07/11 18:00" }, phase: "live" }));
     expect(s.key).toBe("confirmar");
     expect(s.stage).toBe("presenca");
-    expect(s.status).toBe("Confirma tua presença até 07/11 18:00");
+    expect(s.status).toBe("Confirme sua presença até 07/11 18:00");
     expect(s.action?.href).toBe("/rsvp/tok");
   });
   it("antes do evento: ingresso; presença confirmada aparece no status", () => {

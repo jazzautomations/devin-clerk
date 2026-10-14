@@ -1,19 +1,38 @@
 import { notFound } from "next/navigation";
-import db from "@/lib/db";
 import { currentMember } from "@/lib/session";
 import { canManageEdition } from "@/lib/roles";
 import {
   AUDIENCE_LABEL,
   CHANNELS,
+  audienceCounts,
   listAnnouncementsForAdmin,
   listEditionTeams,
   MAX_ATTEMPTS,
   type Channel,
 } from "@/lib/announcements";
+import { announcementReach, channelsEnabled } from "@/lib/notify/channels";
 import { formatDbTime } from "@/lib/format";
 import { AnnouncementComposer } from "@/components/AnnouncementComposer";
 
-const CHANNEL_LABEL: Record<Channel, string> = { inapp: "in-app", email: "e-mail", whatsapp: "whatsapp" };
+const CHANNEL_LABEL: Record<Channel, string> = { inapp: "sino", email: "e-mail", whatsapp: "WhatsApp" };
+
+/** erro do driver em linguagem de quem organiza */
+function failureText(error: string | null): string {
+  if (!error) return "erro sem detalhe";
+  if (error.includes("E.164")) return "telefone em formato inválido no perfil";
+  if (error.startsWith("rede:")) return "o provedor não respondeu";
+  const http = error.match(/^HTTP (\d{3})/);
+  if (http) return `o provedor recusou (código ${http[1]})`;
+  return error;
+}
+
+/** o que dizer quando parte do público não recebe por um canal desligado */
+function offNotice(c: { email: boolean; whatsapp: boolean }): string | null {
+  if (c.email && c.whatsapp) return null;
+  const off = [!c.email && "E-mail", !c.whatsapp && "WhatsApp"].filter(Boolean).join(" e ");
+  const verb = !c.email && !c.whatsapp ? "ainda não estão ligados" : "ainda não está ligado";
+  return `${off} ${verb} nesta plataforma. O aviso sai ${announcementReach(c)}.`;
+}
 
 // spec 033 US2 — aba de avisos do painel da edição (organizador/admin)
 export default async function AvisosPage({ params }: PageProps<"/admin/h/[id]/avisos">) {
@@ -24,14 +43,10 @@ export default async function AvisosPage({ params }: PageProps<"/admin/h/[id]/av
   const [announcements, teams, counts] = await Promise.all([
     listAnnouncementsForAdmin(id),
     listEditionTeams(id),
-    db
-      .prepare(
-        `SELECT COUNT(*) FILTER (WHERE status IN ('approved','pending')) AS todos,
-                COUNT(*) FILTER (WHERE status = 'approved') AS aprovados
-         FROM registrations WHERE hackathonId = ?`,
-      )
-      .get<{ todos: number; aprovados: number }>(id),
+    audienceCounts(id),
   ]);
+  const channels = channelsEnabled();
+  const notice = offNotice(channels);
 
   return (
     <div className="flex flex-col gap-10">
@@ -39,14 +54,19 @@ export default async function AvisosPage({ params }: PageProps<"/admin/h/[id]/av
         <div className="flex flex-col gap-1">
           <h2 className="text-[1.6rem] leading-none font-extrabold tracking-[-0.03em]">Novo aviso</h2>
           <p className="text-[14px] text-muted">
-            Vai fixado na página da edição, no sino, por e-mail e por WhatsApp individual pra quem optou. Sem grupo.
+            O aviso aparece {announcementReach(channels)}
+            {channels.whatsapp ? ", sempre em mensagem individual" : ""}.
           </p>
         </div>
-        <AnnouncementComposer
-          hackathonId={id}
-          teams={teams}
-          counts={{ todos: counts?.todos ?? 0, aprovados: counts?.aprovados ?? 0 }}
-        />
+        {notice && (
+          <p
+            data-testid="channels-off"
+            className="border-[1.5px] border-l-4 border-line border-l-orange px-4 py-3 text-[14px] leading-snug"
+          >
+            {notice}
+          </p>
+        )}
+        <AnnouncementComposer hackathonId={id} teams={teams} counts={counts} channels={channels} />
       </section>
 
       <section className="flex flex-col gap-4">
@@ -87,7 +107,15 @@ export default async function AvisosPage({ params }: PageProps<"/admin/h/[id]/av
                           <td className={`border-b border-line-soft py-1 pr-3 ${a.stats[ch].failed ? "font-bold text-orange" : ""}`}>
                             {a.stats[ch].failed}
                           </td>
-                          <td className="border-b border-line-soft py-1 pr-3">{a.stats[ch].skipped}</td>
+                          <td className="border-b border-line-soft py-1 pr-3">
+                            {a.stats[ch].skipped}
+                            {a.noDriver[ch] > 0 && (
+                              <span className="text-muted">
+                                {" "}
+                                · {a.noDriver[ch] === a.stats[ch].skipped ? "" : `${a.noDriver[ch]} `}canal desligado
+                              </span>
+                            )}
+                          </td>
                           <td className="border-b border-line-soft py-1">{a.stats[ch].queued}</td>
                         </tr>
                       ))}
@@ -101,7 +129,7 @@ export default async function AvisosPage({ params }: PageProps<"/admin/h/[id]/av
                       {a.failures.map((f, i) => (
                         <li key={i} className="break-words">
                           @{f.username} · {CHANNEL_LABEL[f.channel]} · {f.attempts}/{MAX_ATTEMPTS}
-                          {f.retrying ? " · vai tentar de novo" : ""} — <span className="text-muted">{f.error}</span>
+                          {f.retrying ? " · vai tentar de novo" : ""} — <span className="text-muted">{failureText(f.error)}</span>
                         </li>
                       ))}
                     </ul>

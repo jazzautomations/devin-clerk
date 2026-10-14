@@ -139,7 +139,9 @@ function inline(escaped: string): string {
   return escaped
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text: string, url: string) =>
-      /^(https?:\/\/|\/(?!\/))/i.test(url)
+      // "/\evil.com" vira "//evil.com" no navegador: caminho interno não
+      // pode começar com barra seguida de / ou \
+      /^(https?:\/\/|\/(?![\/\\]))/i.test(url)
         ? `<a href="${url}">${text}</a>`
         : text,
     )
@@ -213,8 +215,10 @@ export function renderMarkdown(md: string): string {
 /** markdown de conteúdo de usuário (descrição de projeto): mesmo renderer,
  * links externos com rel de UGC e abrindo fora */
 export function renderUserMarkdown(md: string): string {
-  return renderMarkdown(md).replace(
-    /<a href="(https?:\/\/[^"]+)">/g,
-    '<a href="$1" target="_blank" rel="nofollow ugc noopener noreferrer">',
-  );
+  return renderMarkdown(md)
+    .replace(
+      /<a href="(https?:\/\/[^"]+)">/g,
+      '<a href="$1" target="_blank" rel="nofollow ugc noopener noreferrer">',
+    )
+    .replace(/<a href="(\/[^"]*)">/g, '<a href="$1" rel="nofollow ugc">');
 }

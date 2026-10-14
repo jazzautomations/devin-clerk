@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { appConfig } from "@/app.config";
+import { OG_CACHE_HEADERS } from "@/lib/ogCache";
 import { getHackathon } from "@/lib/hackathons";
 import { getCardRarity } from "@/lib/xp";
 
@@ -94,6 +95,6 @@ export default async function Image({
         </div>
       </div>
     ),
-    size,
+    { ...size, headers: OG_CACHE_HEADERS },
   );
 }

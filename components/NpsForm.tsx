@@ -76,11 +76,10 @@ export function NpsForm({
       <button type="submit" disabled={busy} className="btn w-fit rounded-[6px] disabled:opacity-60">
         {initial ? "salvar alteração" : "enviar resposta"}
       </button>
-      {msg && (
-        <p role="status" className={`font-mono text-[13px] ${msg.ok ? "text-accent" : "text-orange"}`}>
-          {msg.text}
-        </p>
-      )}
+      {/* sempre montada: leitor de tela só anuncia região que já existia */}
+      <p role="status" className={msg ? `font-mono text-[13px] ${msg.ok ? "text-accent" : "text-orange"}` : "sr-only"}>
+        {msg?.text ?? ""}
+      </p>
     </form>
   );
 }

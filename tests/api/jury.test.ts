@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
 import { createTeam } from "@/lib/archive";
-import { grantEditionRole } from "@/lib/roles";
+import { grantEditionRole, revokeEditionRole } from "@/lib/roles";
 import { listMemberCertificates } from "@/lib/certificates";
+import { updateCertSettings } from "@/lib/certHours";
 
 // API do júri e dos certificados — spec 033 US5/US6. Quem chama é trocado
 // mexendo em `who` (o mock do Clerk lê a cada request).
@@ -125,6 +126,24 @@ describe("júri — fluxo", () => {
     expect(body.ranking[0]).toMatchObject({ teamId: teamAlheio, weighted: 4, rank: 1 });
   });
 
+  it("auditoria 041: jurado que perdeu o papel leva 403 e as notas dele saem do ranking", async () => {
+    const sc = await import("@/app/api/admin/hackathons/[id]/juri/scores/route");
+    const rk = await import("@/app/api/admin/hackathons/[id]/juri/ranking/route");
+    who = "clerk_api_jur2";
+    const nota = { teamId: teamAlheio, scores: [{ criterionId: critId, score: 1 }] };
+    expect((await sc.POST(req("POST", nota), ctx())).status).toBe(200);
+    who = "clerk_api_org";
+    expect((await (await rk.GET(req("GET"), ctx())).json()).ranking[0]).toMatchObject({ teamId: teamAlheio, weighted: 2.5 });
+
+    // a atribuição antiga fica (quem apaga é lib/roles), mas não vale mais nada
+    await revokeEditionRole(H, ids.api_jur2, "jurado");
+    who = "clerk_api_jur2";
+    const res = await sc.POST(req("POST", { ...nota, scores: [{ criterionId: critId, score: 2 }] }), ctx());
+    expect(res.status).toBe(403);
+    who = "clerk_api_org";
+    expect((await (await rk.GET(req("GET"), ctx())).json()).ranking[0]).toMatchObject({ teamId: teamAlheio, weighted: 4 });
+  });
+
   it("publicar → placement do primeiro e ranking aberto pro jurado; certificados emitem e não duplicam", async () => {
     who = "clerk_api_org";
     const pub = await import("@/app/api/admin/hackathons/[id]/juri/publish/route");
@@ -139,6 +158,7 @@ describe("júri — fluxo", () => {
 
     who = "clerk_api_org";
     const cert = await import("@/app/api/admin/hackathons/[id]/certificados/route");
+    await updateCertSettings(H, { hours: { jurado: 4, organizador: 40 } });
     // edição ainda no futuro → 409
     await db.prepare("UPDATE hackathons SET startsAt = '2999-01-01', endsAt = '2999-01-02' WHERE id = ?").run(H);
     expect((await cert.POST(req("POST"), ctx())).status).toBe(409);
@@ -148,7 +168,16 @@ describe("júri — fluxo", () => {
     const again = await cert.POST(req("POST"), ctx());
     expect((await again.json()).created).toBe(0);
     expect((await listMemberCertificates(ids.api_jur)).map((c) => c.kind)).toEqual(["jurado"]);
-    expect((await listMemberCertificates(ids.api_colega)).map((c) => c.kind)).toEqual(["premiacao"]);
+    // sem inscrição aprovada e check-in não sai premiação (auditoria 041)
+    expect(await listMemberCertificates(ids.api_colega)).toEqual([]);
+    await db
+      .prepare("INSERT INTO registrations (memberId, hackathonId, status) VALUES (?, ?, 'approved')")
+      .run(ids.api_colega, H);
+    await db
+      .prepare("INSERT INTO checkins (registrationId) SELECT id FROM registrations WHERE memberId = ? AND hackathonId = ?")
+      .run(ids.api_colega, H);
+    expect((await cert.POST(req("POST"), ctx())).status).toBe(200);
+    expect((await listMemberCertificates(ids.api_colega)).map((c) => c.kind).sort()).toEqual(["participacao", "premiacao"]);
   });
 
   it("PDF público responde application/pdf; código desconhecido 404", async () => {
@@ -159,5 +188,71 @@ describe("júri — fluxo", () => {
     expect(res.headers.get("content-type")).toBe("application/pdf");
     const missing = await GET(req("GET"), { params: Promise.resolve({ code: "NAOEXISTE0" }) });
     expect(missing.status).toBe(404);
+  });
+
+  it("auditoria 041: PDF de certificado revogado responde 410 sem cache", async () => {
+    const [c] = await listMemberCertificates(ids.api_jur);
+    const { GET } = await import("@/app/c/[code]/pdf/route");
+    await db.prepare("UPDATE certificates SET revokedAt = sqlite_now() WHERE code = ?").run(c.code);
+    try {
+      const res = await GET(req("GET"), { params: Promise.resolve({ code: c.code }) });
+      expect(res.status).toBe(410);
+      expect(res.headers.get("content-type")).not.toBe("application/pdf");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    } finally {
+      await db.prepare("UPDATE certificates SET revokedAt = NULL WHERE code = ?").run(c.code);
+    }
+  });
+});
+
+describe("auditoria 041 — publicar com avaliação faltando", () => {
+  const H2 = "hack-inova-puc-saude-2026";
+  const ctx2 = () => ({ params: Promise.resolve({ id: H2 }) });
+
+  it("409 com a contagem; force sem motivo 400; force com motivo 200 e o motivo fica gravado", async () => {
+    await grantEditionRole(H2, ids.api_org, "organizador", null);
+    await grantEditionRole(H2, ids.api_jur, "jurado", null);
+    const t1 = (await createTeam(H2, { name: "F1", placement: 0, memberUsernames: ["api_colega"] })).team.id;
+    const t2 = (await createTeam(H2, { name: "F2", placement: 0, memberUsernames: [] })).team.id;
+    who = "clerk_api_org";
+    const crit = await import("@/app/api/admin/hackathons/[id]/juri/criteria/route");
+    const c = (await (await crit.POST(req("POST", { label: "Execução", weight: 1 }), ctx2())).json()).criterion.id;
+    const asg = await import("@/app/api/admin/hackathons/[id]/juri/assignments/route");
+    await asg.POST(req("POST", { all: true }), ctx2());
+    who = "clerk_api_jur";
+    const sc = await import("@/app/api/admin/hackathons/[id]/juri/scores/route");
+    expect((await sc.POST(req("POST", { teamId: t1, scores: [{ criterionId: c, score: 5 }] }), ctx2())).status).toBe(200);
+
+    who = "clerk_api_org";
+    const pub = await import("@/app/api/admin/hackathons/[id]/juri/publish/route");
+    const recusa = await pub.POST(req("POST"), ctx2());
+    expect(recusa.status).toBe(409);
+    expect(await recusa.json()).toMatchObject({ missing: 1, missingScores: 1, error: expect.stringMatching(/falta.*1 nota/) });
+    expect((await pub.POST(req("POST", { force: true }), ctx2())).status).toBe(400);
+
+    const ok = await pub.POST(req("POST", { force: true, reason: "jurado do F2 ficou doente" }), ctx2());
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ forced: true, first: true });
+    const row = await db
+      .prepare("SELECT forced, reason FROM jury_results WHERE hackathonId = ?")
+      .get<{ forced: boolean; reason: string }>(H2);
+    expect(row).toEqual({ forced: true, reason: "jurado do F2 ficou doente" });
+    // o pódio ignora quem não tem nota; o time avaliado leva
+    const p = await db.prepare("SELECT placement FROM teams WHERE id = ?").get<{ placement: number }>(t1);
+    expect(p!.placement).toBe(1);
+    expect((await db.prepare("SELECT placement FROM teams WHERE id = ?").get<{ placement: number }>(t2))!.placement).toBe(0);
+
+    // integrante do time avaliado recebe aviso do resultado
+    const n = await db
+      .prepare("SELECT text, href FROM notifications WHERE memberId = ? AND type = 'jury_result' AND href = ?")
+      .all<{ text: string; href: string }>(ids.api_colega, `/h/${H2}`);
+    expect(n).toEqual([expect.objectContaining({ href: `/h/${H2}` })]);
+
+    // rubrica travada depois de publicar
+    const one = await import("@/app/api/admin/hackathons/[id]/juri/criteria/[criterionId]/route");
+    expect((await one.DELETE(req("DELETE"), { params: Promise.resolve({ id: H2, criterionId: String(c) }) })).status).toBe(409);
+    expect(
+      (await one.PATCH(req("PATCH", { weight: 3 }), { params: Promise.resolve({ id: H2, criterionId: String(c) }) })).status,
+    ).toBe(409);
   });
 });

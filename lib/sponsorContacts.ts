@@ -118,3 +118,30 @@ export async function countActiveOptIns(hackathonId: string, sponsorId: string):
     .get<{ n: number }>(hackathonId, sponsorId);
   return Number(r?.n ?? 0);
 }
+
+export type MyContactShare = {
+  hackathonId: string;
+  hackathonName: string;
+  sponsorId: string;
+  sponsorName: string;
+  sharedAt: string;
+};
+
+/**
+ * Marcas com quem o membro compartilhou o contato e ainda não revogou. O
+ * /perfil lista isso com o botão de revogar: quem aceitou no estande não
+ * precisa guardar o QR pra desfazer (LGPD art. 8º §5).
+ */
+export async function listMyContactShares(memberId: number): Promise<MyContactShare[]> {
+  return db
+    .prepare(
+      `SELECT o.hackathonId, h.name AS "hackathonName", o.sponsorId, s.name AS "sponsorName",
+              o.grantedAt AS "sharedAt"
+       FROM sponsor_contact_optins o
+       JOIN hackathons h ON h.id = o.hackathonId
+       JOIN sponsors s ON s.id = o.sponsorId
+       WHERE o.memberId = ? AND o.revokedAt IS NULL
+       ORDER BY o.grantedAt DESC, lower(s.name)`,
+    )
+    .all<MyContactShare>(memberId);
+}

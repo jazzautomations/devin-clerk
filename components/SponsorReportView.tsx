@@ -101,7 +101,7 @@ export function SponsorReportView({
       <section className={section}>
         <h3 className={h3}>desafios e prêmios da marca</h3>
         {r.challenges.length === 0 ? (
-          <p className="font-mono text-[13px] text-muted">nenhum desafio ligado à marca</p>
+          <p className="font-mono text-[13px] text-muted">nenhum desafio ligado à marca. Peça à organização pra vincular o desafio nesta edição.</p>
         ) : (
           <ul className="border-b border-line">
             {r.challenges.map((c) => (

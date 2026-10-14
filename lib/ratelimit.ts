@@ -14,6 +14,7 @@ const HOUR = 60 * 60 * 1000;
 // são chaveadas por IP; autenticadas por member.id (a rota passa a key).
 export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   leads: { limit: 5, windowMs: HOUR }, // POST /api/leads — ip
+  subscribe: { limit: 5, windowMs: HOUR }, // POST /api/subscribe — ip
   submissions: { limit: 5, windowMs: HOUR }, // POST /api/submissions — ip
   posts: { limit: 20, windowMs: HOUR }, // POST /api/posts — membro
   comments: { limit: 30, windowMs: HOUR }, // POST /api/posts/[id]/comments
@@ -27,9 +28,11 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // voto ao vivo é editável (nota muda até fechar): folga pra ~10 pitches
   // com troca de nota, mas freia script martelando o endpoint
   "stage-vote": { limit: 120, windowMs: HOUR }, // POST …/[id]/stage/vote
-  // denúncia de conduta: forte, aceita anônimo (chave = IP só em memória,
-  // nunca gravado) — 3/h por IP ou por membro
+  // denúncia de conduta logada: 3/h por membro
   incidents: { limit: 3, windowMs: HOUR }, // POST …/[id]/incidents
+  // denúncia anônima: chave = IP + edição (só em memória, nunca gravada).
+  // No evento todo mundo sai pelo mesmo wifi; 3/h por IP barrava a 4ª vítima
+  "incidents-anon": { limit: 20, windowMs: HOUR }, // POST …/[id]/incidents
   "image-consent": { limit: 20, windowMs: HOUR }, // POST …/[id]/image-consent
 };
 
@@ -112,7 +115,7 @@ export function limitOrNull(
     return null;
   }
   return Response.json(
-    { error: `muitas requisições — tenta de novo em ${r.retryAfterSec}s` },
+    { error: `muitas requisições. Tente de novo em ${r.retryAfterSec}s.` },
     { status: 429, headers: { "Retry-After": String(r.retryAfterSec) } },
   );
 }

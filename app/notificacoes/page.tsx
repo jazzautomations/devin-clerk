@@ -32,7 +32,9 @@ export default async function NotificacoesPage() {
         {unread > 0 && <MarkAllReadButton />}
       </header>
       {items.length === 0 ? (
-        <p className="text-muted">nenhuma notificação por aqui</p>
+        <p className="text-muted">
+          Nada por aqui ainda. Respostas às suas dúvidas, convites de time e avisos das suas edições aparecem aqui.
+        </p>
       ) : (
         <ul className="border-b border-line" data-testid="notification-list">
           {items.map((n) => (

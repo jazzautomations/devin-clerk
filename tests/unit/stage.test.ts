@@ -15,6 +15,7 @@ import {
   getStageSnapshot,
   goToTeam,
   liveRanking,
+  minVotesPerTeam,
   pauseTimer,
   reopenStage,
   resetTimer,
@@ -296,17 +297,39 @@ describe("ranking — escolha do público", () => {
     ]);
   });
 
+  it("auditoria 041: 1 voto 5 fica atrás de 9 votos de média 4,8, com selo de poucos votos", async () => {
+    await setAudienceMinVotes(H, 1);
+    await setQueue(H, [a, b]);
+    await votes(a, [5]);
+    await votes(b, [5, 5, 5, 5, 5, 5, 5, 5, 3]); // 4,78 com 9
+    const r = await liveRanking(H);
+    expect(r.map((e) => [e.teamName, e.position, e.fewVotes, e.votes])).toEqual([
+      ["Beta", 1, false, 9],
+      ["Alfa", 2, true, 1],
+    ]);
+    await endStage(H);
+    expect(await getAudienceResult(b)).toMatchObject({ position: 1, votes: 9 });
+    expect(await getAudienceResult(a)).toBeNull(); // poucos votos não vira selo
+    await setAudienceMinVotes(H, 10);
+  });
+
+  it("minVotesPerTeam: piso 2 e 30% da média de votos dos times votados", () => {
+    expect(minVotesPerTeam([])).toBe(2);
+    expect(minVotesPerTeam([1, 9])).toBe(2);
+    expect(minVotesPerTeam([0, 40, 60])).toBe(15);
+  });
+
   it("snapshot público só mostra o ranking depois de encerrar; ficha do projeto idem", async () => {
     await setAudienceMinVotes(H, 1); // quórum testado à parte
     await setQueue(H, [a, b]);
-    await votes(a, [5]);
+    await votes(a, [5, 5]);
     expect((await getStageSnapshot(H)).ranking).toBeNull();
     expect(await getAudienceResult(a)).toBeNull();
     await endStage(H);
     const snap = await getStageSnapshot(H);
     expect(snap.status).toBe("ended");
     expect(snap.ranking?.[0]).toMatchObject({ teamId: a, position: 1 });
-    expect(await getAudienceResult(a)).toEqual({ position: 1, avg: 5, votes: 1, tied: false, total: 1 });
+    expect(await getAudienceResult(a)).toEqual({ position: 1, avg: 5, votes: 2, tied: false, total: 1 });
     expect(await getAudienceResult(b)).toBeNull(); // sem voto, sem selo
   });
 

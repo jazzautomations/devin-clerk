@@ -561,6 +561,47 @@ def sweep_expired(conn) -> int:
 
 # ---------- fontes ----------
 
+# Temas do Devpost em PT-BR. O que não está aqui fica de fora: pedaço solto
+# de tema ("low", "open") e tema genérico não ajudam a filtrar. O prêmio já
+# tem campo próprio e não vira tag. Mesmo dicionário de lib/radarTags.ts.
+DEVPOST_THEMES = {
+    "machine learning/ai": "ia",
+    "beginner friendly": "iniciante",
+    "health": "saúde",
+    "education": "educação",
+    "gaming": "jogos",
+    "social good": "impacto social",
+    "web": "web",
+    "blockchain": "web3",
+    "fintech": "fintech",
+    "iot": "iot",
+    "design": "design",
+    "productivity": "produtividade",
+    "communication": "comunicação",
+    "ar/vr": "ar/vr",
+    "cybersecurity": "segurança",
+    "databases": "dados",
+    "devops": "devops",
+    "mobile": "mobile",
+    "music/art": "arte",
+    "quantum": "computação quântica",
+    "e-commerce/retail": "varejo",
+    "government": "governo",
+    "robotic process automation": "automação",
+    "voice skills": "voz",
+}
+
+
+def devpost_tags(themes) -> list[str]:
+    """Temas do Devpost → até 3 tags em PT-BR, sem repetir e sem desconhecidos."""
+    out: list[str] = []
+    for name in themes:
+        tag = DEVPOST_THEMES.get((name or "").strip().lower())
+        if tag and tag not in out:
+            out.append(tag)
+    return out[:3]
+
+
 def src_devpost() -> list[dict]:
     """API pública paginada — meta.total_count governa (has_next não existe)."""
     out = []
@@ -594,10 +635,7 @@ def src_devpost() -> list[dict]:
             loc = (h.get("displayed_location") or {}).get("location") or "Online"
             fmt = "online" if loc == "Online" else "presencial"
             prize = prize_display(h.get("prize_amount"))
-            tags = [t["name"].lower().split("/")[0].split(" ")[0]
-                    for t in h.get("themes", [])][:3]
-            if prize:
-                tags.append(f"premio-{prize}")
+            tags = devpost_tags(t.get("name") for t in h.get("themes", []))
             out.append({
                 "id": f"devpost-{h['id']}",
                 "name": h["title"],
@@ -635,9 +673,8 @@ def src_taikai() -> list[dict]:
         org = c.get("organization") or {}
         prize = taikai_prize(c.get("prize"),
                              (c.get("prizeCurrency") or {}).get("name"))
-        tags = []
-        if prize:
-            tags.append(f"premio-{prize}")
+        # o prêmio tem campo próprio; virar tag "premio-$1,000" só polui o filtro
+        tags: list[str] = []
         out.append({
             "id": f"taikai-{c['slug']}",
             "name": c["name"],

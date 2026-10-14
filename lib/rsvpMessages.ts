@@ -31,7 +31,7 @@ const esc = (s: string) =>
 export const WHAT_TO_BRING = [
   "documento com foto (o nome tem que bater com a inscrição)",
   "notebook e carregador",
-  "garrafa d'água e um casaco (sala com ar-condicionado)",
+  "garrafa d'água e um casaco",
 ];
 
 type Body = { subject: string; heading: string; lines: string[]; cta: string; ctaUrl: string; secondary?: { label: string; url: string } };
@@ -43,9 +43,9 @@ function body(m: RsvpMessageInput): Body {
   if (m.kind === "invite") {
     return {
       subject: `[${m.hackathonName}] Você vai? Confirme sua presença`,
-      heading: "Confirma tua presença?",
+      heading: "Confirma sua presença?",
       lines: [
-        `${hi}tua vaga em ${m.hackathonName} está garantida — falta só confirmar que você vai.`,
+        `${hi}sua vaga em ${m.hackathonName} está garantida — falta só confirmar que você vai.`,
         `Quando: ${m.when}. Onde: ${where}.`,
         `Responda até ${m.deadline}. Sem resposta até lá, a vaga vai pra próxima pessoa da fila de espera.`,
         "Não vai conseguir? Avise pelo mesmo link: a vaga é liberada na hora pra quem está esperando.",
@@ -62,7 +62,7 @@ function body(m: RsvpMessageInput): Body {
         `${hi}obrigado por confirmar. ${m.hackathonName} começa ${m.when}.`,
         `Onde: ${where}.`,
         `O que levar: ${WHAT_TO_BRING.join("; ")}.`,
-        "Teu ingresso (QR do check-in) está no link abaixo. Se não puder mais ir, libere a vaga pelo segundo link.",
+        "Seu ingresso (QR do check-in) está no link abaixo. Se não puder mais ir, libere a vaga pelo segundo link.",
       ],
       cta: "Ver meu ingresso",
       ctaUrl: ticketUrl,
@@ -142,7 +142,7 @@ export function renderRsvpWhatsapp(m: RsvpMessageInput): string {
 }
 
 export function rsvpInappText(m: RsvpMessageInput): string {
-  if (m.kind === "invite") return `${m.hackathonName}: confirme tua presença até ${m.deadline}`;
+  if (m.kind === "invite") return `${m.hackathonName}: confirme sua presença até ${m.deadline}`;
   if (m.kind === "d1") return `${m.hackathonName} é amanhã — veja o que levar`;
   return `${m.hackathonName} começa em 2 horas`;
 }

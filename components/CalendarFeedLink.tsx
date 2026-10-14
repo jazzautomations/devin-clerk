@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { userMessage } from "@/lib/apiError";
 
 // Feed .ics pessoal: copiar, assinar (webcal) e revogar o link.
 export function CalendarFeedLink({ hackathonId, initialUrl }: { hackathonId: string; initialUrl: string }) {
@@ -13,7 +14,7 @@ export function CalendarFeedLink({ hackathonId, initialUrl }: { hackathonId: str
       await navigator.clipboard.writeText(url);
       setMsg("link copiado");
     } catch {
-      setMsg("não deu pra copiar — seleciona o link e copia");
+      setMsg("não deu pra copiar. Selecione o link e copie.");
     }
   }
 
@@ -22,11 +23,11 @@ export function CalendarFeedLink({ hackathonId, initialUrl }: { hackathonId: str
     const res = await fetch(`/api/me/calendar?h=${encodeURIComponent(hackathonId)}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setMsg(data.error ?? "erro ao revogar");
+      setMsg(userMessage(res, data, "não deu pra revogar. Tente de novo."));
       return;
     }
     setUrl(data.url);
-    setMsg("link antigo revogado — assina de novo com o novo");
+    setMsg("link antigo revogado. Assine de novo com o link novo.");
   }
 
   return (
@@ -34,8 +35,8 @@ export function CalendarFeedLink({ hackathonId, initialUrl }: { hackathonId: str
       <div className="flex flex-col gap-1">
         <p className="font-mono text-[12px] tracking-widest text-muted uppercase">minha agenda</p>
         <p className="text-[14px]">
-          Link pessoal com tudo que vale pra você (inclusive itens só do teu papel). Assina uma vez; mudança de horário
-          chega sozinha. Não compartilha — quem tiver o link vê tua programação.
+          Link pessoal com tudo que vale pra você, inclusive o que é só do seu papel. Assine uma vez e as mudanças de
+          horário chegam sozinhas. Não compartilhe: quem tiver o link vê sua programação.
         </p>
       </div>
       <input

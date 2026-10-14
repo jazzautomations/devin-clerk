@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { userMessage } from "@/lib/apiError";
 import {
   LEAD_INTEREST_LABELS,
   LEAD_INTERESTS,
@@ -41,7 +42,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
       setStatus("error");
       const data = await res?.json().catch(() => null);
       setError(
-        typeof data?.error === "string" ? data.error : "algo deu errado",
+        res ? userMessage(res, data, "não deu pra enviar. Tente de novo.") : "sem conexão. Tente de novo.",
       );
     }
   }
@@ -49,7 +50,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
   if (status === "done") {
     return (
       <p className="border-[1.5px] border-line bg-mint px-4 py-3 font-mono text-xs text-accent">
-        {"recebido — a gente te chama pra conversar em até 2 dias úteis."}
+        {"recebido. A gente chama você pra conversar em até 2 dias úteis."}
       </p>
     );
   }
@@ -120,7 +121,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           rows={3}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder={org ? "quando, onde, quantas pessoas, tema…" : "contexto, edição que tu tem em mente, budget…"}
+          placeholder={org ? "quando, onde, quantas pessoas, tema…" : "contexto, a edição que você tem em mente, orçamento…"}
           className={inputCls}
         />
       </label>

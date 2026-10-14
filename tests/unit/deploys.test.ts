@@ -129,3 +129,31 @@ describe("trava de ambiente (HACKAHUB_DEPLOY_TOOL)", () => {
     }
   });
 });
+
+describe("DeployPanel some quando a publicação de demos está desligada", () => {
+  it("sem HACKAHUB_DEPLOY_TOOL=on não renderiza nada", async () => {
+    const { DeployPanel } = await import("@/components/DeployPanel");
+    vi.stubEnv("HACKAHUB_DEPLOY_TOOL", "");
+    expect(await DeployPanel({ teamId: 1, canDeploy: true, hasRepo: true })).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it("ligado renderiza o painel", async () => {
+    const { DeployPanel } = await import("@/components/DeployPanel");
+    vi.stubEnv("HACKAHUB_DEPLOY_TOOL", "on");
+    await setDeploysEnabled(true);
+    expect(await DeployPanel({ teamId: 1, canDeploy: true, hasRepo: true })).not.toBeNull();
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("guia do blog não promete a publicação de demos", () => {
+  it("não diz que a edição liga a ferramenta (a trava é global) e avisa que está desligada", async () => {
+    const { getPost } = await import("@/lib/blog");
+    const post = getPost("deploy-da-demo-em-5-min");
+    expect(post).not.toBeNull();
+    const text = `${post!.description} ${post!.html}`;
+    expect(text).not.toMatch(/edi(ç|c)(ão|ões)\s+(liga|ligam)|edição por edição|na sua edição|hackahub\.dev/i);
+    expect(text).toMatch(/ainda está desligada/);
+  });
+});

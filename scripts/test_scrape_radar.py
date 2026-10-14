@@ -649,6 +649,15 @@ def test_house_sources_untouched():
         assert conn.execute(
             f"SELECT active, region FROM hackathons WHERE id='{rid}'"
         ).fetchone() == (1, None)
+def test_devpost_tags_pt_sem_premio_nem_token_solto():
+    # auditoria 041: "low", "open", "machine" e "premio-$1,000" viravam filtro
+    tags = sr.devpost_tags([
+        "Machine Learning/AI", "Low/No Code", "Open Ended",
+        "Beginner Friendly", "Health",
+    ])
+    assert tags == ["ia", "iniciante", "saúde"]
+    assert sr.devpost_tags(["Enterprise", None, ""]) == []
+    assert sr.devpost_tags(["Blockchain", "blockchain"]) == ["web3"]
 
 
 if __name__ == "__main__":

@@ -1,0 +1,42 @@
+# Crontab do usuário ubuntu na VPS asyn — FONTE DA VERDADE do cron do HackaHub.
+# Instalar (substitui o crontab inteiro do ubuntu; confira antes se há linha
+# de outro produto e junte aqui ou num bloco separado):
+#   crontab -l > ~/hackahub/tmp/crontab.antes   # cópia do que estava
+#   crontab ~/hackahub/ops/crontab.txt
+# Conferir: crontab -l | grep hackahub
+#
+# Os scripts moram em ~/hackahub/ops (cópia de deploy/ do repo). As rotas
+# /api/cron/* passam por cron-call.sh, que grava logs/<rota>-<env>.log com
+# horário e o contador de falhas que o /api/health?deep=1 expõe.
+# Horários em UTC (BRT = UTC-3).
+SHELL=/bin/bash
+H=/home/ubuntu/hackahub
+
+# backup diário dos dois bancos (+ offsite); também corta log grande
+0 6 * * *     bash $H/ops/backup.sh >> $H/logs/backup.log 2>&1
+# restore drill semanal: prod no domingo, stage na quarta (grava LAST_DRILL_OK-<banco>;
+# o health e o monitor olham só o de prod)
+30 6 * * 0    bash $H/ops/restore-drill.sh "" hackahub >> $H/logs/drill.log 2>&1
+30 6 * * 3    bash $H/ops/restore-drill.sh "" hackahub_stage >> $H/logs/drill.log 2>&1
+
+# radar (scraper)
+15 5 * * *    bash $H/ops/scrape.sh stage >> $H/logs/scrape-stage.log 2>&1
+20 5 * * *    bash $H/ops/scrape.sh prod >> $H/logs/scrape-prod.log 2>&1
+
+# fila de avisos (e-mail/zap) e pesquisa pós-edição: a cada 2 min.
+# stage também roda e manda e-mail de verdade (docs/runbook.md, seção do cron)
+# prod e stage em minutos diferentes pra não disputar CPU
+*/2 * * * *   bash $H/ops/deliveries.sh prod >> $H/logs/cron-stderr.log 2>&1
+1-59/2 * * * * bash $H/ops/deliveries.sh stage >> $H/logs/cron-stderr.log 2>&1
+# lembretes e trava da entrega: a cada 5 min
+*/5 * * * *   bash $H/ops/submissions.sh prod >> $H/logs/cron-stderr.log 2>&1
+2-59/5 * * * * bash $H/ops/submissions.sh stage >> $H/logs/cron-stderr.log 2>&1
+# RSVP (convite D-7, prazo D-3, lembretes): a cada 15 min
+*/15 * * * *  bash $H/ops/rsvp.sh prod >> $H/logs/cron-stderr.log 2>&1
+7-59/15 * * * * bash $H/ops/rsvp.sh stage >> $H/logs/cron-stderr.log 2>&1
+
+# guarda de disco: alerta em 85%, limpa sobras do HackaHub em 90%
+*/10 * * * *  bash $H/ops/disk-guard.sh >> $H/logs/disk.log 2>&1
+
+# Perto de edição ao vivo, descomente pra backup de hora em hora:
+# 0 * * * *   bash $H/ops/backup.sh >> $H/logs/backup.log 2>&1

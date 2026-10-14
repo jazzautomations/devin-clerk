@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { MAX_PERSONAS, PERSONAS } from "@/lib/personas";
-import { OPEN_TO } from "@/lib/openTo";
+import { OPEN_TO, openToLabel } from "@/lib/openTo";
 import { INTENTS, LIMITS, onboardingNext, type IntentKey } from "@/lib/onboarding";
 
 // spec 039 — /bem-vindo: 3 passos curtos (quem é você, perfil básico,
@@ -253,11 +253,11 @@ export function OnboardingWizard({
           </h2>
           <label className="flex flex-col gap-1.5">
             <span className={label}>GitHub (opcional)</span>
-            <input className={input} value={v.github} placeholder="teuusuario ou github.com/teuusuario" onChange={(e) => set("github", e.target.value)} />
+            <input className={input} value={v.github} placeholder="seuusuario ou github.com/seuusuario" onChange={(e) => set("github", e.target.value)} />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={label}>LinkedIn (opcional)</span>
-            <input className={input} value={v.linkedin} placeholder="in/teuusuario ou o link do perfil" onChange={(e) => set("linkedin", e.target.value)} />
+            <input className={input} value={v.linkedin} placeholder="in/seuusuario ou o link do perfil" onChange={(e) => set("linkedin", e.target.value)} />
           </label>
           <fieldset className="flex flex-col gap-2 border-t border-line pt-5">
             <legend className={label}>diretório de talentos (opcional)</legend>
@@ -277,7 +277,7 @@ export function OnboardingWizard({
                       on ? "border-foreground bg-foreground text-band" : "border-line hover:bg-mint"
                     }`}
                   >
-                    {o}
+                    {openToLabel(o)}
                   </button>
                 );
               })}

@@ -1,5 +1,6 @@
 import db from "@/lib/db";
-import { computeRanking, isPublished, listCriteria, listJuryTeams, type Criterion, type ScoreRow } from "@/lib/jury";
+import { activeScores, computeRanking, isPublished, listCriteria, listJuryTeams, type Criterion, type ScoreRow } from "@/lib/jury";
+import { notify } from "@/lib/notifications";
 
 // Feedback do júri pro time (roadmap 037 #9, research 036 #5 — lacuna do
 // mercado). Regras:
@@ -96,8 +97,44 @@ export async function feedbackVisible(hackathonId: string): Promise<boolean> {
   return !!published && released;
 }
 
-export async function setFeedbackReleased(hackathonId: string, released: boolean) {
+/**
+ * Liga/desliga a liberação. Quando o feedback passa a ficar visível (ligou
+ * com o resultado já publicado), avisa os integrantes de cada time que tem
+ * feedback. Devolve quantas pessoas foram avisadas.
+ */
+export async function setFeedbackReleased(hackathonId: string, released: boolean): Promise<{ notified: number }> {
+  const before = await feedbackVisible(hackathonId);
   await db.prepare("UPDATE hackathons SET juryFeedbackReleased = ? WHERE id = ?").run(released ? 1 : 0, hackathonId);
+  if (before || !(await feedbackVisible(hackathonId))) return { notified: 0 };
+  return notifyFeedbackReleased(hackathonId);
+}
+
+/**
+ * Avisa no sino cada integrante de time que recebeu nota ou comentário do
+ * júri. Chamado quando o feedback fica visível: na liberação com resultado
+ * publicado, ou na primeira publicação com a liberação já ligada.
+ */
+export async function notifyFeedbackReleased(hackathonId: string): Promise<{ notified: number }> {
+  const rows = await db
+    .prepare(
+      `SELECT DISTINCT m.id AS "memberId", t.id AS "teamId", t.name AS "teamName"
+       FROM teams t
+       JOIN team_members tm ON tm.teamId = t.id
+       JOIN members m ON m.username = tm.username
+       WHERE t.hackathonId = ?
+         AND (EXISTS (SELECT 1 FROM scores s WHERE s.teamId = t.id)
+           OR EXISTS (SELECT 1 FROM jury_team_feedback f WHERE f.teamId = t.id))
+       ORDER BY m.id, t.id`,
+    )
+    .all<{ memberId: number; teamId: number; teamName: string }>(hackathonId);
+  for (const r of rows) {
+    await notify(r.memberId, {
+      type: "jury_feedback",
+      text: `O feedback do júri sobre o time ${r.teamName} está disponível.`,
+      href: `/p/${r.teamId}/feedback`,
+    });
+  }
+  return { notified: rows.length };
 }
 
 /** nome do time (público na ficha do projeto); null = não existe */
@@ -109,6 +146,13 @@ export async function teamName(teamId: number): Promise<string | null> {
 async function isTeamMember(teamId: number, username: string) {
   return !!(await db.prepare("SELECT 1 FROM team_members WHERE teamId = ? AND username = ?").get(teamId, username));
 }
+
+// comentário de jurado que perdeu o papel ou a atribuição não aparece
+const ACTIVE_JUDGE = (alias: string) => `EXISTS (
+  SELECT 1 FROM judge_assignments a
+  JOIN edition_roles er ON er.hackathonId = a.hackathonId AND er.memberId = a.judgeMemberId AND er.role = 'jurado'
+  JOIN teams tt ON tt.id = a.teamId AND tt.hackathonId = a.hackathonId
+  WHERE a.judgeMemberId = ${alias}.judgeMemberId AND a.teamId = ${alias}.teamId)`;
 
 /** porta única do feedback: quem pergunta + qual time → o que pode ver */
 export async function teamFeedbackFor(
@@ -132,22 +176,19 @@ export async function teamFeedbackFor(
   const [teams, criteria, scores, feedback, general] = await Promise.all([
     listJuryTeams(team.hackathonId),
     listCriteria(team.hackathonId),
-    db
-      .prepare(
-        `SELECT s.judgeMemberId, s.teamId, s.criterionId, s.score FROM scores s
-         JOIN rubric_criteria c ON c.id = s.criterionId
-         WHERE c.hackathonId = ?`,
-      )
-      .all<ScoreRow>(team.hackathonId),
+    activeScores(team.hackathonId),
     db
       .prepare(
         `SELECT s.criterionId, s.feedback AS text FROM scores s
          JOIN rubric_criteria c ON c.id = s.criterionId
-         WHERE s.teamId = ? AND c.hackathonId = ? AND s.feedback IS NOT NULL`,
+         WHERE s.teamId = ? AND c.hackathonId = ? AND s.feedback IS NOT NULL AND ${ACTIVE_JUDGE("s")}`,
       )
       .all<{ criterionId: number; text: string }>(teamId, team.hackathonId),
     db
-      .prepare("SELECT comment FROM jury_team_feedback WHERE teamId = ?")
+      .prepare(
+        `SELECT f.comment FROM jury_team_feedback f
+         WHERE f.teamId = ? AND ${ACTIVE_JUDGE("f")}`,
+      )
       .all<{ comment: string }>(teamId),
   ]);
   return {

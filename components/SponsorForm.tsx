@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { userMessage } from "@/lib/apiError";
 
 const input =
   "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
@@ -36,7 +37,7 @@ export function SponsorForm() {
       window.location.reload();
     } else {
       const data = await res.json().catch(() => null);
-      setError(data?.error ?? "erro ao criar");
+      setError(userMessage(res, data, "não deu pra criar. Tente de novo."));
       setStatus("error");
     }
   }

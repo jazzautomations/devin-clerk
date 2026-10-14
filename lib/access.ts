@@ -31,7 +31,7 @@ export const PUBLIC_PAGES: RegExp[] = [
 export const PUBLIC_APIS: RegExp[] = [
   /^\/api\/health$/,
   /^\/api\/leads$/, // contato do /organizar e /empresas
-  /^\/api\/subscribe$/, // newsletter da landing
+  /^\/api\/subscribe(\/(confirm|unsubscribe))?$/, // newsletter da landing + links do e-mail
   /^\/api\/webhooks\/.+$/, // assinatura própria
   /^\/api\/cron\/.+$/, // segredo próprio (lib/cronAuth)
   new RegExp(`^/api/rsvp/${SEG}$`), // token assinado

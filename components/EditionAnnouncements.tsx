@@ -4,6 +4,7 @@ import { listAnnouncementsForMember, markAnnouncementsRead } from "@/lib/announc
 import { getRegistrationStatus } from "@/lib/registrations";
 import { getEditionRoles } from "@/lib/roles";
 import { formatDbTime } from "@/lib/format";
+import { channelsEnabled } from "@/lib/notify/channels";
 
 // spec 033 US2 — avisos fixados no topo da página da edição, só pra quem
 // está inscrito (approved/pending) ou tem papel nela. Mais recente primeiro;
@@ -40,14 +41,16 @@ export async function EditionAnnouncements({
         </h2>
         <Link
           href={`/h/${hackathonId}/duvidas`}
-          className="font-mono text-[13px] text-accent underline-offset-4 hover:underline"
+          className="inline-flex min-h-11 items-center font-mono text-[13px] text-accent underline-offset-4 hover:underline"
         >
           dúvidas da edição →
         </Link>
       </div>
       {items.length === 0 ? (
         <p className="border-[1.5px] border-line px-5 py-5 font-mono text-[13px] text-muted">
-          nenhum aviso ainda — quando a organização publicar, aparece aqui e no teu e-mail
+          {channelsEnabled().email
+            ? "nenhum aviso ainda. Quando a organização publicar, aparece aqui, no sino e no seu e-mail."
+            : "nenhum aviso ainda. Quando a organização publicar, aparece aqui e no sino."}
         </p>
       ) : (
         <ol className="flex flex-col border-b border-line">

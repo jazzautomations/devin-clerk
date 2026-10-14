@@ -17,14 +17,14 @@ export async function PATCH(req: Request) {
   }
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return Response.json({ error: "Bad request" }, { status: 400 });
+    return Response.json({ error: "não deu pra ler os dados enviados" }, { status: 400 });
   }
   // openTo é whitelist comercial (spec 014) — fora dela é 400, nunca
   // sanitização silenciosa; [] limpa o opt-in; campo ausente preserva
   let openTo: string[] | undefined;
   if ("openTo" in body) {
     if (!Array.isArray(body.openTo) || !body.openTo.every(isOpenToValue)) {
-      return Response.json({ error: "openTo inválido" }, { status: 400 });
+      return Response.json({ error: "opção de disponibilidade inválida" }, { status: 400 });
     }
     openTo = body.openTo;
   }
@@ -65,7 +65,7 @@ export async function PATCH(req: Request) {
     extra[k] = t.value;
   }
   if (typeof body.persona === "string" && body.persona !== "" && !personaLabel(body.persona)) {
-    return Response.json({ error: `persona desconhecida: ${body.persona}` }, { status: 400 });
+    return Response.json({ error: "opção de perfil desconhecida" }, { status: 400 });
   }
   await updateMemberProfile(userId, {
     name: typeof body.name === "string" ? body.name : undefined,
@@ -82,7 +82,8 @@ export async function PATCH(req: Request) {
     personas,
   });
   if (member && Object.keys(extra).length > 0) await saveOnboarding(member.id, extra, false);
-  const newBadges = member ? (await checkBadges(member.id)).map((b) => b.id) : [];
+  // nome da conquista ("1ª campanha"), nunca o id interno ("debut")
+  const newBadges = member ? (await checkBadges(member.id)).map((b) => b.name) : [];
   return Response.json({ ok: true, newBadges });
 }
 

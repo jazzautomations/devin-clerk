@@ -55,6 +55,7 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
     ["período", `${certPeriod(c)}${c.location ? ` · ${c.location}` : ""}`],
     ["instituição", c.institution],
     ["emitido em", formatCertDate(c.issuedAt)],
+    ...(c.revokedAt ? ([["revogado em", formatCertDate(c.revokedAt)]] as [string, string][]) : []),
     ["código", <span key="c" className="font-mono text-accent">{c.code}</span>],
   ];
 
@@ -70,9 +71,21 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
           </span>
         </div>
         <div className="flex flex-col gap-6 p-5 font-sans sm:p-8">
-          <p className="self-start border-[1.5px] border-accent bg-mint px-3 py-1 font-mono text-[12px] tracking-widest text-accent uppercase">
-            certificado válido
-          </p>
+          {c.revokedAt ? (
+            <div className="flex flex-col gap-2" data-testid="cert-revoked">
+              <p className="self-start border-[1.5px] border-orange px-3 py-1 font-mono text-[12px] tracking-widest text-orange uppercase">
+                certificado revogado
+              </p>
+              <p className="text-[15px] text-muted">
+                Este código não vale mais. A organização republicou o resultado ou corrigiu o certificado, e a
+                versão vigente, quando existe, tem outro código.
+              </p>
+            </div>
+          ) : (
+            <p className="self-start border-[1.5px] border-accent bg-mint px-3 py-1 font-mono text-[12px] tracking-widest text-accent uppercase">
+              certificado válido
+            </p>
+          )}
           <div className="flex flex-col gap-2">
             <p className="font-mono text-[12px] tracking-widest text-muted uppercase">
               certificado de {CERT_KIND_LABEL[c.kind]} emitido para
@@ -94,6 +107,7 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
               </div>
             ))}
           </dl>
+          {!c.revokedAt && (
           <div className="flex flex-wrap gap-3">
             <a href={`/c/${c.code}/pdf`} className="btn">
               baixar PDF
@@ -105,7 +119,10 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
               ver a edição
             </Link>
           </div>
-          <ShareBar url={certUrl} text={`Certificado de ${kindLabel} — ${c.hackathonName} (Hack Inova)`} label="compartilhar certificado" />
+          )}
+          {!c.revokedAt && (
+            <ShareBar url={certUrl} text={`Certificado de ${kindLabel} — ${c.hackathonName} (Hack Inova)`} label="compartilhar certificado" />
+          )}
         </div>
       </div>
       <p className="font-mono text-xs text-muted">

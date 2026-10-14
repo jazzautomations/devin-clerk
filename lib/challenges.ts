@@ -70,19 +70,19 @@ export async function createChallenge(
   },
 ): Promise<Challenge> {
   const title = input.title?.trim() ?? "";
-  if (!title) throw new Error("title obrigatório");
+  if (!title) throw new Error("dê um título ao desafio");
 
   let sponsorId: string | null = null;
   let sponsorName = input.sponsor?.trim() ?? "";
   if (input.sponsorId !== undefined && input.sponsorId !== null) {
     const entity = await getSponsor(String(input.sponsorId).trim());
-    if (!entity) throw new Error("sponsor não encontrado");
+    if (!entity) throw new Error("patrocinador não encontrado");
     sponsorId = entity.id;
     // sem nome textual, o display assume o nome da entidade
     if (!sponsorName) sponsorName = entity.name;
   }
   if (!sponsorName) {
-    throw new Error("sponsor obrigatório — é a marca que paga");
+    throw new Error("escolha o patrocinador do desafio");
   }
 
   const id = `chal-${randomUUID()}`;
@@ -129,7 +129,7 @@ export async function updateChallenge(
       sets.push("sponsorId = NULL");
     } else {
       const entity = await getSponsor(String(patch.sponsorId).trim());
-      if (!entity) throw new Error("sponsor não encontrado");
+      if (!entity) throw new Error("patrocinador não encontrado");
       sets.push("sponsorId = @sponsorId");
       values.sponsorId = entity.id;
       // vinculou sem mexer no texto? o display acompanha a entidade

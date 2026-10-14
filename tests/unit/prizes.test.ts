@@ -7,6 +7,7 @@ import { addCriterion, assignAll, assignJudge, judgeAssignments, listJuryTeams, 
 import { categoryCandidates, createCategory, listWinners, pickWinners } from "@/lib/prizes";
 import { issueCertificates, listMemberCertificates } from "@/lib/certificates";
 import { grantEditionRole } from "@/lib/roles";
+import { updateCertSettings } from "@/lib/certHours";
 
 // júri × entrega × categorias de prêmio — spec 034 §5 (critérios de aceite)
 
@@ -139,6 +140,7 @@ describe("categorias de prêmio na publicação", () => {
     expect((await listWinners(H)).filter((w) => w.categoryId === desafio.id).map((w) => w.teamName)).toEqual(["Marcou"]);
 
     await db.prepare("UPDATE hackathons SET startsAt = '2020-01-01', endsAt = '2020-01-02' WHERE id = ?").run(H);
+    await updateCertSettings(H, { hours: { jurado: 4 } });
     await issueCertificates(H);
     const q2 = await memberId("q2");
     const q3 = await memberId("q3", false);

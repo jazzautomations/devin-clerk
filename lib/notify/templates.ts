@@ -60,9 +60,9 @@ ${paragraphs}
 <a href="${esc(urls.edition)}" style="display:inline-block;background:#047a43;color:#ffffff;font-family:${sans};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:6px;">Ver na página da edição</a>
 </td></tr>
 <tr><td style="border-top:1.5px solid #0c0c0c;background:#d8f4e5;padding:16px 24px;font-family:${mono};font-size:12px;line-height:1.6;color:#474747;">
-Você recebe este aviso porque está inscrito em ${esc(a.hackathonName)}.<br>
-<a href="${esc(urls.preferences)}" style="color:#047a43;">Preferências de contato (WhatsApp, telefone)</a> ·
-<a href="${esc(urls.edition)}" style="color:#047a43;">Cancelar inscrição na edição</a> para não receber mais avisos dela.
+Você recebe este aviso porque tem inscrição em ${esc(a.hackathonName)}.<br>
+Os avisos também ficam na <a href="${esc(urls.edition)}" style="color:#047a43;">página da edição</a>.
+WhatsApp e telefone você ajusta nas <a href="${esc(urls.preferences)}" style="color:#047a43;">preferências de contato</a>.
 </td></tr>
 </table>
 <p style="margin:12px 0 0;font-family:${mono};font-size:11px;color:#474747;">HackaHub · avisos da edição</p>
@@ -79,9 +79,9 @@ Você recebe este aviso porque está inscrito em ${esc(a.hackathonName)}.<br>
     `Ver na página da edição: ${urls.edition}`,
     "",
     "--",
-    `Você recebe este aviso porque está inscrito em ${a.hackathonName}.`,
-    `Preferências de contato: ${urls.preferences}`,
-    `Para não receber mais avisos desta edição, cancele a inscrição: ${urls.edition}`,
+    `Você recebe este aviso porque tem inscrição em ${a.hackathonName}.`,
+    `Os avisos também ficam na página da edição: ${urls.edition}`,
+    `WhatsApp e telefone você ajusta nas preferências de contato: ${urls.preferences}`,
   ].join("\n");
 
   return { subject, html, text };

@@ -60,7 +60,7 @@ export default async function RadarPage({
             type="search"
             name="q"
             defaultValue={q}
-            placeholder="buscar por nome, cidade ou tag…"
+            placeholder="buscar por nome, cidade ou tema…"
             aria-label="buscar no radar"
             className="w-full max-w-md border-[1.5px] border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
           />
@@ -75,7 +75,7 @@ export default async function RadarPage({
 
       {q && hackathons.length === 0 && (
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {`nada no radar pra "${q}" — tenta outro termo`}
+          {`nada no radar pra "${q}". Tente outro termo.`}
         </p>
       )}
 
@@ -110,7 +110,7 @@ export default async function RadarPage({
       <details className="group border-[1.5px] border-line">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
-            {"indica um hackathon"}
+            {"indique um hackathon"}
           </span>
           <span className="font-mono text-xs text-muted">
             <span className="group-open:hidden">▸</span>
@@ -119,7 +119,7 @@ export default async function RadarPage({
         </summary>
         <div className="flex flex-col gap-4 border-t border-line/50 px-5 py-5">
           <p className="max-w-xl text-sm text-muted">
-            Viu um hackathon que não tá no radar? Manda o link — a
+            Viu um hackathon que não está no radar? Mande o link. A
             curadoria revisa antes de publicar.
           </p>
           <SubmitEventForm />

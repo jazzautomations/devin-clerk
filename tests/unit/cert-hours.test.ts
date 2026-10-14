@@ -6,6 +6,8 @@ import { addCriterion, assignAll, publishResults, saveScores } from "@/lib/jury"
 import {
   attendeesForCertificates,
   buildHoursCsv,
+  CertificateError,
+  rolesMissingHours,
   getCertificate,
   hoursCsvRows,
   issueCertificates,
@@ -111,12 +113,15 @@ describe("horas default pela duração da edição", () => {
     expect(defaultEditionHours("lixo", "2026-10-10")).toBe(8);
   });
 
-  it("override por papel vence o default; papel sem override fica no default", () => {
+  it("override por papel vence o default; só o participante herda a duração (auditoria 041)", () => {
     const h = { startsAt: "2026-10-10", endsAt: "2026-10-11" };
-    const s = { hours: { participante: 20, staff: null, mentor: 6, jurado: null, organizador: null } };
-    expect(hoursFor(s, h, "participante")).toBe(20);
+    const s = { hours: { participante: null, staff: null, mentor: 6, jurado: null, organizador: null } };
+    expect(hoursFor(s, h, "participante")).toBe(16);
+    expect(hoursFor({ hours: { ...s.hours, participante: 20 } }, h, "participante")).toBe(20);
     expect(hoursFor(s, h, "mentor")).toBe(6);
-    expect(hoursFor(s, h, "jurado")).toBe(16);
+    expect(hoursFor(s, h, "jurado")).toBeNull();
+    expect(hoursFor(s, h, "staff")).toBeNull();
+    expect(hoursFor(s, h, "organizador")).toBeNull();
   });
 });
 
@@ -188,6 +193,28 @@ describe("emissão com carga horária", () => {
     expect(await one(campea, "participacao")).toMatchObject({ role: "participante", hours: 30 });
     expect(await one(campea, "premiacao")).toMatchObject({ hours: null });
     expect((await one(campea, "participacao")).institution).toBe("Hack Inova + FIAP");
+  });
+
+  it("auditoria 041: papel sem horas preenchidas bloqueia a emissão (409) e diz qual falta", async () => {
+    const part = await memberId("ch_semhora_part");
+    const jur = await memberId("ch_semhora_jur");
+    const mentor = await memberId("ch_semhora_mentor");
+    await register(part);
+    await grantEditionRole(H, jur, "jurado", null);
+    await grantEditionRole(H, mentor, "mentor", null);
+    const err = await issueCertificates(H).catch((e) => e);
+    expect(err).toBeInstanceOf(CertificateError);
+    expect(err.status).toBe(409);
+    expect(err.message).toMatch(/mentor\(a\) e jurado\(a\)/);
+    expect(await listMemberCertificates(part)).toEqual([]); // nada sai pela metade
+    expect(await rolesMissingHours(H, await getCertSettings(H))).toEqual(["mentor", "jurado"]);
+
+    await updateCertSettings(H, { hours: { jurado: 3, mentor: 8 } });
+    expect(await rolesMissingHours(H, await getCertSettings(H))).toEqual([]);
+    const r = await issueCertificates(H);
+    expect(r.created).toBe(3);
+    expect((await listMemberCertificates(part))[0]).toMatchObject({ hours: H_DEFAULT });
+    expect((await listMemberCertificates(jur))[0]).toMatchObject({ hours: 3 });
   });
 
   it("congela: mudar horas/instituição depois não muda certificado já emitido; quem chega depois pega o novo", async () => {

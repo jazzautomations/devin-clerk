@@ -1,6 +1,6 @@
 import { getHackathon } from "@/lib/hackathons";
-import { getStageSnapshot } from "@/lib/stage";
-import { subscribeStage } from "@/lib/stageStream";
+import { clientIp } from "@/lib/ratelimit";
+import { acquireStageSlot, initialStage, subscribeStage } from "@/lib/stageStream";
 
 // Modo palco — Server-Sent Events do palco, sem lib. Público (o telão
 // roda sem login). Eventos:
@@ -12,6 +12,10 @@ import { subscribeStage } from "@/lib/stageStream";
 // Headers: `no-transform` impede a compressão do `next start` de segurar
 // os bytes; `X-Accel-Buffering: no` desliga buffer de proxy (nginx-like).
 // O Caddy faz flush imediato em text/event-stream.
+//
+// Conexões abertas têm teto por IP e no total (lib/stageStream): acima
+// disso, 429 com Retry-After. O primeiro snapshot sai do canal quando ele
+// já tem um (sem consulta ao banco por conexão).
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +26,24 @@ const PADDING = `:${" ".repeat(2048)}\n`;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const h = await getHackathon(id);
-  if (!h || !h.active) return Response.json({ error: "Edição não encontrada" }, { status: 404 });
+  const release = acquireStageSlot(clientIp(req));
+  if (!release) {
+    return Response.json(
+      { error: "Muitas conexões abertas com o palco. Feche outras abas e tente de novo." },
+      { status: 429, headers: { "Retry-After": "30" } },
+    );
+  }
+  let h: Awaited<ReturnType<typeof getHackathon>>;
+  try {
+    h = await getHackathon(id);
+  } catch (e) {
+    release();
+    throw e;
+  }
+  if (!h || !h.active) {
+    release();
+    return Response.json({ error: "Edição não encontrada" }, { status: 404 });
+  }
 
   const enc = new TextEncoder();
   let closed = false;
@@ -60,10 +80,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         unsub();
         clearInterval(hb);
         clearTimeout(life);
+        release();
       };
       req.signal.addEventListener("abort", close);
+      // o cliente pode ter ido embora antes do listener existir
+      if (req.signal.aborted) return close();
       try {
-        event("stage", await getStageSnapshot(id));
+        event("stage", await initialStage(id));
       } catch {
         close();
       }

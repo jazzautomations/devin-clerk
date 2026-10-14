@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { TERMS_UPDATED, TERMS_VERSION } from "@/lib/legal";
 
 // Termos de uso (spec 022) — contrato honesto e curto: o que a plataforma é,
 // de quem é o conteúdo, conduta e isenção.
@@ -7,7 +8,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "termos de uso",
   description:
-    "Os termos de uso do hackahub: o que a plataforma é, de quem é o conteúdo postado, conduta esperada e limites de responsabilidade.",
+    "Os termos de uso do HackaHub: o que a plataforma é, de quem é o conteúdo postado, conduta esperada e limites de responsabilidade.",
   alternates: { canonical: "/legal/termos" },
 };
 
@@ -22,8 +23,11 @@ export default function TermosPage() {
           Termos de uso
         </h1>
         <p className="text-muted">
-          O combinado entre você e o hackahub. Direto ao ponto — se não concorda
-          com algo aqui, não use a plataforma.
+          O combinado entre você e o HackaHub. Se não concorda com algo aqui,
+          não use a plataforma.
+        </p>
+        <p className="font-mono text-[12px] text-muted" data-testid="terms-version">
+          versão {TERMS_VERSION} · {TERMS_UPDATED}
         </p>
       </div>
 
@@ -32,7 +36,7 @@ export default function TermosPage() {
           o serviço
         </h2>
         <p className="text-sm leading-relaxed text-muted">
-          O hackahub é a rede social dos hackathons: páginas de edições,
+          O HackaHub é a rede social dos hackathons: páginas de edições,
           inscrição, feed, perfil público, arquivo de resultados e diretório de
           talento. Participante nunca paga — a receita vem de marcas que
           patrocinam desafios e edições.
@@ -89,8 +93,8 @@ export default function TermosPage() {
           contato
         </h2>
         <p className="text-sm leading-relaxed text-muted">
-          Dúvidas sobre estes termos: fala com a organização pelo formulário em{" "}
-          <Link href="/empresas" className="text-accent hover:underline">
+          Dúvidas sobre estes termos: fale com a organização pelo formulário em{" "}
+          <Link href="/empresas#contato" className="link-inline">
             /empresas
           </Link>{" "}
           ou nas sessões da comunidade.
@@ -98,9 +102,9 @@ export default function TermosPage() {
       </div>
 
       <p className="border-t border-line pt-6 font-mono text-[12px] text-muted">
-        {"última revisão: out/2026 · "}
-        <Link href="/legal/privacidade" className="hover:text-accent">
-          privacidade →
+        {`versão ${TERMS_VERSION} · ${TERMS_UPDATED} · `}
+        <Link href="/legal/privacidade" className="link-inline">
+          privacidade
         </Link>
       </p>
     </section>

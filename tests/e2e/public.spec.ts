@@ -84,7 +84,7 @@ test.describe("comunidade e feed — pra quem tem conta", () => {
       page.getByRole("heading", { name: /o que a comunidade/i }),
     ).toBeVisible();
     await expect(page.getByText(/cria conta pra postar/i)).toHaveCount(0);
-    await expect(page.getByPlaceholder(/o que tu tá construindo/i)).toBeVisible();
+    await expect(page.getByPlaceholder(/o que você está construindo/i)).toBeVisible();
   });
 });
 

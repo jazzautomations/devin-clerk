@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { userMessage } from "@/lib/apiError";
 
 type State = { sharedAt: string | null; revokedAt: string | null };
 
@@ -43,7 +44,7 @@ export function SponsorOptIn({
     const res = await fetch(`/api/hackathons/${hackathonId}/sponsors/${sponsorId}/contact`, { method });
     const data = await res.json().catch(() => null);
     setBusy(false);
-    if (!res.ok) return setError(data?.error ?? "não deu certo, tente de novo");
+    if (!res.ok) return setError(userMessage(res, data, "não deu certo. Tente de novo."));
     setState({ sharedAt: data.sharedAt ?? null, revokedAt: data.revokedAt ?? null });
   }
 

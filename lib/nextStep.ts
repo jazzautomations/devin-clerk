@@ -3,7 +3,7 @@ import type { RegistrationStatus } from "@/lib/registrations";
 import type { EntryStatus } from "@/lib/entries";
 import { KIND_LABEL, type ApplicationKind, type ApplicationStatus } from "@/lib/applicationKinds";
 
-// spec 039 — "teu próximo passo": UM passo por pessoa por edição, decidido
+// spec 039 — "seu próximo passo": UM passo por pessoa por edição, decidido
 // só a partir de fatos já carregados (sem banco aqui; quem junta é
 // lib/nextStepFacts). A mesma resposta aparece no topo de /h/[id] e no
 // card da edição no /dashboard. Módulo puro: testável e seguro pra client.
@@ -157,7 +157,7 @@ export function nextStep(f: NextStepFacts): NextStep {
         "resultado",
         "Edição encerrada",
         { label: "ver resultado", href: `${base}#resultado` },
-        "teu time, a carta e a trajetória ficam no teu perfil",
+        "seu time, a carta e a trajetória ficam no seu perfil",
       );
     }
     return step("encerrada", "resultado", "Edição encerrada", { label: "ver resultado", href: `${base}#resultado` }, null, {
@@ -218,7 +218,7 @@ export function nextStep(f: NextStepFacts): NextStep {
         "inscricao",
         f.waitlistPosition ? `Na fila de espera · posição ${f.waitlistPosition}` : "Na fila de espera",
         null,
-        "se abrir vaga, tua inscrição confirma sozinha e tu recebe aviso",
+        "se abrir vaga, sua inscrição confirma sozinha e você recebe aviso",
       );
     case "rejected":
       return step(
@@ -235,7 +235,7 @@ export function nextStep(f: NextStepFacts): NextStep {
     return step(
       "confirmar",
       "presenca",
-      `Confirma tua presença até ${f.rsvp.deadline}`,
+      `Confirme sua presença até ${f.rsvp.deadline}`,
       { label: "confirmar presença", href: f.rsvp.href },
       "sem confirmação a vaga vai pra fila de espera",
     );
@@ -274,7 +274,7 @@ export function nextStep(f: NextStepFacts): NextStep {
       return step("sem-entrega", "entrega", "Prazo de entrega encerrado", { label: "ver entrega", href: `${base}/entrega` }, "o time não enviou a entrega");
     }
     if (f.submission.open && !f.hasTeam) {
-      return step("time", "entrega", "Monta teu time", { label: "montar time", href: `${base}#meu-time` }, `a entrega é por time${deadline}`);
+      return step("time", "entrega", "Monte seu time", { label: "montar time", href: `${base}#meu-time` }, `a entrega é por time${deadline}`);
     }
     if (f.submission.open && f.entry) {
       return step("entregar", "entrega", `Entrega${deadline}`, { label: "abrir entrega", href: `${base}/entrega` }, "rascunho salva sozinho; vale o que for enviado");
@@ -282,7 +282,7 @@ export function nextStep(f: NextStepFacts): NextStep {
   }
   if (onSite) {
     if (!f.hasTeam) {
-      return step("time", "entrega", "Monta teu time", { label: "montar time", href: `${base}#meu-time` }, "quem tá sem time marca no quadro e o time te acha");
+      return step("time", "entrega", "Monte seu time", { label: "montar time", href: `${base}#meu-time` }, "quem está sem time se marca no quadro e o time acha você");
     }
     return step("no-evento", "entrega", "Check-in feito", { label: "ver programação", href: `${base}/programacao` }, "bom evento");
   }

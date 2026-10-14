@@ -165,7 +165,7 @@ describe("GET /api/admin/subscribers", () => {
     expect(res.headers.get("content-type")).toContain("text/csv");
     const body = await res.text();
     const lines = body.trim().split("\n");
-    expect(lines[0]).toBe("email,createdAt");
+    expect(lines[0]).toMatch(/^email,createdAt/);
     expect(lines).toHaveLength(3);
     expect(body).toContain("jane@x.dev");
     expect(body).toContain("john@x.dev");

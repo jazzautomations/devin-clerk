@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import db from "@/lib/db";
 import { createTeam, getArchive } from "@/lib/archive";
-import { grantEditionRole } from "@/lib/roles";
+import { grantEditionRole, revokeEditionRole } from "@/lib/roles";
+import { setFeedbackReleased } from "@/lib/juryFeedback";
 import {
   addCriterion,
   assignAll,
@@ -12,12 +13,15 @@ import {
   isPublished,
   judgeAssignments,
   JuryError,
+  JuryPublishIncomplete,
   juryProgress,
   listAssignments,
   publishResults,
+  publishedRanking,
   rankingFor,
   removeCriterion,
   saveScores,
+  unassignJudge,
   updateCriterion,
 } from "@/lib/jury";
 
@@ -226,6 +230,7 @@ describe("progresso, sigilo e publicação", () => {
     const [mine] = await judgeAssignments(H, j);
     expect(mine.scores).toEqual({});
     expect(mine.comment).toBeNull();
+    await saveScores(H, j, t, [{ criterionId: c.id, score: 4 }], null);
 
     await publishResults(H, org);
     expect(await isPublished(H)).toMatchObject({ publishedBy: org });
@@ -260,6 +265,113 @@ describe("progresso, sigilo e publicação", () => {
     await publishResults(H, null);
     const n = await db.prepare("SELECT COUNT(*) AS n FROM jury_results WHERE hackathonId = ?").get<{ n: number }>(H);
     expect(n!.n).toBe(1);
+  });
+});
+
+describe("auditoria 041 — resultado justo e congelado", () => {
+  it("time A com 1 nota (num critério de 3) não fica à frente de B avaliado por completo", () => {
+    const teams = [
+      { id: 1, name: "A", title: null },
+      { id: 2, name: "B", title: null },
+    ];
+    const criteria = [10, 11, 12].map((id) => ({ id, weight: 1 }));
+    const scores = [
+      { judgeMemberId: 1, teamId: 1, criterionId: 10, score: 5 },
+      ...[1, 2, 3].flatMap((j) => criteria.map((c) => ({ judgeMemberId: j, teamId: 2, criterionId: c.id, score: 4 }))),
+    ];
+    const r = computeRanking(teams, criteria, scores);
+    expect(r.map((x) => [x.name, x.rank, x.incomplete, x.missingScores])).toEqual([
+      ["B", 1, false, 0],
+      ["A", 2, true, 2],
+    ]);
+    // com a lista de atribuição: A tinha 3 jurados, faltam 8 notas
+    const assignments = [1, 2, 3].flatMap((j) => [1, 2].map((teamId) => ({ judgeMemberId: j, teamId })));
+    const r2 = computeRanking(teams, criteria, scores, assignments);
+    expect(r2.find((x) => x.name === "A")).toMatchObject({ rank: 2, incomplete: true, missingScores: 8 });
+  });
+
+  it("publicar com avaliação faltando dá 409 com a contagem; force pede motivo e grava", async () => {
+    const c = await addCriterion(H, { label: "A", weight: 1 });
+    const j1 = await judge("jur_inc1");
+    const j2 = await judge("jur_inc2");
+    const t = await team("Inc1");
+    await assignAll(H);
+    await saveScores(H, j1, t, [{ criterionId: c.id, score: 5 }], null);
+    const err = await publishResults(H, null).catch((e) => e);
+    expect(err).toBeInstanceOf(JuryPublishIncomplete);
+    expect(err).toMatchObject({ status: 409, missing: 1, missingScores: 1 });
+    expect(await isPublished(H)).toBeNull();
+    await expect(publishResults(H, null, { force: true, reason: "curto" })).rejects.toMatchObject({ status: 400 });
+    const res = await publishResults(H, null, { force: true, reason: "  jurado 2 não apareceu  " });
+    expect(res).toMatchObject({ forced: true, first: true });
+    expect(await isPublished(H)).toMatchObject({ forced: true, reason: "jurado 2 não apareceu" });
+    expect(j2).toBeGreaterThan(0);
+  });
+
+  it("depois de publicar a rubrica trava (409) e o ranking lido é o congelado", async () => {
+    const c = await addCriterion(H, { label: "A", weight: 1 });
+    const j = await judge("jur_snap");
+    const org = await memberId("org_snap");
+    await grantEditionRole(H, org, "organizador", null);
+    const t1 = await team("Snap1");
+    const t2 = await team("Snap2");
+    await assignAll(H);
+    await saveScores(H, j, t1, [{ criterionId: c.id, score: 5 }], null);
+    await saveScores(H, j, t2, [{ criterionId: c.id, score: 3 }], null);
+    await publishResults(H, org);
+
+    await expect(removeCriterion(H, c.id)).rejects.toMatchObject({ status: 409 });
+    await expect(updateCriterion(H, c.id, { weight: 9 })).rejects.toMatchObject({ status: 409 });
+    await expect(addCriterion(H, { label: "Novo", weight: 1 })).rejects.toMatchObject({ status: 409 });
+
+    // o time 1 sai do júri depois da publicação: o ao vivo muda, o publicado não
+    await unassignJudge(H, j, t1);
+    expect((await getRanking(H))[0]).toMatchObject({ teamId: t2, rank: 1 });
+    const frozen = await rankingFor({ id: org, role: "member" }, H);
+    expect(frozen![0]).toMatchObject({ teamId: t1, rank: 1, weighted: 5 });
+    expect(await publishedRanking(H)).toEqual(frozen);
+    expect(await rankingFor({ id: j, role: "member" }, H)).toEqual(frozen);
+  });
+
+  it("jurado que perdeu o papel não grava nota (403) e as notas dele saem do ranking e do progresso", async () => {
+    const c = await addCriterion(H, { label: "A", weight: 1 });
+    const j1 = await judge("jur_rev1");
+    const j2 = await judge("jur_rev2");
+    const t = await team("Rev1");
+    await assignAll(H);
+    await saveScores(H, j1, t, [{ criterionId: c.id, score: 4 }], null);
+    await saveScores(H, j2, t, [{ criterionId: c.id, score: 1 }], null);
+    expect((await getRanking(H))[0]).toMatchObject({ weighted: 2.5, judges: 2 });
+
+    await revokeEditionRole(H, j2, "jurado");
+    await expect(saveScores(H, j2, t, [{ criterionId: c.id, score: 2 }], null)).rejects.toMatchObject({ status: 403 });
+    expect((await getRanking(H))[0]).toMatchObject({ weighted: 4, judges: 1 });
+    expect(await juryProgress(H)).toMatchObject({ expected: 1, done: 1, missing: 0 });
+  });
+
+  it("liberar o feedback com resultado publicado avisa cada integrante do time com feedback", async () => {
+    await db.exec("DELETE FROM notifications");
+    const c = await addCriterion(H, { label: "A", weight: 1 });
+    const j = await judge("jur_fb");
+    const t = await team("Fb1", ["fb_ana", "fb_bia"]);
+    await team("FbSemNota", ["fb_caio"]);
+    await assignJudge(H, j, t);
+    await saveScores(H, j, t, [{ criterionId: c.id, score: 4, feedback: "bom" }], null);
+    // antes de publicar: liberar só arma, ninguém é avisado
+    expect(await setFeedbackReleased(H, true)).toEqual({ notified: 0 });
+    await setFeedbackReleased(H, false);
+    await publishResults(H, null);
+    expect(await setFeedbackReleased(H, true)).toEqual({ notified: 2 });
+    const rows = await db
+      .prepare("SELECT n.href, m.username FROM notifications n JOIN members m ON m.id = n.memberId WHERE n.type = 'jury_feedback' ORDER BY m.username")
+      .all<{ href: string; username: string }>();
+    expect(rows).toEqual([
+      { href: `/p/${t}/feedback`, username: "fb_ana" },
+      { href: `/p/${t}/feedback`, username: "fb_bia" },
+    ]);
+    // ligar de novo (já visível) não repete o aviso
+    expect(await setFeedbackReleased(H, true)).toEqual({ notified: 0 });
+    await setFeedbackReleased(H, false);
   });
 });
 

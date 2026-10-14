@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon, type Hackathon } from "@/lib/hackathons";
-import { JuryError } from "@/lib/jury";
+import { JuryError, JuryPublishIncomplete } from "@/lib/jury";
 import { getMemberByClerkId, type Member } from "@/lib/members";
 import { canManageEdition } from "@/lib/roles";
 
@@ -32,6 +32,9 @@ export async function body(req: Request): Promise<Record<string, unknown>> {
 }
 
 export function juryErrorResponse(e: unknown): Response {
+  if (e instanceof JuryPublishIncomplete) {
+    return json({ error: e.message, missing: e.missing, missingScores: e.missingScores }, e.status);
+  }
   if (e instanceof JuryError) return json({ error: e.message }, e.status);
   throw e;
 }

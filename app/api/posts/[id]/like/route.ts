@@ -39,7 +39,7 @@ export async function POST(
     await notify(author.memberId, {
       type: "like",
       actorUsername: member.username,
-      text: `@${member.username} curtiu teu post`,
+      text: `@${member.username} curtiu seu post`,
       href: "/feed",
     });
   }

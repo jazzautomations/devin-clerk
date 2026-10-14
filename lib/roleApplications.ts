@@ -303,12 +303,12 @@ export async function reviewApplication(input: {
     result.status === "approved"
       ? {
           type: "role_application_approved",
-          text: `tua candidatura de ${label} em ${edition} foi aprovada — o painel da edição já está liberado`,
+          text: `sua candidatura de ${label} em ${edition} foi aprovada — o painel da edição já está liberado`,
           href: `/admin/h/${hackathonId}`,
         }
       : {
           type: "role_application_rejected",
-          text: `tua candidatura de ${label} em ${edition} não foi aprovada desta vez`,
+          text: `sua candidatura de ${label} em ${edition} não foi aprovada desta vez`,
           href: `/h/${hackathonId}`,
         },
   );

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Prova que o backup restaura: carrega o dump mais recente (ou o dado) num
-# banco descartável, confere checksum, migrations e contagem de linhas contra
-# a origem, e apaga tudo. Prod nunca é tocado. Resultado vai pro stdout e
-# deve ser registrado (com data) em docs/runbook.md.
+# banco descartável, confere checksum, conta as linhas de TODAS as tabelas e
+# compara com a origem, e apaga tudo. O banco de origem nunca é tocado (só
+# leitura pra comparar). No sucesso grava ~/hackahub-backups/LAST_DRILL_OK-<banco>.
+# O /api/health?deep=1 expõe só o de prod (LAST_DRILL_OK-hackahub) pro monitor
+# externo (alerta com > 8 dias): o drill do stage não pode esconder um drill
+# de prod que falha.
 #   bash restore-drill.sh [dir-do-backup] [banco-origem=hackahub]
 set -euo pipefail
 ROOT=/home/ubuntu/hackahub-backups
@@ -17,13 +20,23 @@ trap 'docker exec hackahub-pg psql -U hackahub -d postgres -qc "DROP DATABASE IF
 START=$(date +%s)
 docker exec hackahub-pg createdb -U hackahub "$DB"
 docker exec -i hackahub-pg pg_restore -U hackahub -d "$DB" --no-owner < "$DUMP"
-count() { $PSQL -d "$1" -c "SELECT string_agg(t || '=' || n, ' ' ORDER BY t) FROM (
-  SELECT 'migrations' t, COUNT(*) n FROM schema_migrations UNION ALL
-  SELECT 'members', COUNT(*) FROM members UNION ALL
-  SELECT 'hackathons', COUNT(*) FROM hackathons UNION ALL
-  SELECT 'registrations', COUNT(*) FROM registrations UNION ALL
-  SELECT 'posts', COUNT(*) FROM posts) x"; }
+
+# contagem exata de cada tabela do schema public (pg_stat_user_tables só
+# estima, e num banco recém-restaurado ainda está zerado)
+count() {
+  local q
+  q=$($PSQL -d "$1" -c "SELECT string_agg(format('SELECT %L AS t, count(*) AS n FROM public.%I', relname, relname), ' UNION ALL ' ORDER BY relname) FROM pg_stat_user_tables WHERE schemaname = 'public'")
+  [ -n "$q" ] || { echo ""; return; }
+  $PSQL -d "$1" -c "SELECT t || '=' || n FROM ($q) x ORDER BY t"
+}
 GOT=$(count "$DB")
-echo "restaurado: $GOT"
-echo "origem now: $(count "$SRC")  (pode ter crescido desde o backup)"
+ORIG=$(count "$SRC")
+NT=$(printf '%s\n' "$GOT" | grep -c '=' || true)
+[ "$NT" -gt 0 ] || { echo "restauração sem tabelas" >&2; exit 1; }
+printf '%s\n' "$GOT" | grep -q '^schema_migrations=[1-9]' || { echo "sem schema_migrations" >&2; exit 1; }
+
+echo "restaurado: $NT tabelas"
+# diferenças contra a origem (a origem pode ter crescido desde o backup)
+diff <(printf '%s\n' "$GOT") <(printf '%s\n' "$ORIG") | sed -n 's/^</  backup: /p; s/^>/  agora:  /p' || true
+date -u +%FT%TZ > "$ROOT/LAST_DRILL_OK-$SRC"
 echo "drill ok: $(basename "$SET")/$SRC.dump em $(( $(date +%s) - START ))s"

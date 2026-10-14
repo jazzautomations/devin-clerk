@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { announcementReach, type ChannelsEnabled } from "@/lib/notify/reach";
+import { userMessage } from "@/lib/apiError";
 
 type Audience = "todos" | "aprovados" | "presentes" | "time";
 
@@ -17,10 +19,12 @@ export function AnnouncementComposer({
   hackathonId,
   teams,
   counts,
+  channels,
 }: {
   hackathonId: string;
-  teams: { id: number; name: string }[];
+  teams: { id: number; name: string; members: number }[];
   counts: Partial<Record<Audience, number>>;
+  channels: ChannelsEnabled;
 }) {
   const router = useRouter();
   const [audience, setAudience] = useState<Audience>("todos");
@@ -29,12 +33,22 @@ export function AnnouncementComposer({
   const [body, setBody] = useState("");
   const [state, setState] = useState<{ kind: "idle" | "sending" | "done" | "error"; msg?: string }>({ kind: "idle" });
 
-  const ready = title.trim() && body.trim() && (audience !== "time" || teamId !== "");
+  // quantas pessoas o público escolhido alcança agora; 0 bloqueia o envio
+  const people =
+    audience === "time"
+      ? teamId === ""
+        ? null
+        : (teams.find((t) => t.id === teamId)?.members ?? 0)
+      : (counts[audience] ?? null);
+  const empty = people === 0;
+  const ready = title.trim() && body.trim() && (audience !== "time" || teamId !== "") && !empty;
+  const reach = announcementReach(channels);
 
   async function publish() {
     if (!ready) return;
     const target = OPTIONS.find((o) => o.value === audience)!.label;
-    if (!window.confirm(`Publicar pra ${target}? Sai por in-app, e-mail e WhatsApp (quem optou).`)) return;
+    const howMany = people === null ? target : `${people} ${people === 1 ? "pessoa" : "pessoas"} (${target})`;
+    if (!window.confirm(`Publicar pra ${howMany}? O aviso aparece ${reach}.`)) return;
     setState({ kind: "sending" });
     const res = await fetch(`/api/admin/hackathons/${hackathonId}/announcements`, {
       method: "POST",
@@ -43,12 +57,12 @@ export function AnnouncementComposer({
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setState({ kind: "error", msg: data.error ?? "erro ao publicar" });
+      setState({ kind: "error", msg: userMessage(res, data, "não deu pra publicar, tente de novo") });
       return;
     }
     setTitle("");
     setBody("");
-    setState({ kind: "done", msg: `publicado — ${data.queued} entregas na fila` });
+    setState({ kind: "done", msg: `publicado ${reach}` });
     router.refresh();
   }
 
@@ -96,10 +110,10 @@ export function AnnouncementComposer({
               value={teamId}
               onChange={(e) => setTeamId(e.target.value ? Number(e.target.value) : "")}
             >
-              <option value="">{teams.length ? "escolhe o time…" : "nenhum time nesta edição"}</option>
+              <option value="">{teams.length ? "escolha o time…" : "nenhum time nesta edição"}</option>
               {teams.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name}
+                  {t.name} ({t.members})
                 </option>
               ))}
             </select>
@@ -126,15 +140,24 @@ export function AnnouncementComposer({
             placeholder="Traga documento com foto. Entrada pelo portão 2."
           />
         </label>
+        {empty && (
+          <p data-testid="audience-empty" className="font-mono text-[13px] text-muted">
+            ninguém neste público ainda; escolha outro público
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-4">
           <button type="submit" className="btn rounded-[6px] disabled:opacity-50" disabled={!ready || state.kind === "sending"}>
             {state.kind === "sending" ? "publicando…" : "publicar aviso"}
           </button>
-          {state.msg && (
-            <p role="status" className={`font-mono text-[13px] ${state.kind === "error" ? "text-orange" : "text-accent"}`}>
-              {state.msg}
-            </p>
-          )}
+          {/* região sempre montada: leitor de tela só anuncia o que muda dentro dela */}
+          <p
+            role="status"
+            className={
+              state.msg ? `font-mono text-[13px] ${state.kind === "error" ? "text-orange" : "text-accent"}` : "sr-only"
+            }
+          >
+            {state.msg ?? ""}
+          </p>
         </div>
       </form>
 
@@ -146,7 +169,7 @@ export function AnnouncementComposer({
             {title.trim() || "Título do aviso"}
           </h3>
           <p className="text-[15px] leading-relaxed break-words whitespace-pre-line">
-            {body.trim() || "O texto aparece aqui, no e-mail e no WhatsApp de quem optou."}
+            {body.trim() || `O texto aparece ${reach}.`}
           </p>
         </div>
       </div>

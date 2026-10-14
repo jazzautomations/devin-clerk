@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-// configuração do certificado (roadmap 037 #2): horas por papel (vazio =
-// default pela duração da edição), presença mínima, instituição promotora e
-// qual pergunta do formulário é curso/instituição/matrícula pro CSV.
+// configuração do certificado (roadmap 037 #2): horas por papel (só o
+// participante herda a duração da edição; os outros papéis são preenchidos
+// antes de emitir), presença mínima, instituição promotora e qual pergunta
+// do formulário é curso/instituição/matrícula pro CSV.
 
 type Role = "participante" | "staff" | "mentor" | "jurado" | "organizador";
 
@@ -92,8 +93,8 @@ export function CertificateSettingsForm({
       <fieldset className="flex flex-col gap-3">
         <legend className={`${lbl} mb-2`}>carga horária por papel</legend>
         <p className="text-[14px] text-muted">
-          Vazio = duração da edição ({defaultHours} h). Certificado já emitido não muda: as horas ficam congeladas
-          na emissão.
+          Participante vazio fica com a duração da edição ({defaultHours} h). Os outros papéis precisam das horas
+          que a pessoa dedicou de fato. Certificado já emitido não muda: as horas ficam congeladas na emissão.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
           {roles.map((r) => (
@@ -105,7 +106,7 @@ export function CertificateSettingsForm({
                 min={1}
                 max={1000}
                 step={1}
-                placeholder={`${defaultHours}`}
+                placeholder={r.role === "participante" ? `${defaultHours}` : "preencher"}
                 aria-label={`horas de ${r.label}`}
                 value={hours[r.role]}
                 onChange={(e) => setHours((h) => ({ ...h, [r.role]: e.target.value }))}
@@ -173,7 +174,9 @@ export function CertificateSettingsForm({
         <button type="submit" disabled={busy} className="btn disabled:cursor-not-allowed disabled:opacity-50">
           {busy ? "salvando…" : "salvar configuração"}
         </button>
-        {msg && <span className="font-mono text-[12px] text-accent">{msg}</span>}
+        <span role="status" className={msg ? "font-mono text-[12px] text-accent" : "sr-only"}>
+          {msg}
+        </span>
         {error && (
           <span role="alert" className="font-mono text-[12px] text-orange">
             {error}

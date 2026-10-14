@@ -35,12 +35,30 @@ describe("buildSitemap", () => {
 
 describe("buildRobots", () => {
   it("libera a raiz, bloqueia a área logada e aponta o sitemap absoluto", () => {
-    const robots = buildRobots();
+    const robots = buildRobots("https://hackahub.jazzautomations.com.br");
     expect(robots.sitemap).toBe(absoluteUrl("/sitemap.xml"));
     const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules];
     expect(rules[0].userAgent).toBe("*");
     expect(rules[0].allow).toBe("/");
     expect(rules[0].disallow).toEqual(expect.arrayContaining(["/api/", "/dashboard", "/radar", "/bem-vindo"]));
+  });
+});
+
+describe("buildRobots fora de produção (achado staging-publico-indexavel)", () => {
+  it.each([
+    "https://hackahub-stage.64-181-217-112.sslip.io",
+    "https://hackahub.dev",
+    "http://localhost:3100",
+  ])("%s fecha tudo pro crawler", (url) => {
+    const robots = buildRobots(url);
+    const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules];
+    expect(rules).toEqual([{ userAgent: "*", disallow: "/" }]);
+    expect(robots.sitemap).toBeUndefined();
+  });
+
+  it("o padrão (sem NEXT_PUBLIC_SITE_URL) não é produção", () => {
+    const rules = buildRobots().rules;
+    expect(Array.isArray(rules) ? rules[0] : rules).toMatchObject({ disallow: "/" });
   });
 });
 

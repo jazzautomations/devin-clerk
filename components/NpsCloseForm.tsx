@@ -50,11 +50,13 @@ export function NpsCloseForm({ hackathonId, value }: { hackathonId: string; valu
       >
         voltar pro padrão
       </button>
-      {msg && (
-        <p role="status" className={`font-mono text-[13px] sm:col-span-3 ${msg.ok ? "text-accent" : "text-orange"}`}>
-          {msg.text}
-        </p>
-      )}
+      {/* sempre montada: leitor de tela só anuncia região que já existia */}
+      <p
+        role="status"
+        className={msg ? `font-mono text-[13px] sm:col-span-3 ${msg.ok ? "text-accent" : "text-orange"}` : "sr-only"}
+      >
+        {msg?.text ?? ""}
+      </p>
     </form>
   );
 }

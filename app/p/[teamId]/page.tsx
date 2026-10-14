@@ -16,6 +16,7 @@ import { absoluteUrl } from "@/lib/seo";
 import { renderUserMarkdown } from "@/lib/blog";
 import { sponsorLogosForChallenges } from "@/lib/editionSponsors";
 import { PublicCard } from "@/components/PublicCard";
+import { parseId } from "@/lib/ids";
 
 // Ficha do projeto (spec 010/030; ordem da spec 034 §5.8): capa · título ·
 // tagline · selos · vídeo do time · vídeo do palco · demo ao vivo ·
@@ -25,14 +26,9 @@ import { PublicCard } from "@/components/PublicCard";
 
 type Props = { params: Promise<{ teamId: string }> };
 
-function parseTeamId(raw: string): number | null {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { teamId } = await params;
-  const id = parseTeamId(teamId);
+  const id = parseId(teamId);
   const data = id === null ? null : await getProjectView(id, null);
   if (!data) return { title: `projeto não encontrado — ${appConfig.name}` };
   const description =
@@ -51,7 +47,7 @@ const linkBtn =
 
 export default async function ProjectPage({ params }: Props) {
   const { teamId } = await params;
-  const id = parseTeamId(teamId);
+  const id = parseId(teamId);
   if (id === null) notFound();
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
@@ -181,7 +177,7 @@ export default async function ProjectPage({ params }: Props) {
               href={`/demo/${live.id}/`}
               className="flex items-center justify-between gap-4 border-[1.5px] border-accent bg-mint px-5 py-4 font-mono text-sm text-accent transition hover:bg-[#c3ebd5]"
             >
-              <span>● demo ao vivo — deploy rodando agora</span>
+              <span>● demo ao vivo — no ar agora</span>
               <span>abrir →</span>
             </a>
           )}
@@ -276,7 +272,7 @@ export default async function ProjectPage({ params }: Props) {
               ))}
             </div>
           ) : (
-            <p className="font-mono text-xs text-muted">{"sem links públicos cadastrados — pergunta pro time"}</p>
+            <p className="font-mono text-xs text-muted">{"o time ainda não publicou links"}</p>
           )}
         </>
       )}
@@ -315,7 +311,7 @@ export default async function ProjectPage({ params }: Props) {
           data-testid="feedback-link"
           className="flex items-center justify-between gap-4 border-[1.5px] border-accent px-5 py-4 font-mono text-sm text-accent transition hover:bg-mint"
         >
-          <span>feedback do júri pro teu time · só o time vê</span>
+          <span>feedback do júri pro seu time · só o time vê</span>
           <span>abrir →</span>
         </Link>
       )}
@@ -350,8 +346,8 @@ export default async function ProjectPage({ params }: Props) {
         )}
       </div>
 
-      <Link href={`/h/${data.hackathonId}`} className="w-fit font-mono text-xs text-muted transition hover:text-accent">
-        {"← volta pro arquivo da edição"}
+      <Link href={`/h/${data.hackathonId}`} className="w-fit py-3 font-mono text-xs text-muted transition hover:text-accent">
+        {"← voltar pro arquivo da edição"}
       </Link>
     </section>
   );
