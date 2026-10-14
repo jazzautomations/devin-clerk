@@ -125,6 +125,12 @@ export async function listPendingInvites(hackathonId: string) {
     .all<{ email: string; role: EditionRole; createdAt: string }>(hackathonId);
 }
 
+export async function cancelEditionInvite(hackathonId: string, email: string, role: EditionRole) {
+  await db
+    .prepare("DELETE FROM edition_role_invites WHERE hackathonId = ? AND email = ? AND role = ?")
+    .run(hackathonId, email.trim().toLowerCase(), role);
+}
+
 /** converte convites pendentes do e-mail em papéis do membro recém-chegado */
 export async function claimEditionInvites(memberId: number, email: string) {
   const normalized = email.trim().toLowerCase();
