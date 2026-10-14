@@ -28,9 +28,11 @@ export function ShareBar({ url, text, label = "compartilhar" }: { url: string; t
     }
   }
 
-  const item = "font-mono text-[12px] underline-offset-4 hover:text-accent hover:underline";
+  // alvo de 44px de altura: no celular o dedo acerta sem zoom
+  const item =
+    "inline-flex min-h-11 items-center px-1 font-mono text-[12px] underline-offset-4 hover:text-accent hover:underline";
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2" aria-label={label}>
+    <div role="group" className="flex flex-wrap items-center gap-x-3" aria-label={label}>
       <span className="font-mono text-[12px] tracking-widest text-muted uppercase">{label}</span>
       {canNative && (
         <button type="button" onClick={() => void nativeShare()} className={item}>
@@ -38,16 +40,16 @@ export function ShareBar({ url, text, label = "compartilhar" }: { url: string; t
         </button>
       )}
       <a href={links.linkedin} target="_blank" rel="noopener noreferrer" className={item}>
-        linkedin
+        LinkedIn
       </a>
       <a href={links.x} target="_blank" rel="noopener noreferrer" className={item}>
-        x
+        X (Twitter)
       </a>
       <a href={links.whatsapp} target="_blank" rel="noopener noreferrer" className={item}>
-        whatsapp
+        WhatsApp
       </a>
       <a href={links.telegram} target="_blank" rel="noopener noreferrer" className={item}>
-        telegram
+        Telegram
       </a>
       <button type="button" onClick={() => void copy()} className={item} aria-live="polite">
         {copied ? "link copiado" : "copiar link"}

@@ -40,8 +40,8 @@ export default async function FeedPage() {
           Devs, empreendedores, investidores, professores e marcas — demos,
           projetos e bastidores dos hackathons.{" "}
           {!member && (
-            <Link href="/sign-up" className="text-accent hover:underline">
-              cria conta pra postar →
+            <Link href="/sign-up" className="link-inline">
+              crie sua conta pra postar
             </Link>
           )}
         </p>
@@ -69,13 +69,13 @@ export default async function FeedPage() {
             </div>
             <ol className="tbody gap-3 p-4!">
               {[
-                ["Demo", "o que teu time entregou, com link"],
+                ["Demo", "o que seu time entregou, com link"],
                 ["Bastidor", "o que rolou na edição, foto, aprendizado"],
-                ["Procuro time", "tua skill e o que falta no time"],
+                ["Procuro time", "sua skill e o que falta no time"],
                 ["Recado", "carona, mentoria, dúvida da edição"],
               ].map(([t, d], i) => (
                 <li key={t} className="grid grid-cols-[28px_1fr] gap-2 font-sans text-[14px]">
-                  <span className="font-mono text-accent">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="font-mono text-accent-on-chrome">{String(i + 1).padStart(2, "0")}</span>
                   <span>
                     <strong className="font-bold">{t}</strong>{" "}
                     <span className="text-muted">— {d}</span>

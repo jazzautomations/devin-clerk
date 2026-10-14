@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import db from "@/lib/db";
+import { empresaStats } from "@/lib/empresasStats";
 import { LeadForm } from "@/components/LeadForm";
 
 // Porta comercial (spec 022): participante nunca paga — quem paga é a marca.
@@ -34,9 +34,9 @@ const oferta = [
     title: "Presença no radar e no arquivo",
     desc: (
       <>
-        A edição vira arquivo público permanente — times, projetos, pódio e a
-        marca do sponsor ficam no histórico pra sempre, linkáveis e indexados.
-        Não é banner que expira: é prova que fica.
+        A edição vira arquivo público permanente. Times, projetos, pódio e a
+        marca do patrocinador ficam no histórico, com link e aparecendo na
+        busca. É prova que fica.
       </>
     ),
   },
@@ -45,42 +45,32 @@ const oferta = [
     title: "Talento",
     desc: (
       <>
-        O diretório <Link href="/talento" className="text-accent hover:underline">/talento</Link>{" "}
-        lista quem marcou &quot;open to&quot; — com projetos entregues e pódio
-        verificável. Contrate quem prova, não quem promete.
+        O diretório{" "}
+        <Link href="/talento" className="link-inline">
+          /talento
+        </Link>{" "}
+        lista quem se marcou como disponível, com projetos entregues e pódio
+        verificável. Contrate quem já entregou.
       </>
     ),
   },
   {
     num: "04",
-    title: "Relatório e contatos com opt-in",
+    title: "Relatório e contatos autorizados",
     desc: (
       <>
-        A marca recebe um relatório da edição: funil de inscrição, times que
-        entraram no desafio, stack usada, vencedores e o NPS por papel. Quem quiser
-        falar com a marca escaneia o QR do estande e entra na lista só com
-        consentimento.
+        A marca recebe um relatório da edição: inscrições, times que entraram
+        no desafio, tecnologias usadas, vencedores e a pesquisa de satisfação
+        por papel. Quem quiser falar com a marca lê o QR do estande e autoriza
+        o envio do próprio contato.
       </>
     ),
   },
 ];
 
 export default async function EmpresasPage() {
-  // stats reais do banco — a prova social é o produto vivo, não promessa
-  const members = (
-    await db.prepare("SELECT COUNT(*) n FROM members").get() as { n: number }
-  ).n;
-  const editions = (
-    await db.prepare("SELECT COUNT(*) n FROM hackathons").get() as { n: number }
-  ).n;
-  const projects = (
-    await db.prepare("SELECT COUNT(*) n FROM team_projects").get() as { n: number }
-  ).n;
-  const stats = [
-    { n: members, label: "membros" },
-    { n: editions, label: "edições" },
-    { n: projects, label: "projetos entregues" },
-  ];
+  // números reais do banco, só os da casa e só acima do piso (lib/empresasStats)
+  const stats = await empresaStats();
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-16 px-4 py-16 sm:px-6 sm:py-24">
@@ -102,10 +92,15 @@ export default async function EmpresasPage() {
         </p>
       </div>
 
-      {/* prova social — números direto do banco */}
-      <dl className="grid grid-cols-3 gap-px border border-line bg-line">
+      {/* prova social — números direto do banco; abaixo do piso nem aparece */}
+      {stats.length > 0 && (
+      <dl
+        data-testid="empresas-stats"
+        className="grid gap-px border border-line bg-line"
+        style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}
+      >
         {stats.map((s) => (
-          <div key={s.label} className="bg-background px-5 py-4">
+          <div key={s.key} className="bg-background px-5 py-4">
             <dt className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
               {s.label}
             </dt>
@@ -115,6 +110,7 @@ export default async function EmpresasPage() {
           </div>
         ))}
       </dl>
+      )}
 
       {/* o que tá à venda */}
       <div className="flex flex-col gap-6">
@@ -138,7 +134,7 @@ export default async function EmpresasPage() {
       </div>
 
       {/* captura de lead */}
-      <div className="flex flex-col gap-6 border border-line bg-mint p-6 sm:p-10">
+      <div id="contato" className="flex scroll-mt-24 flex-col gap-6 border border-line bg-mint p-6 sm:p-10">
         <div className="flex flex-col gap-2">
           <p className="tag self-start uppercase">
             {"quero patrocinar"}
@@ -147,8 +143,8 @@ export default async function EmpresasPage() {
             Bora conversar.
           </h2>
           <p className="max-w-xl text-muted">
-            Deixa o contato e a gente volta com formato, edição e orçamento —
-            sem compromisso.
+            Deixe o contato e a gente volta com formato, edição e orçamento.
+            Sem compromisso.
           </p>
         </div>
         <LeadForm />

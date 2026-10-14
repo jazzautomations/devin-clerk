@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { userMessage } from "@/lib/apiError";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 // só tipos: lib/editionSponsors fala com o banco e não entra no bundle do client
@@ -55,7 +56,7 @@ export function EditionSponsorsAdmin({
     const data = await res.json().catch(() => null);
     setBusy(false);
     if (!res.ok) {
-      setMsg({ kind: "error", text: data?.error ?? "não deu certo, tente de novo" });
+      setMsg({ kind: "error", text: userMessage(res, data, "não deu certo. Tente de novo.") });
       return null;
     }
     router.refresh();
@@ -111,11 +112,13 @@ export function EditionSponsorsAdmin({
           cadastrar
         </button>
       </form>
-      {msg && (
-        <p role="status" className={`font-mono text-[13px] ${msg.kind === "ok" ? "text-accent" : "text-orange"}`}>
-          {msg.text}
-        </p>
-      )}
+      {/* região sempre montada: leitor de tela só anuncia o que muda dentro dela */}
+      <p
+        role="status"
+        className={msg ? `font-mono text-[13px] ${msg.kind === "ok" ? "text-accent" : "text-orange"}` : "sr-only"}
+      >
+        {msg?.text ?? ""}
+      </p>
 
       {sponsors.length === 0 ? (
         <p className="border-[1.5px] border-line px-4 py-5 font-mono text-[13px] text-muted">
@@ -207,7 +210,7 @@ function SponsorCard({
           )}
           <Link
             href={`/admin/h/${hackathonId}/patrocinador/${s.sponsorId}`}
-            className="font-mono text-[13px] text-accent underline-offset-4 hover:underline"
+            className="inline-flex min-h-11 items-center font-mono text-[13px] text-accent-on-chrome underline-offset-4 hover:underline"
           >
             ver relatório →
           </Link>
@@ -282,7 +285,7 @@ function SponsorCard({
                   void call(base, "DELETE");
                 }
               }}
-              className="font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
+              className="min-h-11 font-mono text-[13px] text-orange-on-chrome underline-offset-4 hover:underline disabled:opacity-60"
             >
               tirar da edição
             </button>
@@ -296,8 +299,8 @@ function SponsorCard({
             dangerouslySetInnerHTML={{ __html: s.qrSvg }}
           />
           <div className="flex min-w-0 flex-col gap-2">
-            <p className={label}>QR do estande · opt-in de contato</p>
-            <a href={s.optInUrl} className="font-mono text-[13px] break-all text-accent underline-offset-4 hover:underline">
+            <p className={label}>QR do estande · contato autorizado</p>
+            <a href={s.optInUrl} className="font-mono text-[13px] break-all text-accent-on-chrome underline underline-offset-4">
               {s.optInUrl.replace(/^https?:\/\//, "")}
             </a>
             <p className="text-[14px] text-muted">
@@ -322,7 +325,7 @@ function SponsorCard({
                   type="button"
                   disabled={busy}
                   onClick={() => void call(`${base}/people`, "DELETE", { memberId: p.memberId })}
-                  className="font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
+                  className="min-h-11 font-mono text-[13px] text-orange-on-chrome underline-offset-4 hover:underline disabled:opacity-60"
                 >
                   tirar acesso
                 </button>
@@ -335,7 +338,7 @@ function SponsorCard({
                   type="button"
                   disabled={busy}
                   onClick={() => void call(`${base}/people`, "DELETE", { email: i.email })}
-                  className="font-mono text-[13px] text-orange underline-offset-4 hover:underline disabled:opacity-60"
+                  className="min-h-11 font-mono text-[13px] text-orange-on-chrome underline-offset-4 hover:underline disabled:opacity-60"
                 >
                   cancelar convite
                 </button>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Hackathon, HackathonFormat } from "@/lib/hackathons";
 import { eventRegion, getRegions } from "@/lib/regions";
 import { HackathonCard } from "@/components/HackathonCard";
+import { cleanTags } from "@/lib/radarTags";
 
 const FORMATS: { value: HackathonFormat | null; label: string }[] = [
   { value: null, label: "todos" },
@@ -28,11 +29,13 @@ export function HackathonFeed({
   const [region, setRegion] = useState<string | null>(null);
   const nowDate = new Date(now);
   const regions = getRegions(hackathons);
+  // filtro só com tag que diz algo (sem "premio-*", sem pedaço de tema em inglês)
+  const tagList = cleanTags(tags).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   const filtered = hackathons.filter(
     (h) =>
       (format === null || h.format === format) &&
-      (tag === null || h.tags.includes(tag)) &&
+      (tag === null || cleanTags(h.tags).includes(tag)) &&
       (region === null || eventRegion(h) === region),
   );
 
@@ -52,8 +55,8 @@ export function HackathonFeed({
             {f.label}
           </button>
         ))}
-        <span className="mx-1 h-4 w-px bg-line" aria-hidden />
-        {tags.map((t) => (
+        {tagList.length > 0 && <span className="mx-1 h-4 w-px bg-line" aria-hidden />}
+        {tagList.map((t) => (
           <button
             key={t}
             onClick={() => setTag(tag === t ? null : t)}
@@ -91,7 +94,7 @@ export function HackathonFeed({
         <div className="flex flex-col items-start gap-3 border-[1.5px] border-line px-6 py-10">
           <p className="font-mono text-sm text-muted">
             {hackathons.length === 0
-              ? "nenhum hackathon aberto no momento — a curadoria tá trabalhando"
+              ? "nenhum hackathon aberto agora"
               : "nenhum evento com esses filtros"}
           </p>
           {hackathons.length > 0 && (

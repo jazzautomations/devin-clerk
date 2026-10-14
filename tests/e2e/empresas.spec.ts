@@ -41,10 +41,14 @@ test.describe("/empresas — pitch pra marca", () => {
     await expect(
       page.locator("main").getByRole("link", { name: /talento/i }),
     ).toBeVisible();
-    // prova social vinda do banco (header também tem link "membros" — scopa no main)
-    await expect(
-      page.locator("main").getByText("membros", { exact: true }),
-    ).toBeVisible();
+    // prova social vinda do banco: só aparece acima do piso, nunca "0"
+    // (auditoria 041 — "membros 0" afastava patrocinador)
+    const stats = page.getByTestId("empresas-stats");
+    if ((await stats.count()) > 0) {
+      for (const dd of await stats.locator("dd").allTextContents()) {
+        expect(Number(dd)).toBeGreaterThan(0);
+      }
+    }
     // formulário de lead com os campos do spec
     await expect(page.getByLabel(/empresa/i)).toBeVisible();
     await expect(page.getByLabel(/e-mail/i)).toBeVisible();

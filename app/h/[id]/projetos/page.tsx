@@ -88,13 +88,14 @@ export default async function EditionProjectsPage({ params, searchParams }: Prop
         <section data-testid="entries-showcase" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <h2 className={h2}>mostruário</h2>
-            <nav className="flex gap-4 font-mono text-[13px]">
-              <Link href={`/h/${h.id}/projetos`} className={onlyVideo ? "text-muted hover:text-accent" : "text-accent underline underline-offset-4"}>
+            <nav aria-label="filtro do mostruário" className="flex gap-2 font-mono text-[13px]">
+              <Link href={`/h/${h.id}/projetos`} aria-current={onlyVideo ? undefined : "page"} className={`inline-flex items-center px-2 py-3 ${onlyVideo ? "text-muted hover:text-accent" : "text-accent underline underline-offset-4"}`}>
                 todos
               </Link>
               <Link
                 href={`/h/${h.id}/projetos?video=1`}
-                className={onlyVideo ? "text-accent underline underline-offset-4" : "text-muted hover:text-accent"}
+                aria-current={onlyVideo ? "page" : undefined}
+                className={`inline-flex items-center px-2 py-3 ${onlyVideo ? "text-accent underline underline-offset-4" : "text-muted hover:text-accent"}`}
               >
                 tem vídeo
               </Link>

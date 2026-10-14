@@ -615,3 +615,29 @@ textarea::placeholder {
     text-decoration: none;
   }
 }
+
+/* auditoria 041, pacote E — contraste em fundo cinza (.window) e link em
+   texto corrido. Bloco no fim do arquivo de propósito: a frente da landing
+   também mexe aqui.
+   verde #047a43 sobre o cinza #dedede dá 4.03:1 e o laranja 4.23:1, abaixo
+   do AA pra texto pequeno; estes tons dão 7.11:1 e 5.63:1. */
+:root {
+  --accent-on-chrome: #064f3e;
+  --orange-on-chrome: #9a2e12;
+}
+@theme inline {
+  --color-accent-on-chrome: var(--accent-on-chrome);
+  --color-orange-on-chrome: var(--orange-on-chrome);
+}
+
+/* link dentro de parágrafo: o verde contra o texto cinza dá só 1.71:1, então
+   o sublinhado fica sempre (WCAG 1.4.1); no hover ele engrossa */
+.link-inline {
+  color: var(--accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.link-inline:hover {
+  text-decoration-thickness: 2px;
+}

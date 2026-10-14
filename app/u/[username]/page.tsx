@@ -144,11 +144,12 @@ export default async function PublicProfilePage({
             avatarUrl={member.avatarUrl}
             size="lg"
           />
-          <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
+          {/* username tem até 20 caracteres sem espaço: quebra em vez de estourar 390px */}
+          <h1 className="min-w-0 font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95] [overflow-wrap:anywhere]">
             {member.name ?? `@${member.username}`}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="font-mono text-sm text-muted">@{member.username}</p>
           <span className="border border-line bg-surface px-1.5 font-mono text-[12px] text-foreground">
             LV{level.n}

@@ -3,14 +3,15 @@ import type { Metadata } from "next";
 import { listTalent } from "@/lib/talent";
 import { levelFor } from "@/lib/game";
 import { Avatar } from "@/components/Avatar";
+import { openToLabel } from "@/lib/openTo";
 
-// diretório público "open to" — spec 014. Participante nunca paga: a vitrine
+// diretório público "disponível para" (open to) — spec 014. Participante nunca paga: a vitrine
 // é pra empresa que quer alcançar quem prova em hackathon.
 
 export const metadata: Metadata = {
   title: "talento",
   description:
-    "Quem constrói de verdade: membros do hackahub abertos a trampo, cofundadoria, freela e mentoria — com projetos entregues e pódio verificável.",
+    "Quem constrói de verdade: membros do HackaHub disponíveis para emprego, sociedade, freela e mentoria, com projetos entregues e pódio verificável.",
   alternates: { canonical: "/talento" },
 };
 
@@ -26,11 +27,14 @@ export default async function TalentoPage() {
         <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           Quem constrói de verdade
         </h1>
-        <p className="max-w-xl text-lg text-muted">
-          Essas pessoas entregaram em hackathon — projetos no arquivo, pódio
-          registrado, skills à mostra. Contrate quem prova: participante nunca
-          paga, quem paga é a empresa que quer alcançar elas.
-        </p>
+        {/* a frase fala "dessas pessoas": só aparece quando tem alguém na lista */}
+        {talent.length > 0 && (
+          <p className="max-w-xl text-lg text-muted">
+            Essas pessoas entregaram em hackathon, com projeto no arquivo e
+            pódio registrado. Contrate quem prova. Participante nunca paga;
+            quem paga é a empresa que quer falar com elas.
+          </p>
+        )}
       </div>
 
       <ul className="flex flex-col gap-2">
@@ -76,14 +80,14 @@ export default async function TalentoPage() {
                   {/* openTo é o sinal comercial — leva o acento */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-mono text-[12px] text-muted">
-                      open to:
+                      disponível para:
                     </span>
                     {t.openTo.map((o) => (
                       <span
                         key={o}
                         className="border border-accent bg-mint px-1.5 font-mono text-[12px] text-accent"
                       >
-                        {o}
+                        {openToLabel(o)}
                       </span>
                     ))}
                   </div>
@@ -138,9 +142,11 @@ export default async function TalentoPage() {
 
       {talent.length === 0 && (
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {
-            "ninguém marcou \"open to\" ainda — se tu constrói em hackathon, marca no teu /perfil e entra na vitrine"
-          }
+          ninguém se marcou como disponível ainda. Se você constrói em hackathon, marque no{" "}
+          <Link href="/perfil" className="link-inline">
+            seu perfil
+          </Link>{" "}
+          e entre na vitrine.
         </p>
       )}
     </section>

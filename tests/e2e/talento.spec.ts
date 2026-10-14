@@ -63,7 +63,8 @@ test.describe("talento — diretório de quem constrói de verdade", () => {
       row.getByRole("link", { name: /talento e2e/i }),
     ).toHaveAttribute("href", `/u/${MEMBER}`);
     // sinal comercial: chips de openTo
-    await expect(row.getByText("trampo", { exact: true })).toBeVisible();
+    // valor salvo "trampo", rótulo na tela "emprego"
+    await expect(row.getByText("emprego", { exact: true })).toBeVisible();
     await expect(row.getByText("mentoria", { exact: true })).toBeVisible();
     // prova: projetos entregues + melhor colocação com a edição
     await expect(row.getByText(/projeto/)).toBeVisible();

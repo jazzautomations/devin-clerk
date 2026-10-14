@@ -306,6 +306,17 @@ def test_sweep_respects_registration_deadline():
         "SELECT active FROM hackathons WHERE id='all-past'").fetchone()[0] == 0
 
 
+def test_devpost_tags_pt_sem_premio_nem_token_solto():
+    # auditoria 041: "low", "open", "machine" e "premio-$1,000" viravam filtro
+    tags = sr.devpost_tags([
+        "Machine Learning/AI", "Low/No Code", "Open Ended",
+        "Beginner Friendly", "Health",
+    ])
+    assert tags == ["ia", "iniciante", "saúde"]
+    assert sr.devpost_tags(["Enterprise", None, ""]) == []
+    assert sr.devpost_tags(["Blockchain", "blockchain"]) == ["web3"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     try:
