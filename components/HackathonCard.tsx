@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import type { Hackathon } from "@/lib/hackathons";
 import type { RegistrationStatus } from "@/lib/registrations";
 import { CardArt } from "@/components/CardArt";
+import { BADGES } from "@/lib/game";
+import { cleanTags } from "@/lib/radarTags";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
   online: "online",
@@ -88,11 +90,15 @@ export function HackathonCard({
         if (next === "approved") {
           const parts = [data.xp ? `${data.xp} xp` : null]
             .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
-            .concat(data.newBadges?.length ? [`badge nova: ${data.newBadges.join(", ")}`] : [])
+            .concat(
+              data.newBadges?.length
+                ? [`conquista nova: ${(data.newBadges as string[]).map((b) => BADGES[b]?.name ?? b).join(", ")}`]
+                : [],
+            )
             .filter(Boolean);
           setReward(parts.length ? parts.join(" · ") : null);
         } else if (next === "pending") {
-          setReward("pedido enviado — a curadoria revisa tua presença");
+          setReward("pedido enviado. A organização avalia sua inscrição.");
         } else {
           setReward(null);
         }
@@ -170,7 +176,7 @@ export function HackathonCard({
       </dl>
 
       <div className="flex flex-wrap gap-2">
-        {hackathon.tags.map((tag) => (
+        {cleanTags(hackathon.tags).map((tag) => (
           <span
             key={tag}
             className="border-[1.5px] border-line px-2 py-0.5 font-mono text-[12px] text-muted"

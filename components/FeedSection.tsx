@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { userMessage } from "@/lib/apiError";
 import { useState } from "react";
 import { levelFor } from "@/lib/game";
 import { Avatar } from "@/components/Avatar";
@@ -64,6 +65,7 @@ export function FeedSection({
   const [body, setBody] = useState("");
   const [link, setLink] = useState("");
   const [status, setStatus] = useState<"idle" | "posting" | "error">("idle");
+  const [postError, setPostError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [threads, setThreads] = useState<Record<number, FeedComment[]>>({});
   const [drafts, setDrafts] = useState<Record<number, string>>({});
@@ -86,7 +88,10 @@ export function FeedSection({
       setBody("");
       setLink("");
       setStatus("idle");
+      setPostError(null);
     } else {
+      const data = await res.json().catch(() => null);
+      setPostError(userMessage(res, data, "não deu pra postar. Tente de novo."));
       setStatus("error");
     }
   }
@@ -202,7 +207,7 @@ export function FeedSection({
             onChange={(e) => setBody(e.target.value)}
             rows={3}
             maxLength={500}
-            placeholder="O que tu tá construindo? Posta a demo, o que quebrou, o que aprendeu…"
+            placeholder="O que você está construindo? Poste a demo, o que quebrou, o que aprendeu…"
             className="w-full resize-none border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
           />
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -221,8 +226,8 @@ export function FeedSection({
             </button>
           </div>
           {status === "error" && (
-            <p className="font-mono text-xs text-orange">
-              {"erro — link precisa começar com http(s)"}
+            <p role="alert" className="font-mono text-xs text-orange">
+              {postError ?? "não deu pra postar. Tente de novo."}
             </p>
           )}
         </div>

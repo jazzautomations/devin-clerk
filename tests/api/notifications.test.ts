@@ -165,7 +165,7 @@ describe("gatilhos — like e comentário geram notificação", () => {
     const notes = await notificationsOf(author);
     expect(notes).toHaveLength(1);
     expect(notes[0].type).toBe("like");
-    expect(notes[0].text).toBe("@u_clerk_liker curtiu teu post");
+    expect(notes[0].text).toBe("@u_clerk_liker curtiu seu post");
     expect(notes[0].read).toBe(0);
 
     // toggle de novo = unlike — nenhuma notificação nova
@@ -203,7 +203,7 @@ describe("gatilhos — like e comentário geram notificação", () => {
     const notes = await notificationsOf(author);
     expect(notes).toHaveLength(1);
     expect(notes[0].type).toBe("comment");
-    expect(notes[0].text).toBe("@u_clerk_commenter comentou no teu post");
+    expect(notes[0].text).toBe("@u_clerk_commenter comentou no seu post");
   });
 
   it("comentário no próprio post não notifica", async () => {

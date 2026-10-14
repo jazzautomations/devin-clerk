@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { userMessage } from "@/lib/apiError";
 
 // Form de indicação de hackathon (spec 026) — POST público em
 // /api/submissions. Honeypot `company` escondido: bot que preenche
@@ -48,7 +49,7 @@ export function SubmitEventForm() {
       setStatus("error");
       const data = await res?.json().catch(() => null);
       setError(
-        typeof data?.error === "string" ? data.error : "algo deu errado",
+        res ? userMessage(res, data, "não deu pra enviar. Tente de novo.") : "sem conexão. Tente de novo.",
       );
     }
   }
@@ -136,7 +137,7 @@ export function SubmitEventForm() {
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="quem organiza, onde tu viu, o que vale olhar…"
+          placeholder="quem organiza, onde você viu, o que vale olhar…"
           className={inputCls}
         />
       </label>

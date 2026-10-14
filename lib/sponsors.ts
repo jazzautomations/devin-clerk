@@ -69,11 +69,11 @@ export async function createSponsor(input: {
   notes?: string | null;
 }): Promise<Sponsor> {
   const name = input.name?.trim() ?? "";
-  if (!name) throw new Error("name obrigatório");
+  if (!name) throw new Error("informe o nome do patrocinador");
   const tier = input.tier ?? "sponsor";
-  if (!SPONSOR_TIERS.includes(tier)) throw new Error("tier inválido");
+  if (!SPONSOR_TIERS.includes(tier)) throw new Error("nível de patrocínio inválido");
   if (await db.prepare("SELECT 1 FROM sponsors WHERE name = ?").get(name)) {
-    throw new Error("já existe um sponsor com esse nome");
+    throw new Error("já existe um patrocinador com esse nome");
   }
   const id = `spon-${randomUUID()}`;
   await db.prepare(
@@ -112,13 +112,13 @@ export async function updateSponsor(
 
   if (patch.name !== undefined) {
     const name = patch.name.trim();
-    if (!name) throw new Error("name obrigatório");
+    if (!name) throw new Error("informe o nome do patrocinador");
     if (
       await db
         .prepare("SELECT 1 FROM sponsors WHERE name = ? AND id != ?")
         .get(name, id)
     ) {
-      throw new Error("já existe um sponsor com esse nome");
+      throw new Error("já existe um patrocinador com esse nome");
     }
     sets.push("name = @name");
     values.name = name;
@@ -128,7 +128,7 @@ export async function updateSponsor(
     values.url = opt(patch.url);
   }
   if (patch.tier !== undefined) {
-    if (!SPONSOR_TIERS.includes(patch.tier)) throw new Error("tier inválido");
+    if (!SPONSOR_TIERS.includes(patch.tier)) throw new Error("nível de patrocínio inválido");
     sets.push("tier = @tier");
     values.tier = patch.tier;
   }

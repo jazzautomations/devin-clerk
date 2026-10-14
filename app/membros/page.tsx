@@ -19,7 +19,7 @@ const PODIUM_RANK: Record<number, string> = {
 export const metadata: Metadata = {
   title: "membros",
   description:
-    "Quem tá na frente — leaderboard de XP, badges, skills e histórico de campanhas da comunidade HackaHub.",
+    "Quem está na frente no ranking de XP da comunidade HackaHub, com conquistas, skills e histórico de campanhas.",
   alternates: { canonical: "/membros" },
 };
 
@@ -45,7 +45,7 @@ export default async function MembrosPage({
     <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6">
       <div className="flex flex-col gap-3">
         <p className="tag self-start uppercase">
-          {"leaderboard"}
+          {"ranking"}
         </p>
         <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           Quem tá na frente
@@ -159,7 +159,7 @@ export default async function MembrosPage({
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {q
             ? `nenhum membro com "${q}"`
-            : "ainda vazio — cria tua conta e entra pro ranking"}
+            : "ainda vazio. Crie sua conta e entre no ranking."}
         </p>
       )}
     </section>

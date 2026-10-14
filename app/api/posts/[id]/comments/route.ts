@@ -62,7 +62,7 @@ export async function POST(
   await notify(author.memberId, {
     type: "comment",
     actorUsername: member.username,
-    text: `@${member.username} comentou no teu post`,
+    text: `@${member.username} comentou no seu post`,
     href: "/feed",
   });
   return Response.json({ comment }, { status: 201 });

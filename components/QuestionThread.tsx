@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { userMessage } from "@/lib/apiError";
 import { useRouter } from "next/navigation";
 import type { Question } from "@/lib/questions";
 
@@ -34,7 +35,7 @@ export function QuestionThread({
     setBusy(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "não deu — tenta de novo");
+      setError(userMessage(res, data, "não deu pra enviar. Tente de novo."));
       return false;
     }
     router.refresh();
@@ -56,7 +57,7 @@ export function QuestionThread({
           }}
         >
           <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-[12px] tracking-widest text-muted uppercase">tua dúvida</span>
+            <span className="font-mono text-[12px] tracking-widest text-muted uppercase">sua dúvida</span>
             <textarea
               className={field}
               rows={3}

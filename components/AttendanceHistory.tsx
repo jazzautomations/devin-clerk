@@ -37,7 +37,7 @@ export function AttendanceHistory({
       )}
       {entries.length > 0 && (
         <>
-          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">teu histórico de presença</h2>
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">seu histórico de presença</h2>
           <p className="font-mono text-[13px]">
             {summary.compareceu} compareceu · {summary.faltou} faltou
             {summary.sem_resposta ? ` · ${summary.sem_resposta} sem resposta` : ""} · {summary.recusou} liberou vaga ·{" "}
