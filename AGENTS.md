@@ -84,4 +84,7 @@ que não sejam a sua. Builds com `nice -n 10`. Segredos de dev ficam em
 
 ## Commits
 
-Mensagem em PT-BR focada no porquê. Sem push.
+Mensagem em PT-BR focada no porquê. Push só pro remoto privado
+`private` (github.com/jazzautomations/hackahub), e só o pai/orquestrador
+faz push; agente em worktree não faz push. Nunca pro `origin` (fork
+público devin-clerk).
