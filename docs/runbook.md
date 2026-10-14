@@ -18,7 +18,7 @@ de `caddy validate`.
 | Ops | `~/hackahub/ops/` (`deploy.sh`, `backup.sh`, `restore-drill.sh`, `scrape.sh`), logs em `~/hackahub/logs/` |
 | Backups | `~/hackahub-backups/<stamp>/` (14 dias) + bucket OCI `hackahub-backups` (prefixo `hackahub/`, expira em 60 dias) |
 | Scraper | venv `~/hackahub/scraper/.venv` (uv) |
-| Cron (usuário ubuntu) | 05:15/05:20 UTC radar (stage/prod) · 06:00 UTC backup · dom 06:30 UTC restore drill · */2 min fila de avisos · */10 min guarda de disco |
+| Cron (usuário ubuntu) | 05:15/05:20 UTC radar (stage/prod) · 06:00 UTC backup · dom 06:30 UTC restore drill · */2 min fila de avisos · */5 min entregas (lembretes/trava) · */15 min RSVP · */10 min guarda de disco |
 
 Portas de app não são públicas: security list da OCI só abre 22/80/443 e o
 iptables rejeita o resto (verificado de fora em 14/10/2026).
