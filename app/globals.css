@@ -526,3 +526,20 @@ textarea::placeholder {
   padding-left: 1rem;
   color: var(--muted);
 }
+
+/* impressão / PDF (relatório do patrocinador, roadmap 037 #8): some o
+   cromo do site e do painel; o conteúdo vai em papel branco, fio preto */
+@media print {
+  body > header,
+  body > footer,
+  [data-print-hide] {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}

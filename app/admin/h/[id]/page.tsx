@@ -1,10 +1,23 @@
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { getEditionOverview } from "@/lib/editionOverview";
+import { mySponsorships } from "@/lib/editionSponsors";
+import { getEditionRoles } from "@/lib/roles";
+import { currentMember } from "@/lib/session";
 
 type Stat = { label: string; n: number; testId: string; note?: string };
 
 export default async function EditionPanelHome({ params }: PageProps<"/admin/h/[id]">) {
   const { id } = await params;
+  // quem só é de patrocinador (migration 017) não vê a visão geral da
+  // operação: vai direto pro relatório da própria marca
+  const member = await currentMember();
+  if (!member) notFound();
+  if (member.role !== "admin" && (await getEditionRoles(id, member.id)).length === 0) {
+    const mine = await mySponsorships(id, member.id);
+    if (mine.length === 0) notFound();
+    redirect(`/admin/h/${id}/patrocinador/${mine[0].sponsorId}`);
+  }
   const o = await getEditionOverview(id);
   const intake: Stat[] = [
     { label: "inscrições", n: o.total, testId: "ov-total" },

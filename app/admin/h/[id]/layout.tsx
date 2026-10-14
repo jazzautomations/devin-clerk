@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getHackathon } from "@/lib/hackathons";
 import { getEditionRoles, type EditionRole } from "@/lib/roles";
+import { mySponsorships } from "@/lib/editionSponsors";
 import { currentMember } from "@/lib/session";
 import { isConductHandler } from "@/lib/incidents";
 
@@ -27,6 +28,8 @@ const TABS: { href: string; label: string; roles: EditionRole[]; conductHandler?
   { href: "/juri", label: "júri", roles: ["organizador", "jurado"] },
   { href: "/palco", label: "palco", roles: ["organizador", "staff"] },
   { href: "/certificados", label: "certificados", roles: ["organizador"] },
+  { href: "/patrocinadores", label: "patrocinadores", roles: ["organizador"] },
+  { href: "/nps", label: "nps", roles: ["organizador"] },
 ];
 
 export default async function EditionPanelLayout({
@@ -36,9 +39,14 @@ export default async function EditionPanelLayout({
   const { id } = await params;
   const [member, h] = await Promise.all([currentMember(), getHackathon(id)]);
   if (!member || !h) notFound();
-  const roles = member.role === "admin" ? (["organizador"] as EditionRole[]) : await getEditionRoles(id, member.id);
-  if (roles.length === 0) notFound();
+  const [roles, sponsorships] = await Promise.all([
+    member.role === "admin" ? (["organizador"] as EditionRole[]) : getEditionRoles(id, member.id),
+    // papel patrocinador (migration 017) é por marca: só a aba do relatório dela
+    mySponsorships(id, member.id),
+  ]);
+  if (roles.length === 0 && sponsorships.length === 0) notFound();
   const handler = roles.includes("organizador") ? false : await isConductHandler(member.id, id);
+  const labels = [...roles, ...(sponsorships.length > 0 && !roles.includes("organizador") ? ["patrocinador"] : [])];
   const can = (tab: (typeof TABS)[number]) =>
     roles.includes("organizador") || tab.roles.some((r) => roles.includes(r)) || (handler && !!tab.conductHandler);
 
@@ -46,17 +54,27 @@ export default async function EditionPanelLayout({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
       <header className="flex flex-col gap-3 border-b-2 border-line pb-5">
         <p className="font-mono text-[12px] tracking-widest text-muted uppercase">
-          painel da edição · {roles.join(" · ")}
+          painel da edição · {labels.join(" · ")}
         </p>
         <h1 className="text-[clamp(1.8rem,4vw,2.6rem)] leading-none font-extrabold tracking-[-0.035em]">
           {h.name}
         </h1>
-        <nav className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-[13px]">
-          {TABS.filter(can).map((t) => (
+        <nav data-print-hide className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-[13px]">
+          {(roles.length > 0 ? TABS.filter(can) : []).map((t) => (
             <Link key={t.href} href={`/admin/h/${id}${t.href}`} className="underline-offset-4 hover:text-accent hover:underline">
               {t.label}
             </Link>
           ))}
+          {!roles.includes("organizador") &&
+            sponsorships.map((s) => (
+              <Link
+                key={s.sponsorId}
+                href={`/admin/h/${id}/patrocinador/${s.sponsorId}`}
+                className="underline-offset-4 hover:text-accent hover:underline"
+              >
+                relatório · {s.name}
+              </Link>
+            ))}
           <Link href={`/h/${id}`} className="text-muted underline-offset-4 hover:underline">
             ver página pública ↗
           </Link>

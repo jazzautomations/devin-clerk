@@ -14,6 +14,7 @@ import { VoteButton } from "@/components/VoteButton";
 import { ShareBar } from "@/components/ShareBar";
 import { absoluteUrl } from "@/lib/seo";
 import { renderUserMarkdown } from "@/lib/blog";
+import { sponsorLogosForChallenges } from "@/lib/editionSponsors";
 
 // Ficha do projeto (spec 010/030; ordem da spec 034 §5.8): capa · título ·
 // tagline · selos · vídeo do time · vídeo do palco · demo ao vivo ·
@@ -56,12 +57,14 @@ export default async function ProjectPage({ params }: Props) {
   const data = await getProjectView(id, member);
   if (!data) notFound();
 
-  const [deploy, voteCount, voted, showFeedback] = await Promise.all([
+  const [deploy, voteCount, voted, showFeedback, sponsorLogos] = await Promise.all([
     getLatestDeployForTeam(data.teamId),
     voteCountFor(data.teamId),
     member ? hasVoted(member.id, data.teamId) : Promise.resolve(false),
     // roadmap 037 #9 — atalho só pro time; a página confere de novo
     data.isMember ? feedbackVisible(data.hackathonId) : Promise.resolve(false),
+    // roadmap 037 #8 — logo da marca no projeto que entrou no desafio dela
+    sponsorLogosForChallenges(data.challenges.map((c) => c.id)),
   ]);
   const live = deploy?.status === "running" ? deploy : null;
   // modo palco: nota do público na final ao vivo — selo separado do voto
@@ -198,11 +201,20 @@ export default async function ProjectPage({ params }: Props) {
             <div className="flex flex-col gap-2">
               <h2 className={h2}>desafios patrocinados</h2>
               <ul className="flex flex-col gap-1">
-                {data.challenges.map((c) => (
-                  <li key={c.id} className="break-words">
-                    <span className="font-mono text-[12px] text-accent uppercase">{c.sponsor}</span> · {c.title}
-                  </li>
-                ))}
+                {data.challenges.map((c) => {
+                  const logo = sponsorLogos.get(c.id);
+                  return (
+                    <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 break-words" data-testid="project-challenge">
+                      {logo?.logoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element -- logo remoto da marca; next/image exigiria remotePatterns
+                        <img src={logo.logoUrl} alt={`logo de ${logo.name}`} className="h-8 max-w-[120px] object-contain" />
+                      )}
+                      <span>
+                        <span className="font-mono text-[12px] text-accent uppercase">{c.sponsor}</span> · {c.title}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

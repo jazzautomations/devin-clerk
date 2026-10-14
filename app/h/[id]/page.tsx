@@ -21,6 +21,8 @@ import { CollectibleCard } from "@/components/CollectibleCard";
 import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
 import { getArchive } from "@/lib/archive";
 import { getChallenges } from "@/lib/challenges";
+import { listEditionSponsors } from "@/lib/editionSponsors";
+import { EditionSponsors } from "@/components/EditionSponsors";
 import { DeployPanel } from "@/components/DeployPanel";
 import { getLatestDeployForTeam } from "@/lib/deploys";
 import { listBoardEntries } from "@/lib/teamboard";
@@ -152,6 +154,8 @@ export default async function HackathonPage({
   const archive = await visibleArchive(h.id, await getArchive(h.id), now);
   const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
   const challenges = await getChallenges(h.id);
+  // roadmap 037 #8 — logos dos patrocinadores da edição
+  const sponsors = await listEditionSponsors(h.id);
   const boardEntries = await listBoardEntries(h.id);
   const phase = editionPhase(h, now);
   const countdownTo = countdownTarget(h, now);
@@ -389,6 +393,13 @@ export default async function HackathonPage({
                   </li>
                 ))}
               </ol>
+            </section>
+          )}
+
+          {sponsors.length > 0 && (
+            <section className="flex flex-col gap-5">
+              <SectionHead k={nextK()} title="Patrocinadores" />
+              <EditionSponsors sponsors={sponsors} />
             </section>
           )}
 
