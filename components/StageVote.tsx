@@ -125,6 +125,11 @@ export function StageVote({
           </div>
           <div className="tbody gap-3 p-5!">
             <p className="text-[22px] leading-tight font-extrabold tracking-[-0.02em]">Final encerrada — escolha do público</p>
+            {!snap.quorum.met && (
+              <p data-testid="vote-no-quorum" className="font-mono text-[13px] text-orange">
+                votação sem quórum: {snap.quorum.total} de {snap.quorum.min} votos mínimos
+              </p>
+            )}
             <ol className="border-b border-line">
               {(snap.ranking ?? []).slice(0, 5).map((r) => (
                 <li key={r.teamId} className="flex items-baseline gap-3 border-t border-line py-2">
