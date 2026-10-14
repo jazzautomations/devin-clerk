@@ -12,6 +12,7 @@ export default async function EditionBadgesPage({ params }: PageProps<"/admin/h/
   const all = await listBadges(id);
   const byRole = BADGE_ROLES.map((r) => ({ role: r, n: all.filter((b) => b.role === r).length }));
   const withQr = all.filter((b) => b.token).length;
+  const noPhoto = all.filter((b) => b.noPhoto).length;
   const sheets = Math.ceil(all.length / PER_SHEET);
   const api = `/api/admin/hackathons/${id}/crachas`;
 
@@ -47,6 +48,13 @@ export default async function EditionBadgesPage({ params }: PageProps<"/admin/h/
           </li>
         ))}
       </ul>
+
+      <p className="max-w-2xl text-[14px] text-muted" data-testid="no-photo-legend">
+        <strong className="text-foreground">{noPhoto}</strong> {noPhoto === 1 ? "crachá sai" : "crachás saem"} com o
+        sinal <strong className="text-foreground">SEM FOTO</strong> (círculo cortado na faixa): inscritos que não
+        autorizaram ou revogaram o uso de imagem. Combine com a equipe de foto antes do evento. Quem revogar depois de
+        impresso aparece na lista de inscritos.
+      </p>
 
       <form method="get" action={api} className="flex flex-col gap-4 border-[1.5px] border-line p-4 sm:p-5">
         <label className="flex flex-col gap-1.5">

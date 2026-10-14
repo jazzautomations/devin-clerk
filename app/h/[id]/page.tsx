@@ -11,8 +11,10 @@ import {
   getRegistrationStatus,
   getWaitlistPosition,
 } from "@/lib/registrations";
-import { consentPurpose, hasActiveQuestions } from "@/lib/registrationForm";
+import { consentPurpose } from "@/lib/registrationForm";
 import { RegisterButton } from "@/components/RegisterButton";
+import { getImageConsent } from "@/lib/eventTerms";
+import { ImageConsentToggle } from "@/components/ImageConsentToggle";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
 import { getArchive } from "@/lib/archive";
@@ -170,14 +172,16 @@ export default async function HackathonPage({
   const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(startDate);
   const canRegister = !past && !closed && h.partner;
   // spec 033 US1/FR-009 — formulário da edição, aceite LGPD e vagas
-  const [hasForm, consent, cap, myPosition, helpKinds, myApps] = await Promise.all([
-    canRegister ? hasActiveQuestions(h.id) : Promise.resolve(false),
+  // frente L — inscrição sempre passa pelo formulário (data de nascimento,
+  // código de conduta e uso de imagem não cabem em 1 clique)
+  const [consent, cap, myPosition, helpKinds, myApps, myImage] = await Promise.all([
     canRegister ? consentPurpose(h.id) : Promise.resolve(null),
     getEditionCapacity(h.id),
     member && myStatus === "waitlist" ? getWaitlistPosition(member.id, h.id) : Promise.resolve(null),
     // frente E — "Quer ajudar?": tipos de candidatura abertos pela organização
     !past && h.partner ? getOpenKinds(h.id) : Promise.resolve([] as ApplicationKind[]),
     member ? getMyApplications(member.id, h.id) : Promise.resolve({} as Partial<Record<ApplicationKind, ApplicationStatus>>),
+    member && myStatus ? getImageConsent(member.id, h.id) : Promise.resolve(null),
   ]);
   // quem se candidatou pra ajudar (pendente/aprovado) não compete na mesma edição
   const helping = (Object.entries(myApps) as [ApplicationKind, ApplicationStatus][]).find(
@@ -611,7 +615,7 @@ export default async function HackathonPage({
                     hackathonId={h.id}
                     requiresApproval={h.requiresApproval}
                     status={myStatus}
-                    formHref={hasForm ? `/h/${h.id}/inscricao` : null}
+                    formHref={`/h/${h.id}/inscricao`}
                     consentText={consent?.text ?? null}
                     full={!h.requiresApproval && cap.remaining === 0}
                     waitlistPosition={myPosition}
@@ -674,6 +678,29 @@ export default async function HackathonPage({
                   );
                 })}
               </ul>
+            </section>
+          )}
+
+          {h.partner && (
+            <section data-testid="safety-links" className="flex flex-col gap-2 border-[1.5px] border-line p-4">
+              <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">conduta e segurança</h2>
+              <ul className="flex flex-col gap-1.5 text-[14px]">
+                <li>
+                  <Link href={`/h/${h.id}/conduta`} className="text-accent underline-offset-4 hover:underline">
+                    código de conduta da edição →
+                  </Link>
+                </li>
+                <li>
+                  <Link href={`/h/${h.id}/incidente`} className="text-accent underline-offset-4 hover:underline">
+                    relatar um problema (pode ser anônimo) →
+                  </Link>
+                </li>
+              </ul>
+              {myImage && (
+                <div className="border-t border-line pt-2">
+                  <ImageConsentToggle hackathonId={h.id} granted={myImage.granted} source="edicao" />
+                </div>
+              )}
             </section>
           )}
 

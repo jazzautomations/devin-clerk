@@ -8,6 +8,7 @@ import { getEditionCapacity, getRegistrationStatus, getWaitlistPosition } from "
 import { consentPurpose, listQuestions } from "@/lib/registrationForm";
 import { RegistrationForm } from "@/components/RegistrationForm";
 import { KIND_LABEL, getMyApplications, type ApplicationKind } from "@/lib/roleApplications";
+import { eventDay, getEditionTerms, imagePurpose } from "@/lib/eventTerms";
 
 export async function generateMetadata({ params }: PageProps<"/h/[id]/inscricao">): Promise<Metadata> {
   const { id } = await params;
@@ -33,12 +34,13 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
   const closed = isOver(h, now) || (h.registrationDeadline !== null && new Date(h.registrationDeadline) < now);
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
-  const [questions, purpose, cap, status, myApps] = await Promise.all([
+  const [questions, purpose, cap, status, myApps, terms] = await Promise.all([
     listQuestions(h.id),
     consentPurpose(h.id),
     getEditionCapacity(h.id),
     member ? getRegistrationStatus(member.id, h.id) : Promise.resolve(null),
     member ? getMyApplications(member.id, h.id) : Promise.resolve({}),
+    getEditionTerms(h.id),
   ]);
   // frente E — candidato pendente/aprovado a voluntário/mentor/jurado não compete
   const helping = (Object.entries(myApps) as [ApplicationKind, string][]).find(([, st]) => st !== "rejected");
@@ -60,7 +62,7 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
         <p className="text-[15px] text-muted">
           {questions.length > 0
             ? `${questions.length} ${questions.length === 1 ? "pergunta" : "perguntas"}, menos de 3 minutos.`
-            : "Sem perguntas extras: é só aceitar os termos."}
+            : "Sem perguntas extras: data de nascimento e os aceites."}
           {cap.capacity !== null && (
             <>
               {" "}
@@ -120,6 +122,14 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
             signedIn={Boolean(member)}
             requiresApproval={h.requiresApproval}
             full={full}
+            terms={{
+              hackathonId: h.id,
+              minAge: terms.minAge,
+              dietEnabled: terms.dietEnabled,
+              conductVersion: terms.conductVersion,
+              eventDay: eventDay(h.startsAt),
+              imagePurpose: imagePurpose(h.organizer, h.name),
+            }}
           />
         </>
       )}

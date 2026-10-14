@@ -3,10 +3,13 @@ import { notFound } from "next/navigation";
 import { getHackathon } from "@/lib/hackathons";
 import { getEditionRoles, type EditionRole } from "@/lib/roles";
 import { currentMember } from "@/lib/session";
+import { isConductHandler } from "@/lib/incidents";
 
 // Painel da edição (spec 033): onde a organização opera UMA edição.
 // Cada aba é dona de uma feature; a aba só aparece pra quem tem o papel.
-const TABS: { href: string; label: string; roles: EditionRole[] }[] = [
+// conductHandler: a aba também aparece pra quem o organizador marcou como
+// responsável de conduta (frente L) — staff comum não vê incidentes.
+const TABS: { href: string; label: string; roles: EditionRole[]; conductHandler?: boolean }[] = [
   { href: "", label: "visão geral", roles: ["organizador", "staff", "mentor", "jurado"] },
   { href: "/equipe", label: "equipe", roles: ["organizador"] },
   { href: "/formulario", label: "formulário", roles: ["organizador"] },
@@ -18,6 +21,8 @@ const TABS: { href: string; label: string; roles: EditionRole[] }[] = [
   { href: "/presenca", label: "presença", roles: ["organizador"] },
   { href: "/checkin", label: "check-in", roles: ["organizador", "staff"] },
   { href: "/crachas", label: "crachás", roles: ["organizador"] },
+  { href: "/refeicoes", label: "refeições", roles: ["organizador", "staff"] },
+  { href: "/incidentes", label: "incidentes", roles: ["organizador"], conductHandler: true },
   { href: "/entregas", label: "entregas", roles: ["organizador", "staff"] },
   { href: "/juri", label: "júri", roles: ["organizador", "jurado"] },
   { href: "/palco", label: "palco", roles: ["organizador", "staff"] },
@@ -33,8 +38,9 @@ export default async function EditionPanelLayout({
   if (!member || !h) notFound();
   const roles = member.role === "admin" ? (["organizador"] as EditionRole[]) : await getEditionRoles(id, member.id);
   if (roles.length === 0) notFound();
+  const handler = roles.includes("organizador") ? false : await isConductHandler(member.id, id);
   const can = (tab: (typeof TABS)[number]) =>
-    roles.includes("organizador") || tab.roles.some((r) => roles.includes(r));
+    roles.includes("organizador") || tab.roles.some((r) => roles.includes(r)) || (handler && !!tab.conductHandler);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
