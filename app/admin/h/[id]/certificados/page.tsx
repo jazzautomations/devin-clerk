@@ -8,6 +8,7 @@ import {
   certRoleLabel,
   formatHours,
   listEditionCertificates,
+  rolesMissingHours,
 } from "@/lib/certificates";
 import {
   CERT_ROLE_LABEL,
@@ -41,6 +42,7 @@ export default async function CertificatesPanel({ params }: PageProps<"/admin/h/
     listQuestions(id),
   ]);
   const over = isOver(h);
+  const missingHours = await rolesMissingHours(id, settings);
   const counts = CERT_KINDS.map((k) => [k, certs.filter((c) => c.kind === k).length] as const);
   const defaultHours = defaultEditionHours(h.startsAt, h.endsAt);
   const detected = resolveQuestionMapping(questions, settings);
@@ -64,12 +66,23 @@ export default async function CertificatesPanel({ params }: PageProps<"/admin/h/
         <ul className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[12px]" data-testid="effective-hours">
           {effective.map((e) => (
             <li key={e.role}>
-              {e.label} <span className={e.custom ? "text-accent" : "text-muted"}>{formatHours(e.hours)}</span>
+              {e.label}{" "}
+              {e.hours === null ? (
+                <span className="text-orange">preencher</span>
+              ) : (
+                <span className={e.custom ? "text-accent" : "text-muted"}>{formatHours(e.hours)}</span>
+              )}
             </li>
           ))}
         </ul>
-        <IssueCertificatesButton hackathonId={id} disabled={!over} />
+        <IssueCertificatesButton hackathonId={id} disabled={!over || missingHours.length > 0} />
         {!over && <p className="font-mono text-[12px] text-orange">A edição ainda não encerrou.</p>}
+        {missingHours.length > 0 && (
+          <p className="font-mono text-[12px] text-orange" data-testid="missing-hours">
+            Confira as horas antes de emitir. Falta preencher:{" "}
+            {missingHours.map((r) => CERT_ROLE_LABEL[r]).join(", ")}.
+          </p>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

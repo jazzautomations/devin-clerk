@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import db from "@/lib/db";
 import { createTeam } from "@/lib/archive";
 import { grantEditionRole } from "@/lib/roles";
-import { addCriterion, assignAll, publishResults, saveScores } from "@/lib/jury";
+import { addCriterion, assignAll, publishResults, saveScores, unassignJudge } from "@/lib/jury";
+import { updateCertSettings } from "@/lib/certHours";
 import {
   attendeesForCertificates,
   getCertificate,
@@ -38,7 +39,17 @@ async function register(id: number, status = "approved", checkedIn = true) {
 }
 
 beforeEach(async () => {
-  for (const t of ["checkins", "certificates", "scores", "judge_assignments", "rubric_criteria", "jury_results", "edition_roles"]) {
+  for (const t of [
+    "checkins",
+    "certificates",
+    "certificate_settings",
+    "notifications",
+    "scores",
+    "judge_assignments",
+    "rubric_criteria",
+    "jury_results",
+    "edition_roles",
+  ]) {
     await db.exec(`DELETE FROM ${t}`);
   }
   await db.exec(`DELETE FROM registrations WHERE hackathonId = '${H}'`);
@@ -82,6 +93,7 @@ describe("emissão", () => {
     await grantEditionRole(H, org, "organizador", null);
     await grantEditionRole(H, staff, "staff", null);
     await register(campea);
+    await updateCertSettings(H, { hours: { mentor: 6, jurado: 4, organizador: 40, staff: 20 } });
     const t = (await createTeam(H, { name: "Campeões", placement: 0, memberUsernames: ["cert_campea"] })).team.id;
 
     // sem resultado publicado: ninguém ganha premiação ainda
@@ -102,6 +114,76 @@ describe("emissão", () => {
     expect(await kinds(campea)).toEqual(["participacao", "premiacao"]);
     const premio = (await listMemberCertificates(campea)).find((x) => x.kind === "premiacao")!;
     expect(premio.detail).toMatch(/1º lugar.*Campeões/);
+  });
+
+  it("auditoria 041: republicar sem o time X revoga a premiação dele; o código de quem ficou não muda", async () => {
+    const jur = await memberId("cert_rev_jur");
+    const org = await memberId("cert_rev_org");
+    const ana = await memberId("cert_rev_ana");
+    const bia = await memberId("cert_rev_bia");
+    await grantEditionRole(H, jur, "jurado", null);
+    await grantEditionRole(H, org, "organizador", null);
+    await updateCertSettings(H, { hours: { jurado: 4, organizador: 40 } });
+    for (const m of [ana, bia]) await register(m);
+    const a = (await createTeam(H, { name: "Time A", placement: 0, memberUsernames: ["cert_rev_ana"] })).team.id;
+    const b = (await createTeam(H, { name: "Time X", placement: 0, memberUsernames: ["cert_rev_bia"] })).team.id;
+    const c = await addCriterion(H, { label: "Impacto", weight: 1 });
+    await assignAll(H);
+    await saveScores(H, jur, a, [{ criterionId: c.id, score: 5 }], null);
+    await saveScores(H, jur, b, [{ criterionId: c.id, score: 4 }], null);
+    await publishResults(H, org);
+    await issueCertificates(H);
+    const premio = async (id: number) => (await listMemberCertificates(id)).find((x) => x.kind === "premiacao");
+    const anaBefore = (await premio(ana))!;
+    const biaBefore = (await premio(bia))!;
+    expect(biaBefore.detail).toMatch(/2º lugar/);
+
+    // o time X sai do júri (atribuição removida): a nota dele deixa de contar
+    await unassignJudge(H, jur, b);
+    await publishResults(H, org);
+    const r = await issueCertificates(H);
+    expect(r.revoked).toBe(1);
+    expect(await premio(bia)).toBeUndefined();
+    expect((await getCertificate(biaBefore.code))!.revokedAt).not.toBeNull();
+    expect((await premio(ana))!.code).toBe(anaBefore.code);
+    expect((await getCertificate(anaBefore.code))!.revokedAt).toBeNull();
+  });
+
+  it("auditoria 041: detalhe que muda gera código novo e revoga o antigo, sem reescrever o texto", async () => {
+    const org = await memberId("cert_det_org");
+    const staffOrg = await memberId("cert_det_so");
+    await grantEditionRole(H, org, "organizador", null);
+    await grantEditionRole(H, staffOrg, "staff", null);
+    await updateCertSettings(H, { hours: { staff: 10, organizador: 40 } });
+    await issueCertificates(H);
+    const [before] = await listMemberCertificates(staffOrg);
+    expect(before.detail).toBe("staff");
+    await grantEditionRole(H, staffOrg, "organizador", null);
+    await issueCertificates(H);
+    const [after] = await listMemberCertificates(staffOrg);
+    expect(after.code).not.toBe(before.code);
+    expect(after.detail).toBe("organizador e staff");
+    const old = await getCertificate(before.code);
+    expect(old).toMatchObject({ detail: "staff" });
+    expect(old!.revokedAt).not.toBeNull();
+  });
+
+  it("auditoria 041: cada código novo vira uma notificação pro dono, com o link de verificação", async () => {
+    const a = await memberId("cert_notif_a");
+    const b = await memberId("cert_notif_b");
+    await register(a);
+    await register(b);
+    const res = await issueCertificates(H);
+    expect(res.created).toBe(2);
+    const rows = await db
+      .prepare("SELECT memberId, type, href FROM notifications WHERE type = 'certificate' ORDER BY memberId")
+      .all<{ memberId: number; type: string; href: string }>();
+    const codes = [...(await listMemberCertificates(a)), ...(await listMemberCertificates(b))].map((c) => `/c/${c.code}`);
+    expect(rows.map((r) => r.memberId)).toEqual([a, b].sort((x, y) => x - y));
+    expect(rows.map((r) => r.href).sort()).toEqual(codes.sort());
+    // reemitir sem nada novo não avisa de novo
+    await issueCertificates(H);
+    expect((await db.prepare("SELECT COUNT(*)::int AS n FROM notifications WHERE type = 'certificate'").get<{ n: number }>())!.n).toBe(2);
   });
 
   it("reemitir não duplica nem troca o código", async () => {

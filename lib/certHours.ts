@@ -3,8 +3,8 @@ import type { Hackathon } from "@/lib/hackathons";
 import type { EditionQuestion } from "@/lib/registrationForm";
 
 // Carga horária do certificado (roadmap 037 #2, research 035 #3). A
-// organização define horas por papel; sem valor vale o default calculado
-// pela duração da edição. As horas são congeladas no certificado na emissão
+// organização define horas por papel; sem valor, o participante fica com a
+// duração da edição e os outros papéis precisam ser preenchidos. As horas são congeladas no certificado na emissão
 // (lib/certificates) — aqui é só a configuração viva.
 
 export const CERT_ROLES = ["participante", "staff", "mentor", "jurado", "organizador"] as const;
@@ -78,14 +78,24 @@ export function defaultEditionHours(startsAt: string, endsAt: string | null): nu
   return Math.min(HOURS_MAX, Math.max(1, Math.round((end.getTime() - start.getTime()) / 3_600_000)));
 }
 
-/** horas efetivas de um papel: override da organização ou default da edição */
+/**
+ * horas efetivas de um papel. Só o participante herda a duração da edição
+ * quando a organização não preenche: a duração corrida inclui madrugada e
+ * não diz quanto tempo o mentor ou o jurado ficou. Os outros papéis voltam
+ * null = precisam ser preenchidos antes de emitir.
+ */
 export function hoursFor(
   settings: Pick<CertSettings, "hours">,
   h: Pick<Hackathon, "startsAt" | "endsAt">,
   role: CertRole,
-): number {
-  return settings.hours[role] ?? defaultEditionHours(h.startsAt, h.endsAt);
+): number | null {
+  const set = settings.hours[role];
+  if (set !== null) return set;
+  return role === "participante" ? defaultEditionHours(h.startsAt, h.endsAt) : null;
 }
+
+/** papéis que pedem horas preenchidas (não herdam a duração) */
+export const ROLES_REQUIRING_HOURS: CertRole[] = CERT_ROLES.filter((r) => r !== "participante");
 
 const emptyHours = (): Record<CertRole, number | null> => ({
   participante: null,

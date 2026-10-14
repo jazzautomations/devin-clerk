@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
 import db from "@/lib/db";
 import { isPublished } from "@/lib/jury";
-import { getHackathon } from "@/lib/hackathons";
+import { getHackathon, type Hackathon } from "@/lib/hackathons";
+import { notify } from "@/lib/notifications";
 import {
   CERT_ROLE_LABEL,
+  CERT_ROLES,
   getCertSettings,
   hoursFor,
   resolveQuestionMapping,
@@ -13,8 +15,11 @@ import {
 import { csvField, displayAnswer, listQuestions } from "@/lib/registrationForm";
 
 // Certificado verificável (spec 033 US6, FR-007). Emissão é idempotente por
-// (membro, edição, tipo): reemitir não duplica nem troca o código, só
-// atualiza o detalhe (ex.: pódio republicado).
+// (membro, edição, tipo): reemitir não duplica nem troca o código.
+// Auditoria 041 (pacote D): o texto de um certificado emitido nunca muda.
+// Se o detalhe mudou (pódio republicado), nasce um código novo e o antigo
+// fica revogado; premiação de quem saiu do pódio também é revogada. O link
+// /c/<código> de um revogado continua abrindo e diz "revogado".
 // spec 034 — premiação é por categoria de prêmio (prizeCategoryId): a mesma
 // pessoa pode levar o geral e um desafio. Com categorias, só integrante
 // PRESENTE (check-in) do time vencedor recebe; sem categorias vale o pódio
@@ -179,16 +184,77 @@ async function grantsFor(hackathonId: string, settings: CertSettings): Promise<G
   return grants;
 }
 
-/** emite o que falta; devolve quantos certificados novos nasceram e o total da edição */
-export async function issueCertificates(hackathonId: string): Promise<{ created: number; total: number }> {
+export class CertificateError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const grantKey = (memberId: number, kind: string, categoryId: number | null | undefined) =>
+  `${memberId}:${kind}:${categoryId ?? 0}`;
+
+const listLabels = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs.at(-1)}`);
+
+/**
+ * Emite o que falta, troca o que mudou e revoga a premiação que saiu.
+ * Devolve quantos certificados novos nasceram, quantos foram revogados e o
+ * total vigente da edição. Cada código novo vira uma notificação pro dono.
+ */
+export async function issueCertificates(
+  hackathonId: string,
+): Promise<{ created: number; revoked: number; total: number }> {
   const [settings, h] = await Promise.all([getCertSettings(hackathonId), getHackathon(hackathonId)]);
   if (!h) throw new Error("edição não encontrada");
-  const grants = await grantsFor(hackathonId, settings);
   const institution = settings.institution ?? h.organizer;
   const periodEnd = h.endsAt ?? h.startsAt;
-  let created = 0;
+  const issued: { code: string; memberId: number; kind: CertKind }[] = [];
+  let revoked = 0;
   await db.transaction(async () => {
+    const [grants, active] = await Promise.all([
+      grantsFor(hackathonId, settings),
+      db
+        .prepare(
+          `SELECT code, memberId, kind, prizeCategoryId, detail FROM certificates
+           WHERE hackathonId = ? AND revokedAt IS NULL`,
+        )
+        .all<{ code: string; memberId: number; kind: CertKind; prizeCategoryId: number | null; detail: string | null }>(
+          hackathonId,
+        ),
+    ]);
+    const current = new Map(active.map((c) => [grantKey(c.memberId, c.kind, c.prizeCategoryId), c]));
+    const wanted = new Map<string, Grant>();
     for (const g of grants) {
+      const k = grantKey(g.memberId, g.kind, g.prizeCategoryId);
+      if (!wanted.has(k)) wanted.set(k, g);
+    }
+    const toIssue = [...wanted.entries()].filter(([k, g]) => {
+      const cur = current.get(k);
+      return !cur || cur.detail !== g.detail;
+    });
+
+    // horas: só o participante herda a duração; os outros papéis precisam
+    // estar preenchidos antes de emitir
+    const missing = rolesWithoutHours(
+      toIssue.map(([, g]) => g),
+      settings,
+      h,
+    );
+    if (missing.length) {
+      throw new CertificateError(
+        `Preencha as horas de ${listLabels(missing.map((r) => CERT_ROLE_LABEL[r]))} na configuração antes de emitir.`,
+        409,
+      );
+    }
+
+    const revoke = async (code: string) => {
+      await db.prepare("UPDATE certificates SET revokedAt = sqlite_now() WHERE code = ?").run(code);
+      revoked++;
+    };
+    for (const [k, g] of toIssue) {
+      const old = current.get(k);
+      if (old) await revoke(old.code);
       const hours = g.kind === "premiacao" ? null : hoursFor(settings, h, g.role);
       // colisão de código (50 bits) é improvável; ainda assim tenta de novo
       for (let attempt = 0; ; attempt++) {
@@ -198,18 +264,14 @@ export async function issueCertificates(hackathonId: string): Promise<{ created:
           if (attempt > 5) throw new Error("não consegui gerar código de certificado");
           continue;
         }
-        // ON CONFLICT só mexe no detalhe: papel, horas, período e
-        // instituição ficam como foram emitidos (congelados)
-        const row = await db
+        // papel, horas, período e instituição ficam congelados aqui
+        await db
           .prepare(
             `INSERT INTO certificates (code, memberId, hackathonId, kind, detail, prizeCategoryId,
                role, hours, periodStart, periodEnd, institution)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT (memberId, hackathonId, kind, (COALESCE(prizeCategoryId, 0)))
-             DO UPDATE SET detail = EXCLUDED.detail
-             RETURNING code`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .get<{ code: string }>(
+          .run(
             code,
             g.memberId,
             hackathonId,
@@ -222,15 +284,43 @@ export async function issueCertificates(hackathonId: string): Promise<{ created:
             periodEnd,
             institution,
           );
-        if (row?.code === code) created++;
+        issued.push({ code, memberId: g.memberId, kind: g.kind });
         break;
       }
     }
+    // premiação de quem saiu do resultado (republicado sem o time)
+    for (const c of active) {
+      if (c.kind === "premiacao" && !wanted.has(grantKey(c.memberId, c.kind, c.prizeCategoryId))) await revoke(c.code);
+    }
   })();
+  for (const c of issued) {
+    await notify(c.memberId, {
+      type: "certificate",
+      text: `Seu certificado de ${CERT_KIND_LABEL[c.kind]} em ${h.name} está disponível.`,
+      href: `/c/${c.code}`,
+    });
+  }
   const total = await db
-    .prepare("SELECT COUNT(*) AS n FROM certificates WHERE hackathonId = ?")
+    .prepare("SELECT COUNT(*) AS n FROM certificates WHERE hackathonId = ? AND revokedAt IS NULL")
     .get<{ n: number }>(hackathonId);
-  return { created, total: total?.n ?? 0 };
+  return { created: issued.length, revoked, total: Number(total?.n ?? 0) };
+}
+
+/** papéis que vão receber certificado e ainda estão sem horas (bloqueiam a emissão) */
+export async function rolesMissingHours(hackathonId: string, settings: CertSettings): Promise<CertRole[]> {
+  const h = await getHackathon(hackathonId);
+  if (!h) return [];
+  return rolesWithoutHours(await grantsFor(hackathonId, settings), settings, h);
+}
+
+/** papéis (na ordem de CERT_ROLES) que algum certificado vai pedir e estão sem horas */
+function rolesWithoutHours(
+  grants: Grant[],
+  settings: CertSettings,
+  h: Pick<Hackathon, "startsAt" | "endsAt">,
+): CertRole[] {
+  const need = new Set(grants.filter((g) => g.kind !== "premiacao").map((g) => g.role));
+  return CERT_ROLES.filter((r) => need.has(r) && hoursFor(settings, h, r) === null);
 }
 
 export type Certificate = {
@@ -253,13 +343,15 @@ export type Certificate = {
   periodEnd: string | null;
   /** instituição promotora (congelada); certificado antigo cai no organizador da edição */
   institution: string;
+  /** revogado (pódio republicado ou texto trocado); null = vigente */
+  revokedAt: string | null;
 };
 
 const SELECT_CERT = `
   SELECT c.code, c.memberId, COALESCE(NULLIF(m.name, ''), m.username) AS memberName, m.username,
          c.hackathonId, h.name AS hackathonName, h.startsAt, h.endsAt, h.location,
          c.kind, c.detail, c.issuedAt, c.role, c.hours, c.periodStart, c.periodEnd,
-         COALESCE(c.institution, h.organizer) AS institution
+         COALESCE(c.institution, h.organizer) AS institution, c.revokedAt
   FROM certificates c
   JOIN members m ON m.id = c.memberId
   JOIN hackathons h ON h.id = c.hackathonId`;
@@ -272,13 +364,13 @@ export async function getCertificate(code: string): Promise<Certificate | null> 
 
 export async function listMemberCertificates(memberId: number): Promise<Certificate[]> {
   return db
-    .prepare(`${SELECT_CERT} WHERE c.memberId = ? ORDER BY h.startsAt DESC, c.kind`)
+    .prepare(`${SELECT_CERT} WHERE c.memberId = ? AND c.revokedAt IS NULL ORDER BY h.startsAt DESC, c.kind`)
     .all<Certificate>(memberId);
 }
 
 export async function listEditionCertificates(hackathonId: string): Promise<Certificate[]> {
   return db
-    .prepare(`${SELECT_CERT} WHERE c.hackathonId = ? ORDER BY c.kind, memberName`)
+    .prepare(`${SELECT_CERT} WHERE c.hackathonId = ? AND c.revokedAt IS NULL ORDER BY c.kind, memberName`)
     .all<Certificate>(hackathonId);
 }
 
@@ -423,7 +515,7 @@ export async function hoursCsvRows(hackathonId: string): Promise<HoursCsvRow[]> 
     db
       .prepare(
         `SELECT DISTINCT m.id, m.email FROM certificates c JOIN members m ON m.id = c.memberId
-         WHERE c.hackathonId = ?`,
+         WHERE c.hackathonId = ? AND c.revokedAt IS NULL`,
       )
       .all<{ id: number; email: string }>(hackathonId),
   ]);
