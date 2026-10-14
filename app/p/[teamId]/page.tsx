@@ -9,6 +9,7 @@ import { getProjectView } from "@/lib/entriesPublic";
 import { getMemberByClerkId } from "@/lib/members";
 import { hasVoted, voteCountFor } from "@/lib/votes";
 import { getAudienceResult } from "@/lib/stage";
+import { feedbackVisible } from "@/lib/juryFeedback";
 import { VoteButton } from "@/components/VoteButton";
 import { ShareBar } from "@/components/ShareBar";
 import { absoluteUrl } from "@/lib/seo";
@@ -55,10 +56,12 @@ export default async function ProjectPage({ params }: Props) {
   const data = await getProjectView(id, member);
   if (!data) notFound();
 
-  const [deploy, voteCount, voted] = await Promise.all([
+  const [deploy, voteCount, voted, showFeedback] = await Promise.all([
     getLatestDeployForTeam(data.teamId),
     voteCountFor(data.teamId),
     member ? hasVoted(member.id, data.teamId) : Promise.resolve(false),
+    // roadmap 037 #9 — atalho só pro time; a página confere de novo
+    data.isMember ? feedbackVisible(data.hackathonId) : Promise.resolve(false),
   ]);
   const live = deploy?.status === "running" ? deploy : null;
   // modo palco: nota do público na final ao vivo — selo separado do voto
@@ -271,6 +274,17 @@ export default async function ProjectPage({ params }: Props) {
         <p data-testid="judged-version" className="font-mono text-xs text-muted">
           versão avaliada: v{data.judged.version}, enviada em {formatBrt(data.judged.submittedAt)} (horário de Brasília)
         </p>
+      )}
+
+      {showFeedback && (
+        <Link
+          href={`/p/${data.teamId}/feedback`}
+          data-testid="feedback-link"
+          className="flex items-center justify-between gap-4 border-[1.5px] border-accent px-5 py-4 font-mono text-sm text-accent transition hover:bg-mint"
+        >
+          <span>feedback do júri pro teu time · só o time vê</span>
+          <span>abrir →</span>
+        </Link>
       )}
 
       {data.afterNotes && (

@@ -294,7 +294,11 @@ export async function listAssignments(hackathonId: string) {
 
 export type JudgeAssignment = JuryTeam & {
   scores: Record<number, number>;
+  /** nota interna pra organização (o time nunca vê) */
   comment: string | null;
+  /** roadmap 037 #9 — feedback pro time, por critério e geral */
+  feedback: Record<number, string>;
+  generalFeedback: string | null;
   /** versão que o jurado avalia (snapshot do prazo); null = edição sem fluxo de entrega */
   judged: JudgedVersion | null;
 };
@@ -308,35 +312,63 @@ export async function judgeAssignments(hackathonId: string, judgeMemberId: numbe
   );
   const teams = (await listJuryTeams(hackathonId)).filter((t) => assigned.has(t.id));
   const versions = await judgedVersions(hackathonId);
-  const mine = await db
-    .prepare(
-      `SELECT s.teamId, s.criterionId, s.score, s.comment FROM scores s
-       JOIN rubric_criteria c ON c.id = s.criterionId
-       WHERE c.hackathonId = ? AND s.judgeMemberId = ?
-       ORDER BY s.updatedAt DESC`,
-    )
-    .all<{ teamId: number; criterionId: number; score: number; comment: string | null }>(hackathonId, judgeMemberId);
+  const [mine, general] = await Promise.all([
+    db
+      .prepare(
+        `SELECT s.teamId, s.criterionId, s.score, s.comment, s.feedback FROM scores s
+         JOIN rubric_criteria c ON c.id = s.criterionId
+         WHERE c.hackathonId = ? AND s.judgeMemberId = ?
+         ORDER BY s.updatedAt DESC`,
+      )
+      .all<{ teamId: number; criterionId: number; score: number; comment: string | null; feedback: string | null }>(
+        hackathonId,
+        judgeMemberId,
+      ),
+    db
+      .prepare(
+        `SELECT f.teamId, f.comment FROM jury_team_feedback f
+         JOIN teams t ON t.id = f.teamId
+         WHERE t.hackathonId = ? AND f.judgeMemberId = ?`,
+      )
+      .all<{ teamId: number; comment: string }>(hackathonId, judgeMemberId),
+  ]);
   return teams.map((t) => {
     const rows = mine.filter((s) => s.teamId === t.id);
     return {
       ...t,
       scores: Object.fromEntries(rows.map((s) => [s.criterionId, s.score])),
       comment: rows.find((s) => s.comment)?.comment ?? null,
+      feedback: Object.fromEntries(
+        rows.filter((s) => s.feedback).map((s) => [s.criterionId, s.feedback as string]),
+      ),
+      generalFeedback: general.find((g) => g.teamId === t.id)?.comment ?? null,
       judged: versions.get(t.id) ?? null,
     };
   });
 }
 
+export const FEEDBACK_MAX = 2000;
+
+const cleanText = (v: string | null | undefined) =>
+  typeof v === "string" && v.trim() ? v.trim().slice(0, FEEDBACK_MAX) : null;
+
 /**
- * Grava (upsert) as notas de um jurado pra um time. O comentário vale pro
- * projeto inteiro e vai em todas as linhas gravadas nessa submissão.
+ * Grava (upsert) as notas de um jurado pra um time. O comentário (nota
+ * interna pra organização) vale pro projeto inteiro e vai em todas as linhas
+ * gravadas nessa submissão.
+ *
+ * roadmap 037 #9 — feedback PRO TIME: `feedback` de cada entrada é o
+ * comentário daquele critério e `generalFeedback` o geral. undefined =
+ * mantém o que estava; null/"" = apaga. O time só lê depois da publicação
+ * e da liberação (lib/juryFeedback), sem nome de jurado.
  */
 export async function saveScores(
   hackathonId: string,
   judgeMemberId: number,
   teamId: number,
-  entries: { criterionId: number; score: number }[],
+  entries: { criterionId: number; score: number; feedback?: string | null }[],
   comment: string | null,
+  generalFeedback?: string | null,
 ) {
   if (await isPublished(hackathonId)) throw new JuryError("resultado já publicado; notas travadas", 409);
   if (!Number.isInteger(teamId)) throw new JuryError("teamId inválido");
@@ -353,17 +385,33 @@ export async function saveScores(
     if (!e || !valid.has(Number(e.criterionId))) throw new JuryError("critério inválido");
     if (!Number.isInteger(e.score) || e.score < 1 || e.score > 5) throw new JuryError("nota precisa ser inteira de 1 a 5");
   }
-  const note = typeof comment === "string" && comment.trim() ? comment.trim().slice(0, 2000) : null;
+  const note = cleanText(comment);
   await db.transaction(async () => {
     for (const e of entries) {
+      const keep = e.feedback === undefined;
       await db
         .prepare(
-          `INSERT INTO scores (judgeMemberId, teamId, criterionId, score, comment, updatedAt)
-           VALUES (?, ?, ?, ?, ?, sqlite_now())
+          `INSERT INTO scores (judgeMemberId, teamId, criterionId, score, comment, feedback, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, sqlite_now())
            ON CONFLICT (judgeMemberId, teamId, criterionId)
-           DO UPDATE SET score = EXCLUDED.score, comment = EXCLUDED.comment, updatedAt = EXCLUDED.updatedAt`,
+           DO UPDATE SET score = EXCLUDED.score, comment = EXCLUDED.comment, updatedAt = EXCLUDED.updatedAt,
+             feedback = CASE WHEN ?::int = 1 THEN scores.feedback ELSE EXCLUDED.feedback END`,
         )
-        .run(judgeMemberId, teamId, Number(e.criterionId), e.score, note);
+        .run(judgeMemberId, teamId, Number(e.criterionId), e.score, note, keep ? null : cleanText(e.feedback), keep ? 1 : 0);
+    }
+    if (generalFeedback !== undefined) {
+      const text = cleanText(generalFeedback);
+      if (text) {
+        await db
+          .prepare(
+            `INSERT INTO jury_team_feedback (judgeMemberId, teamId, comment, updatedAt)
+             VALUES (?, ?, ?, sqlite_now())
+             ON CONFLICT (judgeMemberId, teamId) DO UPDATE SET comment = EXCLUDED.comment, updatedAt = EXCLUDED.updatedAt`,
+          )
+          .run(judgeMemberId, teamId, text);
+      } else {
+        await db.prepare("DELETE FROM jury_team_feedback WHERE judgeMemberId = ? AND teamId = ?").run(judgeMemberId, teamId);
+      }
     }
   })();
 }
