@@ -20,19 +20,25 @@ function useApi(hackathonId: string) {
   async function call(path: string, method: string, body?: unknown) {
     setBusy(true);
     setError("");
-    const res = await fetch(`/api/admin/hackathons/${hackathonId}/${path}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
-    setBusy(false);
-    if (!res.ok) {
-      setError(data?.error ?? "algo deu errado");
+    try {
+      const res = await fetch(`/api/admin/hackathons/${hackathonId}/${path}`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(data?.error ?? "algo deu errado");
+        return null;
+      }
+      router.refresh();
+      return data;
+    } catch {
+      setError("sem conexão. Tente de novo.");
       return null;
+    } finally {
+      setBusy(false);
     }
-    router.refresh();
-    return data;
   }
   return { call, busy, error };
 }
@@ -45,7 +51,16 @@ function ErrorLine({ error }: { error: string }) {
   ) : null;
 }
 
-export function JuryCriteria({ hackathonId, criteria }: { hackathonId: string; criteria: Criterion[] }) {
+export function JuryCriteria({
+  hackathonId,
+  criteria,
+  locked = false,
+}: {
+  hackathonId: string;
+  criteria: Criterion[];
+  /** resultado publicado: a rubrica não muda mais */
+  locked?: boolean;
+}) {
   const { call, busy, error } = useApi(hackathonId);
   const total = criteria.reduce((a, c) => a + c.weight, 0);
 
@@ -72,6 +87,7 @@ export function JuryCriteria({ hackathonId, criteria }: { hackathonId: string; c
                   min={1}
                   max={1000}
                   defaultValue={c.weight}
+                  disabled={locked}
                   aria-label={`peso de ${c.label}`}
                   className={`${input} w-20`}
                   onBlur={(e) => {
@@ -83,16 +99,18 @@ export function JuryCriteria({ hackathonId, criteria }: { hackathonId: string; c
               <span className="w-12 text-right font-mono text-[12px] text-muted">
                 {total > 0 ? `${Math.round((c.weight / total) * 100)}%` : ""}
               </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (confirm(`Apagar "${c.label}" e as notas dele?`)) call(`juri/criteria/${c.id}`, "DELETE");
-                }}
-                className="font-mono text-[12px] text-muted underline-offset-4 hover:text-orange hover:underline"
-              >
-                apagar
-              </button>
+              {!locked && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (confirm(`Apagar "${c.label}" e as notas dele?`)) call(`juri/criteria/${c.id}`, "DELETE");
+                  }}
+                  className="min-h-11 font-mono text-[12px] text-muted underline-offset-4 hover:text-orange hover:underline"
+                >
+                  apagar
+                </button>
+              )}
             </li>
           ))}
           <li className="flex justify-between py-2 font-mono text-[13px]">
@@ -101,6 +119,11 @@ export function JuryCriteria({ hackathonId, criteria }: { hackathonId: string; c
           </li>
         </ul>
       )}
+      {locked ? (
+        <p className="font-mono text-[12px] text-muted" data-testid="rubric-locked">
+          Resultado publicado: a rubrica está travada e o pódio publicado não muda.
+        </p>
+      ) : (
       <form onSubmit={add} className="flex flex-wrap items-end gap-3">
         <label className="flex min-w-0 flex-[2_1_12rem] flex-col gap-1.5">
           <span className="font-mono text-xs text-muted">critério</span>
@@ -114,9 +137,12 @@ export function JuryCriteria({ hackathonId, criteria }: { hackathonId: string; c
           adicionar
         </button>
       </form>
-      <p className="font-mono text-[12px] text-muted">
-        A soma é livre: cada critério pesa a fração dele no total. Mudar peso recalcula o ranking sem perder nota.
-      </p>
+      )}
+      {!locked && (
+        <p className="font-mono text-[12px] text-muted">
+          A soma é livre: cada critério pesa a fração dele no total. Mudar peso recalcula o ranking sem perder nota.
+        </p>
+      )}
       <ErrorLine error={error} />
     </div>
   );
@@ -208,28 +234,89 @@ export function JuryAssignments({
 export function PublishResultsButton({
   hackathonId,
   published,
-  disabled,
+  disabledReason,
+  missing,
+  missingScores,
 }: {
   hackathonId: string;
   published: boolean;
-  disabled: boolean;
+  /** por que não dá pra publicar ainda; null = pode */
+  disabledReason: string | null;
+  /** avaliações (jurado × projeto) incompletas e notas que faltam nelas */
+  missing: number;
+  missingScores: number;
 }) {
   const { call, busy, error } = useApi(hackathonId);
+  const [forcing, setForcing] = useState(false);
+  const [reason, setReason] = useState("");
+  const label = published ? "republicar resultado" : "publicar resultado";
+  const pending = `${missingScores === 1 ? "falta 1 nota" : `faltam ${missingScores} notas`} em ${missing} ${
+    missing === 1 ? "avaliação" : "avaliações"
+  }`;
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex w-full flex-col items-end gap-2 sm:w-auto">
       <button
         type="button"
-        disabled={busy || disabled}
+        disabled={busy || disabledReason !== null}
+        aria-describedby={disabledReason ? "publish-reason" : missing > 0 ? "publish-missing" : undefined}
         className="btn disabled:cursor-not-allowed disabled:opacity-50"
         onClick={() => {
+          if (missing > 0) {
+            setForcing(true);
+            return;
+          }
           const msg = published
-            ? "Republicar recalcula o pódio com as notas e pesos atuais. Continuar?"
-            : "Publicar trava as notas e grava o pódio no arquivo da edição. Continuar?";
+            ? "Republicar recalcula o pódio com as notas de agora. Continuar?"
+            : "Publicar trava as notas e a rubrica e grava o pódio no arquivo da edição. Continuar?";
           if (confirm(msg)) call("juri/publish", "POST");
         }}
       >
-        {published ? "republicar resultado" : "publicar resultado"}
+        {label}
       </button>
+      {disabledReason ? (
+        <p id="publish-reason" className="max-w-sm text-right font-mono text-[12px] text-muted" data-testid="publish-disabled-reason">
+          {disabledReason}
+        </p>
+      ) : missing > 0 ? (
+        <p id="publish-missing" className="max-w-sm text-right font-mono text-[12px] text-orange" data-testid="publish-missing">
+          {pending[0].toUpperCase() + pending.slice(1)}.
+        </p>
+      ) : null}
+      {forcing && (
+        <form
+          className="flex w-full max-w-md flex-col gap-2 border-[1.5px] border-orange p-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const ok = await call("juri/publish", "POST", { force: true, reason });
+            if (ok) setForcing(false);
+          }}
+        >
+          <p className="text-[14px]">
+            {pending[0].toUpperCase() + pending.slice(1)}. Times com nota faltando ficam atrás dos avaliados por completo. Se for publicar
+            assim, registre o motivo.
+          </p>
+          <label className="flex flex-col gap-1">
+            <span className="font-mono text-[12px] text-muted">motivo (fica registrado)</span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+              minLength={10}
+              maxLength={500}
+              rows={2}
+              className={input}
+            />
+          </label>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className="btn-ghost" onClick={() => setForcing(false)}>
+              cancelar
+            </button>
+            <button type="submit" disabled={busy || reason.trim().length < 10} className="btn disabled:opacity-50">
+              publicar mesmo assim
+            </button>
+          </div>
+        </form>
+      )}
       <ErrorLine error={error} />
     </div>
   );

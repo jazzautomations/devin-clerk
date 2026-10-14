@@ -43,25 +43,32 @@ export function JudgeScoreForm({
     e.preventDefault();
     setStatus("saving");
     setError("");
-    const res = await fetch(`/api/admin/hackathons/${hackathonId}/juri/scores`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        teamId: team.id,
-        scores: criteria
-          .filter((c) => scores[c.id])
-          .map((c) => ({ criterionId: c.id, score: scores[c.id], feedback: feedback[c.id] ?? "" })),
-        comment,
-        feedback: general,
-      }),
-    });
-    if (res.ok) {
-      setStatus("saved");
-      router.refresh();
-    } else {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? "não deu pra salvar");
-      setStatus("error");
+    // try/finally: erro de rede não pode deixar o botão preso em "salvando…"
+    let next: "saved" | "error" = "error";
+    try {
+      const res = await fetch(`/api/admin/hackathons/${hackathonId}/juri/scores`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId: team.id,
+          scores: criteria
+            .filter((c) => scores[c.id])
+            .map((c) => ({ criterionId: c.id, score: scores[c.id], feedback: feedback[c.id] ?? "" })),
+          comment,
+          feedback: general,
+        }),
+      });
+      if (res.ok) {
+        next = "saved";
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error ?? "não deu pra salvar");
+      }
+    } catch {
+      setError("sem conexão. Suas notas não foram salvas, tente de novo.");
+    } finally {
+      setStatus(next);
     }
   }
 
@@ -77,29 +84,36 @@ export function JudgeScoreForm({
       <fieldset disabled={locked} className="flex flex-col gap-3">
         {criteria.map((c) => (
           <div key={c.id} className="flex flex-col gap-2 border-b border-line pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 font-medium break-words">{c.label}</span>
-              <div role="radiogroup" aria-label={c.label} className="flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((n) => {
-                  const on = scores[c.id] === n;
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      aria-label={`${c.label}: ${n}`}
-                      onClick={() => setScores((s) => ({ ...s, [c.id]: n }))}
-                      className={`h-10 w-10 rounded-[6px] border-[1.5px] font-mono text-sm ${
-                        on ? "border-accent bg-accent text-white" : "border-line hover:border-accent"
-                      }`}
+            {/* radio nativo: um Tab por critério e setas trocando a nota */}
+            <fieldset className="min-w-0">
+              <legend className="sr-only">{c.label}</legend>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+              <span aria-hidden className="min-w-0 font-medium break-words">
+                {c.label}
+              </span>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <label key={n} className="relative">
+                    <input
+                      type="radio"
+                      name={`t${team.id}-c${c.id}`}
+                      value={n}
+                      checked={scores[c.id] === n}
+                      onChange={() => setScores((s) => ({ ...s, [c.id]: n }))}
+                      aria-label={`${c.label}: nota ${n}`}
+                      className="peer sr-only"
+                    />
+                    <span
+                      aria-hidden
+                      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-[6px] border-[1.5px] border-line font-mono text-sm peer-checked:border-accent peer-checked:bg-accent peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent hover:border-accent"
                     >
                       {n}
-                    </button>
-                  );
-                })}
+                    </span>
+                  </label>
+                ))}
               </div>
-            </div>
+              </div>
+            </fieldset>
             <label className="flex flex-col gap-1">
               <span className="font-mono text-[11px] text-muted">comentário pro time sobre {c.label} (opcional, anônimo)</span>
               <textarea
@@ -145,12 +159,9 @@ export function JudgeScoreForm({
           >
             {status === "saving" ? "salvando…" : "salvar notas"}
           </button>
-          {status === "saved" && <span className="font-mono text-[12px] text-accent">salvo</span>}
-          {error && (
-            <span role="alert" className="font-mono text-[12px] text-orange">
-              {error}
-            </span>
-          )}
+          <span role="status" className={`font-mono text-[12px] ${error ? "text-orange" : "text-accent"}`}>
+            {status === "saved" ? "salvo" : error}
+          </span>
         </div>
       )}
     </form>

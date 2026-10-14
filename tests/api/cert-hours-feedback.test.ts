@@ -75,7 +75,8 @@ describe("certificados — configuração e CSV", () => {
     const bad = await cfg.PUT(req("PUT", { hours: { participante: -1 } }), ctx());
     expect(bad.status).toBe(400);
     expect((await bad.json()).error).toMatch(/horas/);
-    const ok = await cfg.PUT(req("PUT", { hours: { jurado: 5 }, institution: "Inst KF" }), ctx());
+    // auditoria 041: só o participante herda a duração; organização e júri preenchem
+    const ok = await cfg.PUT(req("PUT", { hours: { jurado: 5, organizador: 20 }, institution: "Inst KF" }), ctx());
     expect(ok.status).toBe(200);
     expect(await ok.json()).toMatchObject({ hours: { jurado: 5 }, institution: "Inst KF" });
     expect(await (await cfg.GET(req("GET"), ctx())).json()).toMatchObject({ hours: { jurado: 5 } });
@@ -108,7 +109,7 @@ describe("júri — liberar feedback", () => {
     const res = await route.POST(req("POST", { released: true }), ctx());
     expect(res.status).toBe(200);
     // liberado mas resultado não publicado: armado, ainda invisível
-    expect(await res.json()).toEqual({ released: true, visible: false });
+    expect(await res.json()).toEqual({ released: true, visible: false, notified: 0 });
   });
 
   it("jurado grava feedback pela API de notas", async () => {

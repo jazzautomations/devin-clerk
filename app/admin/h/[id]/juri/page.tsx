@@ -11,6 +11,7 @@ import {
   listCriteria,
   listJudges,
   listJuryTeams,
+  publishedRanking,
   type Criterion,
   type RankingRow,
 } from "@/lib/jury";
@@ -40,17 +41,36 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
   if (!manage && !isJudge) notFound();
 
   const mine = isJudge ? await judgeAssignments(id, member.id) : [];
+  // depois de publicado, todo mundo lê o ranking congelado na publicação
   const org = manage
-    ? await Promise.all([listJudges(id), listJuryTeams(id), listAssignments(id), juryProgress(id), getRanking(id)])
+    ? await Promise.all([
+        listJudges(id),
+        listJuryTeams(id),
+        listAssignments(id),
+        juryProgress(id),
+        published ? publishedRanking(id).then((r) => r ?? []) : getRanking(id),
+      ])
     : null;
   // jurado vê o ranking só depois de publicado
-  const publicRanking = !manage && published ? await getRanking(id) : null;
+  const publicRanking = !manage && published ? await publishedRanking(id) : null;
+  const disabledReason = org
+    ? org[1].length === 0
+      ? "Nenhum time entregou ainda. Acompanhe na aba entregas."
+      : org[0].length === 0
+        ? "Ainda não há jurados. Convide na aba equipe."
+        : criteria.length === 0
+          ? "Defina os critérios da rubrica primeiro."
+          : !org[4].some((r) => r.rank !== null)
+            ? "Nenhum projeto recebeu nota ainda."
+            : null
+    : null;
 
   return (
     <div className="flex flex-col gap-10">
       {published && (
         <p className="border-[1.5px] border-accent bg-mint px-4 py-3 font-mono text-[13px] text-accent">
           resultado publicado em {formatCertDate(published.publishedAt)} · o pódio já está no arquivo da edição
+          {published.forced && published.reason ? ` · publicado com avaliação faltando: ${published.reason}` : ""}
         </p>
       )}
 
@@ -58,7 +78,7 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
         <>
           <section className="flex flex-col gap-4">
             <h2 className={h2}>rubrica</h2>
-            <JuryCriteria hackathonId={id} criteria={criteria} />
+            <JuryCriteria hackathonId={id} criteria={criteria} locked={!!published} />
           </section>
 
           <section className="flex flex-col gap-4">
@@ -78,8 +98,14 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
 
           <section className="flex flex-col gap-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <h2 className={h2}>ranking {published ? "" : "· só a organização vê"}</h2>
-              <PublishResultsButton hackathonId={id} published={!!published} disabled={!org[4].some((r) => r.rank !== null)} />
+              <h2 className={h2}>ranking {published ? "· publicado" : "· só a organização vê"}</h2>
+              <PublishResultsButton
+                hackathonId={id}
+                published={!!published}
+                disabledReason={disabledReason}
+                missing={org[3].missing}
+                missingScores={org[3].missingScores}
+              />
             </div>
             <Ranking ranking={org[4]} criteria={criteria} />
           </section>
@@ -98,11 +124,11 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
 
       {isJudge && (
         <section className="flex flex-col gap-4">
-          <h2 className={h2}>tuas avaliações · {mine.length} {mine.length === 1 ? "projeto" : "projetos"}</h2>
+          <h2 className={h2}>suas avaliações · {mine.length} {mine.length === 1 ? "projeto" : "projetos"}</h2>
           {criteria.length === 0 ? (
             <p className="text-muted">A organização ainda não definiu os critérios.</p>
           ) : mine.length === 0 ? (
-            <p className="text-muted">Nenhum projeto atribuído a ti ainda.</p>
+            <p className="text-muted">Nenhum projeto atribuído a você ainda.</p>
           ) : (
             <ul className="flex flex-col gap-5">
               {mine.map((a) => (
@@ -182,6 +208,14 @@ function Ranking({ ranking, criteria }: { ranking: RankingRow[]; criteria: Crite
               {r.tied && (
                 <span className="ml-2 border border-orange px-1.5 py-0.5 align-middle font-mono text-[11px] font-normal text-orange uppercase">
                   empate
+                </span>
+              )}
+              {r.incomplete && (
+                <span
+                  data-testid="ranking-incomplete"
+                  className="ml-2 border border-line px-1.5 py-0.5 align-middle font-mono text-[11px] font-normal text-muted uppercase"
+                >
+                  {r.missingScores === 1 ? "falta 1 nota" : `faltam ${r.missingScores} notas`}
                 </span>
               )}
             </p>

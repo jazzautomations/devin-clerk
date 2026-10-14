@@ -25,7 +25,7 @@ function Shell({ teamId, children }: { teamId: number; children: React.ReactNode
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-12 sm:px-6 sm:py-16">
       {children}
       <Link href={`/p/${teamId}`} className="w-fit font-mono text-xs text-muted transition hover:text-accent">
-        {"← volta pro projeto"}
+        {"← voltar pro projeto"}
       </Link>
     </section>
   );
@@ -60,7 +60,7 @@ function CriterionBlock({ c }: { c: FeedbackCriterion }) {
         <span className="font-mono text-[12px] text-muted">peso {c.weight}</span>
       </div>
       <div className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-x-3 gap-y-2 font-mono text-[13px]">
-        <span>teu time</span>
+        <span>seu time</span>
         <Bar value={c.team} tone="team" />
         <span className="text-right text-accent">{fmt(c.team)}</span>
         <span className="text-muted">média edição</span>
@@ -115,7 +115,7 @@ export default async function TeamFeedbackPage({ params }: Props) {
   if (res.status === "forbidden") {
     return (
       <Shell teamId={teamId}>
-        <Notice title="Esse feedback não é teu" text="Só quem é do time vê o feedback do júri sobre o projeto." />
+        <Notice title="Feedback só do time" text="Só quem é do time vê o feedback do júri sobre o projeto." />
       </Shell>
     );
   }
@@ -124,7 +124,7 @@ export default async function TeamFeedbackPage({ params }: Props) {
       <Shell teamId={teamId}>
         <Notice
           title="Feedback ainda não liberado"
-          text={`A organização do ${res.hackathonName} libera o feedback do júri depois de publicar o resultado. Volta aqui quando sair.`}
+          text={`A organização do ${res.hackathonName} libera o feedback do júri depois de publicar o resultado. Você recebe um aviso quando sair.`}
         />
       </Shell>
     );
@@ -150,7 +150,7 @@ export default async function TeamFeedbackPage({ params }: Props) {
 
       {empty ? (
         <p className="border-[1.5px] border-line px-5 py-4 font-mono text-xs text-muted">
-          o júri não deixou nota nem comentário pro teu time
+          o júri não deixou nota nem comentário pro seu time
         </p>
       ) : (
         <>
