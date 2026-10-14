@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
-import { getMemberByClerkId } from "@/lib/members";
+import { getMemberByClerkId, type Member } from "@/lib/members";
 import { limitOrNull } from "@/lib/ratelimit";
 import { castLiveVote, getMyLiveVote, getSession, StageError, tallyFor, voterStatus } from "@/lib/stage";
 import { nudgeStage } from "@/lib/stageStream";
@@ -13,13 +13,13 @@ import { nudgeStage } from "@/lib/stageStream";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function gate(id: string) {
+async function gate(id: string): Promise<{ res: Response } | { member: Member }> {
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
-  if (!member) return { res: Response.json({ error: "Unauthorized" }, { status: 401 }) } as const;
+  if (!member) return { res: Response.json({ error: "Unauthorized" }, { status: 401 }) };
   const h = await getHackathon(id);
-  if (!h || !h.active) return { res: Response.json({ error: "Edição não encontrada" }, { status: 404 }) } as const;
-  return { member } as const;
+  if (!h || !h.active) return { res: Response.json({ error: "Edição não encontrada" }, { status: 404 }) };
+  return { member };
 }
 
 export async function GET(_req: Request, { params }: Ctx) {

@@ -7,6 +7,7 @@ import { getProjectByTeamId } from "@/lib/archive";
 import { getLatestDeployForTeam } from "@/lib/deploys";
 import { getMemberByClerkId } from "@/lib/members";
 import { hasVoted, voteCountFor } from "@/lib/votes";
+import { getAudienceResult } from "@/lib/stage";
 import { VoteButton } from "@/components/VoteButton";
 import { ShareBar } from "@/components/ShareBar";
 import { absoluteUrl } from "@/lib/seo";
@@ -52,6 +53,9 @@ export default async function ProjectPage({ params }: Props) {
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
   const own = member !== null && data.members.includes(member.username);
+  // modo palco: nota do público na final ao vivo — selo separado do voto
+  // da comunidade (025), só depois da final encerrada
+  const audience = await getAudienceResult(data.teamId);
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
@@ -163,6 +167,18 @@ export default async function ProjectPage({ params }: Props) {
         <p className="font-mono text-xs text-muted">
           {"escolha do povo — a comunidade vota, o júri decide o pódio"}
         </p>
+        {audience && (
+          <p
+            data-testid="audience-result"
+            className="w-fit bg-foreground px-3 py-2 font-mono text-xs text-band"
+          >
+            {`escolha do público na final · ${audience.position}º de ${audience.total}${
+              audience.tied ? " (empate)" : ""
+            } · média ${audience.avg.toLocaleString("pt-BR")}/5 · ${audience.votes} ${
+              audience.votes === 1 ? "voto" : "votos"
+            } de quem estava na sala`}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
