@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { normalizeEventTime, sameEventTime } from "@/lib/eventTime";
 import { getHackathon, type Hackathon } from "@/lib/hackathons";
 // garante o ALTER de requiresApproval (dona: lib/registrations) antes do
 // UPDATE — spec 032
@@ -19,12 +20,27 @@ export type HackathonPatch = {
 };
 
 // update parcial: só os campos presentes no patch são tocados;
-// null explícito limpa o campo (pra endsAt/location/deadline)
+// null explícito limpa o campo (pra endsAt/location/deadline).
+// Datas: normaliza na escrita (sem fuso = horário de Brasília, com o offset
+// gravado) e, se o instante não mudou, não reescreve o texto — salvar o
+// formulário sem mexer na data nunca altera a data. Formato desconhecido
+// lança EventTimeError (a rota devolve 400).
 export async function updateHackathon(
   id: string,
   patch: HackathonPatch,
 ): Promise<Hackathon | null> {
-  if (!await getHackathon(id)) return null;
+  const before = await getHackathon(id);
+  if (!before) return null;
+  for (const k of ["startsAt", "endsAt", "registrationDeadline"] as const) {
+    const v = patch[k];
+    if (v === undefined) continue;
+    if (v === null) {
+      if (k === "startsAt") delete patch[k];
+      continue;
+    }
+    if (sameEventTime(before[k], v)) delete patch[k];
+    else patch[k] = normalizeEventTime(v);
+  }
 
   const sets: string[] = [];
   const values: Record<string, unknown> = { id };
@@ -87,3 +103,12 @@ export async function listSubscribers(): Promise<{ email: string; createdAt: str
     .prepare("SELECT email, createdAt FROM subscribers ORDER BY id DESC")
     .all() as { email: string; createdAt: string }[];
 }
+
+// link de inscrição: http(s) ou caminho do próprio site. Nada de
+// javascript:, data: ou "//outro.site" — o valor vira href na vitrine.
+export function isSafeLink(v: string): boolean {
+  return /^(https?:\/\/\S+|\/(?![/\\])\S*)$/i.test(v);
+}
+
+// endereço da edição (/h/<id>): minúsculas, números e hífen
+export const EDITION_ID_RE = /^[a-z0-9-]{3,80}$/;

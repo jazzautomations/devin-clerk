@@ -17,8 +17,8 @@ const cardRarity: Record<string, string> = {
 export async function seedDatabase(db: Db) {
   const all = [...seed, ...pastSeed];
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)
-    VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active, @prize)
+    INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize, source)
+    VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, @active, @prize, 'seed')
   `);
   // OR IGNORE não alcança bancos existentes — preenche só o vazio,
   // nunca sobrescreve prêmio posto à mão pelo admin
@@ -41,10 +41,17 @@ export async function seedDatabase(db: Db) {
     }
 
     const seedIds = all.map((h) => h.id);
+    // banco antigo: a linha do seed nasceu sem source — marca (a migration
+    // 019 faz o mesmo; aqui cobre id novo que entrar na lista depois)
+    await db
+      .prepare("UPDATE hackathons SET source = 'seed' WHERE source IS NULL AND id = ANY(?)")
+      .run(seedIds);
+    // aposenta só o que JÁ FOI seed e saiu da lista. Edição criada pelo
+    // painel (source='admin'), raspada pelo radar ou de teste nunca é tocada.
     await db
       .prepare(
         `UPDATE hackathons SET active = 0
-         WHERE source IS NULL
+         WHERE source = 'seed'
            AND NOT (id = ANY(?))
            AND id NOT IN (SELECT hackathonId FROM registrations)`,
       )

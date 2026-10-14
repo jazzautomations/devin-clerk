@@ -207,7 +207,8 @@ describe("PATCH /api/admin/hackathons/[id] — deslocar programação junto (fre
     const body = await res.json();
     expect(body.schedule.moved).toBe(2);
     expect(await starts()).toEqual(["2026-12-08 12:00:00", "2026-12-09 18:00:00"]);
-    expect((await getHackathon(HID))!.startsAt).toBe("2026-12-08T09:00");
+    // sem fuso = horário de Brasília, gravado com o offset (auditoria 041)
+    expect((await getHackathon(HID))!.startsAt).toBe("2026-12-08T09:00:00-03:00");
   });
 
   it("400 quando shiftSchedule não é booleano", async () => {

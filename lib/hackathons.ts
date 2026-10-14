@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { parseEventTime } from "@/lib/eventTime";
 
 export type HackathonFormat = "online" | "presencial" | "hibrido";
 
@@ -57,9 +58,12 @@ async function allActive(): Promise<Hackathon[]> {
 // startsAt = abertura da submissão) segue no radar enquanto roda —
 // antes disso 43 ativos (25 c/ prêmio) sumiam da listagem.
 // Data inválida (NaN) conta como "não encerrado": nunca esconde por dado ruim.
+// Datas sem fuso são horário de Brasília (lib/eventTime, o mesmo parser do
+// RSVP e do to_ts no banco) — new Date() leria no fuso do servidor.
+const ts = (v: string | null | undefined) => parseEventTime(v)?.getTime() ?? NaN;
+
 export function isOver(h: Hackathon, now = new Date()): boolean {
-  const ref = h.endsAt ?? h.registrationDeadline ?? h.startsAt;
-  const t = new Date(ref).getTime();
+  const t = ts(h.endsAt ?? h.registrationDeadline ?? h.startsAt);
   return !Number.isNaN(t) && t < now.getTime();
 }
 
@@ -67,12 +71,12 @@ export function isOver(h: Hackathon, now = new Date()): boolean {
 // prazo), se já está rolando. Hackathon online do Devpost começa em junho e
 // fica aberto até novembro — mostrar "24 JUN" em outubro parece lista velha.
 export function nextDate(h: Hackathon, now = new Date()): { at: string; ongoing: boolean } {
-  if (new Date(h.startsAt).getTime() > now.getTime()) return { at: h.startsAt, ongoing: false };
+  if (ts(h.startsAt) > now.getTime()) return { at: h.startsAt, ongoing: false };
   return { at: h.endsAt ?? h.registrationDeadline ?? h.startsAt, ongoing: true };
 }
 
 export async function getOpenHackathons(now = new Date()): Promise<Hackathon[]> {
-  const key = (h: Hackathon) => new Date(nextDate(h, now).at).getTime();
+  const key = (h: Hackathon) => ts(nextDate(h, now).at);
   return (await allActive())
     .filter((h) => !isOver(h, now))
     .sort((a, b) => key(a) - key(b));
@@ -83,10 +87,7 @@ export async function getOpenHackathons(now = new Date()): Promise<Hackathon[]> 
 export async function getPastHackathons(now = new Date()): Promise<Hackathon[]> {
   return (await allActive())
     .filter((h) => isOver(h, now))
-    .sort(
-      (a, b) =>
-        new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
-    );
+    .sort((a, b) => ts(b.startsAt) - ts(a.startsAt));
 }
 
 // busca textual do radar (?q=, spec 023) — substring case-insensitive sobre
@@ -111,9 +112,10 @@ export async function getHackathon(id: string): Promise<Hackathon | null> {
   return row ? toHackathon(row) : null;
 }
 
-export function isRegistrationClosed(h: Hackathon, now = new Date()): boolean {
-  return (
-    h.registrationDeadline !== null &&
-    new Date(h.registrationDeadline) < now
-  );
+export function isRegistrationClosed(
+  h: Pick<Hackathon, "registrationDeadline">,
+  now = new Date(),
+): boolean {
+  const t = ts(h.registrationDeadline);
+  return !Number.isNaN(t) && t < now.getTime();
 }
