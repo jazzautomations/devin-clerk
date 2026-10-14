@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Hackathon } from "@/lib/hackathons";
+import { nextDate, type Hackathon } from "@/lib/hackathons";
 
 // spec 039 — lista de edições em linhas com fio (data pixel, nome, local,
 // selo). Landing ("próximas edições") e /dashboard ("hackathons abertos").
@@ -11,15 +11,19 @@ export function EditionRows({
   hackathons,
   registeredIds = [],
   testId,
+  now = new Date(),
 }: {
   hackathons: Hackathon[];
   registeredIds?: string[];
   testId?: string;
+  now?: Date;
 }) {
   return (
     <ul className="border-b-2 border-line" data-testid={testId}>
       {hackathons.map((h) => {
-        const d = new Date(h.startsAt);
+        // rolando: mostra até quando dá pra entrar, não o início que já passou
+        const next = nextDate(h, now);
+        const d = new Date(next.at);
         const mine = registeredIds.includes(h.id);
         return (
           <li key={h.id} className="border-t-2 border-line">
@@ -28,6 +32,7 @@ export function EditionRows({
               className="group grid grid-cols-[60px_1fr] items-center gap-x-4 gap-y-2 py-4 hover:bg-mint sm:grid-cols-[84px_1fr_auto] sm:gap-x-6 sm:px-2"
             >
               <span className="pix row-span-2 bg-foreground py-1 text-center text-[21px] leading-[1.05] text-band sm:row-span-1 sm:text-[25px]">
+                {next.ongoing && <span className="block text-[14px] leading-none text-background sm:text-[15px]">ATÉ</span>}
                 {fmtDia.format(d)}
                 <br />
                 {fmtMes.format(d).replace(".", "").toUpperCase()}

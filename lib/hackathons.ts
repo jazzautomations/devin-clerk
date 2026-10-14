@@ -58,13 +58,19 @@ export function isOver(h: Hackathon, now = new Date()): boolean {
   return !Number.isNaN(t) && t < now.getTime();
 }
 
+// a data que importa agora: o início, se ainda não começou; o fim (ou o
+// prazo), se já está rolando. Hackathon online do Devpost começa em junho e
+// fica aberto até novembro — mostrar "24 JUN" em outubro parece lista velha.
+export function nextDate(h: Hackathon, now = new Date()): { at: string; ongoing: boolean } {
+  if (new Date(h.startsAt).getTime() > now.getTime()) return { at: h.startsAt, ongoing: false };
+  return { at: h.endsAt ?? h.registrationDeadline ?? h.startsAt, ongoing: true };
+}
+
 export async function getOpenHackathons(now = new Date()): Promise<Hackathon[]> {
+  const key = (h: Hackathon) => new Date(nextDate(h, now).at).getTime();
   return (await allActive())
     .filter((h) => !isOver(h, now))
-    .sort(
-      (a, b) =>
-        new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-    );
+    .sort((a, b) => key(a) - key(b));
 }
 
 // arquivo = complemento exato da lista aberta: edição rolando não é

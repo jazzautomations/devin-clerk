@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import {
   getHackathon,
   getOpenHackathons,
+  nextDate,
   getPastHackathons,
   isOver,
   searchHackathons,
@@ -130,7 +131,7 @@ describe("getOpenHackathons / getPastHackathons — listas complementares", () =
     expect(ids).not.toContain("hack-inova-unifacens-2026"); // seed encerrado
   });
 
-  it("ordena por startsAt asc — ongoing encabeça, futuros depois", async () => {
+  it("ordena pela próxima data: fim de quem está rolando, início de quem vem", async () => {
     await makeHackathon("ro-ongoing", {
       startsAt: "2026-09-28T09:00:00Z",
       endsAt: "2026-10-04T18:00:00Z",
@@ -140,6 +141,21 @@ describe("getOpenHackathons / getPastHackathons — listas complementares", () =
     expect(ids.indexOf("ro-ongoing")).toBeLessThan(
       ids.indexOf("ro-future"),
     );
+  });
+
+  it("devpost aberto desde junho com prazo em novembro vem depois do que começa antes", async () => {
+    await makeHackathon("ro-junho", {
+      startsAt: "2026-06-24T00:00:00Z",
+      endsAt: "2026-11-15T00:00:00Z",
+    });
+    await makeHackathon("ro-future", { startsAt: "2026-10-10T09:00:00Z" });
+    const open = await getOpenHackathons(NOW);
+    const ids = open.map((h) => h.id);
+    expect(ids.indexOf("ro-future")).toBeLessThan(ids.indexOf("ro-junho"));
+    const junho = open.find((h) => h.id === "ro-junho")!;
+    expect(nextDate(junho, NOW)).toEqual({ at: "2026-11-15T00:00:00Z", ongoing: true });
+    const fut = open.find((h) => h.id === "ro-future")!;
+    expect(nextDate(fut, NOW)).toEqual({ at: "2026-10-10T09:00:00Z", ongoing: false });
   });
 
   it("arquivo = complemento exato: ongoing fora, encerrado dentro", async () => {

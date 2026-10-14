@@ -360,7 +360,7 @@ export default async function Home() {
               ver todos os hackathons →
             </Link>
           </div>
-          <EditionRows hackathons={proximas} testId="landing-proximas" />
+          <EditionRows hackathons={proximas} testId="landing-proximas" now={now} />
         </section>
       )}
 
