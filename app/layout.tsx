@@ -1,25 +1,29 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Archivo, JetBrains_Mono, VT323 } from "next/font/google";
 import { appConfig } from "@/app.config";
 import { SITE_URL } from "@/lib/seo";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// tipografia da Hack Inova: Archivo (texto e títulos), JetBrains Mono
+// (dados e rótulos), VT323 (acento pixel do HACKINOVA.OS)
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const vt323 = VT323({
+  variable: "--font-vt323",
   subsets: ["latin"],
+  weight: "400",
 });
 
 // tudo SSR por request: radar/feed/membros/perfil servem dados vivos do
@@ -47,23 +51,34 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <ClerkProvider
       appearance={{
         variables: {
-          colorPrimary: appConfig.accent,
-          colorPrimaryForeground: "#0b0d0e",
-          colorBackground: "#121517",
-          colorForeground: "#e7e5e0",
-          colorInput: "#0b0d0e",
-          colorInputForeground: "#e7e5e0",
+          colorPrimary: "#0c0c0c",
+          colorPrimaryForeground: "#fefefe",
+          colorBackground: "#fefefe",
+          colorForeground: "#0c0c0c",
+          colorMutedForeground: "#474747",
+          colorInput: "#fefefe",
+          colorInputForeground: "#0c0c0c",
+          colorNeutral: "#0c0c0c",
+          colorDanger: "#ba3919",
+          colorSuccess: "#047a43",
+          borderRadius: "0",
+          fontFamily: "var(--font-archivo), system-ui, sans-serif",
+        },
+        elements: {
+          card: { border: "2px solid #0c0c0c", boxShadow: "6px 6px 0 rgba(12,12,12,.85)" },
+          formButtonPrimary: { boxShadow: "none" },
         },
       }}
     >
       <html
         lang="pt-BR"
-        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
+        className={`${archivo.variable} ${jetbrains.variable} ${vt323.variable} h-full antialiased`}
         style={{ "--accent": appConfig.accent } as CSSProperties}
       >
         <body className="flex min-h-full flex-col">
           <Header />
           <main className="flex-1">{children}</main>
+          <Footer />
         </body>
       </html>
     </ClerkProvider>

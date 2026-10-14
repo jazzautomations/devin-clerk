@@ -71,14 +71,14 @@ export default function EmpresasPage() {
   ];
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-16 px-6 py-16 sm:py-24">
+    <section className="mx-auto flex max-w-6xl flex-col gap-16 px-4 py-16 sm:px-6 sm:py-24">
       {/* hero */}
       <div className="flex flex-col gap-5">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// para empresas"}
+        <p className="tag self-start uppercase">
+          {"para empresas"}
         </p>
-        <h1 className="max-w-3xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-          sua marca na frente de{" "}
+        <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-6xl">
+          Sua marca na frente de{" "}
           <span className="text-accent">quem constrói</span>
         </h1>
         <p className="max-w-xl text-lg text-muted">
@@ -94,10 +94,10 @@ export default function EmpresasPage() {
       <dl className="grid grid-cols-3 gap-px border border-line bg-line">
         {stats.map((s) => (
           <div key={s.label} className="bg-background px-5 py-4">
-            <dt className="font-mono text-[10px] tracking-widest text-muted uppercase">
+            <dt className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
               {s.label}
             </dt>
-            <dd className="mt-1 font-display text-3xl font-bold text-accent">
+            <dd className="mt-1 font-display text-3xl font-extrabold text-accent tracking-[-0.02em]">
               {s.n}
             </dd>
           </div>
@@ -107,8 +107,8 @@ export default function EmpresasPage() {
       {/* o que tá à venda */}
       <div className="flex flex-col gap-6">
         <div className="flex items-baseline gap-3 border-b border-line pb-4">
-          <span className="font-mono text-[10px] text-muted">[01]</span>
-          <h2 className="font-display text-2xl font-bold tracking-tight">
+          <span className="font-mono text-[12px] text-muted">[01]</span>
+          <h2 className="font-display text-2xl font-extrabold tracking-[-0.035em]">
             O que sua marca pode fazer
           </h2>
         </div>
@@ -116,7 +116,7 @@ export default function EmpresasPage() {
           {oferta.map((o) => (
             <div key={o.num} className="flex flex-col gap-3 bg-background p-6">
               <span className="font-mono text-xs text-accent">{o.num}</span>
-              <h3 className="font-display text-xl font-semibold tracking-tight">
+              <h3 className="font-display text-xl font-extrabold tracking-[-0.035em]">
                 {o.title}
               </h3>
               <p className="text-sm leading-relaxed text-muted">{o.desc}</p>
@@ -126,12 +126,12 @@ export default function EmpresasPage() {
       </div>
 
       {/* captura de lead */}
-      <div className="flex flex-col gap-6 border border-accent/30 bg-accent/5 p-6 sm:p-10">
+      <div className="flex flex-col gap-6 border border-line bg-mint p-6 sm:p-10">
         <div className="flex flex-col gap-2">
-          <p className="font-mono text-xs tracking-widest text-accent">
-            {"// quero patrocinar"}
+          <p className="tag self-start uppercase">
+            {"quero patrocinar"}
           </p>
-          <h2 className="font-display text-3xl font-bold tracking-tight">
+          <h2 className="font-display text-3xl font-extrabold tracking-[-0.035em]">
             Bora conversar.
           </h2>
           <p className="max-w-xl text-muted">
@@ -144,7 +144,7 @@ export default function EmpresasPage() {
 
       {/* legal — a página comercial é onde a garantia mais importa */}
       <p className="font-mono text-xs text-muted">
-        {"// legal: "}
+        {"legal: "}
         <Link
           href="/legal/termos"
           className="text-muted transition hover:text-accent"

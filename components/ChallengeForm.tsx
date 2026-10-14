@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const input =
-  "w-full border border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none";
+  "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 // desafio patrocinado = inventário vendido — sponsor é a marca que paga
 export function ChallengeForm({ hackathonId }: { hackathonId: string }) {
@@ -84,13 +84,13 @@ export function ChallengeForm({ hackathonId }: { hackathonId: string }) {
         <button
           type="submit"
           disabled={status === "saving"}
-          className="bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+          className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
         >
           {status === "saving" ? "criando…" : "lançar desafio →"}
         </button>
         {status === "error" && (
-          <span className="ml-4 font-mono text-xs text-red-400">
-            {"// "}
+          <span className="ml-4 font-mono text-xs text-orange">
+            {""}
             {error}
           </span>
         )}
@@ -125,7 +125,7 @@ export function ChallengeToggle({
       type="button"
       onClick={toggle}
       disabled={busy}
-      className="font-mono text-[10px] text-muted uppercase tracking-widest transition hover:text-accent disabled:opacity-50"
+      className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] transition hover:text-accent disabled:opacity-50"
     >
       {busy ? "…" : active ? "desativar" : "reativar"}
     </button>

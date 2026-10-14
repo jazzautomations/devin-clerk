@@ -102,10 +102,10 @@ export default async function AdminPage() {
   const td = `${mono} py-2 pr-4 align-top`;
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12">
+    <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6">
       <div className="flex flex-col gap-2">
-        <p className={`${mono} tracking-widest text-accent`}>{"// admin"}</p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+        <p className={`${mono} tracking-widest text-accent`}>{"admin"}</p>
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           Painel do organizador
         </h1>
       </div>
@@ -209,8 +209,8 @@ export default async function AdminPage() {
                                         <span
                                           className={
                                             r.status === "pending"
-                                              ? "border border-lendario/40 bg-lendario/5 px-1.5 py-0.5 text-[10px] text-lendario uppercase"
-                                              : "border border-line px-1.5 py-0.5 text-[10px] text-muted uppercase"
+                                              ? "border-[1.5px] border-lendario bg-lendario/10 px-1.5 py-0.5 text-[12px] text-lendario uppercase"
+                                              : "border-[1.5px] border-line px-1.5 py-0.5 text-[12px] text-muted uppercase"
                                           }
                                         >
                                           {r.status === "pending"
@@ -231,8 +231,8 @@ export default async function AdminPage() {
                           </table>
                         </div>
                       ) : (
-                        <p className="border border-dashed border-line px-4 py-4 font-mono text-xs text-muted">
-                          {"// nenhuma inscrição ainda"}
+                        <p className="border-[1.5px] border-line px-4 py-4 font-mono text-xs text-muted">
+                          {"nenhuma inscrição ainda"}
                         </p>
                       )}
                     </div>
@@ -240,7 +240,7 @@ export default async function AdminPage() {
                       <h3
                         className={`${mono} tracking-widest text-muted uppercase`}
                       >
-                        {"// desafios patrocinados"} (
+                        {"desafios patrocinados"} (
                         {challengesByEvent.get(e.id)?.length ?? 0})
                       </h3>
                       {(challengesByEvent.get(e.id) ?? []).length > 0 && (
@@ -277,7 +277,7 @@ export default async function AdminPage() {
                       <h3
                         className={`${mono} tracking-widest text-muted uppercase`}
                       >
-                        {"// procurando time"} (
+                        {"procurando time"} (
                         {boardByEvent.get(e.id)?.length ?? 0})
                       </h3>
                       {(boardByEvent.get(e.id) ?? []).length > 0 && (
@@ -331,7 +331,7 @@ export default async function AdminPage() {
                       <h3
                         className={`${mono} tracking-widest text-muted uppercase`}
                       >
-                        {"// arquivo"} ({archive.teams.length}{" "}
+                        {"arquivo"} ({archive.teams.length}{" "}
                         {archive.teams.length === 1 ? "time" : "times"} ·{" "}
                         {archive.assets.length}{" "}
                         {archive.assets.length === 1 ? "material" : "materiais"})
@@ -387,7 +387,7 @@ export default async function AdminPage() {
 
       <div className="flex flex-col gap-4">
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-          {"// sponsors"} ({sponsors.length})
+          {"sponsors"} ({sponsors.length})
         </h2>
         {sponsors.length > 0 && (
           <ul className="divide-y divide-line border-y border-line">
@@ -428,7 +428,7 @@ export default async function AdminPage() {
 
       <div className="flex flex-col gap-4">
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-          {"// leads"} ({leads.length})
+          {"leads"} ({leads.length})
         </h2>
         {leads.length > 0 ? (
           <ul className="divide-y divide-line border-y border-line">
@@ -440,7 +440,7 @@ export default async function AdminPage() {
                 <span className={mono}>
                   <span className="text-accent">{l.company}</span>
                   <span className="ml-2 text-muted">{l.email}</span>
-                  <span className="ml-2 border border-line px-1.5 text-[10px] text-muted uppercase">
+                  <span className="ml-2 border border-line px-1.5 text-[12px] text-muted uppercase">
                     {LEAD_INTEREST_LABELS[l.interest]}
                   </span>
                   {l.message && (
@@ -457,8 +457,8 @@ export default async function AdminPage() {
             ))}
           </ul>
         ) : (
-          <p className="border border-dashed border-line px-4 py-4 font-mono text-xs text-muted">
-            {"// nenhum lead ainda — a porta é /empresas"}
+          <p className="border-[1.5px] border-line px-4 py-4 font-mono text-xs text-muted">
+            {"nenhum lead ainda — a porta é /empresas"}
           </p>
         )}
       </div>
@@ -492,7 +492,7 @@ export default async function AdminPage() {
             ))}
             {subscribers.length === 0 && (
               <li className="py-4 font-mono text-xs text-muted">
-                {"// nenhum assinante ainda"}
+                {"nenhum assinante ainda"}
               </li>
             )}
           </ul>
@@ -525,7 +525,7 @@ export default async function AdminPage() {
 
       <div className="flex flex-col gap-4">
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-          {"// indicações"} ({submissions.length})
+          {"indicações"} ({submissions.length})
         </h2>
         {submissions.length > 0 ? (
           <ul className="divide-y divide-line border-y border-line">
@@ -543,7 +543,7 @@ export default async function AdminPage() {
                   >
                     {s.name}
                   </a>
-                  <span className="ml-2 border border-line px-1.5 text-[10px] text-muted uppercase">
+                  <span className="ml-2 border border-line px-1.5 text-[12px] text-muted uppercase">
                     {s.format}
                   </span>
                   {s.startsAt && (
@@ -559,7 +559,7 @@ export default async function AdminPage() {
                   {s.note && (
                     <span className="mt-1 block text-muted">{s.note}</span>
                   )}
-                  <span className="mt-1 block text-[10px] text-muted">
+                  <span className="mt-1 block text-[12px] text-muted">
                     indicado em{" "}
                     {new Intl.DateTimeFormat("pt-BR", {
                       dateStyle: "short",
@@ -572,8 +572,8 @@ export default async function AdminPage() {
             ))}
           </ul>
         ) : (
-          <p className="border border-dashed border-line px-4 py-4 font-mono text-xs text-muted">
-            {"// fila vazia — a porta é o fim do /radar"}
+          <p className="border-[1.5px] border-line px-4 py-4 font-mono text-xs text-muted">
+            {"fila vazia — a porta é o fim do /radar"}
           </p>
         )}
       </div>

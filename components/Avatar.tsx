@@ -18,7 +18,7 @@ export function initialsFor(
 }
 
 const SIZES = {
-  sm: "h-6 w-6 text-[9px]",
+  sm: "h-6 w-6 text-[11px]",
   md: "h-8 w-8 text-[11px]",
   lg: "h-16 w-16 text-xl",
 } as const;
@@ -55,7 +55,7 @@ export function Avatar({
     <span
       data-avatar
       aria-hidden
-      className={`${base} inline-flex select-none items-center justify-center border border-accent/40 bg-accent/10 font-mono font-semibold text-accent`}
+      className={`${base} inline-flex select-none items-center justify-center border-[1.5px] border-line bg-band font-mono font-semibold text-foreground`}
     >
       {initialsFor(name, username)}
     </span>

@@ -126,7 +126,7 @@ export function NotificationBell() {
           ◈
         </span>
         {unread > 0 && (
-          <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-bold leading-4 text-black">
+          <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-orange px-1 text-center text-[11px] font-bold leading-4 text-white">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
@@ -134,14 +134,14 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-72 border border-line bg-surface shadow-lg shadow-black/40">
           <div className="flex items-center justify-between border-b border-line px-3 py-2">
-            <span className="text-[10px] uppercase tracking-widest text-muted">
+            <span className="text-[12px] uppercase tracking-[0.06em] text-muted">
               notificações
             </span>
             {unread > 0 && (
               <button
                 type="button"
                 onClick={readAll}
-                className="text-[10px] text-accent hover:underline"
+                className="text-[12px] text-accent hover:underline"
               >
                 marcar tudo lido
               </button>
@@ -174,7 +174,7 @@ export function NotificationBell() {
                       >
                         {n.text}
                       </span>
-                      <span className="block text-[10px] text-muted">
+                      <span className="block text-[12px] text-muted">
                         {timeAgo(n.createdAt)}
                       </span>
                     </span>

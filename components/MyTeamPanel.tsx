@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { ArchiveTeam } from "@/lib/archive";
 
 const input =
-  "w-full border border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none";
+  "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 // spec 021 — "meu time": o inscrito cria o próprio time+projeto na edição
 // (o arquivo se auto-preenche) ou edita o projeto do time que já tem.
@@ -122,10 +122,10 @@ export function MyTeamPanel({
   return (
     <div data-testid="my-team" className="flex flex-col gap-3">
       {team && !open && (
-        <div className="flex flex-col gap-2 border border-accent/40 bg-accent/5 p-4">
+        <div className="flex flex-col gap-2 border border-line bg-mint p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="font-display font-bold tracking-tight">{team.name}</p>
-            <span className="font-mono text-[10px] text-muted">
+            <p className="font-display font-extrabold tracking-[-0.035em]">{team.name}</p>
+            <span className="font-mono text-[12px] text-muted">
               {team.members.map((u) => `@${u}`).join(" ")}
             </span>
           </div>
@@ -138,7 +138,7 @@ export function MyTeamPanel({
             </p>
           ) : (
             <p className="font-mono text-xs text-muted">
-              {"// sem projeto ainda — adiciona quando sair do papel"}
+              {"sem projeto ainda — adiciona quando sair do papel"}
             </p>
           )}
           <div className="flex flex-wrap items-center gap-3">
@@ -151,7 +151,7 @@ export function MyTeamPanel({
             <button
               type="button"
               onClick={openEdit}
-              className="font-mono text-[10px] text-muted uppercase tracking-widest transition hover:text-accent"
+              className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] transition hover:text-accent"
             >
               {team.project ? "editar projeto" : "+ adicionar projeto"}
             </button>
@@ -166,7 +166,7 @@ export function MyTeamPanel({
             setErr("");
             setOpen(true);
           }}
-          className="w-fit bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110"
+          className="w-fit border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent"
         >
           + submeter meu time → +15xp
         </button>
@@ -273,20 +273,20 @@ export function MyTeamPanel({
             <button
               type="submit"
               disabled={busy || !name.trim()}
-              className="bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
             >
               {busy ? "…" : "criar time → +15xp"}
             </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="font-mono text-[10px] text-muted uppercase tracking-widest hover:text-foreground"
+              className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] hover:text-foreground"
             >
               cancelar
             </button>
             {err && (
-              <span className="font-mono text-xs text-red-400">
-                {"// "}
+              <span className="font-mono text-xs text-orange">
+                {""}
                 {err}
               </span>
             )}
@@ -369,20 +369,20 @@ export function MyTeamPanel({
             <button
               type="submit"
               disabled={busy || !title.trim()}
-              className="bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
             >
               {busy ? "…" : "salvar projeto →"}
             </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="font-mono text-[10px] text-muted uppercase tracking-widest hover:text-foreground"
+              className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] hover:text-foreground"
             >
               cancelar
             </button>
             {err && (
-              <span className="font-mono text-xs text-red-400">
-                {"// "}
+              <span className="font-mono text-xs text-orange">
+                {""}
                 {err}
               </span>
             )}
@@ -392,7 +392,7 @@ export function MyTeamPanel({
 
       {note && (
         <p className="font-mono text-xs text-accent">
-          {"// "}
+          {""}
           {note}
         </p>
       )}

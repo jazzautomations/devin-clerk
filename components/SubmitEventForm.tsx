@@ -7,10 +7,10 @@ import { useState } from "react";
 // recebe 201 e nada grava. Sucesso é honesto: vai pra curadoria.
 
 const inputCls =
-  "w-full border border-line bg-background px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none";
+  "w-full border-[1.5px] border-line bg-background px-4 py-3 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 const labelCls =
-  "font-mono text-[10px] tracking-widest text-muted uppercase";
+  "font-mono text-[12px] tracking-[0.06em] text-muted uppercase";
 
 export function SubmitEventForm() {
   const [name, setName] = useState("");
@@ -55,8 +55,8 @@ export function SubmitEventForm() {
 
   if (status === "done") {
     return (
-      <p className="border border-accent/40 bg-accent/10 px-4 py-3 font-mono text-xs text-accent">
-        {"// recebido — vai pra curadoria antes de entrar no radar."}
+      <p className="border-[1.5px] border-line bg-mint px-4 py-3 font-mono text-xs text-accent">
+        {"recebido — vai pra curadoria antes de entrar no radar."}
       </p>
     );
   }
@@ -155,12 +155,12 @@ export function SubmitEventForm() {
         <button
           type="submit"
           disabled={status === "saving" || !name || !url}
-          className="shrink-0 bg-accent px-6 py-3 font-mono text-sm font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+          className="shrink-0 border-[1.5px] border-line bg-foreground px-6 py-3 text-[15px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
         >
           {status === "saving" ? "…" : "indicar pro radar →"}
         </button>
         {status === "error" && (
-          <p className="font-mono text-xs text-red-400">{`// ${error}`}</p>
+          <p className="font-mono text-xs text-orange">{`${error}`}</p>
         )}
       </div>
     </form>

@@ -44,7 +44,7 @@ export function RegistrationActions({
         type="button"
         onClick={() => act("approve")}
         disabled={busy !== ""}
-        className="font-mono text-[10px] text-accent uppercase tracking-widest transition hover:brightness-125 disabled:opacity-50"
+        className="font-mono text-[12px] text-accent uppercase tracking-[0.06em] transition hover:brightness-125 disabled:opacity-50"
       >
         {busy === "approve" ? "…" : "aprovar"}
       </button>
@@ -53,13 +53,13 @@ export function RegistrationActions({
           type="button"
           onClick={() => act("reject")}
           disabled={busy !== ""}
-          className="font-mono text-[10px] text-muted uppercase tracking-widest transition hover:text-red-400 disabled:opacity-50"
+          className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] transition hover:text-orange disabled:opacity-50"
         >
           {busy === "reject" ? "…" : "recusar"}
         </button>
       )}
       {error && (
-        <span className="font-mono text-[10px] text-red-400">{error}</span>
+        <span className="font-mono text-[12px] text-orange">{error}</span>
       )}
     </span>
   );

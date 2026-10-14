@@ -35,7 +35,7 @@ function arcOutcome(e: MemberArcEntry): { label: string; cls: string } {
   if (e.hasProject)
     return {
       label: "entregou projeto",
-      cls: "border-accent/40 bg-accent/10 text-accent",
+      cls: "border-accent bg-mint text-accent",
     };
   return { label: "participou", cls: "border-line text-muted" };
 }
@@ -90,10 +90,10 @@ export default async function PublicProfilePage({
   const { level } = levelFor(member.xp);
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
       <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// hacker · lv"}
+        <p className="tag self-start uppercase">
+          {"hacker · lv"}
           {level.n} {level.name}
         </p>
         <div className="flex items-center gap-4">
@@ -103,17 +103,17 @@ export default async function PublicProfilePage({
             avatarUrl={member.avatarUrl}
             size="lg"
           />
-          <h1 className="font-display text-4xl font-bold tracking-tight">
+          <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
             {member.name ?? `@${member.username}`}
           </h1>
         </div>
         <div className="flex items-center gap-2">
           <p className="font-mono text-sm text-muted">@{member.username}</p>
-          <span className="border border-line bg-surface px-1.5 font-mono text-[10px] text-foreground">
+          <span className="border border-line bg-surface px-1.5 font-mono text-[12px] text-foreground">
             LV{level.n}
           </span>
           {member.persona && (
-            <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">
+            <span className="border border-line bg-mint px-1.5 font-mono text-[12px] text-accent">
               {member.persona}
             </span>
           )}
@@ -179,7 +179,7 @@ export default async function PublicProfilePage({
           {member.skills.map((s) => (
             <span
               key={s}
-              className="border border-line px-2 py-0.5 font-mono text-[10px] text-muted"
+              className="border-[1.5px] border-line px-2 py-0.5 font-mono text-[12px] text-muted"
             >
               {s}
             </span>
@@ -193,7 +193,7 @@ export default async function PublicProfilePage({
 
       {badges.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
             badges ({badges.length})
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -206,7 +206,7 @@ export default async function PublicProfilePage({
 
       {cards.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
             coleção — cartinhas de edição ({cards.length})
           </h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -227,8 +227,8 @@ export default async function PublicProfilePage({
 
       {arc.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-            {"// trajetória"}
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
+            {"trajetória"}
           </h2>
           <p className="font-mono text-xs text-muted">
             {arc.length} {arc.length === 1 ? "edição" : "edições"} · {podiums}{" "}
@@ -246,7 +246,7 @@ export default async function PublicProfilePage({
                   {i > 0 && (
                     <span
                       aria-hidden
-                      className="font-mono text-[10px] text-muted"
+                      className="font-mono text-[12px] text-muted"
                     >
                       →
                     </span>
@@ -254,15 +254,15 @@ export default async function PublicProfilePage({
                   <Link
                     href={`/h/${e.hackathonId}`}
                     title={e.teamName ?? e.hackathonName}
-                    className="flex flex-wrap items-center gap-2 border border-line bg-surface px-2.5 py-1.5 transition hover:border-accent/50"
+                    className="flex flex-wrap items-center gap-2 border-[1.5px] border-line bg-surface px-2.5 py-1.5 transition hover:border-line"
                   >
-                    <span className="font-mono text-[10px] text-muted">
+                    <span className="font-mono text-[12px] text-muted">
                       {new Intl.DateTimeFormat("pt-BR", {
                         month: "short",
                         year: "2-digit",
                       }).format(new Date(e.startsAt))}
                     </span>
-                    <span className="font-display text-xs font-semibold">
+                    <span className="font-display text-xs font-extrabold tracking-[-0.02em]">
                       {e.hackathonName}
                     </span>
                     <span
@@ -280,14 +280,14 @@ export default async function PublicProfilePage({
 
       {projects.length > 0 && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+          <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
             projetos ({projects.length})
           </h2>
           <ul className="divide-y divide-line border-y border-line">
             {projects.map((p) => (
               <li key={`${p.hackathonId}-${p.teamName}`} className="py-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="font-display font-semibold">
+                  <p className="font-display font-extrabold tracking-[-0.02em]">
                     {p.project ? (
                       <Link
                         href={`/p/${p.teamId}`}
@@ -300,7 +300,7 @@ export default async function PublicProfilePage({
                     )}
                   </p>
                   {p.placement > 0 && (
-                    <span className="border border-lendario/50 bg-lendario/10 px-1.5 font-mono text-[10px] text-lendario">
+                    <span className="border border-lendario/50 bg-lendario/10 px-1.5 font-mono text-[12px] text-lendario">
                       {p.placement}º lugar
                     </span>
                   )}
@@ -325,12 +325,12 @@ export default async function PublicProfilePage({
       )}
 
       <div className="flex flex-col gap-4">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
+        <h2 className="font-mono text-xs tracking-[0.06em] text-muted uppercase">
           campanhas ({history.length})
         </h2>
         {history.length === 0 ? (
-          <p className="border border-dashed border-line px-5 py-6 font-mono text-xs text-muted">
-            {"// ainda não participou de hackathon via hackahub"}
+          <p className="border-[1.5px] border-line px-5 py-6 font-mono text-xs text-muted">
+            {"ainda não participou de hackathon via hackahub"}
           </p>
         ) : (
           <ul className="divide-y divide-line border-y border-line">
@@ -340,7 +340,7 @@ export default async function PublicProfilePage({
                 className="flex items-center justify-between gap-4 py-4"
               >
                 <div>
-                  <p className="font-display font-semibold">{h!.name}</p>
+                  <p className="font-display font-extrabold tracking-[-0.02em]">{h!.name}</p>
                   <p className="font-mono text-xs text-muted">
                     {h!.organizer}
                   </p>

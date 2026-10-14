@@ -7,7 +7,7 @@ import { levelFor } from "@/lib/game";
 import type { BoardEntry } from "@/lib/teamboard";
 
 const input =
-  "w-full border border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none";
+  "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 // board "procuro time" da edição — leitura pública; inscrito (canPost)
 // anuncia/desativa o próprio. Lista vem do server e refaz fetch após mutação.
@@ -101,8 +101,8 @@ export function TeamBoardPanel({
   return (
     <div className="flex flex-col gap-4">
       {entries.length === 0 ? (
-        <p className="border border-dashed border-line px-5 py-6 font-mono text-xs text-muted">
-          {"// ninguém procurando ainda — seja o primeiro a se anunciar"}
+        <p className="border-[1.5px] border-line px-5 py-6 font-mono text-xs text-muted">
+          {"ninguém procurando ainda — seja o primeiro a se anunciar"}
         </p>
       ) : (
         <ul className="grid gap-3">
@@ -111,7 +111,7 @@ export function TeamBoardPanel({
               key={e.id}
               className={`flex flex-col gap-2 border p-4 ${
                 mine?.id === e.id
-                  ? "border-accent/50 bg-accent/5"
+                  ? "border-accent bg-mint"
                   : "border-line bg-surface"
               }`}
             >
@@ -122,11 +122,11 @@ export function TeamBoardPanel({
                 >
                   @{e.username}
                 </Link>
-                <span className="border border-line px-1.5 font-mono text-[10px] text-muted">
+                <span className="border border-line px-1.5 font-mono text-[12px] text-muted">
                   LV{levelFor(e.xp).level.n}
                 </span>
                 {e.persona && (
-                  <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">
+                  <span className="border border-line bg-mint px-1.5 font-mono text-[12px] text-accent">
                     {e.persona}
                   </span>
                 )}
@@ -136,7 +136,7 @@ export function TeamBoardPanel({
                   </span>
                 )}
                 {mine?.id === e.id && (
-                  <span className="ml-auto font-mono text-[10px] text-accent">
+                  <span className="ml-auto font-mono text-[12px] text-accent">
                     ← teu anúncio
                   </span>
                 )}
@@ -146,7 +146,7 @@ export function TeamBoardPanel({
                   {e.skills.map((s) => (
                     <span
                       key={s}
-                      className="border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted"
+                      className="border-[1.5px] border-line px-1.5 py-0.5 font-mono text-[12px] text-muted"
                     >
                       {s}
                     </span>
@@ -169,7 +169,7 @@ export function TeamBoardPanel({
           <button
             type="button"
             onClick={() => openForm(mine)}
-            className="w-fit bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110"
+            className="w-fit border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent"
           >
             {mine ? "editar meu anúncio" : "+ procuro time"}
           </button>
@@ -178,7 +178,7 @@ export function TeamBoardPanel({
               type="button"
               onClick={deactivate}
               disabled={busy}
-              className="font-mono text-[10px] text-muted uppercase tracking-widest transition hover:text-red-400 disabled:opacity-50"
+              className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] transition hover:text-orange disabled:opacity-50"
             >
               {busy ? "…" : "desativar — achei time"}
             </button>
@@ -235,20 +235,20 @@ export function TeamBoardPanel({
             <button
               type="submit"
               disabled={busy || !need.trim()}
-              className="bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
             >
               {busy ? "…" : mine ? "atualizar →" : "anunciar → +10xp"}
             </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="font-mono text-[10px] text-muted uppercase tracking-widest hover:text-foreground"
+              className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] hover:text-foreground"
             >
               cancelar
             </button>
             {err && (
-              <span className="font-mono text-xs text-red-400">
-                {"// "}
+              <span className="font-mono text-xs text-orange">
+                {""}
                 {err}
               </span>
             )}
@@ -287,7 +287,7 @@ export function TeamBoardToggle({
       type="button"
       onClick={toggle}
       disabled={busy}
-      className="font-mono text-[10px] text-muted uppercase tracking-widest transition hover:text-accent disabled:opacity-50"
+      className="font-mono text-[12px] text-muted uppercase tracking-[0.06em] transition hover:text-accent disabled:opacity-50"
     >
       {busy ? "…" : active ? "desativar" : "reativar"}
     </button>

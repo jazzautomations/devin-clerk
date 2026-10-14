@@ -19,12 +19,12 @@ export default async function PerfilPage() {
   });
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+    <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
       <div className="flex flex-col gap-2">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// perfil"}
+        <p className="tag self-start uppercase">
+          {"perfil"}
         </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           @{member.username}
         </h1>
         <p className="text-muted">

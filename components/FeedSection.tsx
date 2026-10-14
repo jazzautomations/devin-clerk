@@ -192,8 +192,8 @@ export function FeedSection({
       {canPost && (
         <div className="card flex flex-col gap-3 p-4">
           {hackathonId && (
-            <p className="font-mono text-[10px] text-accent">
-              {"// postando no mural: "}
+            <p className="font-mono text-[12px] text-accent">
+              {"postando no mural: "}
               {editionLabel ?? hackathonId}
             </p>
           )}
@@ -203,42 +203,42 @@ export function FeedSection({
             rows={3}
             maxLength={500}
             placeholder="O que tu tá construindo? Posta a demo, o que quebrou, o que aprendeu…"
-            className="w-full resize-none border border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none"
+            className="w-full resize-none border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
           />
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               value={link}
               onChange={(e) => setLink(e.target.value)}
               placeholder="link do projeto/demo (opcional)"
-              className="w-full border border-line bg-background px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none"
+              className="w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-xs text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
             />
             <button
               onClick={post}
               disabled={status === "posting" || !body.trim()}
-              className="shrink-0 bg-accent px-5 py-2 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              className="shrink-0 border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
             >
               {status === "posting" ? "postando…" : "postar →"}
             </button>
           </div>
           {status === "error" && (
-            <p className="font-mono text-xs text-red-400">
-              {"// erro — link precisa começar com http(s)"}
+            <p className="font-mono text-xs text-orange">
+              {"erro — link precisa começar com http(s)"}
             </p>
           )}
         </div>
       )}
 
       {hackathonId && !canPost && (
-        <p className="font-mono text-[10px] text-muted/60">
-          {"// só inscritos postam no mural"}
+        <p className="font-mono text-[12px] text-muted">
+          {"só inscritos postam no mural"}
         </p>
       )}
 
       {posts.length === 0 ? (
-        <p className="border border-dashed border-line px-5 py-8 text-center font-mono text-xs text-muted">
+        <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {hackathonId
-            ? "// mural vazio — seja o primeiro a postar da edição"
-            : "// feed vazio — seja o primeiro a postar o que tá construindo"}
+            ? "mural vazio — seja o primeiro a postar da edição"
+            : "feed vazio — seja o primeiro a postar o que tá construindo"}
         </p>
       ) : (
         <ul className="divide-y divide-line border-y border-line">
@@ -262,11 +262,11 @@ export function FeedSection({
                   <span className="font-mono text-xs text-muted">
                     @{p.username}
                   </span>
-                  <span className="border border-line px-1.5 font-mono text-[10px] text-muted">
+                  <span className="border border-line px-1.5 font-mono text-[12px] text-muted">
                     LV{levelFor(p.xp).level.n}
                   </span>
                   {p.persona && (
-                    <span className="border border-accent/30 bg-accent/10 px-1.5 font-mono text-[10px] text-accent">
+                    <span className="border border-line bg-mint px-1.5 font-mono text-[12px] text-accent">
                       {p.persona}
                     </span>
                   )}
@@ -280,20 +280,20 @@ export function FeedSection({
                   {p.hackathonId && p.hackathonId !== hackathonId && (
                     <Link
                       href={`/h/${p.hackathonId}`}
-                      className="border border-line px-1.5 font-mono text-[10px] text-muted transition hover:border-accent/50 hover:text-accent"
+                      className="border border-line px-1.5 font-mono text-[12px] text-muted transition hover:border-line hover:text-accent"
                     >
                       → {p.hackathonName ?? p.hackathonId}
                     </Link>
                   )}
                 </div>
-                <span className="flex shrink-0 items-baseline gap-2 font-mono text-[10px] text-muted">
+                <span className="flex shrink-0 items-baseline gap-2 font-mono text-[12px] text-muted">
                   {fmt.format(new Date(p.createdAt + "Z"))}
                   {canDelete(p.username) && (
                     <button
                       onClick={() => removePost(p.id)}
                       title="apagar post"
                       aria-label="apagar post"
-                      className="text-muted transition hover:text-red-400"
+                      className="text-muted transition hover:text-orange"
                     >
                       ✕
                     </button>
@@ -307,7 +307,7 @@ export function FeedSection({
                     href={p.link}
                     target="_blank"
                     rel="noopener"
-                    className="border border-line px-2.5 py-1 font-mono text-xs text-muted transition hover:border-accent/50 hover:text-accent"
+                    className="border-[1.5px] border-line px-2.5 py-1 font-mono text-xs text-muted transition hover:border-line hover:text-accent"
                   >
                     {p.link.replace(/^https?:\/\//, "").slice(0, 60)} ↗
                   </a>
@@ -348,15 +348,15 @@ export function FeedSection({
                         >
                           @{c.username}
                         </Link>
-                        <span className="border border-line px-1 font-mono text-[10px] text-muted">
+                        <span className="border border-line px-1 font-mono text-[12px] text-muted">
                           LV{levelFor(c.xp).level.n}
                         </span>
                         {c.persona && (
-                          <span className="border border-accent/30 bg-accent/10 px-1 font-mono text-[10px] text-accent">
+                          <span className="border border-line bg-mint px-1 font-mono text-[12px] text-accent">
                             {c.persona}
                           </span>
                         )}
-                        <span className="font-mono text-[10px] text-muted">
+                        <span className="font-mono text-[12px] text-muted">
                           {fmt.format(new Date(c.createdAt + "Z"))}
                         </span>
                         {canDelete(c.username) && (
@@ -364,7 +364,7 @@ export function FeedSection({
                             onClick={() => removeComment(p.id, c.id)}
                             title="apagar comentário"
                             aria-label="apagar comentário"
-                            className="font-mono text-[10px] text-muted transition hover:text-red-400"
+                            className="font-mono text-[12px] text-muted transition hover:text-orange"
                           >
                             ✕
                           </button>
@@ -387,19 +387,19 @@ export function FeedSection({
                         }}
                         maxLength={1000}
                         placeholder="comenta aí — feedback vale ouro"
-                        className="w-full border border-line bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted/50 focus:border-accent/50 focus:outline-none"
+                        className="w-full border-[1.5px] border-line bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
                       />
                       <button
                         onClick={() => comment(p.id)}
                         disabled={sending[p.id] || !(drafts[p.id] ?? "").trim()}
-                        className="shrink-0 bg-accent px-3 py-1.5 font-mono text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+                        className="shrink-0 border-[1.5px] border-line bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
                       >
                         {sending[p.id] ? "…" : "comentar →"}
                       </button>
                     </div>
                   ) : (
-                    <p className="font-mono text-[10px] text-muted/60">
-                      {"// cria conta pra comentar"}
+                    <p className="font-mono text-[12px] text-muted">
+                      {"cria conta pra comentar"}
                     </p>
                   )}
                 </div>

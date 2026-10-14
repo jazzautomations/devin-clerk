@@ -48,7 +48,7 @@ export default async function BlogPostPage({
   if (!post) notFound();
 
   return (
-    <section className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
+    <section className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 [&>*]:max-w-2xl">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd(articleJsonLd(post)) }}
@@ -61,10 +61,10 @@ export default async function BlogPostPage({
       </Link>
 
       <header className="flex flex-col gap-3 border-b border-line pb-6">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {"// blog"}
+        <p className="tag self-start uppercase">
+          {"blog"}
         </p>
-        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+        <h1 className="font-display text-3xl font-extrabold tracking-[-0.035em] sm:text-4xl">
           {post.title}
         </h1>
         <p className="font-mono text-xs text-muted">
@@ -75,7 +75,7 @@ export default async function BlogPostPage({
             {post.tags.map((t) => (
               <span
                 key={t}
-                className="border border-line px-2 py-0.5 font-mono text-[10px] text-muted"
+                className="border-[1.5px] border-line px-2 py-0.5 font-mono text-[12px] text-muted"
               >
                 #{t}
               </span>

@@ -45,18 +45,18 @@ const PHASE_LABEL: Record<EditionPhase, string> = {
   archived: "arquivada",
 };
 const PHASE_CLASS: Record<EditionPhase, string> = {
-  open: "text-muted",
-  "closed-soon": "text-lendario",
-  live: "text-accent animate-pulse",
-  ongoing: "text-accent animate-pulse",
-  ended: "text-muted",
-  archived: "text-muted",
+  open: "text-band",
+  "closed-soon": "text-[#f2b880]",
+  live: "text-band animate-pulse",
+  ongoing: "text-band animate-pulse",
+  ended: "text-mint",
+  archived: "text-mint",
 };
 
 // spec 019 — chip de tier do sponsor vinculado: master é o pacote lendário
 const TIER_CLASS: Record<string, string> = {
-  master: "border-lendario/40 bg-lendario/5 text-lendario",
-  sponsor: "border-accent/40 bg-accent/5 text-accent",
+  master: "border-lendario bg-lendario/10 text-lendario",
+  sponsor: "border-accent bg-mint text-accent",
   apoio: "border-line text-muted",
 };
 
@@ -133,467 +133,554 @@ export default async function HackathonPage({
     year: "numeric",
   });
 
+  const startDate = new Date(h.startsAt);
+  const dia = new Intl.DateTimeFormat("pt-BR", { day: "2-digit" }).format(startDate);
+  const mes = new Intl.DateTimeFormat("pt-BR", { month: "short" })
+    .format(startDate)
+    .replace(".", "")
+    .toUpperCase();
+  const ano = startDate.getFullYear();
+  const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(startDate);
+  const canRegister = !past && !closed && h.partner;
+  // numeração das seções na ordem em que aparecem (as condicionais pulam)
+  let secN = 0;
+  const nextK = () => String(++secN).padStart(2, "0");
+
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+    <div className="overflow-x-clip">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd(eventJsonLd(h)) }}
       />
-      {/* banner de arte — a capa da edição, mesma arte da cartinha */}
-      <div className="card-cover relative -mx-6 -mt-16 h-36 border-b border-line sm:mx-0 sm:mt-0">
-        <CardArt seed={h.id} className="h-full w-full" />
-        <div className="absolute right-4 bottom-3 z-10 flex items-center gap-2 font-mono text-[10px] tracking-widest uppercase">
-          <span className="border border-line bg-background/80 px-2 py-0.5 text-muted backdrop-blur-sm">
-            {FORMAT_LABEL[h.format]}
+
+      {/* faixa do evento — data, formato e local em pixel */}
+      <div className="strip">
+        <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-x-6 gap-y-0.5 px-4 py-1.5 sm:px-6">
+          <span>
+            {dia} {mes} {ano} · {FORMAT_LABEL[h.format].toUpperCase()} ·{" "}
+            {(h.location ?? "online").toUpperCase()}
           </span>
-          {h.partner && (
-            <span className="border border-accent/50 bg-background/80 px-2 py-0.5 text-accent backdrop-blur-sm">
-              hack inova
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <p className="font-mono text-xs tracking-widest text-accent">
-          {past ? "// arquivo" : "// hackathon"}
-        </p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">
-          {h.name}
-        </h1>
-        <p className="font-mono text-sm text-muted">{h.organizer}</p>
-      </div>
-
-      {!past && countdownTo && (
-        <div
-          data-testid="arena-strip"
-          className="flex flex-col gap-5 border border-line bg-surface p-6"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-            <p
-              data-testid="arena-phase"
-              className={`font-mono text-xs tracking-widest uppercase ${PHASE_CLASS[phase]}`}
-            >
-              {"// "}
-              {PHASE_LABEL[phase]}
-            </p>
-            <p
-              data-testid="arena-attendees"
-              className="font-mono text-xs text-muted"
-            >
-              {attendees.length}{" "}
-              {attendees.length === 1 ? "inscrito" : "inscritos"}
-              {boardEntries.length > 0 &&
-                ` · ${boardEntries.length} procurando time`}
-            </p>
-          </div>
-          <ArenaCountdown
-            targetIso={countdownTo.iso}
-            nowIso={now.toISOString()}
-            label={
-              countdownTo.kind === "deadline"
-                ? "inscrições fecham em"
-                : countdownTo.kind === "end"
-                  ? "termina em"
-                  : "começa em"
-            }
-            live={phase === "live" || phase === "ongoing"}
-          />
-        </div>
-      )}
-
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 border-y border-line py-6 font-mono text-sm sm:grid-cols-4">
-        <div>
-          <dt className="text-xs text-muted">data</dt>
-          <dd className="mt-1">{fmt.format(new Date(h.startsAt))}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">formato</dt>
-          <dd className="mt-1">{FORMAT_LABEL[h.format]}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">local</dt>
-          <dd className="mt-1">{h.location ?? "Online"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">inscrições</dt>
-          <dd className={`mt-1 ${closed && !past ? "text-muted" : "text-accent"}`}>
+          <span>
             {past
-              ? "edição encerrada"
-              : closed
-                ? "encerradas"
-                : h.registrationDeadline
-                  ? `até ${fmt.format(new Date(h.registrationDeadline))}`
-                  : "abertas"}
-          </dd>
-        </div>
-      </dl>
-
-      <div className="flex flex-wrap gap-2">
-        {h.tags.map((t) => (
-          <span
-            key={t}
-            className="border border-line px-2 py-0.5 font-mono text-[10px] text-muted"
-          >
-            #{t}
+              ? "ARQUIVO DA EDIÇÃO"
+              : h.partner
+                ? "INSCRIÇÃO PELO HACKAHUB, SEM FORMS"
+                : "EVENTO NO RADAR"}
           </span>
-        ))}
+        </div>
       </div>
 
-      {!past && !closed && h.partner && (
-        <div className="flex flex-col gap-3 border border-line bg-surface p-6">
-          <RegisterButton
-            hackathonId={h.id}
-            requiresApproval={h.requiresApproval}
-            status={myStatus}
-          />
-          {!member && (
-            <p className="font-mono text-xs text-muted">
-              {"// vai pedir login — é o cadastro único do hackahub, não um Google Form"}
-            </p>
+      {/* hero: nome grande à esquerda, ingresso à direita */}
+      <header className="mx-auto grid max-w-6xl gap-10 px-4 pt-10 pb-10 sm:px-6 sm:pt-16 lg:grid-cols-[1.55fr_1fr] lg:items-end lg:gap-14">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="tag uppercase">{past ? "arquivo" : "hackathon"}</p>
+            {h.partner && <span className="chip bare">edição hack inova</span>}
+            <span className="chip bare">{FORMAT_LABEL[h.format]}</span>
+          </div>
+          <h1 className="mt-5 text-[clamp(2.5rem,7vw,5.25rem)] leading-[0.92] font-extrabold tracking-[-0.045em] break-words">
+            {h.name}
+          </h1>
+          <p className="mt-5 text-[17px] text-muted">
+            Realização <strong className="font-bold text-foreground">{h.organizer}</strong>
+          </p>
+          {h.tags.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-1.5">
+              {h.tags.map((t) => (
+                <span key={t} className="chip">
+                  {t}
+                </span>
+              ))}
+            </div>
           )}
         </div>
-      )}
 
-      {!past && !h.partner && (
-        <a
-          href={h.registrationUrl}
-          target="_blank"
-          rel="noopener"
-          className="w-fit border border-line px-6 py-3 font-mono text-sm transition hover:border-accent/50 hover:text-accent"
-        >
-          inscrever no site oficial →
-        </a>
-      )}
-
-      {/* spec 021 — inscrito submete/edita o próprio time; edição encerrada
-          vira arquivo e o painel some (o time já tá em "resultado") */}
-      {!past && registered && (
-        <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-            {"// meu time"}
-          </h2>
-          <MyTeamPanel hackathonId={h.id} initialTeam={myTeam} />
-        </div>
-      )}
-
-      {challenges.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-            {"// desafios patrocinados"}
-          </h2>
-          <ul className="grid gap-3">
-            {challenges.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-col gap-2 border border-line bg-surface p-5"
-              >
-                <p className="font-mono text-xs tracking-widest text-accent uppercase">
-                  {c.sponsorUrl ? (
-                    <a
-                      href={c.sponsorUrl}
-                      target="_blank"
-                      rel="noopener"
-                      className="hover:underline"
-                    >
-                      {c.sponsor}
-                    </a>
-                  ) : (
-                    c.sponsor
-                  )}
-                  {c.sponsorTier && (
-                    <span
-                      className={`ml-2 inline-block border px-1.5 py-0.5 text-[10px] ${TIER_CLASS[c.sponsorTier] ?? "border-line text-muted"}`}
-                    >
-                      {c.sponsorTier}
-                    </span>
-                  )}
-                </p>
-                <h3 className="font-display text-xl font-bold tracking-tight">
-                  {c.title}
-                </h3>
-                {c.prize && (
-                  <p className="w-fit border border-lendario/40 bg-lendario/5 px-2 py-1 font-mono text-xs text-lendario">
-                    prêmio: {c.prize}
-                  </p>
-                )}
-                {c.description && (
-                  <p className="text-sm text-muted">{c.description}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-          cartinha colecionável desta edição
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
-          <CollectibleCard
-            hackathonId={h.id}
-            name={h.name}
-            startsAt={h.startsAt}
-            location={h.location}
-            rarity={cardRarity}
-            serial={myCard?.serial}
-            supply={myCard === null ? cardSupply : undefined}
-          />
-          <div className="flex flex-col justify-center gap-2 border border-line bg-surface p-5 font-mono text-xs text-muted">
-            <p>
-              {myCard
-                ? `// tu tens a № ${String(myCard.serial).padStart(3, "0")} — prova de presença na tua coleção`
-                : past
-                  ? "// edição encerrada — a tiragem desta carta fechou"
-                  : "// inscreve-te pra mintar a tua — serial na ordem de chegada"}
+        {/* ingresso — a ficha técnica do site da Hack Inova */}
+        <div className="border-t-[3px] border-b border-line">
+          <div className="card-cover h-16">
+            <CardArt seed={h.id} className="h-full w-full" />
+          </div>
+          <div className="flex items-baseline gap-2 pt-5 text-[clamp(3.5rem,8vw,4.75rem)] leading-none font-extrabold tracking-[-0.04em] tabular-nums">
+            {dia}
+            <span className="text-[0.5em] text-accent">
+              {mes} {ano}
+            </span>
+          </div>
+          <p className="mt-3 mb-5 text-[14px] text-muted first-letter:uppercase">
+            {diaSemana} · {fmt.format(startDate)}
+          </p>
+          <div className="border-t border-line py-5">
+            <p className="text-[22px] leading-tight font-extrabold tracking-[-0.02em]">
+              {h.location ?? "Online"}
             </p>
-            <p className="text-foreground">
-              {cardSupply} {cardSupply === 1 ? "mintada" : "mintadas"} até agora
+            <p className="mt-1 font-mono text-[13px] text-muted">
+              {FORMAT_LABEL[h.format]} · {attendees.length}{" "}
+              {attendees.length === 1 ? "inscrito" : "inscritos"}
             </p>
           </div>
         </div>
-      </div>
+      </header>
 
-      {(past || hasArchive) && (
-        <div className="flex flex-col gap-5">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-            resultado
-          </h2>
-          {podium.length > 0 ? (
-            <ol className="grid gap-3 sm:grid-cols-3">
-              {podium.map((t) => (
-                <li
-                  key={t.id}
-                  className={`flex flex-col gap-2 border p-4 ${
-                    t.placement === 1
-                      ? "border-lendario/60 bg-lendario/5"
-                      : "border-line bg-surface"
-                  }`}
-                >
-                  <span
-                    className={`font-mono text-2xl font-bold ${
-                      t.placement === 1 ? "text-lendario" : "text-muted"
-                    }`}
+      <div className="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:gap-14">
+        {/* coluna principal */}
+        <div className="flex min-w-0 flex-col gap-14">
+          {!past && countdownTo && (
+            <div data-testid="arena-strip" className="window dark hard">
+              <div className="tbar">
+                <span className="title">CONTAGEM.exe</span>
+                <span className="dots" aria-hidden>
+                  <b />
+                  <b />
+                </span>
+              </div>
+              <div className="tbody gap-5 p-5!">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                  <p
+                    data-testid="arena-phase"
+                    className={`pix text-[22px] uppercase ${PHASE_CLASS[phase]}`}
                   >
-                    {t.placement}º
-                  </span>
-                  <p className="font-display font-bold tracking-tight">
-                    {t.name}
+                    {""}
+                    {PHASE_LABEL[phase]}
                   </p>
-                  {t.project && (
-                    <div className="flex flex-col gap-1">
-                      <Link
-                        href={`/p/${t.id}`}
-                        className="font-mono text-xs text-foreground transition hover:text-accent"
+                  <p data-testid="arena-attendees" className="font-mono text-[13px] text-mint">
+                    {attendees.length}{" "}
+                    {attendees.length === 1 ? "inscrito" : "inscritos"}
+                    {boardEntries.length > 0 &&
+                      ` · ${boardEntries.length} procurando time`}
+                  </p>
+                </div>
+                <ArenaCountdown
+                  targetIso={countdownTo.iso}
+                  nowIso={now.toISOString()}
+                  label={
+                    countdownTo.kind === "deadline"
+                      ? "inscrições fecham em"
+                      : countdownTo.kind === "end"
+                        ? "termina em"
+                        : "começa em"
+                  }
+                  live={phase === "live" || phase === "ongoing"}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* spec 021 — inscrito submete/edita o próprio time; edição encerrada
+              vira arquivo e o painel some (o time já tá em "resultado") */}
+          {!past && registered && (
+            <section className="flex flex-col gap-5">
+              <SectionHead k={nextK()} title="Meu time" />
+              <MyTeamPanel hackathonId={h.id} initialTeam={myTeam} />
+            </section>
+          )}
+
+          {challenges.length > 0 && (
+            <section className="flex flex-col gap-5">
+              <SectionHead
+                k={nextK()}
+                title="Desafios patrocinados"
+                note="Escolha o desafio do time. Cada um tem dono, prêmio e o que entregar."
+              />
+              <ol className="border-b border-line">
+                {challenges.map((c, i) => (
+                  <li
+                    key={c.id}
+                    className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 border-t border-line py-6"
+                  >
+                    <span className="pix row-span-3 self-start bg-foreground px-2 text-[22px] leading-[1.2] text-band">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <p className="font-mono text-[12px] tracking-[0.06em] text-accent uppercase">
+                      {c.sponsorUrl ? (
+                        <a
+                          href={c.sponsorUrl}
+                          target="_blank"
+                          rel="noopener"
+                          className="hover:underline"
+                        >
+                          {c.sponsor}
+                        </a>
+                      ) : (
+                        c.sponsor
+                      )}
+                      {c.sponsorTier && (
+                        <span
+                          className={`ml-2 inline-block border px-1.5 py-0.5 text-[11px] ${TIER_CLASS[c.sponsorTier] ?? "border-line text-muted"}`}
+                        >
+                          {c.sponsorTier}
+                        </span>
+                      )}
+                    </p>
+                    <h3 className="text-[22px] leading-tight font-extrabold tracking-[-0.02em]">
+                      {c.title}
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                      {c.prize && <p className="prize-badge w-fit">prêmio: {c.prize}</p>}
+                      {c.description && (
+                        <p className="text-[15px] leading-relaxed text-muted">{c.description}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {(past || hasArchive) && (
+            <section className="flex flex-col gap-5">
+              <SectionHead k={nextK()} title="Resultado" />
+              {podium.length > 0 ? (
+                <ol className="ink-grid sm:grid-cols-3">
+                  {podium.map((t) => (
+                    <li
+                      key={t.id}
+                      className={`flex flex-col gap-2 p-4 ${
+                        t.placement === 1 ? "bg-mint!" : ""
+                      }`}
+                    >
+                      <span
+                        className={`pix self-start px-2 text-[26px] leading-[1.15] ${
+                          t.placement === 1
+                            ? "bg-foreground text-band"
+                            : "border-[1.5px] border-line text-foreground"
+                        }`}
                       >
-                        {t.project.title}
-                      </Link>
-                      {t.project.description && (
-                        <p className="text-xs text-muted">
-                          {t.project.description}
+                        {t.placement}º
+                      </span>
+                      <p className="text-[18px] font-extrabold tracking-[-0.02em]">{t.name}</p>
+                      {t.project && (
+                        <div className="flex flex-col gap-1">
+                          <Link
+                            href={`/p/${t.id}`}
+                            className="text-[14px] font-semibold text-foreground underline-offset-4 hover:text-accent hover:underline"
+                          >
+                            {t.project.title}
+                          </Link>
+                          {t.project.description && (
+                            <p className="text-[13px] text-muted">{t.project.description}</p>
+                          )}
+                          <span className="flex gap-3 font-mono text-[12px] text-accent">
+                            {t.project.repoUrl && (
+                              <a
+                                href={t.project.repoUrl}
+                                target="_blank"
+                                rel="noopener"
+                                className="hover:underline"
+                              >
+                                repo →
+                              </a>
+                            )}
+                            {t.project.demoUrl && (
+                              <a
+                                href={t.project.demoUrl}
+                                target="_blank"
+                                rel="noopener"
+                                className="hover:underline"
+                              >
+                                demo →
+                              </a>
+                            )}
+                          </span>
+                          <DeployPanel
+                            teamId={t.id}
+                            hasRepo={!!t.project.repoUrl}
+                            initialDeploy={getLatestDeployForTeam(t.id)}
+                            canDeploy={
+                              !!member &&
+                              (member.role === "admin" ||
+                                t.members.includes(member.username))
+                            }
+                          />
+                        </div>
+                      )}
+                      {t.members.length > 0 && (
+                        <p className="mt-auto font-mono text-[12px] text-muted">
+                          {t.members.map((u) => `@${u}`).join(" ")}
                         </p>
                       )}
-                      <span className="flex gap-3 font-mono text-[10px] text-accent">
-                        {t.project.repoUrl && (
-                          <a
-                            href={t.project.repoUrl}
-                            target="_blank"
-                            rel="noopener"
-                            className="hover:underline"
-                          >
-                            repo →
-                          </a>
-                        )}
-                        {t.project.demoUrl && (
-                          <a
-                            href={t.project.demoUrl}
-                            target="_blank"
-                            rel="noopener"
-                            className="hover:underline"
-                          >
-                            demo →
-                          </a>
-                        )}
-                      </span>
-                      <DeployPanel
-                        teamId={t.id}
-                        hasRepo={!!t.project.repoUrl}
-                        initialDeploy={getLatestDeployForTeam(t.id)}
-                        canDeploy={
-                          !!member &&
-                          (member.role === "admin" ||
-                            t.members.includes(member.username))
-                        }
-                      />
-                    </div>
-                  )}
-                  {t.members.length > 0 && (
-                    <p className="mt-auto font-mono text-[10px] text-muted">
-                      {t.members.map((u) => `@${u}`).join(" ")}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ol>
-          ) : hasArchive ? (
-            <p className="border border-dashed border-line px-5 py-6 font-mono text-xs text-muted">
-              {"// pódio em organização"}
-            </p>
-          ) : (
-            <p className="border border-dashed border-line px-5 py-6 font-mono text-xs text-muted">
-              {"// arquivo em organização — resultado entra aqui depois do evento"}
-            </p>
-          )}
+                    </li>
+                  ))}
+                </ol>
+              ) : hasArchive ? (
+                <p className="border-[1.5px] border-line px-5 py-6 font-mono text-[13px] text-muted">
+                  {"pódio em organização"}
+                </p>
+              ) : (
+                <p className="border-[1.5px] border-line px-5 py-6 font-mono text-[13px] text-muted">
+                  {"arquivo em organização — resultado entra aqui depois do evento"}
+                </p>
+              )}
 
-          {field.length > 0 && (
-            <ul className="divide-y divide-line border-y border-line">
-              {field.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-baseline justify-between gap-4 py-3"
-                >
-                  <div>
-                    <p className="font-display font-semibold">{t.name}</p>
-                    {t.project && (
-                      <p className="font-mono text-xs text-muted">
-                        <Link
-                          href={`/p/${t.id}`}
-                          className="text-foreground transition hover:text-accent"
-                        >
-                          {t.project.title}
-                        </Link>
-                        {t.project.repoUrl && (
-                          <>
-                            {" "}
-                            —{" "}
-                            <a
-                              href={t.project.repoUrl}
-                              target="_blank"
-                              rel="noopener"
-                              className="text-accent hover:underline"
-                            >
-                              repo →
-                            </a>
-                          </>
-                        )}
-                      </p>
-                    )}
-                    {t.project && (
-                      <DeployPanel
-                        teamId={t.id}
-                        hasRepo={!!t.project.repoUrl}
-                        initialDeploy={getLatestDeployForTeam(t.id)}
-                        canDeploy={
-                          !!member &&
-                          (member.role === "admin" ||
-                            t.members.includes(member.username))
-                        }
-                      />
-                    )}
-                  </div>
-                  {t.members.length > 0 && (
-                    <span className="font-mono text-[10px] text-muted">
-                      {t.members.map((u) => `@${u}`).join(" ")}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {archive.assets.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h3 className="font-mono text-[10px] tracking-widest text-muted uppercase">
-                materiais & fotos
-              </h3>
-              <ul className="divide-y divide-line border-y border-line">
-                {archive.assets.map((a) => (
-                  <li key={a.id} className="flex items-baseline gap-3 py-2">
-                    <span className="w-16 shrink-0 font-mono text-[10px] text-muted uppercase">
-                      {a.type}
-                    </span>
-                    <a
-                      href={a.url}
-                      target="_blank"
-                      rel="noopener"
-                      className="font-mono text-xs text-accent hover:underline"
+              {field.length > 0 && (
+                <ul className="border-b border-line">
+                  {field.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-line py-4"
                     >
-                      {a.caption ?? a.url.replace(/^https?:\/\//, "").slice(0, 50)}
-                    </a>
+                      <div className="min-w-0">
+                        <p className="text-[17px] font-extrabold tracking-[-0.02em]">{t.name}</p>
+                        {t.project && (
+                          <p className="text-[14px] text-muted">
+                            <Link
+                              href={`/p/${t.id}`}
+                              className="text-foreground underline-offset-4 hover:text-accent hover:underline"
+                            >
+                              {t.project.title}
+                            </Link>
+                            {t.project.repoUrl && (
+                              <>
+                                {" "}
+                                —{" "}
+                                <a
+                                  href={t.project.repoUrl}
+                                  target="_blank"
+                                  rel="noopener"
+                                  className="font-mono text-[12px] text-accent hover:underline"
+                                >
+                                  repo →
+                                </a>
+                              </>
+                            )}
+                          </p>
+                        )}
+                        {t.project && (
+                          <DeployPanel
+                            teamId={t.id}
+                            hasRepo={!!t.project.repoUrl}
+                            initialDeploy={getLatestDeployForTeam(t.id)}
+                            canDeploy={
+                              !!member &&
+                              (member.role === "admin" ||
+                                t.members.includes(member.username))
+                            }
+                          />
+                        )}
+                      </div>
+                      {t.members.length > 0 && (
+                        <span className="font-mono text-[12px] text-muted">
+                          {t.members.map((u) => `@${u}`).join(" ")}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {archive.assets.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
+                    materiais & fotos
+                  </h3>
+                  <ul className="border-b border-line">
+                    {archive.assets.map((a) => (
+                      <li key={a.id} className="flex items-baseline gap-3 border-t border-line py-2.5">
+                        <span className="pix w-16 shrink-0 text-[18px] text-muted uppercase">
+                          {a.type}
+                        </span>
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener"
+                          className="min-w-0 truncate text-[14px] text-accent hover:underline"
+                        >
+                          {a.caption ?? a.url.replace(/^https?:\/\//, "").slice(0, 50)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {(!past || boardEntries.length > 0) && (
+            <section className="flex flex-col gap-5">
+              <SectionHead
+                k={nextK()}
+                title={`Quem tá procurando time (${boardEntries.length})`}
+                note="Chegou sozinho? Marca aqui e o time te acha."
+              />
+              <TeamBoardPanel
+                hackathonId={h.id}
+                canPost={!past && registered}
+                myUsername={member?.username ?? null}
+                initialEntries={boardEntries}
+              />
+            </section>
+          )}
+
+          {/* spec 028 — mural da edição: recorte do feed por hackathonId;
+              leitura pública, postar exige inscrição (mesmo gate do board) */}
+          <section className="flex flex-col gap-5">
+            <SectionHead
+              k={nextK()}
+              title="Mural da edição"
+              note="Demo, bastidor e recado de quem tá na edição."
+            />
+            <FeedSection
+              initialPosts={listPosts(50, member?.id ?? null, {
+                hackathonId: h.id,
+              })}
+              canPost={Boolean(member && registered)}
+              me={member?.username ?? null}
+              isAdmin={member?.role === "admin"}
+              hackathonId={h.id}
+              editionLabel={h.name}
+            />
+          </section>
+        </div>
+
+        {/* coluna lateral: inscrição, ficha, carta, inscritos */}
+        <aside className="order-first flex min-w-0 flex-col gap-8 lg:sticky lg:top-24 lg:order-none lg:self-start">
+          {canRegister && (
+            <div className="window dark hard">
+              <div className="tbar">
+                <span className="title">INSCRICAO.exe</span>
+                <span className="dots" aria-hidden>
+                  <b />
+                  <b />
+                </span>
+              </div>
+              <div className="tbody gap-3 p-5!">
+                <p className="text-[11px]">INSCRIÇÕES ABERTAS</p>
+                <div className="pix -mt-2 text-[46px] leading-[0.85]">ENTRAR</div>
+                <div className="[&_button]:w-full">
+                  <RegisterButton
+                    hackathonId={h.id}
+                    requiresApproval={h.requiresApproval}
+                    status={myStatus}
+                  />
+                </div>
+                {!member && (
+                  <p className="text-[13px] leading-snug text-mint">
+                    {"vai pedir login — é o cadastro único do hackahub, não um Google Form"}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!past && !h.partner && (
+            <a
+              href={h.registrationUrl}
+              target="_blank"
+              rel="noopener"
+              className="btn w-full"
+            >
+              inscrever no site oficial ↗
+            </a>
+          )}
+
+          <dl className="border-b border-line">
+            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">data</dt>
+              <dd className="text-[15px] font-semibold">{fmt.format(new Date(h.startsAt))}</dd>
+            </div>
+            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">formato</dt>
+              <dd className="text-[15px] font-semibold">{FORMAT_LABEL[h.format]}</dd>
+            </div>
+            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">local</dt>
+              <dd className="text-[15px] font-semibold">{h.location ?? "Online"}</dd>
+            </div>
+            <div className="grid grid-cols-[92px_1fr] gap-4 border-t border-line py-3.5">
+              <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">inscrições</dt>
+              <dd
+                className={`text-[15px] font-semibold ${closed && !past ? "text-muted" : "text-accent"}`}
+              >
+                {past
+                  ? "edição encerrada"
+                  : closed
+                    ? "encerradas"
+                    : h.registrationDeadline
+                      ? `até ${fmt.format(new Date(h.registrationDeadline))}`
+                      : "abertas"}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="flex flex-col gap-4">
+            <h2 className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
+              cartinha colecionável desta edição
+            </h2>
+            <div className="grid grid-cols-[minmax(0,180px)_1fr] items-start gap-4">
+              <CollectibleCard
+                hackathonId={h.id}
+                name={h.name}
+                startsAt={h.startsAt}
+                location={h.location}
+                rarity={cardRarity}
+                serial={myCard?.serial}
+                supply={myCard === null ? cardSupply : undefined}
+              />
+              <div className="flex flex-col gap-3 text-[13px] leading-snug text-muted">
+                <p>
+                  {myCard
+                    ? `tu tens a № ${String(myCard.serial).padStart(3, "0")} — prova de presença na tua coleção`
+                    : past
+                      ? "edição encerrada — a tiragem desta carta fechou"
+                      : "inscreve-te pra mintar a tua — serial na ordem de chegada"}
+                </p>
+                <p className="pix text-[22px] leading-none text-foreground">
+                  {cardSupply} {cardSupply === 1 ? "mintada" : "mintadas"} até agora
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {attendees.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
+                inscritos ({attendees.length})
+                {boardEntries.length > 0 &&
+                  ` · ${boardEntries.length} procurando time`}
+              </h2>
+              <ul className="max-h-[360px] overflow-y-auto border-y border-line text-[14px]">
+                {attendees.map((a) => (
+                  <li
+                    key={a.username}
+                    className="flex items-center justify-between gap-2 border-t border-line-soft py-2 first:border-t-0"
+                  >
+                    <Link
+                      href={`/u/${a.username}`}
+                      className="flex min-w-0 items-center gap-2 font-medium hover:text-accent"
+                    >
+                      <Avatar
+                        username={a.username}
+                        name={a.name}
+                        avatarUrl={a.avatarUrl}
+                        size="sm"
+                      />
+                      <span className="truncate">@{a.username}</span>
+                    </Link>
+                    <span className="font-mono text-[12px] text-muted">
+                      {new Intl.DateTimeFormat("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
+                      }).format(new Date(a.createdAt + "Z"))}
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
-        </div>
-      )}
-
-      {(!past || boardEntries.length > 0) && (
-        <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-            {"// quem tá procurando time"} ({boardEntries.length})
-          </h2>
-          <TeamBoardPanel
-            hackathonId={h.id}
-            canPost={!past && registered}
-            myUsername={member?.username ?? null}
-            initialEntries={boardEntries}
-          />
-        </div>
-      )}
-
-      {attendees.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-            inscritos ({attendees.length})
-            {boardEntries.length > 0 &&
-              ` · ${boardEntries.length} procurando time`}
-          </h2>
-          <ul className="divide-y divide-line border-y border-line font-mono text-xs">
-            {attendees.map((a) => (
-              <li
-                key={a.username}
-                className="flex items-center justify-between gap-2 py-2"
-              >
-                <span className="flex items-center gap-2">
-                  <Avatar
-                    username={a.username}
-                    name={a.name}
-                    avatarUrl={a.avatarUrl}
-                    size="sm"
-                  />
-                  @{a.username}
-                </span>
-                <span className="text-muted">
-                  {new Intl.DateTimeFormat("pt-BR", {
-                    day: "2-digit",
-                    month: "short",
-                  }).format(new Date(a.createdAt + "Z"))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* spec 028 — mural da edição: recorte do feed por hackathonId;
-          leitura pública, postar exige inscrição (mesmo gate do board) */}
-      <div className="flex flex-col gap-3">
-        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">
-          {"// mural da edição"}
-        </h2>
-        <FeedSection
-          initialPosts={listPosts(50, member?.id ?? null, {
-            hackathonId: h.id,
-          })}
-          canPost={Boolean(member && registered)}
-          me={member?.username ?? null}
-          isAdmin={member?.role === "admin"}
-          hackathonId={h.id}
-          editionLabel={h.name}
-        />
+        </aside>
       </div>
-    </section>
+    </div>
+  );
+}
+
+// cabeçalho de seção: fio grosso de tinta, número em mono verde, título pesado
+function SectionHead({ k, title, note }: { k: string; title: string; note?: string }) {
+  return (
+    <div className="flex flex-col gap-2 border-t-2 border-line pt-5 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+      <h2 className="flex items-baseline gap-3 text-[clamp(1.6rem,3vw,2.1rem)] leading-none font-extrabold tracking-[-0.035em]">
+        <span className="font-mono text-[15px] font-medium tracking-normal text-accent">{k}</span>
+        {title}
+      </h2>
+      {note && <p className="max-w-[38ch] text-[14px] text-muted sm:text-right">{note}</p>}
+    </div>
   );
 }

@@ -12,10 +12,10 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 const RARITY_HEX: Record<string, string> = {
-  comum: "#565b60",
-  raro: "#38bdf8",
-  epico: "#a78bfa",
-  lendario: "#f59e0b",
+  comum: "#0c0c0c",
+  raro: "#0369a1",
+  epico: "#6d28d9",
+  lendario: "#a8550a",
 };
 
 const fmt = new Intl.DateTimeFormat("pt-BR", { dateStyle: "long" });
@@ -39,7 +39,7 @@ export default async function Image({
       ]
         .filter(Boolean)
         .join(" · ")
-    : "a rede social dos hackathons";
+    : "a plataforma da Hack Inova";
 
   return new ImageResponse(
     (
@@ -50,8 +50,8 @@ export default async function Image({
           justifyContent: "center",
           width: "100%",
           height: "100%",
-          background: "#0b0d0e",
-          border: `6px solid ${accent}`,
+          background: "#fefefe",
+          border: `10px solid ${accent}`,
           padding: "72px 80px",
         }}
       >
@@ -59,20 +59,23 @@ export default async function Image({
           style={{
             display: "flex",
             fontSize: 28,
-            color: accent,
             fontFamily: "monospace",
-            marginBottom: 32,
+            marginBottom: 36,
+            background: "#0c0c0c",
+            color: "#3ecf8e",
+            padding: "6px 16px",
+            alignSelf: "flex-start",
           }}
         >
-          {`// hackahub · ${rarity}`}
+          {`HACKAHUB · CARTA ${rarity.toUpperCase()}`}
         </div>
         <div
           style={{
             display: "flex",
             fontSize: title.length > 40 ? 64 : 84,
-            fontWeight: 700,
-            color: "#e7e5e0",
-            letterSpacing: "-0.03em",
+            fontWeight: 800,
+            color: "#0c0c0c",
+            letterSpacing: "-0.045em",
             lineHeight: 1.05,
           }}
         >
@@ -82,7 +85,7 @@ export default async function Image({
           style={{
             display: "flex",
             fontSize: 30,
-            color: "#8b8f94",
+            color: "#474747",
             marginTop: 32,
             fontFamily: "monospace",
           }}
