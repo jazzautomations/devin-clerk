@@ -234,3 +234,37 @@ export function PublishResultsButton({
     </div>
   );
 }
+
+// roadmap 037 #9 — liberação do feedback do júri pros times
+export function FeedbackReleaseToggle({
+  hackathonId,
+  released,
+  published,
+}: {
+  hackathonId: string;
+  released: boolean;
+  published: boolean;
+}) {
+  const { call, busy, error } = useApi(hackathonId);
+  const state = released
+    ? published
+      ? "liberado · os times já veem"
+      : "armado · os times veem quando o resultado sair"
+    : "desligado · os times não veem";
+  return (
+    <div className="flex flex-col gap-2">
+      <p className={`font-mono text-[13px] ${released ? "text-accent" : "text-muted"}`}>{state}</p>
+      <div>
+        <button
+          type="button"
+          disabled={busy}
+          className={`${released ? "btn-ghost" : "btn"} disabled:cursor-not-allowed disabled:opacity-50`}
+          onClick={() => call("juri/feedback", "POST", { released: !released })}
+        >
+          {released ? "recolher feedback" : "liberar feedback pros times"}
+        </button>
+      </div>
+      <ErrorLine error={error} />
+    </div>
+  );
+}

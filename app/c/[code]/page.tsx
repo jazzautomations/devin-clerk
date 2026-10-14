@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { CERT_KIND_LABEL, formatCertDate, getCertificate } from "@/lib/certificates";
+import { CERT_KIND_LABEL, certPeriod, certRoleLabel, formatCertDate, formatHours, getCertificate } from "@/lib/certificates";
 import { ShareBar } from "@/components/ShareBar";
 import { absoluteUrl } from "@/lib/seo";
 import { linkedinAddCertificationUrl } from "@/lib/social";
 
 // Verificação pública do certificado (spec 033 US6): quem recebe o PDF abre
 // esse link e confere nome, edição, tipo e data. Não indexa — é dado pessoal.
+// roadmap 037 #2 — mostra também papel, carga horária, período e instituição
+// promotora, congelados na emissão: é aqui que o coordenador confere a hora
+// complementar.
 
 export async function generateMetadata({ params }: PageProps<"/c/[code]">): Promise<Metadata> {
   const { code } = await params;
@@ -27,9 +30,10 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
   const certUrl = absoluteUrl(`/c/${c.code}`);
   const kindLabel = CERT_KIND_LABEL[c.kind];
   const certName = `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} — ${c.hackathonName}`;
+  const role = certRoleLabel(c);
   const addToLinkedin = linkedinAddCertificationUrl({
     name: certName,
-    organizationName: "Hack Inova",
+    organizationName: c.institution || "Hack Inova",
     issuedAt: c.issuedAt,
     certUrl,
     certId: c.code,
@@ -43,8 +47,13 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
       </Link>,
     ],
     ["tipo", CERT_KIND_LABEL[c.kind]],
+    ...(role ? ([["papel", role]] as [string, string][]) : []),
+    ...(c.hours !== null
+      ? ([["carga horária", <span key="hrs" data-testid="cert-hours">{formatHours(c.hours)}</span>]] as [string, ReactNode][])
+      : []),
     ...(c.detail ? ([["detalhe", c.detail]] as [string, string][]) : []),
-    ["data da edição", `${formatCertDate(c.startsAt)}${c.location ? ` · ${c.location}` : ""}`],
+    ["período", `${certPeriod(c)}${c.location ? ` · ${c.location}` : ""}`],
+    ["instituição", c.institution],
     ["emitido em", formatCertDate(c.issuedAt)],
     ["código", <span key="c" className="font-mono text-accent">{c.code}</span>],
   ];
@@ -100,8 +109,8 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
         </div>
       </div>
       <p className="font-mono text-xs text-muted">
-        Emitido pela organização da Hack Inova no HackaHub. O código acima é único e
-        confere com o PDF.
+        Emitido por {c.institution} no HackaHub. O código acima é único e confere com o PDF;
+        carga horária e papel ficam congelados na emissão.
       </p>
     </section>
   );

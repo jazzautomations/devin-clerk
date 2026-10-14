@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { JudgeScoreForm } from "@/components/JudgeScoreForm";
-import { JuryAssignments, JuryCriteria, PublishResultsButton } from "@/components/JuryOrganizer";
+import { FeedbackReleaseToggle, JuryAssignments, JuryCriteria, PublishResultsButton } from "@/components/JuryOrganizer";
+import { isFeedbackReleased } from "@/lib/juryFeedback";
 import {
   getRanking,
   isPublished,
@@ -28,11 +29,12 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
   const { id } = await params;
   const member = await currentMember();
   if (!member) notFound();
-  const [manage, roles, criteria, published] = await Promise.all([
+  const [manage, roles, criteria, published, feedbackReleased] = await Promise.all([
     canManageEdition(member, id),
     getEditionRoles(id, member.id),
     listCriteria(id),
     isPublished(id),
+    isFeedbackReleased(id),
   ]);
   const isJudge = roles.includes("jurado");
   if (!manage && !isJudge) notFound();
@@ -81,6 +83,16 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
             </div>
             <Ranking ranking={org[4]} criteria={criteria} />
           </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className={h2}>feedback pros times</h2>
+            <p className="max-w-2xl text-muted">
+              Cada time vê, logado, as próprias notas por critério ao lado da média da edição e os comentários
+              que os jurados escreveram pro time — sem nome de jurado. A nota interna não vai. Só aparece com o
+              resultado publicado e a liberação ligada; dá pra recolher a qualquer momento.
+            </p>
+            <FeedbackReleaseToggle hackathonId={id} released={feedbackReleased} published={!!published} />
+          </section>
         </>
       )}
 
@@ -101,6 +113,8 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
                     criteria={criteria.map((c) => ({ id: c.id, label: c.label }))}
                     initial={a.scores}
                     initialComment={a.comment}
+                    initialFeedback={a.feedback}
+                    initialGeneral={a.generalFeedback}
                     locked={!!published}
                   />
                   {a.judged && <JudgedSnapshot judged={a.judged} />}
