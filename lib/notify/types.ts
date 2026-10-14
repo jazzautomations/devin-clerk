@@ -4,8 +4,17 @@
 // registrado com o motivo, pra o admin ver "pulado" e não "entregue".
 export type SendOutcome =
   | { status: "sent" }
-  | { status: "skipped"; reason: string }
+  | { status: "skipped"; reason: string; code?: SkipCode }
   | { status: "failed"; error: string; permanent?: boolean };
+
+/**
+ * Motivo de skip que tem conserto do lado da plataforma. `no_driver` = o
+ * canal não está configurado neste ambiente (sem chave do Resend ou do
+ * Evolution). Fica gravado em deliveries.reason pra o painel agrupar o
+ * motivo e pra reenfileirar quando a chave aparecer.
+ */
+export type SkipCode = "no_driver";
+export const NO_DRIVER: SkipCode = "no_driver";
 
 export type EmailMessage = {
   to: string;
@@ -16,6 +25,8 @@ export type EmailMessage = {
   idempotencyKey: string;
   /** vira header List-Unsubscribe (Gmail/Outlook mostram "cancelar inscrição") */
   unsubscribeUrl?: string;
+  /** endereço que recebe a resposta; sem ele vale HACKAHUB_EMAIL_REPLY_TO */
+  replyTo?: string;
   /** anexos; com contentId viram imagem inline (<img src="cid:…">) */
   attachments?: EmailAttachment[];
 };

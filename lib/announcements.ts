@@ -4,6 +4,7 @@ import { emailDriver } from "@/lib/notify/email";
 import { whatsappDriver } from "@/lib/notify/whatsapp";
 import { normalizeBrPhone } from "@/lib/notify/phone";
 import { announcementUrls, renderAnnouncementEmail, renderAnnouncementWhatsapp } from "@/lib/notify/templates";
+import { channelsEnabled } from "@/lib/notify/channels";
 import type { DriverEnv, SendOutcome } from "@/lib/notify/types";
 
 // Avisos da edição (spec 033 US2, FR-003). Publicar = 1 linha em
@@ -130,6 +131,31 @@ function channelsFor(r: Recipient): Channel[] {
   return ch;
 }
 
+/**
+ * Grava as deliveries de um aviso num INSERT só (unnest dos pares membro ×
+ * canal), em vez de uma ida ao banco por linha segurando a transação. A
+ * unique (aviso, membro, canal) faz do fan-out repetido um no-op.
+ */
+async function insertDeliveries(announcementId: number, recipients: Recipient[]): Promise<number> {
+  const memberIds: number[] = [];
+  const channels: string[] = [];
+  for (const r of recipients) {
+    for (const ch of channelsFor(r)) {
+      memberIds.push(r.memberId);
+      channels.push(ch);
+    }
+  }
+  if (memberIds.length === 0) return 0;
+  const r = await db
+    .prepare(
+      `INSERT INTO deliveries (announcementId, memberId, channel)
+       SELECT ?, x.m, x.c FROM unnest(?::int[], ?::text[]) AS x(m, c)
+       ON CONFLICT DO NOTHING RETURNING id`,
+    )
+    .run(announcementId, memberIds, channels);
+  return r.changes;
+}
+
 /** cria as deliveries que faltam; devolve quantas nasceram (0 = já feito) */
 export async function fanOut(announcementId: number): Promise<number> {
   return db.transaction(async () => {
@@ -140,17 +166,7 @@ export async function fanOut(announcementId: number): Promise<number> {
     // 'lista' nasce com as deliveries prontas (publishToMembers)
     if (a.audience === "lista") return 0;
     const recipients = await recipientsFor(a.hackathonId, a.audience, a.teamId);
-    let created = 0;
-    const insert = db.prepare(
-      `INSERT OR IGNORE INTO deliveries (announcementId, memberId, channel)
-       VALUES (?, ?, ?)`,
-    );
-    for (const r of recipients) {
-      for (const ch of channelsFor(r)) {
-        created += (await insert.run(announcementId, r.memberId, ch)).changes;
-      }
-    }
-    return created;
+    return insertDeliveries(announcementId, recipients);
   })();
 }
 
@@ -215,20 +231,41 @@ export async function publishToMembers(
           )
           .all<RecipientRow>(`{${ids.join(",")}}`)
       : [];
-    const insert = db.prepare(
-      `INSERT OR IGNORE INTO deliveries (announcementId, memberId, channel) VALUES (?, ?, ?)`,
+    const queued = await insertDeliveries(
+      row!.id,
+      rows.map((r) => ({ ...r, whatsappOptIn: r.whatsappOptIn === 1 })),
     );
-    let queued = 0;
-    for (const r of rows) {
-      for (const ch of channelsFor({ ...r, whatsappOptIn: r.whatsappOptIn === 1 })) {
-        queued += (await insert.run(row!.id, r.memberId, ch)).changes;
-      }
-    }
     return { id: row!.id, queued };
   })();
 }
 
 // ---------- worker ----------
+
+/** aviso mais velho que isso não sai mais quando o canal liga: notícia velha confunde */
+const REQUEUE_MAX_AGE_DAYS = 7;
+
+/**
+ * Canal que estava sem chave (skipped com reason 'no_driver') e agora tem:
+ * volta pra fila só o que é recente. Chamado pelo worker a cada passada,
+ * então ligar a RESEND_API_KEY basta pra os avisos da semana saírem.
+ */
+export async function requeueNoDriver(
+  opts: { now?: Date; env?: DriverEnv } = {},
+): Promise<number> {
+  const enabled = channelsEnabled(opts.env ?? process.env);
+  const channels = (["email", "whatsapp"] as const).filter((c) => enabled[c]);
+  if (channels.length === 0) return 0;
+  const now = opts.now ?? new Date();
+  const r = await db
+    .prepare(
+      `UPDATE deliveries SET status = 'queued', reason = NULL, error = NULL, attempts = 0,
+         nextAttemptAt = NULL, claimedAt = NULL
+       WHERE status = 'skipped' AND reason = 'no_driver' AND channel = ANY(?::text[])
+         AND announcementId IN (SELECT id FROM announcements WHERE createdAt >= ?)`,
+    )
+    .run(channels, sqlTime(addMin(now, -REQUEUE_MAX_AGE_DAYS * 24 * 60)));
+  return r.changes;
+}
 
 const sqlTime = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
 const addMin = (d: Date, min: number) => new Date(d.getTime() + min * 60_000);
@@ -268,6 +305,7 @@ export async function processDeliveries(
   const now = opts.now ?? new Date();
   const env = opts.env ?? process.env;
   const nowText = sqlTime(now);
+  await requeueNoDriver({ now, env });
   const claimed = await db
     .prepare(
       `WITH claimed AS (
@@ -296,7 +334,7 @@ export async function processDeliveries(
   const email = emailDriver(env);
   const whatsapp = whatsappDriver(env);
   const finish = db.prepare(
-    `UPDATE deliveries SET status = @status, error = @error, attempts = @attempts,
+    `UPDATE deliveries SET status = @status, error = @error, reason = @reason, attempts = @attempts,
        nextAttemptAt = @next, sentAt = @sentAt, claimedAt = NULL
      WHERE id = @id`,
   );
@@ -323,6 +361,7 @@ export async function processDeliveries(
       id: d.id,
       status: out.status,
       error: out.status === "failed" ? out.error : out.status === "skipped" ? out.reason : null,
+      reason: out.status === "skipped" ? (out.code ?? null) : null,
       attempts,
       next: retry,
       sentAt: out.status === "sent" ? nowText : null,
@@ -378,6 +417,8 @@ export type AdminAnnouncement = {
   createdAt: string;
   authorUsername: string | null;
   stats: Record<Channel, Counts>;
+  /** dos pulados, quantos foram por canal sem chave neste ambiente */
+  noDriver: Record<Channel, number>;
   failures: { username: string; channel: Channel; error: string | null; attempts: number; retrying: boolean }[];
 };
 
@@ -391,15 +432,18 @@ export async function listAnnouncementsForAdmin(hackathonId: string): Promise<Ad
          LEFT JOIN members m ON m.id = a.createdBy
          WHERE a.hackathonId = ? AND a.system = 0 ORDER BY a.id DESC LIMIT 100`,
       )
-      .all<Omit<AdminAnnouncement, "stats" | "failures">>(hackathonId),
+      .all<Omit<AdminAnnouncement, "stats" | "noDriver" | "failures">>(hackathonId),
     db
       .prepare(
-        `SELECT d.announcementId, d.channel, d.status, COUNT(*) AS n
+        `SELECT d.announcementId, d.channel, d.status,
+                COALESCE(d.reason = 'no_driver', false) AS "noDriver", COUNT(*) AS n
          FROM deliveries d JOIN announcements a ON a.id = d.announcementId
          WHERE a.hackathonId = ?
-         GROUP BY d.announcementId, d.channel, d.status`,
+         GROUP BY d.announcementId, d.channel, d.status, 4`,
       )
-      .all<{ announcementId: number; channel: Channel; status: DeliveryStatus; n: number }>(hackathonId),
+      .all<{ announcementId: number; channel: Channel; status: DeliveryStatus; noDriver: boolean; n: number }>(
+        hackathonId,
+      ),
     db
       .prepare(
         `SELECT d.announcementId, m.username, d.channel, d.error, d.attempts,
@@ -414,10 +458,17 @@ export async function listAnnouncementsForAdmin(hackathonId: string): Promise<Ad
   ]);
   return rows.map((a) => {
     const stats = { inapp: zero(), email: zero(), whatsapp: zero() };
-    for (const c of counts) if (c.announcementId === a.id) stats[c.channel][c.status] = c.n;
+    const noDriver = { inapp: 0, email: 0, whatsapp: 0 };
+    for (const c of counts) {
+      if (c.announcementId !== a.id) continue;
+      const n = Number(c.n);
+      stats[c.channel][c.status] += n;
+      if (c.noDriver) noDriver[c.channel] += n;
+    }
     return {
       ...a,
       stats,
+      noDriver,
       failures: failures
         .filter((f) => f.announcementId === a.id)
         .map((f) => ({
@@ -476,14 +527,46 @@ export async function listAnnouncementsForMember(
 }
 
 export async function markAnnouncementsRead(memberId: number, ids: number[]): Promise<void> {
-  const ins = db.prepare(
-    "INSERT OR IGNORE INTO announcement_reads (announcementId, memberId) VALUES (?, ?)",
-  );
-  for (const id of ids) await ins.run(id, memberId);
+  if (ids.length === 0) return;
+  await db
+    .prepare(
+      `INSERT INTO announcement_reads (announcementId, memberId)
+       SELECT x.id, ? FROM unnest(?::int[]) AS x(id)
+       ON CONFLICT DO NOTHING RETURNING "announcementId"`,
+    )
+    .run(memberId, ids);
 }
 
+/** times da edição com quantas pessoas cada um tem (o composer mostra e bloqueia time vazio) */
 export async function listEditionTeams(hackathonId: string) {
-  return db
-    .prepare("SELECT id, name FROM teams WHERE hackathonId = ? ORDER BY name")
-    .all<{ id: number; name: string }>(hackathonId);
+  const rows = await db
+    .prepare(
+      `SELECT t.id, t.name, COUNT(m.id) AS members
+       FROM teams t
+       LEFT JOIN team_members tm ON tm.teamId = t.id
+       LEFT JOIN members m ON m.username = tm.username
+       WHERE t.hackathonId = ?
+       GROUP BY t.id, t.name
+       ORDER BY t.name`,
+    )
+    .all<{ id: number; name: string; members: number }>(hackathonId);
+  return rows.map((r) => ({ ...r, members: Number(r.members) }));
+}
+
+/** quantas pessoas cada público alcança agora (mesma regra de recipientsFor) */
+export async function audienceCounts(hackathonId: string): Promise<Record<"todos" | "aprovados" | "presentes", number>> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) FILTER (WHERE r.status IN ('approved','pending','waitlist')) AS todos,
+              COUNT(*) FILTER (WHERE r.status = 'approved') AS aprovados,
+              COUNT(*) FILTER (WHERE r.status = 'approved'
+                AND EXISTS (SELECT 1 FROM checkins c WHERE c.registrationId = r.id)) AS presentes
+       FROM registrations r WHERE r.hackathonId = ?`,
+    )
+    .get<{ todos: number; aprovados: number; presentes: number }>(hackathonId);
+  return {
+    todos: Number(row?.todos ?? 0),
+    aprovados: Number(row?.aprovados ?? 0),
+    presentes: Number(row?.presentes ?? 0),
+  };
 }

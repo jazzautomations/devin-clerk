@@ -34,7 +34,8 @@ describe("emailDriver (Resend)", () => {
     const d = emailDriver({});
     expect(d.name).toBe("log");
     const out = await d.send(msg);
-    expect(out).toEqual({ status: "skipped", reason: expect.stringContaining("RESEND_API_KEY") });
+    // code no_driver: o painel agrupa o motivo e o worker reenfileira quando a chave aparece
+    expect(out).toEqual({ status: "skipped", reason: expect.stringContaining("RESEND_API_KEY"), code: "no_driver" });
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
@@ -142,7 +143,10 @@ describe("templates do aviso", () => {
     expect(html).toContain("#047a43");
     expect(text).toContain("Traga documento.");
     expect(text).toContain("/h/hack-x#avisos");
-    expect(text).toContain("Preferências de contato");
+    expect(text).toContain("preferências de contato");
+    // parar de receber e-mail não passa por cancelar a inscrição
+    expect(text).not.toMatch(/cancele a inscrição/);
+    expect(html).not.toMatch(/Cancelar inscrição/);
   });
 
   it("WhatsApp: texto puro com link e como parar", () => {

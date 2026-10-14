@@ -115,8 +115,16 @@ export type TicketEmailContent = {
   hackathonName: string;
   startsAt: string;
   location: string | null;
+  /** sem local cadastrado, edição online diz "online" e as outras "local a confirmar" */
+  format?: "online" | "presencial" | "hibrido" | null;
   memberName: string;
 };
+
+/** o que o e-mail diz no "onde" quando a edição não tem local cadastrado */
+export function ticketWhere(location: string | null, format?: string | null): string {
+  if (location?.trim()) return location.trim();
+  return format === "online" ? "online" : "local a confirmar na página da edição";
+}
 
 function eventDate(startsAt: string): string {
   const d = new Date(startsAt);
@@ -132,7 +140,7 @@ function eventDate(startsAt: string): string {
 export function renderTicketEmail(c: TicketEmailContent): { subject: string; html: string; text: string } {
   const ticketUrl = absoluteUrl(`/h/${c.hackathonId}/ingresso`);
   const subject = `[${c.hackathonName}] Inscrição confirmada — seu ingresso`;
-  const when = `${eventDate(c.startsAt)} · ${c.location ?? "online"}`;
+  const when = `${eventDate(c.startsAt)} · ${ticketWhere(c.location, c.format)}`;
   const mono = "'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace";
   const sans = "Archivo,'Helvetica Neue',Arial,sans-serif";
   const html = `<!doctype html>
@@ -216,6 +224,7 @@ type ClaimedRow = {
   hackathonName: string;
   startsAt: string;
   location: string | null;
+  format: "online" | "presencial" | "hibrido";
   email: string;
   name: string | null;
   username: string;
@@ -249,7 +258,7 @@ export async function processTicketEmails(
            FOR UPDATE SKIP LOCKED)
          RETURNING registrationId, sends, attempts)
        SELECT c.registrationId, c.sends, c.attempts, r.status, r.hackathonId,
-              h.name AS hackathonName, h.startsAt, h.location,
+              h.name AS hackathonName, h.startsAt, h.location, h.format,
               m.email, m.name, m.username, m.emailBouncedAt
        FROM claimed c
        JOIN registrations r ON r.id = c.registrationId
@@ -284,6 +293,7 @@ export async function processTicketEmails(
             hackathonName: row.hackathonName,
             startsAt: row.startsAt,
             location: row.location,
+            format: row.format,
             memberName: row.name ?? `@${row.username}`,
           }),
         );

@@ -1,4 +1,5 @@
 import {
+  NO_DRIVER,
   networkFailure,
   outcomeFromResponse,
   type Driver,
@@ -12,6 +13,11 @@ import {
 export const RESEND_URL = "https://api.resend.com/emails";
 const DEFAULT_FROM = "Hack Inova <avisos@hackahub.dev>";
 
+/** endereço de resposta configurado, ou null (a copy só promete resposta quando existe) */
+export function emailReplyTo(env: DriverEnv = process.env): string | null {
+  return env.RESEND_API_KEY ? env.HACKAHUB_EMAIL_REPLY_TO?.trim() || null : null;
+}
+
 export function emailDriver(env: DriverEnv = process.env): Driver<EmailMessage> {
   const key = env.RESEND_API_KEY;
   if (!key) {
@@ -19,11 +25,19 @@ export function emailDriver(env: DriverEnv = process.env): Driver<EmailMessage> 
       name: "log",
       async send(m) {
         console.info(`[notify:email:log] ${m.idempotencyKey} (não enviado)`);
-        return { status: "skipped", reason: "RESEND_API_KEY ausente — driver log, nada enviado" };
+        return {
+          status: "skipped",
+          reason: "RESEND_API_KEY ausente — driver log, nada enviado",
+          code: NO_DRIVER,
+        };
       },
     };
   }
   const from = env.HACKAHUB_EMAIL_FROM || DEFAULT_FROM;
+  // o remetente costuma ser um endereço que ninguém lê; a resposta vai pra
+  // um e-mail real da organização (HACKAHUB_EMAIL_REPLY_TO) ou pro que a
+  // mensagem pedir
+  const defaultReplyTo = env.HACKAHUB_EMAIL_REPLY_TO?.trim() || undefined;
   return {
     name: "resend",
     async send(m) {
@@ -41,6 +55,7 @@ export function emailDriver(env: DriverEnv = process.env): Driver<EmailMessage> 
             subject: m.subject,
             html: m.html,
             text: m.text,
+            ...((m.replyTo || defaultReplyTo) ? { reply_to: m.replyTo || defaultReplyTo } : {}),
             ...(m.attachments?.length
               ? {
                   attachments: m.attachments.map((a) => ({

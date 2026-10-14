@@ -1,5 +1,5 @@
 import db from "@/lib/db";
-import { emailDriver } from "@/lib/notify/email";
+import { emailDriver, emailReplyTo } from "@/lib/notify/email";
 import type { DriverEnv, SendOutcome } from "@/lib/notify/types";
 import { absoluteUrl } from "@/lib/seo";
 
@@ -517,12 +517,16 @@ export async function sendGuardianEmail(registrationId: number, env: DriverEnv =
   const text = [
     `Olá, ${row.guardianName}.`,
     "",
-    `${who} (${row.ageAtEvent} anos na data do evento) se inscreveu em ${row.edition}, organizado por ${row.organizer}, e informou que você é o responsável legal e autorizou a participação.`,
+    `${who} (${row.ageAtEvent} anos na data do evento) se inscreveu na edição ${row.edition}, organizada por ${row.organizer}, e informou que você é o responsável legal e autorizou a participação.`,
     "",
     `Código de conduta da edição: ${conduct}`,
     `Página do evento: ${page}`,
     "",
-    `Se você NÃO autorizou, responda este e-mail ou fale com ${row.organizer} antes do evento: a inscrição será cancelada.`,
+    // "responda este e-mail" só quando a resposta chega em alguém: sem
+    // reply-to configurado, o remetente é um endereço que ninguém lê
+    emailReplyTo(env)
+      ? `Se você NÃO autorizou, responda este e-mail ou fale com ${row.organizer} antes do evento. A inscrição será cancelada.`
+      : `Se você NÃO autorizou, avise ${row.organizer} antes do evento. A inscrição será cancelada.`,
   ].join("\n");
   const html = text
     .split("\n")

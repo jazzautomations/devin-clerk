@@ -1,4 +1,5 @@
 import {
+  NO_DRIVER,
   networkFailure,
   outcomeFromResponse,
   type Driver,
@@ -21,6 +22,7 @@ export function whatsappDriver(env: DriverEnv = process.env): Driver<WhatsappMes
         return {
           status: "skipped",
           reason: "EVOLUTION_URL/INSTANCE/API_KEY ausentes — driver log, nada enviado",
+          code: NO_DRIVER,
         };
       },
     };
