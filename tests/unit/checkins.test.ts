@@ -161,3 +161,19 @@ describe("contagem, busca e ingresso", () => {
     expect(await isCheckedIn(rid)).toBe(false);
   });
 });
+
+describe("check-in × fila de espera (frente B)", () => {
+  it("quem está na fila de espera não entra", async () => {
+    const m = await db
+      .prepare("INSERT INTO members (clerkId, username, email) VALUES ('c_fila', 'fila', 'fila@t.dev') RETURNING id")
+      .get<{ id: number }>();
+    const reg = await db
+      .prepare(
+        "INSERT INTO registrations (memberId, hackathonId, status) VALUES (?, 'hack-inova-alphaville-2026', 'waitlist') RETURNING id",
+      )
+      .get<{ id: number }>(m!.id);
+    const r = await checkIn("hack-inova-alphaville-2026", { registrationId: reg!.id }, null);
+    expect(r).toMatchObject({ ok: false, reason: "waitlist" });
+    expect(await isCheckedIn(reg!.id)).toBe(false);
+  });
+});

@@ -117,8 +117,17 @@ describe("recipientsFor — público-alvo", () => {
     expect((await recipientsFor(H, "time", team!.id)).map((r) => r.memberId)).toEqual([a]);
   });
 
-  // presentes depende de checkins (frente A, migration 003) — integra no merge
-  it.todo("presentes = aprovados com check-in (checkins.registrationId)");
+  it("presentes = aprovados com check-in", async () => {
+    const veio = await registered("approved");
+    await registered("approved");
+    await db
+      .prepare(
+        `INSERT INTO checkins (registrationId)
+         SELECT id FROM registrations WHERE memberId = ? AND hackathonId = ?`,
+      )
+      .run(veio, H);
+    expect((await recipientsFor(H, "presentes")).map((r) => r.memberId)).toEqual([veio]);
+  });
 });
 
 describe("publicar + fan-out", () => {

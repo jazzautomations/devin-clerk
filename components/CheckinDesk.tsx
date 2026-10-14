@@ -28,6 +28,7 @@ const STATUS_LABEL: Record<RegistrantHit["status"], string> = {
   approved: "aprovado",
   pending: "pendente",
   rejected: "recusado",
+  waitlist: "fila de espera",
 };
 
 export function CheckinDesk({

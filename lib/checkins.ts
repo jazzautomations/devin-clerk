@@ -70,7 +70,7 @@ export type CheckInResult =
       name: string | null;
     }
   | { ok: false; reason: "invalid" | "not_found" }
-  | { ok: false; reason: "pending" | "rejected"; username: string; name: string | null };
+  | { ok: false; reason: "pending" | "rejected" | "waitlist"; username: string; name: string | null };
 
 /**
  * Marca presença. Idempotente: a segunda leitura devolve already=true com

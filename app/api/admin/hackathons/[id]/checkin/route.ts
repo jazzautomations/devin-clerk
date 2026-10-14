@@ -68,6 +68,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           { error: `${label(r)} tem pedido de inscrição pendente — aprove antes de liberar a entrada.` },
           { status: 409 },
         );
+      case "waitlist":
+        return Response.json(
+          { error: `${label(r)} está na fila de espera — sem vaga confirmada, sem entrada.` },
+          { status: 409 },
+        );
       case "rejected":
         return Response.json(
           { error: `A inscrição de ${label(r)} foi recusada — entrada não liberada.` },
