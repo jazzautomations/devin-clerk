@@ -137,6 +137,10 @@ export async function syncCheckins(
   const byHash = new Map(regs.map((r) => [tokenHash(ticketToken(r.id)), r]));
   const byId = new Map(regs.map((r) => [r.id, r]));
   const w = checkinWindow(hackathon);
+  // A janela vale pelo relógio do servidor: fora dela (pacote baixado e
+  // subido semanas antes ou depois) nada é gravado, igual ao check-in online.
+  // Dentro dela, o horário do aparelho só é ajustado pra caber na janela.
+  const open = now.getTime() >= w.start.getTime() && now.getTime() <= w.end.getTime();
   const out: SyncItemResult[] = [];
 
   for (const item of items) {
@@ -164,6 +168,10 @@ export async function syncCheckins(
     }
     if (reg.status !== "approved") {
       out.push({ rid: reg.id, ok: false, reason: reg.status });
+      continue;
+    }
+    if (!open) {
+      out.push({ rid: reg.id, ok: false, reason: "outside_window" });
       continue;
     }
     const adj = clampWithFlag(item.at, w, now);

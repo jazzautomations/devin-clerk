@@ -193,6 +193,17 @@ describe("sync em lote", () => {
     expect(b).toMatchObject({ ok: true, at: "2026-11-07 20:00:00", clamped: true });
   });
 
+  it("fora da janela do evento o sync não grava nada (antes e depois)", async () => {
+    const ra = await reg("clerk_a", "approved");
+    const item = [{ token: ticketToken(ra), at: "2026-11-07T14:00:00Z" }];
+    const antes = new Date(new Date("2026-11-07T12:00:00Z").getTime() - 10 * 86_400_000);
+    expect(await syncCheckins(ed, item, null, antes)).toEqual([{ rid: ra, ok: false, reason: "outside_window" }]);
+    // fim 08/11 09:00 BRT + 48h = 10/11 12:00Z; um minuto depois já fecha
+    const depois = new Date("2026-11-10T12:01:00Z");
+    expect(await syncCheckins(ed, item, null, depois)).toEqual([{ rid: ra, ok: false, reason: "outside_window" }]);
+    expect(await db.prepare("SELECT * FROM checkins").all()).toHaveLength(0);
+  });
+
   it("recusa: status mudou, ingresso de outra edição, lixo — e não grava nada", async () => {
     const rw = await reg("clerk_a", "waitlist");
     const ro = await reg("clerk_b", "approved", OTHER);
@@ -221,6 +232,9 @@ describe("sync em lote", () => {
     asUser("clerk_staff");
     expect((await POST(req("POST", { items: [] }), params(H))).status).toBe(400);
     expect((await POST(req("POST", { items: Array(501).fill({}) }), params(H))).status).toBe(400);
+    // a edição acontece hoje: o sync só grava dentro da janela do evento
+    const today = new Date().toISOString();
+    await db.prepare("UPDATE hackathons SET startsAt = ?, endsAt = ? WHERE id = ?").run(today, today, H);
     const ok = await POST(req("POST", { items: [{ token: ticketToken(ra), at: new Date().toISOString() }] }), params(H));
     expect(ok.status).toBe(200);
     const body = await ok.json();

@@ -5,8 +5,9 @@ import { requireEditionStaff } from "@/lib/staffAuth";
 
 // Sync em lote do check-in offline: {items: [{token | registrationId, at}]}.
 // Idempotente (mandar a mesma fila de novo não duplica nada); horário vem do
-// aparelho mas é limitado à janela da edição; conflito entre aparelhos fica
-// com o primeiro horário. Uma resposta por item, na ordem.
+// aparelho mas é limitado à janela da edição; sync com o servidor fora da
+// janela é recusado (outside_window); conflito entre aparelhos fica com o
+// primeiro horário. Uma resposta por item, na ordem.
 const HOUR = 3_600_000;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

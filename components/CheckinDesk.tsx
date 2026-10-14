@@ -232,8 +232,14 @@ export function CheckinDesk({
       if (isOfflinePack(pk)) writeLocal(packKey, mergeIntoPack(pk, data.results));
       setCounts(data.counts);
       const refused = data.results.filter((r) => !r.ok).length;
+      const late = data.results.filter((r) => !r.ok && r.reason === "outside_window").length;
       const clamped = data.results.filter((r) => r.ok && r.clamped).length;
-      if (refused > 0) {
+      if (late > 0) {
+        setFeedback({
+          kind: "error",
+          text: `${late} ${late === 1 ? "check-in offline ficou" : "check-ins offline ficaram"} de fora: o check-in só vale da véspera até 2 dias depois do evento.`,
+        });
+      } else if (refused > 0) {
         setFeedback({
           kind: "error",
           text: `O servidor recusou ${refused} ${refused === 1 ? "check-in" : "check-ins"} offline (inscrição mudou ou ingresso inválido).`,
