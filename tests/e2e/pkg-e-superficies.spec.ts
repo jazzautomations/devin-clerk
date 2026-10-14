@@ -84,7 +84,7 @@ test.describe("pacote E — /perfil", () => {
          ON CONFLICT(id) DO NOTHING`,
       )
       .run(ED);
-    await db.prepare("INSERT INTO sponsors (id, name) VALUES ('e2e-e-marca', 'Marca E2E') ON CONFLICT DO NOTHING").run();
+    await db.prepare("INSERT INTO sponsors (id, name) VALUES ('e2e-e-marca', 'Marca Pacote E') ON CONFLICT DO NOTHING").run();
     await db
       .prepare("INSERT INTO edition_sponsors (hackathonId, sponsorId) VALUES (?, 'e2e-e-marca') ON CONFLICT DO NOTHING")
       .run(ED);
@@ -102,12 +102,12 @@ test.describe("pacote E — /perfil", () => {
       await page.goto("/perfil");
       await expect(page.getByRole("heading", { level: 1 })).toContainText(`@${long}`);
       const marcas = page.getByTestId("contact-shares");
-      await expect(marcas).toContainText("Marca E2E");
+      await expect(marcas).toContainText("Marca Pacote E");
       await at390(page, "perfil-390");
       expect(await axeIds(page, ["color-contrast", "link-in-text-block"])).toEqual([]);
       // sem RESEND no e2e: o perfil não promete e-mail
       await expect(page.getByText(/no seu e-mail/)).toHaveCount(0);
-      await marcas.getByRole("button", { name: /revogar o compartilhamento com Marca E2E/ }).click();
+      await marcas.getByRole("button", { name: /revogar o compartilhamento com Marca Pacote E/ }).click();
       await expect(marcas.getByRole("status")).toContainText(/revogado/);
       const row = await db
         .prepare("SELECT revokedAt FROM sponsor_contact_optins WHERE hackathonId = ? AND memberId = ?")

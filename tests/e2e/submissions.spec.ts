@@ -23,13 +23,13 @@ const subsCount = async (url: string) => {
   return n ?? 0;
 };
 
-test.describe("/radar — bloco indica um hackathon", () => {
+test.describe("/radar — bloco indique um hackathon", () => {
   test("rodapé do radar tem o details com o formulário de indicação", async ({
     memberPage: page,
   }) => {
     const res = await page.goto("/radar");
     expect(res?.status()).toBe(200);
-    const bloco = page.locator("details", { hasText: /indica um hackathon/i });
+    const bloco = page.locator("details", { hasText: /indique um hackathon/i });
     await expect(bloco).toBeVisible();
     // abre e mostra o form com os campos da spec
     await bloco.locator("summary").click();
