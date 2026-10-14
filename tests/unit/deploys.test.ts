@@ -16,6 +16,8 @@ import {
   stopDeploy,
   sweepDeploys,
   validateRepoUrl,
+  deployToolAllowed,
+  setDeploysEnabled,
 } from "@/lib/deploys";
 
 async function ensureMember(username: string, role = "member") {
@@ -109,5 +111,21 @@ describe("sweep/stop", () => {
     const d = await queueDeploy({ teamId, byUsername: "dev1" });
     await stopDeploy(d.id);
     expect((await getDeploy(d.id))!.status).toBe("stopped");
+  });
+});
+
+describe("trava de ambiente (HACKAHUB_DEPLOY_TOOL)", () => {
+  it("sem a env o deploy tool fica desligado e o admin não religa", async () => {
+    vi.stubEnv("HACKAHUB_DEPLOY_TOOL", "");
+    try {
+      expect(deployToolAllowed()).toBe(false);
+      await setDeploysEnabled(true).catch(() => {});
+      expect(await deploysEnabled()).toBe(false);
+      await expect(setDeploysEnabled(true)).rejects.toThrow(/desligado/);
+      // desligar continua permitido
+      await expect(setDeploysEnabled(false)).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

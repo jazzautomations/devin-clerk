@@ -16,7 +16,7 @@ export default defineConfig({
   use: { baseURL: "http://localhost:3100" },
   webServer: {
     command:
-      "HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p 3100",
+      "HACKAHUB_DEPLOY_TOOL=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p 3100",
     port: 3100,
     reuseExistingServer: false,
     timeout: 120_000,

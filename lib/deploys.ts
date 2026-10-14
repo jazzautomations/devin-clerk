@@ -39,7 +39,15 @@ export function validateRepoUrl(u: string): string | null {
   return null;
 }
 
+// trava de ambiente: o deploy tool roda código de terceiros, e a VPS de
+// produção divide máquina com outros serviços — sem HACKAHUB_DEPLOY_TOOL=on
+// ele fica desligado e o toggle do admin não religa (spec 033, Produção)
+export function deployToolAllowed(): boolean {
+  return process.env.HACKAHUB_DEPLOY_TOOL === "on";
+}
+
 export async function deploysEnabled(): Promise<boolean> {
+  if (!deployToolAllowed()) return false;
   const row = await db
     .prepare("SELECT value FROM settings WHERE key = 'deploys_enabled'")
     .get() as { value: string } | undefined;
@@ -47,6 +55,9 @@ export async function deploysEnabled(): Promise<boolean> {
 }
 
 export async function setDeploysEnabled(on: boolean) {
+  if (on && !deployToolAllowed()) {
+    throw new Error("Deploy tool desligado neste ambiente (HACKAHUB_DEPLOY_TOOL)");
+  }
   await db.prepare(
     "INSERT INTO settings (key, value) VALUES ('deploys_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   ).run(on ? "1" : "0");
