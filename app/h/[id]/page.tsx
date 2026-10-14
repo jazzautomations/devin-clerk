@@ -23,6 +23,7 @@ import { listBoardEntries } from "@/lib/teamboard";
 import { TeamBoardPanel } from "@/components/TeamBoardPanel";
 import { memberTeamFor } from "@/lib/teams";
 import { MyTeamPanel } from "@/components/MyTeamPanel";
+import { listMyInvites, listPendingTeamInvites, type MyInvite } from "@/lib/teamInvites";
 import { countdownTarget, editionPhase } from "@/lib/arena";
 import type { EditionPhase } from "@/lib/arena";
 import { ArenaCountdown } from "@/components/ArenaCountdown";
@@ -132,6 +133,11 @@ export default async function HackathonPage({
   // spec 021 — time do próprio membro na edição (null = ainda não submeteu)
   const myTeam =
     member && registered ? await memberTeamFor(h.id, member.username) : null;
+  // frente N #4 — convites de time pendentes (pra mim / do meu time)
+  const [myInvites, teamPending] = await Promise.all([
+    member && registered && !myTeam ? listMyInvites(member.id, h.id) : Promise.resolve([] as MyInvite[]),
+    myTeam ? listPendingTeamInvites(myTeam.id) : Promise.resolve([] as string[]),
+  ]);
   const attendees = await getRegistrationsByHackathon(h.id);
   const cardRarity = await getCardRarity(h.id);
   const cardSupply = await getCardSupply(h.id);
@@ -315,9 +321,14 @@ export default async function HackathonPage({
           {/* spec 021 — inscrito submete/edita o próprio time; edição encerrada
               vira arquivo e o painel some (o time já tá em "resultado") */}
           {!past && registered && (
-            <section className="flex flex-col gap-5">
+            <section id="meu-time" className="flex scroll-mt-24 flex-col gap-5">
               <SectionHead k={nextK()} title="Meu time" />
-              <MyTeamPanel hackathonId={h.id} initialTeam={myTeam} />
+              <MyTeamPanel
+                hackathonId={h.id}
+                initialTeam={myTeam}
+                initialInvites={myInvites}
+                initialPending={teamPending}
+              />
             </section>
           )}
 

@@ -81,7 +81,7 @@ export async function POST(
     return Response.json({ error: "name obrigatório" }, { status: 400 });
   }
   try {
-    const { team, ignoredUsernames } = await submitTeam(h.id, member, {
+    const { team, ignoredUsernames, invitedUsernames } = await submitTeam(h.id, member, {
       name: b.name,
       memberUsernames: Array.isArray(b.memberUsernames)
         ? b.memberUsernames
@@ -94,6 +94,8 @@ export async function POST(
       {
         team,
         ignoredUsernames,
+        // frente N #4 — colegas recebem convite e só entram quando aceitam
+        invitedUsernames,
         xp: `+${XP.teamSubmit}`,
         newBadges: newBadges.map((b) => b.id),
       },
