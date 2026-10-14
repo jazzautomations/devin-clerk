@@ -114,7 +114,7 @@ parser voltou 0 em 14/10 — revisar.
 | `HACKAHUB_ADMIN_EMAILS` | admins globais (lista separada por vírgula) |
 | `HACKAHUB_DEPLOY_TOOL` | só `on` liga o deploy tool — **nunca em prod nesta máquina** |
 | `HACKAHUB_TICKET_SECRET` | HMAC do QR do ingresso (trocar invalida os QRs emitidos) |
-| `HACKAHUB_CRON_SECRET` | bearer do `/api/cron/deliveries` (cron a cada 2 min, `ops/deliveries.sh`) e do `/api/cron/submissions` (lembretes da entrega, cron a cada 5 min, `deploy/submissions.sh` — ainda não instalado no crontab) |
+| `HACKAHUB_CRON_SECRET` | bearer do `/api/cron/deliveries` (cron a cada 2 min, `ops/deliveries.sh`; a mesma passada dispara a pesquisa NPS pós-edição — idempotente, sem crontab novo) e do `/api/cron/submissions` (lembretes da entrega, cron a cada 5 min, `deploy/submissions.sh` — ainda não instalado no crontab) |
 | `RESEND_API_KEY`, `HACKAHUB_EMAIL_FROM`, `RESEND_WEBHOOK_SECRET` | e-mail dos avisos; sem eles as entregas ficam `skipped` |
 | `EVOLUTION_URL`, `EVOLUTION_INSTANCE`, `EVOLUTION_API_KEY` | WhatsApp individual dos avisos (opt-in); sem eles `skipped` |
 

@@ -189,21 +189,23 @@ export async function publishAnnouncement(
  * Aviso pra uma lista explícita de membros (audience 'lista'). Mesmo
  * caminho de entrega do resto — deliveries 'queued' por canal, o worker
  * envia — só que o público é decidido por quem chama (ex.: só os mentores
- * afetados por uma mudança de programação).
+ * afetados por uma mudança de programação). system = mensagem automática
+ * (fica fora da lista de avisos do painel, como em lib/entries).
  */
 export async function publishToMembers(
   hackathonId: string,
   createdBy: number | null,
   content: { title: string; body: string },
   memberIds: number[],
+  opts: { system?: boolean } = {},
 ): Promise<{ id: number; queued: number }> {
   return db.transaction(async () => {
     const row = await db
       .prepare(
-        `INSERT INTO announcements (hackathonId, audience, title, body, createdBy)
-         VALUES (?, 'lista', ?, ?, ?) RETURNING id`,
+        `INSERT INTO announcements (hackathonId, audience, title, body, createdBy, system)
+         VALUES (?, 'lista', ?, ?, ?, ?) RETURNING id`,
       )
-      .get<{ id: number }>(hackathonId, content.title, content.body, createdBy);
+      .get<{ id: number }>(hackathonId, content.title, content.body, createdBy, opts.system ? 1 : 0);
     const ids = [...new Set(memberIds)];
     const rows = ids.length
       ? await db
