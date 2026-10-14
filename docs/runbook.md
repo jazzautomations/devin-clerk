@@ -1,0 +1,111 @@
+# Runbook — HackaHub em produção
+
+Tudo roda na VPS **asyn-oracle** (`ssh ubuntu@64.181.217.112`, OCI
+us-chicago-1), que também hospeda asyn-settlement, cachorro, oneiro e
+pocketful. Regra de convivência: o HackaHub só mexe no que é dele (tabela
+abaixo). Nada de reiniciar Caddy inteiro: só `systemctl reload caddy` depois
+de `caddy validate`.
+
+## O que é do HackaHub na máquina
+
+| Peça | Onde |
+|---|---|
+| App stage | systemd `hackahub-stage` → `:3410`, `~/hackahub/stage/current` |
+| App prod | systemd `hackahub-prod` → `:3411`, `~/hackahub/prod/current` |
+| Postgres | container `hackahub-pg` (postgres:17-alpine, `127.0.0.1:5434`, 1 GB, volume `hackahub-pgdata`); bancos `hackahub` (prod), `hackahub_stage`, `hackahub_e2e*`, `hackahub_dev` |
+| Caddy | blocos marcados `# hackahub-stage` / `# hackahub-prod` no fim de `/etc/caddy/Caddyfile` |
+| Segredos | `~/hackahub-secrets/` (700): `pg.env`, `url.<banco>`, `stage.env`, `prod.env`, `backup-par.url`, estado do Clerk dev |
+| Ops | `~/hackahub/ops/` (`deploy.sh`, `backup.sh`, `restore-drill.sh`, `scrape.sh`), logs em `~/hackahub/logs/` |
+| Backups | `~/hackahub-backups/<stamp>/` (14 dias) + bucket OCI `hackahub-backups` (prefixo `hackahub/`, expira em 60 dias) |
+| Scraper | venv `~/hackahub/scraper/.venv` (uv) |
+| Cron (usuário ubuntu) | 05:15 UTC radar (stage) · 06:00 UTC backup · dom 06:30 UTC restore drill |
+
+Portas de app não são públicas: security list da OCI só abre 22/80/443 e o
+iptables rejeita o resto (verificado de fora em 14/10/2026).
+
+## Deploy
+
+```bash
+# no notebook, a partir de um commit limpo
+git archive --format=tar.gz -o /tmp/hh.tar.gz HEAD
+scp /tmp/hh.tar.gz ubuntu@64.181.217.112:~/hackahub-secrets/hh-release.tar.gz
+ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh stage ~/hackahub-secrets/hh-release.tar.gz'
+# conferiu no stage → mesmo tarball pra prod
+ssh ubuntu@64.181.217.112 'bash ~/hackahub/ops/deploy.sh prod ~/hackahub-secrets/hh-release.tar.gz'
+```
+
+`deploy.sh` cria um release novo, `npm ci` + `next build` com o env do
+ambiente, troca o symlink `current`, reinicia o serviço e espera
+`/api/health` (app + banco). Se o health não responder em 40 s, **volta
+sozinho** pro release anterior. Mantém os 3 últimos releases.
+
+Migrations rodam no boot do app (em ordem, com lock); deploy de migration
+destrutiva precisa de plano expand/contract — não existe nenhuma hoje.
+
+### Rollback manual
+
+```bash
+ls -1dt ~/hackahub/prod/releases/*        # escolhe o anterior
+ln -sfn ~/hackahub/prod/releases/<stamp> ~/hackahub/prod/current
+sudo systemctl restart hackahub-prod
+```
+
+Rollback de código não desfaz migration: se a versão nova aplicou migration
+incompatível com a antiga, restaurar backup (abaixo).
+
+## Backup e restauração
+
+- `ops/backup.sh`: `pg_dump -Fc` de `hackahub` e `hackahub_stage`, SHA256,
+  cópia offsite por link pré-autenticado **só de escrita** (a VPS não lê nem
+  apaga o bucket), rotação local de 14 dias, carimbo em
+  `~/hackahub-backups/LAST_OK`.
+- `ops/restore-drill.sh [dir] [banco]`: confere checksum, restaura num banco
+  descartável, compara contagens com a origem e apaga.
+- O link de escrita expira em **14/10/2027** — renovar antes
+  (`oci os preauth-request create --bucket-name hackahub-backups --access-type AnyObjectWrite ...`).
+
+Restaurar de verdade (incidente):
+
+```bash
+sudo systemctl stop hackahub-prod
+docker exec hackahub-pg dropdb -U hackahub hackahub --force
+docker exec hackahub-pg createdb -U hackahub hackahub
+docker exec -i hackahub-pg pg_restore -U hackahub -d hackahub --no-owner < ~/hackahub-backups/<stamp>/hackahub.dump
+sudo systemctl start hackahub-prod
+```
+
+Backup que só está no bucket: baixar pelo console da OCI ou
+`oci os object get --bucket-name hackahub-backups --name hackahub/<stamp>/hackahub.dump --file x.dump`
+(no notebook do Jazz, que tem credencial de leitura).
+
+### Registro de restore drills
+
+| Data | Backup | Banco | Resultado |
+|---|---|---|---|
+| 2026-10-14 | 20261014T031838Z | hackahub_stage | ok — contagens iguais à origem (hackathons=4, migrations=1), checksum ok, offsite conferido no bucket |
+
+## Radar (scraper)
+
+`ops/scrape.sh <stage|prod>` roda `scripts/scrape_radar.py` do release
+atual contra o banco do ambiente. Fontes: Devpost, TAIKAI, Meetup,
+curadoria; ETHGlobal e Luma costumam dar 0 (geogate); MLH responde mas o
+parser voltou 0 em 14/10 — revisar.
+
+## Variáveis de ambiente (`~/hackahub-secrets/<env>.env`)
+
+| Variável | Para quê |
+|---|---|
+| `DATABASE_URL` | Postgres do ambiente |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_*_URL` | auth (stage usa instância dev; prod precisa de instância de produção) |
+| `NEXT_PUBLIC_SITE_URL` | canonical/OG/sitemap |
+| `HACKAHUB_ADMIN_EMAILS` | admins globais (lista separada por vírgula) |
+| `HACKAHUB_DEPLOY_TOOL` | só `on` liga o deploy tool — **nunca em prod nesta máquina** |
+
+## Pendências que só o fundador resolve
+
+- Domínio definitivo + DNS (`hackahub.jazzautomations.com.br` → `64.181.217.112`).
+- Clerk: claim do app + instância de produção no domínio (DNS do Clerk).
+- Provedor de e-mail (Resend) + SPF/DKIM/DMARC no domínio.
+- Número de WhatsApp da Hack Inova na Evolution.
+- Monitor externo de uptime com alerta (ex.: Healthchecks/UptimeRobot em `/api/health` e no carimbo do backup).
+- Encarregado (DPO) e texto jurídico de termos/privacidade.
