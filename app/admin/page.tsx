@@ -299,7 +299,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 key={l.id}
                 className="flex items-baseline justify-between gap-4 py-2"
               >
-                <span className={mono}>
+                <span className={`${mono} min-w-0 [overflow-wrap:anywhere]`}>
                   <span className="text-accent">{l.company}</span>
                   <span className="ml-2 text-muted">{l.email}</span>
                   <span className="ml-2 border border-line px-1.5 text-[12px] text-muted uppercase">
