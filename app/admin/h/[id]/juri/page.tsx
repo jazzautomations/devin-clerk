@@ -15,6 +15,7 @@ import {
 } from "@/lib/jury";
 import { canManageEdition, getEditionRoles } from "@/lib/roles";
 import { formatCertDate } from "@/lib/certificates";
+import { formatBrt, type JudgedVersion } from "@/lib/entries";
 import { currentMember } from "@/lib/session";
 
 // Aba júri (spec 033 US5). Organização: rubrica, atribuição, progresso,
@@ -102,6 +103,7 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
                     initialComment={a.comment}
                     locked={!!published}
                   />
+                  {a.judged && <JudgedSnapshot judged={a.judged} />}
                 </li>
               ))}
             </ul>
@@ -179,5 +181,51 @@ function Ranking({ ranking, criteria }: { ranking: RankingRow[]; criteria: Crite
         </li>
       ))}
     </ol>
+  );
+}
+
+// spec 034 — o jurado avalia a versão enviada até o prazo (snapshot), não o
+// rascunho atual do time
+function JudgedSnapshot({ judged }: { judged: JudgedVersion }) {
+  const s = judged.snapshot;
+  const links = [
+    ["repositório", s.repoUrl],
+    ["vídeo", s.videoUrl],
+    ["demo", s.demoUrl],
+    ["slides", s.slidesUrl],
+    ...s.links.map((l) => [l.label, l.url] as const),
+  ].filter((x): x is [string, string] => !!x[1]);
+  return (
+    <details className="border-x-[1.5px] border-b-[1.5px] border-line px-4 py-3">
+      <summary className="cursor-pointer font-mono text-[12px] text-accent">
+        versão avaliada · v{judged.version} enviada em {formatBrt(judged.submittedAt)}
+      </summary>
+      <div className="mt-3 flex flex-col gap-3 text-[14px]">
+        {s.tagline && <p className="font-semibold break-words">{s.tagline}</p>}
+        {s.description && <p className="whitespace-pre-line break-words text-muted">{s.description}</p>}
+        {s.priorWork && (
+          <p className="break-words">
+            <span className="font-mono text-[12px] text-muted">trabalho anterior: </span>
+            {s.priorWork}
+          </p>
+        )}
+        {s.technologies.length > 0 && <p className="font-mono text-[12px] break-words text-muted">{s.technologies.join(" · ")}</p>}
+        {s.aiUsage && (
+          <p className="break-words">
+            <span className="font-mono text-[12px] text-muted">uso de IA: </span>
+            {s.aiUsage}
+          </p>
+        )}
+        {links.length > 0 && (
+          <p className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[12px]">
+            {links.map(([l, u]) => (
+              <a key={u} href={u} target="_blank" rel="noopener" className="break-all text-accent hover:underline">
+                {l} ↗
+              </a>
+            ))}
+          </p>
+        )}
+      </div>
+    </details>
   );
 }

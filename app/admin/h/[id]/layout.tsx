@@ -14,6 +14,7 @@ const TABS: { href: string; label: string; roles: EditionRole[] }[] = [
   { href: "/avisos", label: "avisos", roles: ["organizador"] },
   { href: "/duvidas", label: "dúvidas", roles: ["organizador", "mentor"] },
   { href: "/checkin", label: "check-in", roles: ["organizador", "staff"] },
+  { href: "/entregas", label: "entregas", roles: ["organizador", "staff"] },
   { href: "/juri", label: "júri", roles: ["organizador", "jurado"] },
   { href: "/certificados", label: "certificados", roles: ["organizador"] },
 ];
