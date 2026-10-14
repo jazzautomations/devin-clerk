@@ -1,10 +1,6 @@
 import db from "@/lib/db";
 import { toLikePattern } from "@/lib/search";
-import type { TeamProject } from "@/lib/archive";
-// garante o ALTER de videoUrl/logoUrl em team_projects (spec 030) — o
-// import acima é type-only, não roda o módulo; mesmo espírito do import
-// de efeito abaixo pra votes
-import "@/lib/archive";
+import { ABANDONED_SQL, type TeamProject } from "@/lib/archive";
 
 // Índice público de projetos (spec 017) — o "/companies" do Colosseum:
 // todo time que ENTREGOU vira card, cruzando edições. INNER JOIN em
@@ -97,6 +93,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
          AND (h.submissionDeadline IS NULL
               OR (to_ts(h.submissionDeadline) + make_interval(mins => h.submissionGraceMinutes) < now()
                   AND EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = t.id)))
+         AND NOT ${ABANDONED_SQL("t")}
          AND (@q::text IS NULL
               OR tp.title LIKE @q ESCAPE '\\'
               OR tp.description LIKE @q ESCAPE '\\'

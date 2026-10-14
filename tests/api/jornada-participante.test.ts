@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
 import { submitRegistration } from "@/lib/registrationForm";
-import { reviewRegistration, unregister } from "@/lib/registrations";
+import { cancelRegistration, reviewRegistration, unregister } from "@/lib/registrations";
 import { memberTeamFor, submitTeam } from "@/lib/teams";
 import { listMyInvites, respondInvite } from "@/lib/teamInvites";
 import { getBoardEntry, upsertBoardEntry } from "@/lib/teamboard";
 import { getEntry, listEntriesForAdmin, saveDraft, submitEntry } from "@/lib/entries";
 import { deleteMemberData } from "@/lib/privacy";
-import { getRanking } from "@/lib/jury";
+import { getRanking, listJuryTeams } from "@/lib/jury";
+import { getArchive, getProjectByTeamId } from "@/lib/archive";
+import { processRsvp, respondRsvp, rsvpToken } from "@/lib/rsvp";
 
 // Auditoria 041, pacote C: inscrição e cancelamento com regra, time que se
 // resolve sem mexer no banco, participante avisado e entrega sem caminho
@@ -49,6 +51,8 @@ const notes = async (id: number) =>
 
 beforeEach(async () => {
   for (const t of [
+    "rsvp_messages",
+    "rsvp_releases",
     "checkins",
     "team_invites",
     "team_members",
@@ -106,7 +110,7 @@ describe("recompensa e cancelamento (unregister-sem-regra)", () => {
     await signup(m);
     const reg = await db.prepare("SELECT id FROM registrations WHERE memberId = ?").get<{ id: number }>(m.id);
     await db.prepare("INSERT INTO checkins (registrationId) VALUES (?)").run(reg!.id);
-    await expect(unregister(m.id, H)).rejects.toMatchObject({ code: "checked_in", status: 409 });
+    await expect(cancelRegistration(m.id, H)).rejects.toMatchObject({ code: "checked_in", status: 409 });
     expect(await db.prepare("SELECT 1 FROM checkins WHERE registrationId = ?").get(reg!.id)).toBeTruthy();
   });
 
@@ -117,7 +121,7 @@ describe("recompensa e cancelamento (unregister-sem-regra)", () => {
     await signup(a);
     await signup(b);
     expect(await statusOf(b.id)).toBe("waitlist");
-    await expect(unregister(a.id, H, AFTER_START)).rejects.toMatchObject({ code: "event_started" });
+    await expect(cancelRegistration(a.id, H, AFTER_START)).rejects.toMatchObject({ code: "event_started" });
     expect(await statusOf(a.id)).toBe("approved");
     expect(await statusOf(b.id)).toBe("waitlist");
   });
@@ -235,14 +239,23 @@ describe("time sem membro fantasma (time-membro-fantasma-bloqueia-entrega)", () 
     await expect(submitEntry(teamId, ana)).rejects.toThrow(/@carla está no time sem inscrição aprovada.*Meu time/);
   });
 
-  it("PATCH /team: remover colega e sair do time", async () => {
+  it("PATCH /team: só tira colega sem inscrição aprovada; sair do time", async () => {
     const { ana, carla, davi } = await teamOf3();
     const { PATCH, GET } = await import("@/app/api/hackathons/[id]/team/route");
     who = "clerk_ana";
-    expect(await (await GET(req("GET"), ctx())).json()).toMatchObject({ me: "ana" });
+    expect(await (await GET(req("GET"), ctx())).json()).toMatchObject({ me: "ana", removable: [] });
+    // carla está aprovada: só ela mesma ou a organização tiram ela do time
+    const blocked = await PATCH(req("PATCH", { action: "remove", username: "@carla" }), ctx());
+    expect(blocked.status).toBe(403);
+    expect((await blocked.json()).error).toMatch(/fale com a organização/);
+    expect((await memberTeamFor(H, "carla"))?.members).toEqual(["ana", "carla", "davi"]);
+
+    // dado antigo: a inscrição da carla sumiu sem passar pelo unregister
+    await db.prepare("DELETE FROM registrations WHERE memberId = ?").run(carla.id);
+    expect(await (await GET(req("GET"), ctx())).json()).toMatchObject({ removable: ["carla"] });
     const rm = await PATCH(req("PATCH", { action: "remove", username: "@carla" }), ctx());
     expect(rm.status).toBe(200);
-    expect((await rm.json()).team.members).toEqual(["ana", "davi"]);
+    expect(await rm.json()).toMatchObject({ team: { members: ["ana", "davi"] }, removable: [] });
     expect((await notes(carla.id)).at(-1)?.type).toBe("team_member_removed");
     expect((await PATCH(req("PATCH", { action: "remove", username: "ana" }), ctx())).status).toBe(400);
     expect((await PATCH(req("PATCH", { action: "remove", username: "carla" }), ctx())).status).toBe(404);
@@ -252,6 +265,45 @@ describe("time sem membro fantasma (time-membro-fantasma-bloqueia-entrega)", () 
     expect(await memberTeamFor(H, "davi")).toBeNull();
     expect((await notes(ana.id)).some((n) => n.text.includes("@davi saiu do time"))).toBe(true);
     expect(await statusOf(davi.id)).toBe("approved"); // a inscrição continua
+  });
+
+  it("B (aprovado, recém-chegado) tenta tirar A (quem criou) e recebe 403", async () => {
+    const { ana, davi } = await teamOf3();
+    const { PATCH } = await import("@/app/api/hackathons/[id]/team/route");
+    who = "clerk_davi";
+    const res = await PATCH(req("PATCH", { action: "remove", username: "ana" }), ctx());
+    expect(res.status).toBe(403);
+    expect((await memberTeamFor(H, ana.username))?.members).toContain("ana");
+    expect(await statusOf(davi.id)).toBe("approved");
+  });
+
+  it("último integrante cancela: o time some e o nome fica livre", async () => {
+    const solo = await member("solo");
+    await signup(solo);
+    const { team } = await submitTeam(H, solo, { name: "Time Solo", memberUsernames: [] });
+    await saveDraft(team.id, solo, full);
+    await cancelRegistration(solo.id, H);
+    expect(await db.prepare("SELECT 1 FROM teams WHERE id = ?").get(team.id)).toBeUndefined();
+    expect(await db.prepare("SELECT 1 FROM team_projects WHERE teamId = ?").get(team.id)).toBeUndefined();
+    expect((await getArchive(H)).teams.map((t) => t.name)).not.toContain("Time Solo");
+    expect(await listEntriesForAdmin(H)).toEqual(expect.not.arrayContaining([expect.objectContaining({ teamId: team.id })]));
+
+    await signup(solo);
+    const again = await submitTeam(H, solo, { name: "Time Solo", memberUsernames: [] });
+    expect(again.team.name).toBe("Time Solo");
+  });
+
+  it("time que enviou versão e ficou vazio fica guardado, fora do júri e da vitrine", async () => {
+    const { ana, carla, davi, teamId } = await teamOf3();
+    await db.prepare("UPDATE hackathons SET submissionDeadline = '2027-01-01 00:00:00', submissionGraceMinutes = 0 WHERE id = ?").run(H);
+    await submitEntry(teamId, ana);
+    expect((await listJuryTeams(H)).map((t) => t.id)).toContain(teamId);
+    for (const m of [ana, carla, davi]) await cancelRegistration(m.id, H);
+    expect(await db.prepare("SELECT 1 AS ok FROM teams WHERE id = ?").get(teamId)).toEqual({ ok: 1 });
+    expect((await listJuryTeams(H)).map((t) => t.id)).not.toContain(teamId);
+    expect((await getArchive(H)).teams.map((t) => t.id)).not.toContain(teamId);
+    expect(await getProjectByTeamId(teamId)).toBeNull();
+    expect((await listEntriesForAdmin(H)).some((e) => e.teamId === teamId)).toBe(true);
   });
 
   it("time travado na entrega não muda de integrante", async () => {
@@ -413,5 +465,56 @@ describe("fila de espera e time por edição", () => {
     const fromArchive = (await getArchive(H)).teams.find((t) => t.id === team.id);
     expect(await memberTeamFor(H, "ana")).toEqual(fromArchive);
     expect(await memberTeamFor(H, "ninguem")).toBeNull();
+  });
+});
+
+describe("RSVP libera a vaga pelo unregister sem regra de cancelamento", () => {
+  // edição que já começou no relógio real; o RSVP roda com `now` anterior
+  const ED = "pkgc-rsvp";
+  const START = "2026-03-14T09:00:00-03:00"; // 12:00Z
+  const OPENS = new Date("2026-03-07T12:00:00Z");
+  const DEADLINE = new Date("2026-03-12T03:00:00Z");
+  const MAILENV = { RESEND_API_KEY: "re_teste" };
+
+  beforeEach(async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ id: "ok" }), { status: 200 }));
+    await db.prepare("UPDATE hackathons SET rsvpEnabled = 0").run();
+    await db
+      .prepare(
+        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, rsvpEnabled)
+         VALUES (?, 'RSVP C', 'Hack Inova', ?, NULL, 'presencial', 'Rua Teste, 100', '/x', '[]', 1, 1)
+         ON CONFLICT (id) DO UPDATE SET rsvpEnabled = 1`,
+      )
+      .run(ED, START);
+  });
+
+  const approved = async (username: string) => {
+    const m = await member(username);
+    const r = await db
+      .prepare("INSERT INTO registrations (memberId, hackathonId, status) VALUES (?, ?, 'approved') RETURNING id")
+      .get<{ id: number }>(m.id, ED);
+    return { ...m, regId: r!.id };
+  };
+
+  it("recusa pelo link antes do início passa mesmo com o relógio real depois do início", async () => {
+    const a = await approved("rsvp_recusa");
+    await processRsvp(OPENS, { env: MAILENV });
+    const res = await respondRsvp(rsvpToken(a.regId, DEADLINE), "decline", new Date("2026-03-09T12:00:00Z"), {});
+    expect(res).toMatchObject({ ok: true, status: "declined", already: false });
+    expect(await statusOf(a.id, ED)).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("prazo vencido com check-in feito não derruba o cron: as outras vagas expiram", async () => {
+    const a = await approved("rsvp_presente");
+    const b = await approved("rsvp_sumido");
+    await processRsvp(OPENS, { env: MAILENV });
+    await db.prepare("INSERT INTO checkins (registrationId) VALUES (?)").run(a.regId);
+    const out = await processRsvp(DEADLINE, { env: MAILENV });
+    expect(out.expired).toBeGreaterThanOrEqual(1);
+    expect(await statusOf(b.id, ED)).toBeNull();
+    expect(await db.prepare("SELECT outcome FROM rsvp_releases WHERE memberId = ?").get(b.id)).toEqual({ outcome: "expired" });
+    vi.unstubAllGlobals();
   });
 });

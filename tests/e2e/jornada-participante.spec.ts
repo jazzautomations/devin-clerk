@@ -4,7 +4,7 @@ import { openE2eDb } from "./db";
 
 // Auditoria 041, pacote C (jornada do participante): cancelar a inscrição
 // pede confirmação; quem está na fila vê a posição em /ingresso; /inscricao
-// mostra os próximos passos; "Meu time" tem remover, sair e um link só pra
+// mostra os próximos passos; "Meu time" tem remover (quem está sem inscrição), sair e um link só pra
 // entrega. Tudo a 390px sem scroll horizontal.
 
 const ED = "e2e-jornada-c";
@@ -37,7 +37,7 @@ async function seed(request: APIRequestContext) {
     E2E_MEMBER_EMAIL,
   );
   if (!me) throw new Error("membro de teste não existe no banco do e2e");
-  for (const u of ["jc_vaga", "jc_fila", "jc_colega"]) {
+  for (const u of ["jc_vaga", "jc_fila", "jc_colega", "jc_firme"]) {
     await db
       .prepare("INSERT INTO members (clerkId, username, email, name) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING")
       .run(`clerk_${u}`, u, `${u}@e2e.dev`, u);
@@ -119,15 +119,16 @@ test.describe("jornada do participante", () => {
     await shot(page, "inscricao-aprovado-390");
   });
 
-  test("meu time: link fixo pra entrega, remover colega e sair", async ({ memberPage: page, request }) => {
+  test("meu time: link fixo pra entrega, remover colega sem inscrição e sair", async ({ memberPage: page, request }) => {
     const { db, me } = await seed(request);
     await db.prepare("UPDATE hackathons SET capacity = NULL WHERE id = ?").run(ED);
     await reg(db, me.username, "approved");
-    await reg(db, "jc_colega", "approved");
+    await reg(db, "jc_firme", "approved");
+    // jc_colega ficou no time sem inscrição aprovada (dado antigo)
     const t = await db
       .prepare("INSERT INTO teams (hackathonId, name, placement) VALUES (?, 'Time Jornada', 0) RETURNING id")
       .get<{ id: number }>(ED);
-    for (const u of [me.username, "jc_colega"]) {
+    for (const u of [me.username, "jc_colega", "jc_firme"]) {
       await db.prepare("INSERT INTO team_members (teamId, username) VALUES (?, ?)").run(t!.id, u);
     }
     await page.setViewportSize({ width: 390, height: 844 });
@@ -136,6 +137,8 @@ test.describe("jornada do participante", () => {
     await expect(panel.getByTestId("open-entry")).toHaveAttribute("href", `/h/${ED}/entrega`);
     await expect(panel.getByRole("button", { name: "remover @jc_colega do time" })).toBeVisible();
     await expect(panel.getByRole("button", { name: `remover @${me.username} do time` })).toHaveCount(0);
+    // aprovado só sai por conta própria ou pela organização
+    await expect(panel.getByRole("button", { name: "remover @jc_firme do time" })).toHaveCount(0);
     await noHorizontalScroll(page);
     await panel.scrollIntoViewIfNeeded();
     await shot(page, "meu-time-390");

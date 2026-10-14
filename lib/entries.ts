@@ -1,5 +1,6 @@
 import db from "@/lib/db";
 import { publishAnnouncement } from "@/lib/announcements";
+import { ABANDONED_SQL } from "@/lib/archive";
 
 // Entrega de projeto (spec 034 §5). O projeto do time vive em team_projects
 // como RASCUNHO (autosave). Enviar valida os obrigatórios da edição e grava
@@ -788,7 +789,8 @@ export async function challengesByTeam(hackathonId: string): Promise<Map<number,
  * juntado como `h`.
  */
 export const ELIGIBLE_SQL = (alias = "t") =>
-  `(h.submissionDeadline IS NULL OR EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = ${alias}.id))`;
+  `((h.submissionDeadline IS NULL OR EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = ${alias}.id))
+    AND NOT ${ABANDONED_SQL(alias)})`;
 
 /**
  * Pra integração com voto popular (outra frente): só time enviado/travado
@@ -799,7 +801,8 @@ export async function isEligibleForVoting(teamId: number): Promise<boolean> {
     .prepare(
       `SELECT CASE WHEN h.submissionDeadline IS NULL
                    THEN EXISTS (SELECT 1 FROM team_projects tp WHERE tp.teamId = t.id)
-                   ELSE EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = t.id) END AS ok
+                   ELSE EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = t.id)
+                        AND NOT ${ABANDONED_SQL("t")} END AS ok
        FROM teams t JOIN hackathons h ON h.id = t.hackathonId WHERE t.id = ?`,
     )
     .get<{ ok: boolean }>(teamId);

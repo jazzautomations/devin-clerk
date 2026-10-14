@@ -28,7 +28,7 @@ const splitNames = (s: string) =>
     .filter(Boolean);
 
 // spec 021 — "meu time": o inscrito cria o time da edição, convida colegas,
-// tira quem não vem e sai do time. O projeto é montado num lugar só, a
+// tira quem ficou sem inscrição aprovada e sai do time. O projeto é montado num lugar só, a
 // página de entrega (/h/[id]/entrega), que tem os campos que o júri usa.
 // Renderizado só quando !past && registered — o server já garante.
 // Frente N #4: colega não entra direto — recebe convite e aceita/recusa
@@ -59,23 +59,27 @@ export function MyTeamPanel({
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
   const [me, setMe] = useState(myUsername ?? null);
-  const hasTeam = team !== null;
+  // quem dá pra tirar daqui (sem inscrição aprovada); o resto é com a organização
+  const [removable, setRemovable] = useState<string[]>([]);
+  const teamId = team?.id ?? null;
 
-  // a página não diz quem está vendo; o GET do time diz (só pra esconder o
-  // "remover" da própria linha)
+  // a página não diz quem está vendo nem quem está sem inscrição; o GET do
+  // time diz
   useEffect(() => {
-    if (me || !hasTeam) return;
+    if (teamId === null) return;
     let live = true;
     fetch(`/api/hackathons/${hackathonId}/team`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (live && typeof data?.me === "string") setMe(data.me);
+        if (!live) return;
+        if (typeof data?.me === "string") setMe(data.me);
+        if (Array.isArray(data?.removable)) setRemovable(data.removable as string[]);
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [me, hasTeam, hackathonId]);
+  }, [teamId, hackathonId]);
 
   async function call(url: string, method: string, body: unknown): Promise<Record<string, unknown> | null> {
     setBusy(true);
@@ -163,6 +167,7 @@ export function MyTeamPanel({
     const data = await call(`/api/hackathons/${hackathonId}/team`, "PATCH", { action: "remove", username });
     if (!data) return;
     setTeam(data.team as ArchiveTeam);
+    setRemovable((data.removable as string[] | undefined) ?? []);
     setNote(`@${username} saiu do time`);
     router.refresh();
   }
@@ -211,7 +216,7 @@ export function MyTeamPanel({
                   @{u}
                   {u === me && <span className="text-muted"> (você)</span>}
                 </span>
-                {me && u !== me && (
+                {u !== me && removable.includes(u) && (
                   <button
                     type="button"
                     disabled={busy}
@@ -225,6 +230,11 @@ export function MyTeamPanel({
               </li>
             ))}
           </ul>
+          {team.members.length > 1 && (
+            <p className="font-mono text-xs text-muted">
+              Dá pra tirar do time quem está sem inscrição aprovada. Pra tirar outra pessoa, fale com a organização.
+            </p>
+          )}
           <p className="font-mono text-xs text-muted">
             {team.project ? `projeto: ${team.project.title}` : "o projeto ainda não tem título"}
           </p>

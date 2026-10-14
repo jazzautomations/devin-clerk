@@ -266,30 +266,29 @@ const hasStarted = (startsAt: string | null | undefined, now: Date) => {
 };
 
 /**
- * Cancelar a própria inscrição. Recusa (RegistrationError, 409):
+ * Cancelar a própria inscrição (botão do participante e exclusão de conta).
+ * Recusa (RegistrationError, 409):
  *  - inscrição recusada: a decisão é da organização, a linha fica;
  *  - edição já começou: a vaga não volta pra fila com o evento rolando;
  *  - check-in feito: a presença é registro do evento.
- * Se quem saiu era aprovado, o 1º da fila sobe na mesma transação. Respostas
- * do formulário e termos caem junto (CASCADE); a recompensa já paga fica
- * (registration_rewards), então se inscrever de novo não paga outra vez.
+ * Passando, faz o mesmo que `unregister`.
  */
-export async function unregister(
+export async function cancelRegistration(
   memberId: number,
   hackathonId: string,
   now = new Date(),
   dropKind: "sem_inscricao" | "conta_excluida" = "sem_inscricao",
 ): Promise<{ promoted: Promoted[] }> {
   return db.transaction(async () => {
-    const ed = await lockEdition(hackathonId);
+    await lockEdition(hackathonId);
     const reg = await db
       .prepare(
-        `SELECT r.id, r.status, h.startsAt,
+        `SELECT r.status, h.startsAt,
                 EXISTS (SELECT 1 FROM checkins c WHERE c.registrationId = r.id) AS "checkedIn"
          FROM registrations r JOIN hackathons h ON h.id = r.hackathonId
          WHERE r.memberId = ? AND r.hackathonId = ? FOR UPDATE OF r`,
       )
-      .get<{ id: number; status: RegistrationStatus; startsAt: string; checkedIn: boolean }>(memberId, hackathonId);
+      .get<{ status: RegistrationStatus; startsAt: string; checkedIn: boolean }>(memberId, hackathonId);
     if (!reg) return { promoted: [] };
     if (reg.status === "rejected") {
       throw new RegistrationError("rejected", "a organização recusou esta inscrição; só ela pode mudar isso");
@@ -300,9 +299,33 @@ export async function unregister(
     if (hasStarted(reg.startsAt, now)) {
       throw new RegistrationError("event_started", "a edição já começou; não dá mais pra cancelar a inscrição");
     }
-    await db.prepare("DELETE FROM registrations WHERE id = ?").run(reg.id);
+    return unregister(memberId, hackathonId, dropKind);
+  })();
+}
+
+/**
+ * Libera a vaga sem regra de quem pede: apaga a inscrição, tira a pessoa do
+ * que dependia dela na edição (time, convites, "procuro time") e, se ela
+ * era aprovada, sobe o 1º da fila na mesma transação. Nunca lança erro de
+ * regra: quem chama já decidiu (o RSVP checa o início com o próprio
+ * relógio; o cancelamento do participante passa por `cancelRegistration`).
+ * Respostas do formulário e termos caem junto (CASCADE); a recompensa já
+ * paga fica (registration_rewards), então se inscrever de novo não paga
+ * outra vez.
+ */
+export async function unregister(
+  memberId: number,
+  hackathonId: string,
+  dropKind: "sem_inscricao" | "conta_excluida" = "sem_inscricao",
+): Promise<{ promoted: Promoted[] }> {
+  return db.transaction(async () => {
+    const ed = await lockEdition(hackathonId);
+    const gone = await db
+      .prepare(`DELETE FROM registrations WHERE memberId = ? AND hackathonId = ? RETURNING status`)
+      .get<{ status: RegistrationStatus }>(memberId, hackathonId);
+    if (!gone) return { promoted: [] };
     await dropFromEdition(memberId, hackathonId, dropKind);
-    if (!ed || reg.status !== "approved") return { promoted: [] };
+    if (!ed || gone.status !== "approved") return { promoted: [] };
     return { promoted: await fillFromWaitlist(hackathonId, ed.capacity) };
   })();
 }

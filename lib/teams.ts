@@ -124,6 +124,7 @@ export async function leaveEditionTeam(
     for (const m of stay) {
       await notify(m.id, { type: "team_member_left", actorUsername: how.by, text, href: `/h/${hackathonId}#meu-time` });
     }
+    if (stay.length === 0) await dropEmptyTeam(team.id);
     if (how.kind === "removido") {
       const gone = await db.prepare("SELECT id FROM members WHERE username = ?").get<{ id: number }>(username);
       if (gone) {
@@ -137,6 +138,33 @@ export async function leaveEditionTeam(
     }
     return team.id;
   })();
+}
+
+/**
+ * Time que ficou sem ninguém e não deixou rastro na edição (versão enviada,
+ * nota, voto, pódio, aviso, deploy) é apagado: some do arquivo, do júri e
+ * da vitrine, e o nome fica livre de novo. Convites e desafios caem junto
+ * (CASCADE). Com rastro, o time fica; o júri e a vitrine já deixam de fora
+ * time enviado sem integrante (`ABANDONED_SQL` em lib/archive).
+ */
+async function dropEmptyTeam(teamId: number): Promise<void> {
+  const clean = await db
+    .prepare(
+      `SELECT 1 AS ok FROM teams t
+       WHERE t.id = ? AND t.placement = 0
+         AND NOT EXISTS (SELECT 1 FROM team_members x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM project_submissions x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM scores x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM votes x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM live_votes x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM prize_winners x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM announcements x WHERE x.teamId = t.id)
+         AND NOT EXISTS (SELECT 1 FROM deploys x WHERE x.teamId = t.id)`,
+    )
+    .get(teamId);
+  if (!clean) return;
+  await db.prepare("DELETE FROM team_projects WHERE teamId = ?").run(teamId);
+  await db.prepare("DELETE FROM teams WHERE id = ?").run(teamId);
 }
 
 // depois da trava da entrega o time fica como foi enviado
@@ -157,7 +185,25 @@ export async function leaveTeam(hackathonId: string, member: { id: number; usern
   await leaveEditionTeam(hackathonId, member.username, { kind: "saiu" });
 }
 
-/** integrante tira um colega do time (ex.: quem não apareceu) */
+/**
+ * Integrantes que um colega pode tirar do time: só quem está sem inscrição
+ * aprovada na edição (cancelou, foi recusado, ficou na fila). Tirar alguém
+ * aprovado é com a organização.
+ */
+export async function removableMembers(hackathonId: string, teamId: number): Promise<string[]> {
+  const rows = await db
+    .prepare(
+      `SELECT tm.username FROM team_members tm
+       LEFT JOIN members m ON m.username = tm.username
+       LEFT JOIN registrations r ON r.memberId = m.id AND r.hackathonId = ?
+       WHERE tm.teamId = ? AND (r.status IS NULL OR r.status <> 'approved')
+       ORDER BY tm.username`,
+    )
+    .all<{ username: string }>(hackathonId, teamId);
+  return rows.map((r) => r.username);
+}
+
+/** integrante tira do time um colega que está sem inscrição aprovada */
 export async function removeTeamMember(
   hackathonId: string,
   actor: { username: string },
@@ -169,6 +215,9 @@ export async function removeTeamMember(
   if (!team) throw new TeamError("você não está em nenhum time nesta edição", 404);
   if (target === actor.username) throw new TeamError("pra sair do time, use \"sair do time\"", 400);
   if (!team.members.includes(target)) throw new TeamError(`@${target} não está no seu time`, 404);
+  if (!(await removableMembers(hackathonId, team.id)).includes(target)) {
+    throw new TeamError(`@${target} tem inscrição aprovada. Pra tirar @${target} do time, fale com a organização.`, 403);
+  }
   await assertTeamEditable(team.id);
   await leaveEditionTeam(hackathonId, target, { kind: "removido", by: actor.username });
   return (await teamView("t.id = ?", team.id))!;

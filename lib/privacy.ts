@@ -1,6 +1,6 @@
 import db from "@/lib/db";
 import { parseEventTime } from "@/lib/eventTime";
-import { dropFromEdition, RegistrationError, unregister } from "@/lib/registrations";
+import { cancelRegistration, dropFromEdition, RegistrationError } from "@/lib/registrations";
 
 // Direitos do titular (LGPD art. 18): exportar e excluir. Genérico de
 // propósito — descobre pelo catálogo do Postgres toda coluna que referencia
@@ -112,7 +112,7 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
       if (r.status === "approved" && !future) continue;
       if (r.status === "approved") {
         try {
-          await unregister(memberId, r.hackathonId, new Date(now), "conta_excluida");
+          await cancelRegistration(memberId, r.hackathonId, new Date(now), "conta_excluida");
           continue;
         } catch (e) {
           // check-in na véspera: a presença fica, anonimizada

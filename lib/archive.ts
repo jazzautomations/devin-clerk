@@ -35,6 +35,16 @@ export type EditionArchive = {
   assets: EditionAsset[];
 };
 
+/**
+ * Time que enviou versão e depois ficou sem nenhum integrante (todos saíram,
+ * cancelaram ou foram recusados). Fica guardado pra organização, fora do
+ * júri e da vitrine. Time do arquivo cadastrado pelo admin sem integrantes
+ * não tem versão enviada, então não cai aqui.
+ */
+export const ABANDONED_SQL = (alias = "t") =>
+  `(EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = ${alias}.id)
+    AND NOT EXISTS (SELECT 1 FROM team_members tm0 WHERE tm0.teamId = ${alias}.id))`;
+
 const httpUrl = (u: string) => /^https?:\/\//i.test(u.trim());
 
 // 3 queries por edição, não 2 por time: times + projeto num JOIN, os
@@ -46,7 +56,7 @@ export async function getArchive(hackathonId: string): Promise<EditionArchive> {
         `SELECT t.id, t.name, t.placement, tp.title, tp.description, tp.repoUrl,
                 tp.demoUrl, tp.videoUrl, tp.logoUrl
          FROM teams t LEFT JOIN team_projects tp ON tp.teamId = t.id
-         WHERE t.hackathonId = ?
+         WHERE t.hackathonId = ? AND NOT ${ABANDONED_SQL("t")}
          ORDER BY CASE WHEN t.placement = 0 THEN 99 ELSE t.placement END, t.name`,
       )
       .all<{ id: number; name: string; placement: number; title: string | null } & Omit<TeamProject, "title">>(
@@ -317,7 +327,7 @@ export async function getProjectByTeamId(teamId: number): Promise<ProjectPage | 
        FROM teams t
        JOIN hackathons h ON h.id = t.hackathonId
        JOIN team_projects tp ON tp.teamId = t.id
-       WHERE t.id = ?`,
+       WHERE t.id = ? AND NOT ${ABANDONED_SQL("t")}`,
     )
     .get(teamId) as
     | {

@@ -2,11 +2,11 @@ import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
 import {
+  cancelRegistration,
   getPublicListing,
   getRegistrationStatus,
   RegistrationError,
   setPublicListing,
-  unregister,
 } from "@/lib/registrations";
 import { submitRegistration, updateMyDiet } from "@/lib/registrationForm";
 import { limitOrNull } from "@/lib/ratelimit";
@@ -168,7 +168,7 @@ export async function DELETE(
   // recusada, com check-in ou com o evento começado não cancela (409)
   let promoted;
   try {
-    ({ promoted } = await unregister(member.id, id));
+    ({ promoted } = await cancelRegistration(member.id, id));
   } catch (e) {
     if (e instanceof RegistrationError) {
       return Response.json({ error: e.message, code: e.code }, { status: e.status });

@@ -6,6 +6,7 @@ import { getRegistrationIds } from "@/lib/registrations";
 import {
   leaveTeam,
   memberTeamFor,
+  removableMembers,
   removeTeamMember,
   submitTeam,
   TeamError,
@@ -49,8 +50,9 @@ export async function GET(
   if (!team) {
     return Response.json({ error: "sem time nesta edição" }, { status: 404 });
   }
-  // me: quem está vendo (o painel não oferece "remover" na própria linha)
-  return Response.json({ team, me: member.username });
+  // me: quem está vendo; removable: quem o painel deixa tirar (sem
+  // inscrição aprovada). O resto é com a organização.
+  return Response.json({ team, me: member.username, removable: await removableMembers(h.id, team.id) });
 }
 
 export async function POST(
@@ -120,7 +122,8 @@ export async function POST(
 // description?, repoUrl?, demoUrl?, videoUrl?, logoUrl?} (030);
 // o time precisa ser desta edição.
 // {action: "leave"} = sair do time; {action: "remove", username} = tirar um
-// colega (quem ficou e quem saiu recebem aviso)
+// colega sem inscrição aprovada (403 se ele tem; quem ficou e quem saiu
+// recebem aviso)
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -145,7 +148,8 @@ export async function PATCH(
         await leaveTeam(h.id, member);
         return Response.json({ team: null });
       }
-      return Response.json({ team: await removeTeamMember(h.id, member, b.username) });
+      const team = await removeTeamMember(h.id, member, b.username);
+      return Response.json({ team, removable: await removableMembers(h.id, team.id) });
     } catch (e) {
       return Response.json(
         { error: e instanceof Error ? e.message : "Erro" },
