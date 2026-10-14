@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getMemberByClerkId, updateMemberProfile } from "@/lib/members";
 import { checkBadges } from "@/lib/xp";
 import { isOpenToValue } from "@/lib/openTo";
@@ -6,6 +6,7 @@ import { setOpenTo } from "@/lib/talent";
 import { applyContactPatch, parseContactPatch } from "@/lib/contact";
 import { normalizeSocial, type SocialKind } from "@/lib/social";
 import { parsePersonas, personaLabel } from "@/lib/personas";
+import { deleteMemberData } from "@/lib/privacy";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
@@ -72,4 +73,27 @@ export async function PATCH(req: Request) {
   });
   const newBadges = member ? (await checkBadges(member.id)).map((b) => b.id) : [];
   return Response.json({ ok: true, newBadges });
+}
+
+// LGPD art. 18 VI — excluir conta: apaga conteúdo pessoal, anonimiza o que
+// sustenta contagem agregada e remove o usuário do Clerk. Exige confirmação.
+export async function DELETE(req: Request) {
+  const { userId } = await auth();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  if (body?.confirm !== "excluir") {
+    return Response.json({ error: 'confirme com {"confirm":"excluir"}' }, { status: 400 });
+  }
+  const member = await getMemberByClerkId(userId);
+  if (!member) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const clerkId = await deleteMemberData(member.id);
+  if (clerkId) {
+    try {
+      await (await clerkClient()).users.deleteUser(clerkId);
+    } catch (e) {
+      // dados já anonimizados aqui; falha no Clerk fica no log pra repetir à mão
+      console.error("[privacy] falha ao excluir usuário no Clerk", member.id, e);
+    }
+  }
+  return Response.json({ deleted: true });
 }

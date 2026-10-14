@@ -3,6 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { getOrCreateMember } from "@/lib/members";
 import { getOpenTo } from "@/lib/talent";
 import { ProfileForm } from "@/components/ProfileForm";
+import { PrivacyPanel } from "@/components/PrivacyPanel";
 import { getContactPrefs } from "@/lib/contact";
 
 export default async function PerfilPage() {
@@ -44,6 +45,7 @@ export default async function PerfilPage() {
         </p>
       </div>
       <ProfileForm member={member} openTo={openTo} contact={contact} />
+      <PrivacyPanel />
     </section>
   );
 }
