@@ -59,7 +59,7 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
       : org[0].length === 0
         ? "Ainda não há jurados. Convide na aba equipe."
         : criteria.length === 0
-          ? "Defina os critérios da rubrica primeiro."
+          ? "Defina os critérios primeiro."
           : !org[4].some((r) => r.rank !== null)
             ? "Nenhum projeto recebeu nota ainda."
             : null
@@ -77,7 +77,7 @@ export default async function JuryPage({ params }: PageProps<"/admin/h/[id]/juri
       {org && (
         <>
           <section className="flex flex-col gap-4">
-            <h2 className={h2}>rubrica</h2>
+            <h2 className={h2}>critérios</h2>
             <JuryCriteria hackathonId={id} criteria={criteria} locked={!!published} />
           </section>
 

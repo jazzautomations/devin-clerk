@@ -121,7 +121,7 @@ export function JuryCriteria({
       )}
       {locked ? (
         <p className="font-mono text-[12px] text-muted" data-testid="rubric-locked">
-          Resultado publicado: a rubrica está travada e o pódio publicado não muda.
+          Resultado publicado: os critérios estão travados e o pódio publicado não muda.
         </p>
       ) : (
       <form onSubmit={add} className="flex flex-wrap items-end gap-3">
@@ -267,7 +267,7 @@ export function PublishResultsButton({
           }
           const msg = published
             ? "Republicar recalcula o pódio com as notas de agora. Continuar?"
-            : "Publicar trava as notas e a rubrica e grava o pódio no arquivo da edição. Continuar?";
+            : "Publicar trava as notas e os critérios e grava o pódio no arquivo da edição. Continuar?";
           if (confirm(msg)) call("juri/publish", "POST");
         }}
       >

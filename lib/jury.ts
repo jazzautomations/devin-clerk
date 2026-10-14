@@ -170,7 +170,7 @@ export async function listCriteria(hackathonId: string): Promise<Criterion[]> {
 /** depois de publicado, a rubrica não muda: o pódio saiu dessas regras */
 async function assertRubricOpen(hackathonId: string) {
   if (await isPublished(hackathonId)) {
-    throw new JuryError("resultado já publicado: a rubrica está travada", 409);
+    throw new JuryError("resultado já publicado: os critérios estão travados", 409);
   }
 }
 

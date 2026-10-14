@@ -168,7 +168,16 @@ describe("júri — fluxo", () => {
     const again = await cert.POST(req("POST"), ctx());
     expect((await again.json()).created).toBe(0);
     expect((await listMemberCertificates(ids.api_jur)).map((c) => c.kind)).toEqual(["jurado"]);
-    expect((await listMemberCertificates(ids.api_colega)).map((c) => c.kind)).toEqual(["premiacao"]);
+    // sem inscrição aprovada e check-in não sai premiação (auditoria 041)
+    expect(await listMemberCertificates(ids.api_colega)).toEqual([]);
+    await db
+      .prepare("INSERT INTO registrations (memberId, hackathonId, status) VALUES (?, ?, 'approved')")
+      .run(ids.api_colega, H);
+    await db
+      .prepare("INSERT INTO checkins (registrationId) SELECT id FROM registrations WHERE memberId = ? AND hackathonId = ?")
+      .run(ids.api_colega, H);
+    expect((await cert.POST(req("POST"), ctx())).status).toBe(200);
+    expect((await listMemberCertificates(ids.api_colega)).map((c) => c.kind).sort()).toEqual(["participacao", "premiacao"]);
   });
 
   it("PDF público responde application/pdf; código desconhecido 404", async () => {

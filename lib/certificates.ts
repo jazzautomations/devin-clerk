@@ -161,15 +161,18 @@ async function grantsFor(hackathonId: string, settings: CertSettings): Promise<G
       role: "participante",
     });
   }
-  // modo antigo (sem categorias): pódio vale pra todo o time (o pódio já
-  // pressupõe que o time apresentou)
+  // modo antigo (sem categorias): pódio vale pro integrante presente do
+  // time, com a mesma regra do caminho com categorias (sem presença, sem
+  // certificado)
   if (!hasCategories && published) {
     const winners = await db
       .prepare(
         `SELECT m.id AS memberId, t.placement, t.name FROM teams t
          JOIN team_members tm ON tm.teamId = t.id
          JOIN members m ON m.username = tm.username
-         WHERE t.hackathonId = ? AND t.placement BETWEEN 1 AND 3`,
+         JOIN registrations r ON r.memberId = m.id AND r.hackathonId = t.hackathonId AND r.status = 'approved'
+         WHERE t.hackathonId = ? AND t.placement BETWEEN 1 AND 3
+           AND EXISTS (SELECT 1 FROM checkins c WHERE c.registrationId = r.id)`,
       )
       .all<{ memberId: number; placement: number; name: string }>(hackathonId);
     for (const w of winners) {

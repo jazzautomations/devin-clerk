@@ -116,6 +116,27 @@ describe("emissão", () => {
     expect(premio.detail).toMatch(/1º lugar.*Campeões/);
   });
 
+  it("auditoria 041: no pódio sem categorias, integrante sem check-in não ganha premiação", async () => {
+    const jur = await memberId("cert_leg_jur");
+    const org = await memberId("cert_leg_org");
+    const veio = await memberId("cert_leg_veio");
+    const faltou = await memberId("cert_leg_faltou");
+    await grantEditionRole(H, jur, "jurado", null);
+    await grantEditionRole(H, org, "organizador", null);
+    await updateCertSettings(H, { hours: { jurado: 4, organizador: 40 } });
+    await register(veio);
+    await register(faltou, "approved", false);
+    const t = (await createTeam(H, { name: "Pódio", placement: 0, memberUsernames: ["cert_leg_veio", "cert_leg_faltou"] }))
+      .team.id;
+    const c = await addCriterion(H, { label: "Impacto", weight: 1 });
+    await assignAll(H);
+    await saveScores(H, jur, t, [{ criterionId: c.id, score: 5 }], null);
+    await publishResults(H, org);
+    await issueCertificates(H);
+    expect((await listMemberCertificates(veio)).map((x) => x.kind).sort()).toEqual(["participacao", "premiacao"]);
+    expect(await listMemberCertificates(faltou)).toEqual([]);
+  });
+
   it("auditoria 041: republicar sem o time X revoga a premiação dele; o código de quem ficou não muda", async () => {
     const jur = await memberId("cert_rev_jur");
     const org = await memberId("cert_rev_org");
