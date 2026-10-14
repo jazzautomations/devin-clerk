@@ -7,12 +7,14 @@ import { absoluteUrl, eventJsonLd, jsonLd } from "@/lib/seo";
 import { getMemberByClerkId } from "@/lib/members";
 import {
   getEditionCapacity,
+  getPublicListing,
   getRegistrationsByHackathon,
   getRegistrationStatus,
   getWaitlistPosition,
 } from "@/lib/registrations";
 import { consentPurpose, hasActiveQuestions } from "@/lib/registrationForm";
 import { RegisterButton } from "@/components/RegisterButton";
+import { PublicListingToggle } from "@/components/PublicListingToggle";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { getCardRarity, getCardSupply, getMemberCard } from "@/lib/xp";
 import { getArchive } from "@/lib/archive";
@@ -138,7 +140,9 @@ export default async function HackathonPage({
     member && registered && !myTeam ? listMyInvites(member.id, h.id) : Promise.resolve([] as MyInvite[]),
     myTeam ? listPendingTeamInvites(myTeam.id) : Promise.resolve([] as string[]),
   ]);
+  // frente N #6 — só quem optou por aparecer; a contagem é o agregado (cap.approved)
   const attendees = await getRegistrationsByHackathon(h.id);
+  const myListing = member && registered ? await getPublicListing(member.id, h.id) : false;
   const cardRarity = await getCardRarity(h.id);
   const cardSupply = await getCardSupply(h.id);
   const myCard = member ? await getMemberCard(member.id, h.id) : null;
@@ -263,8 +267,8 @@ export default async function HackathonPage({
               {h.location ?? "Online"}
             </p>
             <p className="mt-1 font-mono text-[13px] text-muted">
-              {FORMAT_LABEL[h.format]} · {attendees.length}{" "}
-              {attendees.length === 1 ? "inscrito" : "inscritos"}
+              {FORMAT_LABEL[h.format]} · {cap.approved}{" "}
+              {cap.approved === 1 ? "inscrito" : "inscritos"}
             </p>
           </div>
         </div>
@@ -294,8 +298,8 @@ export default async function HackathonPage({
                     {PHASE_LABEL[phase]}
                   </p>
                   <p data-testid="arena-attendees" className="font-mono text-[13px] text-mint">
-                    {attendees.length}{" "}
-                    {attendees.length === 1 ? "inscrito" : "inscritos"}
+                    {cap.approved}{" "}
+                    {cap.approved === 1 ? "inscrito" : "inscritos"}
                     {boardEntries.length > 0 &&
                       ` · ${boardEntries.length} procurando time`}
                   </p>
@@ -756,13 +760,22 @@ export default async function HackathonPage({
             </div>
           </div>
 
-          {attendees.length > 0 && (
-            <div className="flex flex-col gap-3">
+          {cap.approved > 0 && (
+            <div className="flex flex-col gap-3" data-testid="public-attendees">
               <h2 className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
-                inscritos ({attendees.length})
+                inscritos ({cap.approved})
                 {boardEntries.length > 0 &&
                   ` · ${boardEntries.length} procurando time`}
               </h2>
+              <p className="text-[13px] leading-snug text-muted" data-testid="public-attendees-note">
+                {attendees.length === cap.approved
+                  ? "só aparece aqui quem escolheu aparecer"
+                  : `só aparece aqui quem escolheu aparecer · ${cap.approved - attendees.length} ${
+                      cap.approved - attendees.length === 1 ? "preferiu" : "preferiram"
+                    } não`}
+              </p>
+              {registered && <PublicListingToggle hackathonId={h.id} initial={myListing} />}
+              {attendees.length > 0 && (
               <ul className="max-h-[360px] overflow-y-auto border-y border-line text-[14px]">
                 {attendees.map((a) => (
                   <li
@@ -790,6 +803,7 @@ export default async function HackathonPage({
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           )}
         </aside>

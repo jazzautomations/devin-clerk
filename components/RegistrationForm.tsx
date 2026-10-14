@@ -52,6 +52,7 @@ export function RegistrationForm({
   const router = useRouter();
   const [values, setValues] = useState<Record<number, Value>>({});
   const [consent, setConsent] = useState(false);
+  const [listed, setListed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; questionId: number | null } | null>(null);
 
@@ -69,7 +70,9 @@ export function RegistrationForm({
       const res = await fetch(target?.submitUrl ?? `/api/hackathons/${hackathonId}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consent: true, answers: values }),
+        body: JSON.stringify(
+          target ? { consent: true, answers: values } : { consent: true, answers: values, publicListing: listed },
+        ),
       });
       if (res.status === 401) {
         router.push(`/sign-in?redirect_url=${encodeURIComponent(target?.pagePath ?? `/h/${hackathonId}/inscricao`)}`);
@@ -203,6 +206,7 @@ export function RegistrationForm({
       </ol>
 
       <ConsentBox text={consentText} checked={consent} onChange={setConsent} />
+      {!target && <PublicListingBox checked={listed} onChange={setListed} />}
 
       {error && error.questionId === null && (
         <p role="alert" className="font-mono text-[13px] text-orange">
@@ -214,6 +218,38 @@ export function RegistrationForm({
         {busy ? "enviando…" : signedIn ? cta : `entrar e ${cta}`}
       </button>
     </form>
+  );
+}
+
+// frente N #6 — aparecer na lista pública de inscritos é opt-in separado do
+// aceite (que só cobre organizar o evento). Nunca vem marcada.
+export function PublicListingBox({
+  checked,
+  onChange,
+  tone = "paper",
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  tone?: "paper" | "dark";
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 text-[13px] leading-snug ${
+        tone === "dark" ? "text-mint" : "border-[1.5px] border-line p-3.5 text-foreground"
+      }`}
+    >
+      <input
+        type="checkbox"
+        name="publicListing"
+        data-testid="public-listing-optin"
+        className="mt-0.5 size-5 shrink-0 accent-[#047a43]"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="min-w-0">
+        {"Opcional: quero aparecer na lista pública de inscritos desta edição (@usuário e foto). Dá pra desligar depois."}
+      </span>
+    </label>
   );
 }
 

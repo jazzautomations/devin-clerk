@@ -99,6 +99,8 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
       await db.prepare(`DELETE FROM ${ident(table)} WHERE ${ident(column)} = ?`).run(memberId);
     }
     await db.prepare("UPDATE team_members SET username = ? WHERE username = ?").run(anon, member.username);
+    // inscrição mantida pela contagem não aparece mais na lista pública
+    await db.prepare("UPDATE registrations SET publicListing = 0 WHERE memberId = ?").run(memberId);
     await db
       .prepare(
         `UPDATE members SET

@@ -270,8 +270,12 @@ export async function getRegistrationsForMember(memberId: number): Promise<strin
   return getRegistrationIds(memberId);
 }
 
-// lista PÚBLICA da edição (/h/[id] "inscritos" + contagem da arena) —
-// só aprovados aparecem e contam; pendente/rejeitado não vaza
+// lista PÚBLICA da edição (/h/[id] "inscritos") — só aprovados que
+// ESCOLHERAM aparecer (frente N #6, migration 016). O aceite LGPD da
+// inscrição cobre "organizar o evento", não exibir quem se inscreveu: a
+// exibição é opt-in explícito (publicListing), padrão não aparecer. A
+// contagem pública usa getEditionCapacity (agregado, sem dado pessoal).
+// pendente/rejeitado/fila nunca vazam.
 export async function getRegistrationsByHackathon(
   hackathonId: string,
 ): Promise<{
@@ -284,7 +288,7 @@ export async function getRegistrationsByHackathon(
     .prepare(
       `SELECT m.username, m.name, m.avatarUrl, r.createdAt
        FROM registrations r JOIN members m ON m.id = r.memberId
-       WHERE r.hackathonId = ? AND r.status = 'approved'
+       WHERE r.hackathonId = ? AND r.status = 'approved' AND r.publicListing = 1
        ORDER BY r.createdAt`,
     )
     .all(hackathonId) as {
@@ -293,6 +297,21 @@ export async function getRegistrationsByHackathon(
     avatarUrl: string | null;
     createdAt: string;
   }[];
+}
+
+/** opt-in/opt-out da lista pública; false quando não há inscrição */
+export async function setPublicListing(memberId: number, hackathonId: string, on: boolean): Promise<boolean> {
+  const r = await db
+    .prepare("UPDATE registrations SET publicListing = ? WHERE memberId = ? AND hackathonId = ?")
+    .run(on ? 1 : 0, memberId, hackathonId);
+  return r.changes > 0;
+}
+
+export async function getPublicListing(memberId: number, hackathonId: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT publicListing FROM registrations WHERE memberId = ? AND hackathonId = ?")
+    .get<{ publicListing: number }>(memberId, hackathonId);
+  return row?.publicListing === 1;
 }
 
 // a recompensa da inscrição efetivada — ÚNICO caminho de XP + carta +

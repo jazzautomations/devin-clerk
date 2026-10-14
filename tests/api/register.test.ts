@@ -70,6 +70,37 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it("lista pública (frente N #6): POST sem opt-in não lista; publicListing:true lista; PATCH liga/desliga", async () => {
+    const route = await import("@/app/api/hackathons/[id]/register/route");
+    const mid = await makeMember();
+    const listed = async () =>
+      (await db.prepare("SELECT publicListing FROM registrations WHERE memberId = ? AND hackathonId = ?").get<{
+        publicListing: number;
+      }>(mid, HACK_ID))?.publicListing;
+
+    const patch = (body: unknown) =>
+      route.PATCH(new Request("http://t", { method: "PATCH", body: JSON.stringify(body) }), { params });
+    expect((await patch({ publicListing: true })).status).toBe(404); // sem inscrição
+
+    await route.POST(consentReq(), { params });
+    expect(await listed()).toBe(0);
+    expect((await patch({ publicListing: "sim" })).status).toBe(400);
+    const on = await patch({ publicListing: true });
+    expect(on.status).toBe(200);
+    expect(await listed()).toBe(1);
+    const st = await (await route.GET(new Request("http://t"), { params })).json();
+    expect(st).toEqual({ status: "approved", publicListing: true });
+    await patch({ publicListing: false });
+    expect(await listed()).toBe(0);
+
+    await db.prepare("DELETE FROM registrations").run();
+    await route.POST(
+      new Request("http://t", { method: "POST", body: JSON.stringify({ consent: true, publicListing: true }) }),
+      { params },
+    );
+    expect(await listed()).toBe(1);
+  });
 });
 
 describe("POST /api/posts — recompensa de criação", () => {

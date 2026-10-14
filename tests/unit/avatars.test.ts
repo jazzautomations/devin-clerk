@@ -3,7 +3,7 @@ import db from "@/lib/db";
 import { getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
 import { createComment, listComments } from "@/lib/comments";
-import { getRegistrationsByHackathon, register } from "@/lib/registrations";
+import { getRegistrationsByHackathon, register, setPublicListing } from "@/lib/registrations";
 import { listTalent, setOpenTo } from "@/lib/talent";
 import { initialsFor } from "@/components/Avatar";
 
@@ -101,6 +101,7 @@ describe("avatars — joins expõem avatarUrl", () => {
     const id = await makeMember("av10");
     await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(IMG_A, id);
     await register(id, "hack-inova-unifacens-2026");
+    await setPublicListing(id, "hack-inova-unifacens-2026", true); // lista pública é opt-in (frente N #6)
     const r = (await getRegistrationsByHackathon("hack-inova-unifacens-2026")).find(
       (x) => x.username === "u_av10",
     );

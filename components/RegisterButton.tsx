@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RegistrationStatus } from "@/lib/registrations";
-import { ConsentBox, errorText } from "@/components/RegistrationForm";
+import { ConsentBox, errorText, PublicListingBox } from "@/components/RegistrationForm";
 
 type Status = RegistrationStatus | null;
 
@@ -38,6 +38,7 @@ export function RegisterButton({
   const [position, setPosition] = useState<number | null>(waitlistPosition);
   const [loading, setLoading] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [listed, setListed] = useState(false);
   const [reward, setReward] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +55,7 @@ export function RegisterButton({
       const res = await fetch(`/api/hackathons/${hackathonId}/register`, {
         method: cancellable ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: cancellable ? undefined : JSON.stringify({ consent }),
+        body: cancellable ? undefined : JSON.stringify({ consent, publicListing: listed }),
       });
       if (res.status === 401) {
         router.push("/sign-in");
@@ -133,6 +134,7 @@ export function RegisterButton({
       {status === null && consentText && (
         <ConsentBox text={consentText} checked={consent} onChange={setConsent} tone="dark" />
       )}
+      {status === null && <PublicListingBox checked={listed} onChange={setListed} tone="dark" />}
       <button onClick={toggle} disabled={loading || status === "rejected"} className={cls}>
         {label}
       </button>

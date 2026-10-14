@@ -137,6 +137,9 @@ describe("reviewRegistration — a curadoria decide", () => {
     expect(row.reviewedAt).toBeTruthy();
     // gates abrem depois da aprovação
     expect(await getRegistrationIds(m)).toEqual([CURATED]);
+    // lista pública é opt-in (frente N #6): aprovado sem opt-in não aparece
+    expect(await getRegistrationsByHackathon(CURATED)).toEqual([]);
+    await db.prepare("UPDATE registrations SET publicListing = 1 WHERE memberId = ?").run(m);
     expect((await getRegistrationsByHackathon(CURATED)).map((r) => r.username)).toEqual([
       "u_cur5",
     ]);
