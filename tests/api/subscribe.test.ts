@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { resetRateLimits } from "@/lib/ratelimit";
 import { PRIVACY_VERSION } from "@/lib/legal";
 import { subscribersCsv } from "@/lib/subscribers";
+import { subscribeDoneMessage } from "@/components/NewsletterForm";
 
 // auditoria 041 pacote E — newsletter com limite, consentimento registrado,
 // confirmação por e-mail, saída pelo link e planilha sem fórmula.
@@ -75,13 +76,24 @@ describe("POST /api/subscribe", () => {
     vi.unstubAllEnvs();
 
     const confirm = await import("@/app/api/subscribe/confirm/route");
-    const ok = await confirm.GET(new Request(`http://t/api/subscribe/confirm?token=${link}`));
+    const confirmUrl = `http://t/api/subscribe/confirm?token=${link}`;
+    // GET só mostra o botão: scanner de e-mail que abre o link não confirma
+    const page0 = await confirm.GET(new Request(confirmUrl));
+    expect(page0.status).toBe(200);
+    expect(await page0.text()).toContain("<form method=\"post\"");
+    const before = await db
+      .prepare("SELECT confirmedAt FROM subscribers WHERE email = 'bia@x.dev'")
+      .get<{ confirmedAt: string | null }>();
+    expect(before?.confirmedAt).toBeNull();
+    // POST (o clique no botão) grava a confirmação
+    const ok = await confirm.POST(new Request(confirmUrl, { method: "POST" }));
     expect(ok.status).toBe(200);
     const row = await db
       .prepare("SELECT confirmedAt, unsubscribeToken FROM subscribers WHERE email = 'bia@x.dev'")
       .get<{ confirmedAt: string | null; unsubscribeToken: string }>();
     expect(row?.confirmedAt).toBeTruthy();
-    expect((await confirm.GET(new Request("http://t/api/subscribe/confirm?token=nada"))).status).toBe(404);
+    expect((await confirm.POST(new Request("http://t/api/subscribe/confirm?token=nada", { method: "POST" }))).status).toBe(404);
+    expect((await confirm.GET(new Request("http://t/api/subscribe/confirm"))).status).toBe(400);
 
     // GET de saída só mostra o botão (scanner de e-mail abre links sozinho)
     const out = await import("@/app/api/subscribe/unsubscribe/route");
@@ -92,6 +104,15 @@ describe("POST /api/subscribe", () => {
     // POST apaga a linha
     expect((await out.POST(new Request(url, { method: "POST" }))).status).toBe(200);
     expect(await db.prepare("SELECT 1 FROM subscribers WHERE email = 'bia@x.dev'").get()).toBeUndefined();
+  });
+});
+
+describe("resposta da newsletter na tela", () => {
+  it("sem e-mail ligado (pending) não promete e-mail agora", () => {
+    const msg = subscribeDoneMessage("pending");
+    expect(msg).toMatch(/ainda não começou/);
+    expect(msg).not.toMatch(/antes do primeiro envio/i);
+    expect(subscribeDoneMessage("sent")).toMatch(/link que mandamos/);
   });
 });
 

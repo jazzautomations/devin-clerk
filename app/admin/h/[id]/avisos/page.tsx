@@ -31,7 +31,8 @@ function offNotice(c: { email: boolean; whatsapp: boolean }): string | null {
   if (c.email && c.whatsapp) return null;
   const off = [!c.email && "E-mail", !c.whatsapp && "WhatsApp"].filter(Boolean).join(" e ");
   const verb = !c.email && !c.whatsapp ? "ainda não estão ligados" : "ainda não está ligado";
-  return `${off} ${verb} nesta plataforma. O aviso sai ${announcementReach(c)}.`;
+  // o subtítulo já diz onde o aviso aparece; aqui só o que falta
+  return `${off} ${verb} nesta plataforma. Por ${!c.email && !c.whatsapp ? "esses canais" : "esse canal"}, ninguém recebe nada por enquanto.`;
 }
 
 // spec 033 US2 — aba de avisos do painel da edição (organizador/admin)
