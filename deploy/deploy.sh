@@ -99,7 +99,7 @@ CADDYEOF
   fi
 fi
 
-echo "== limpeza (mantém 3 releases)"
-ls -1dt "$BASE"/releases/* | tail -n +4 | xargs -r rm -rf
+echo "== limpeza (mantém 2 releases)"
+ls -1dt "$BASE"/releases/* | tail -n +3 | xargs -r rm -rf
 
 echo "ok: $ENV_NAME → $(readlink -f "$BASE/current") em :$PORT ($HOSTS)"
