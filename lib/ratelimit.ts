@@ -24,6 +24,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "team-board": { limit: 10, windowMs: HOUR }, // POST …/[id]/team-board
   applications: { limit: 10, windowMs: HOUR }, // POST/DELETE …/[id]/applications/[kind]
   "application-review": { limit: 300, windowMs: HOUR }, // organizador decide/abre tipos
+  // voto ao vivo é editável (nota muda até fechar): folga pra ~10 pitches
+  // com troca de nota, mas freia script martelando o endpoint
+  "stage-vote": { limit: 120, windowMs: HOUR }, // POST …/[id]/stage/vote
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

@@ -40,6 +40,7 @@ import {
   type ApplicationKind,
   type ApplicationStatus,
 } from "@/lib/roleApplications";
+import { StageCta } from "@/components/StageCta";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -568,6 +569,7 @@ export default async function HackathonPage({
         {/* coluna lateral: inscrição, ficha, carta, inscritos */}
         <aside className="order-first flex min-w-0 flex-col gap-8 lg:sticky lg:top-24 lg:order-none lg:self-start">
           <TicketLink hackathonId={h.id} show={registered && !past} />
+          <StageCta hackathonId={h.id} />
           {canRegister && (
             <div className="window dark hard">
               <div className="tbar">
