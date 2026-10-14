@@ -82,7 +82,7 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/register/route"
     );
-    const res = await POST(req("POST"), { params: regParams(CURATED) });
+    const res = await POST(req("POST", { consent: true }), { params: regParams(CURATED) });
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.status).toBe("pending");
@@ -98,8 +98,8 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/register/route"
     );
-    await POST(req("POST"), { params: regParams(CURATED) });
-    const res = await POST(req("POST"), { params: regParams(CURATED) });
+    await POST(req("POST", { consent: true }), { params: regParams(CURATED) });
+    const res = await POST(req("POST", { consent: true }), { params: regParams(CURATED) });
     expect(res.status).toBe(200);
     expect((await res.json()).status).toBe("pending");
   });
@@ -109,7 +109,7 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/register/route"
     );
-    const res = await POST(req("POST"), { params: regParams(OPEN) });
+    const res = await POST(req("POST", { consent: true }), { params: regParams(OPEN) });
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.registered).toBe(true);
@@ -121,7 +121,7 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
   it("GET devolve o status do membro; anon → 401 JSON", async () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    await reg.POST(req("POST"), { params: regParams(CURATED) });
+    await reg.POST(req("POST", { consent: true }), { params: regParams(CURATED) });
     const res = await reg.GET(req("GET"), { params: regParams(CURATED) });
     expect(res.status).toBe(200);
     expect((await res.json()).status).toBe("pending");
@@ -134,7 +134,7 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
   it("DELETE cancela o pedido pendente (a linha some)", async () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    await reg.POST(req("POST"), { params: regParams(CURATED) });
+    await reg.POST(req("POST", { consent: true }), { params: regParams(CURATED) });
     const res = await reg.DELETE(req("DELETE"), { params: regParams(CURATED) });
     expect(res.status).toBe(200);
     expect(
@@ -147,7 +147,7 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
   it("admin aprova → 200, status approved e recompensa completa", async () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    await reg.POST(req("POST"), { params: regParams(CURATED) });
+    await reg.POST(req("POST", { consent: true }), { params: regParams(CURATED) });
     const mid = await memberIdOf("clerk_usr");
 
     asUser("clerk_adm");
@@ -170,7 +170,7 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
   it("admin recusa → 200 {status:'rejected'}; memberId sem inscrição → 404", async () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    await reg.POST(req("POST"), { params: regParams(CURATED) });
+    await reg.POST(req("POST", { consent: true }), { params: regParams(CURATED) });
     const mid = await memberIdOf("clerk_usr");
 
     asUser("clerk_adm");
@@ -254,7 +254,7 @@ describe("gates tratam pendente como não-inscrito", () => {
   it("team, team-board e mural (posts c/ hackathonId) → 403 pra pendente", async () => {
     asUser("clerk_usr");
     const reg = await import("@/app/api/hackathons/[id]/register/route");
-    await reg.POST(req("POST"), { params: regParams(CURATED) }); // pending
+    await reg.POST(req("POST", { consent: true }), { params: regParams(CURATED) }); // pending
 
     const team = await import("@/app/api/hackathons/[id]/team/route");
     const t = await team.POST(req("POST", { name: "Time X" }), {

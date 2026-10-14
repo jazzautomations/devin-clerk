@@ -35,7 +35,8 @@ export function HackathonCard({
   const [reward, setReward] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!hackathon.requiresApproval || status !== null) return;
+    // pendente (curada) e fila de espera (spec 033) só aparecem pelo GET
+    if (!hackathon.partner || status !== null) return;
     let alive = true;
     fetch(`/api/hackathons/${hackathon.id}/register`)
       .then((r) => (r.ok ? r.json() : null))
@@ -46,7 +47,7 @@ export function HackathonCard({
     return () => {
       alive = false;
     };
-  }, [hackathon.id, hackathon.requiresApproval, status]);
+  }, [hackathon.id, hackathon.partner, status]);
   const starts = new Date(hackathon.startsAt);
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -65,11 +66,16 @@ export function HackathonCard({
   const ongoing = !over && starts <= now;
 
   async function toggleRegistration() {
+    // spec 033 — inscrever exige o aceite LGPD (e as perguntas da edição,
+    // quando há): o card leva pra página de inscrição; cancelar segue aqui
+    if (status !== "approved" && status !== "pending" && status !== "waitlist") {
+      router.push(`/h/${hackathon.id}/inscricao`);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`/api/hackathons/${hackathon.id}/register`, {
-        method:
-          status === "approved" || status === "pending" ? "DELETE" : "POST",
+        method: "DELETE",
       });
       if (res.status === 401) {
         router.push("/sign-in");
@@ -181,7 +187,7 @@ export function HackathonCard({
           className={
             status === "approved"
               ? "mt-auto border-[1.5px] border-accent bg-mint px-4 py-2 font-mono text-xs font-semibold text-accent transition hover:bg-[#c3ebd5] disabled:opacity-50"
-              : status === "pending"
+              : status === "pending" || status === "waitlist"
                 ? "mt-auto border-[1.5px] border-accent bg-surface px-4 py-2 font-mono text-xs font-semibold text-muted transition hover:text-accent disabled:opacity-50"
                 : status === "rejected"
                   ? "mt-auto border-[1.5px] border-line px-4 py-2 font-mono text-xs text-muted opacity-60"
@@ -194,6 +200,8 @@ export function HackathonCard({
               ? "✓ inscrito — cancelar"
               : status === "pending"
                 ? "aguardando aprovação — desistir"
+                : status === "waitlist"
+                  ? "na fila de espera — sair"
                 : status === "rejected"
                   ? "não rolou dessa vez"
                   : hackathon.requiresApproval

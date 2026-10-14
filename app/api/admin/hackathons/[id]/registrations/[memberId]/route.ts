@@ -53,7 +53,11 @@ export async function PATCH(
     );
   }
   if (res.status === "rejected") {
-    return Response.json({ status: "rejected" });
+    return Response.json({ status: "rejected", promoted: res.promoted.length });
+  }
+  // spec 033 FR-009 — edição cheia: aprovado entra na fila de espera
+  if (res.status === "waitlist") {
+    return Response.json({ status: "waitlist", position: res.position });
   }
   return Response.json({
     status: "approved",
