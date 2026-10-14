@@ -3,13 +3,16 @@
 import { useState } from "react";
 import type { Member } from "@/lib/members";
 import { OPEN_TO } from "@/lib/openTo";
+import { formatBrPhone } from "@/lib/notify/phone";
 
 export function ProfileForm({
   member,
   openTo: initialOpenTo = [],
+  contact,
 }: {
   member: Member;
   openTo?: string[];
+  contact?: { phone: string | null; whatsappOptIn: boolean };
 }) {
   const [name, setName] = useState(member.name ?? "");
   const [openTo, setOpenTo] = useState<string[]>(initialOpenTo);
@@ -21,9 +24,12 @@ export function ProfileForm({
   const [website, setWebsite] = useState(member.website ?? "");
   const [headline, setHeadline] = useState(member.headline ?? "");
   const [persona, setPersona] = useState(member.persona ?? "");
+  const [phone, setPhone] = useState(contact?.phone ? formatBrPhone(contact.phone) : "");
+  const [whatsappOptIn, setWhatsappOptIn] = useState(contact?.whatsappOptIn ?? false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function save() {
     setStatus("saving");
@@ -40,12 +46,18 @@ export function ProfileForm({
         headline,
         persona,
         openTo,
+        phone,
+        whatsappOptIn,
         skills: skills
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean),
       }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErrorMsg(typeof data.error === "string" ? data.error : null);
+    }
     setStatus(res.ok ? "saved" : "error");
   }
 
@@ -176,6 +188,37 @@ export function ProfileForm({
           />
         </label>
       </div>
+      {/* spec 033 FR-010 — telefone + opt-in de WhatsApp, separado do e-mail */}
+      <fieldset id="contato" className="flex scroll-mt-24 flex-col gap-3 border-t border-line pt-4">
+        <legend className="sr-only">contato para avisos</legend>
+        <span className="font-mono text-xs text-muted">
+          avisos das edições — chegam sempre no app e no teu e-mail
+        </span>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs text-muted">celular com DDD</span>
+          <input
+            className={input}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="(11) 99999-9999"
+          />
+        </label>
+        <label className="flex items-start gap-2.5 text-[14px]">
+          <input
+            type="checkbox"
+            className="mt-1 size-4 accent-[var(--accent)]"
+            checked={whatsappOptIn}
+            onChange={(e) => setWhatsappOptIn(e.target.checked)}
+          />
+          <span>
+            Quero receber os avisos das edições em que estou inscrito também pelo WhatsApp,
+            em mensagem individual (nunca grupo). Dá pra desmarcar quando quiser.
+          </span>
+        </label>
+      </fieldset>
       <button
         onClick={save}
         disabled={status === "saving"}
@@ -189,7 +232,7 @@ export function ProfileForm({
       </button>
       {status === "error" && (
         <p className="font-mono text-xs text-orange">
-          {"erro ao salvar — tenta de novo"}
+          {errorMsg ?? "erro ao salvar — tenta de novo"}
         </p>
       )}
     </div>
