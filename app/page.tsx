@@ -9,6 +9,7 @@ import { NewsletterForm } from "@/components/NewsletterForm";
 import { EditionRows } from "@/components/EditionRows";
 import { getOpenHackathons, getPastHackathons, isRegistrationClosed, type Hackathon } from "@/lib/hackathons";
 import { getEditionCapacity } from "@/lib/registrations";
+import { landingList } from "@/lib/radar";
 import { getStatsMomentum } from "@/lib/momentum";
 import { getChampions, getCommunityProof } from "@/lib/landing";
 
@@ -172,8 +173,9 @@ export default async function Home() {
   const proxima = editions[0] ?? null;
   const proximaCap = proxima ? await getEditionCapacity(proxima.id) : null;
   const ultima = past.find((h) => h.partner) ?? null;
-  // próximas: Hack Inova primeiro, depois o radar por data
-  const proximas = [...editions, ...upcoming.filter((h) => !h.partner)].slice(0, 6);
+  // próximas: Hack Inova primeiro, depois hackathons do Brasil por data
+  // (sem gringo online, sem o que fecha em menos de 48h — lib/radar.ts)
+  const proximas = landingList(upcoming, now, 6);
 
   const stats = [
     { n: proof.editions, label: "edições realizadas", delta: 0 },

@@ -14,6 +14,7 @@ import { getAttendanceHistory } from "@/lib/rsvp";
 import { AttendanceHistory } from "@/components/AttendanceHistory";
 import { NextStepPanel } from "@/components/NextStepPanel";
 import { EditionRows } from "@/components/EditionRows";
+import { dashboardList } from "@/lib/radar";
 import { getNextStep, listMyActiveEditions } from "@/lib/nextStepFacts";
 import { listMyEditionRoles } from "@/lib/roles";
 import { ProfileReminder } from "@/components/ProfileReminder";
@@ -54,11 +55,10 @@ export default async function DashboardPage() {
     listPosts(20, member.id),
   ]);
   const steps = await Promise.all(active.map(async (h) => ({ h, step: await getNextStep(h, member, now) })));
-  // abertos: Hack Inova primeiro, sem repetir o que já está nos próximos passos
+  // abertos: Hack Inova primeiro, depois Brasil com a cidade/UF do perfil na
+  // frente; sem repetir o que já está nos próximos passos
   const activeIds = new Set(active.map((h) => h.id));
-  const abertos = [...open.filter((h) => h.partner), ...open.filter((h) => !h.partner)]
-    .filter((h) => !activeIds.has(h.id))
-    .slice(0, 5);
+  const abertos = dashboardList(open, now, { city: member.city, exclude: activeIds, limit: 5 });
   const proxima = open.find((h) => h.partner && !activeIds.has(h.id)) ?? null;
 
   return (

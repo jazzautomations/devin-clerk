@@ -100,9 +100,77 @@ depois de mergeada; nunca mais de 3 builds simultâneas.
 ## Radar (scraper)
 
 `ops/scrape.sh <stage|prod>` roda `scripts/scrape_radar.py` do release
-atual contra o banco do ambiente. Fontes: Devpost, TAIKAI, Meetup,
-curadoria; ETHGlobal e Luma costumam dar 0 (geogate); MLH responde mas o
-parser voltou 0 em 14/10 — revisar.
+atual contra o banco do ambiente. Testes: `pytest scripts/test_scrape_radar.py`
+(fixtures reais em `scripts/fixtures/radar`; os de banco usam um schema
+descartável no `DATABASE_URL` e apagam no fim).
+
+O radar é Brasil-first e só lista hackathon.
+
+**Fontes**
+
+| fonte | como lê | status em 14/10 |
+|---|---|---|
+| Sympla | busca pública (`/eventos?s=`) via Jina, termos hackathon, hackaton, game jam, datathon, space apps; robots `Allow: /` | ok, ~20 BR (só a 1ª página de cada termo) |
+| Doity | busca HTML do servidor + JSON-LD da página do evento (só abre card com cara de hackathon); robots `Allow: /` | ok, 1 BR |
+| Shawee | página de inscrições abertas; avisa no log quando abrir | ok, 0 (sem inscrição aberta) |
+| Devpost | API pública | ok, quase tudo online-mundo/exterior |
+| TAIKAI | GraphQL | ok, eventos expiram rápido (sem data de fim) |
+| Meetup | Jina, 3 cidades | ok, quase sempre 0 depois do filtro |
+| curadoria | lista à mão no scraper | ok |
+| ETHGlobal, Luma | Jina | degraded (geogate) |
+| MLH | Scrapling | precisa de `playwright` na venv; o parser voltou 0 em 14/10 |
+| Even3 | — | degraded: busca pede reCAPTCHA, não burlamos |
+| Eventbrite | — | degraded: 405 pra robô |
+
+Testadas e fora: Devpost não tem filtro por país e a busca "Brasil" não
+traz nada brasileiro; gov.br só tem notícia (sem data estruturada);
+Liga Ventures, Distrito, Rocketseat, DIO e os hackathons de banco (CCR,
+Itaú, Bradesco, BB) não publicam agenda legível. Esses entram pela
+curadoria ou pela indicação no `/radar`.
+
+**Critério de hackathon** (`classify` no scraper)
+
+1. Termo no nome (ou na descrição, quando a fonte manda): hackathon,
+   hackaton, hacka*, hack day, datathon, ideathon, buildathon, makeathon,
+   designathon, game jam, maratona de programação/inovação, desafio de
+   inovação, NASA Space Apps.
+2. Palavra de "evento sobre o hackathon" antes do termo derruba:
+   workshop, curso, palestra, mentoria, abertura, premiação, inscrição de
+   mentores/jurados/voluntários, "learn to".
+3. Sympla, Doity, Meetup e Luma exigem o termo. Nome neutro fica fora.
+4. Devpost, TAIKAI, ETHGlobal e MLH só listam hackathon: nome neutro passa,
+   mas sai projeto de disciplina ("Senior Design", capstone), prêmio abaixo
+   de US$ 200 (câmbio aproximado, só pra comparar), organizador vazio
+   ("nill") e Devpost com menos de 10 inscritos.
+5. Curadoria, indicação aprovada (`comunidade`) e evento do admin (`admin`)
+   não passam pelo filtro.
+
+Recusado que já estava no banco vira `active=0` com `excludedReason`
+(nada é apagado). A cada rodada o scraper também reclassifica as linhas
+ativas de Meetup/Devpost que a busca do dia não trouxe.
+
+**Região** (`hackathons.region`, migration 023): `br` (presencial/híbrido
+no Brasil), `online-br` (online de fonte brasileira, em português ou com
+prêmio em real), `online-mundo`, `exterior`. Vazio = o app deriva igual
+(`lib/radar.ts`).
+
+**Onde aparece**: `/radar` em seções (Brasil por UF, online em português,
+online no mundo, presencial lá fora). Landing e painel só mostram edição
+Hack Inova + `br`/`online-br`, nada que feche em menos de 48h, e prêmio só
+em real. O painel põe a cidade/UF do perfil na frente.
+
+**Frescor**: o cron roda 1x por dia (05:15 stage / 05:20 prod UTC).
+Expirado sai da lista na hora pelo filtro `isOver`, sem depender do cron.
+Hackathon brasileiro abre inscrição com semanas de antecedência, então uma
+rodada por dia já pega quase tudo. Proposta (não aplicada): segunda rodada
+às 17:20 UTC (14:20 BRT) só em prod, pra pegar evento publicado de manhã e
+o fecha-em-48h ficar mais justo. Custo: ~11 requisições ao Jina e ~6 ao
+Doity por rodada.
+
+**Curadoria manual**: no `/admin`, "indicações" aprova com 1 clique (vira
+evento `comunidade`). O formulário de criar edição aceita link oficial e
+prêmio; organizador que não é Hack Inova grava `source='admin'` e fica no
+radar (antes o seed desativava no boot seguinte).
 
 ## Variáveis de ambiente (`~/hackahub-secrets/<env>.env`)
 

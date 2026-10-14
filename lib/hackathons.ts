@@ -21,6 +21,11 @@ export type Hackathon = {
   // spec 032 — edição curada: register entra como 'pending' e a recompensa
   // só cai na aprovação do admin (a coluna nasce do ALTER de registrations)
   requiresApproval: boolean;
+  // radar Brasil-first (migration 023): região gravada pelo scraper e a
+  // fonte ("sympla", "devpost+taikai"; null = edição da casa). lib/radar.ts
+  // deriva a região quando a coluna está vazia.
+  region?: string | null;
+  source?: string | null;
 };
 
 type Row = Omit<Hackathon, "tags" | "active" | "partner" | "requiresApproval"> & {
@@ -104,11 +109,6 @@ export async function getHackathon(id: string): Promise<Hackathon | null> {
     .prepare("SELECT * FROM hackathons WHERE id = ?")
     .get(id) as Row | undefined;
   return row ? toHackathon(row) : null;
-}
-
-export async function getTags(events?: Hackathon[]): Promise<string[]> {
-  const list = events ?? await getOpenHackathons();
-  return [...new Set(list.flatMap((h) => h.tags))].sort();
 }
 
 export function isRegistrationClosed(h: Hackathon, now = new Date()): boolean {

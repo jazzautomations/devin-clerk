@@ -21,9 +21,12 @@ export async function POST(req: Request) {
   }
   await db.prepare(
     `INSERT OR REPLACE INTO hackathons
-       (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize)
-     VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, 1, @prize)`,
+       (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline, tags, active, prize, source)
+     VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl, @registrationDeadline, @tags, 1, @prize, @source)`,
   ).run({
+    // evento de terceiro posto à mão vai pro radar como 'admin': o seed só
+    // mantém no ar as edições da casa (source NULL) que ele conhece
+    source: b.organizer.toLowerCase().includes("hack inova") ? null : "admin",
     id: b.id.trim(),
     name: b.name.trim(),
     organizer: b.organizer.trim(),

@@ -86,11 +86,3 @@ export function eventRegion(h: Regionable): string {
   if (/\bbrasil\b|\bbrazil\b/i.test(low)) return "brasil";
   return "exterior";
 }
-
-// ordem dos chips: UFs alfabéticas, depois os buckets não-estaduais
-export function getRegions(events: Regionable[]): string[] {
-  const set = new Set(events.map(eventRegion));
-  const ufs = [...set].filter((r) => r.length === 2).sort();
-  const rest = ["online", "brasil", "exterior"].filter((r) => set.has(r));
-  return [...ufs, ...rest];
-}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { nextDate, type Hackathon } from "@/lib/hackathons";
+import { prizeInReais, shortLocation } from "@/lib/radar";
 
 // spec 039 — lista de edições em linhas com fio (data pixel, nome, local,
 // selo). Landing ("próximas edições") e /dashboard ("hackathons abertos").
@@ -25,6 +26,8 @@ export function EditionRows({
         const next = nextDate(h, now);
         const d = new Date(next.at);
         const mine = registeredIds.includes(h.id);
+        // landing e painel falam em real; ₹/€/US$ ficam no /radar
+        const prize = prizeInReais(h.prize);
         return (
           <li key={h.id} className="border-t-2 border-line">
             <Link
@@ -42,7 +45,7 @@ export function EditionRows({
                   {h.name}
                 </span>
                 <span className="mt-1 block truncate font-mono text-[12.5px] text-muted">
-                  {h.location ?? "online"} · {FORMAT_LABEL[h.format]} · {h.organizer}
+                  {shortLocation(h.location) ?? "online"} · {FORMAT_LABEL[h.format]} · {h.organizer}
                 </span>
               </span>
               <span className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-3 sm:justify-end">
@@ -52,7 +55,7 @@ export function EditionRows({
                 ) : (
                   <span className="chip bare">radar</span>
                 )}
-                {h.prize && <span className="chip bare max-w-[180px] truncate">{h.prize}</span>}
+                {prize && <span className="chip bare max-w-[180px] truncate">{prize}</span>}
               </span>
             </Link>
           </li>

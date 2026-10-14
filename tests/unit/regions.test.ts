@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventRegion, getRegions } from "@/lib/regions";
+import { eventRegion } from "@/lib/regions";
 
 // região do card — heurística sobre o texto livre que o scraper traz
 // ("Belém, PA", "Santa Casa, São Paulo", "Mumbai, Índia"). Nunca inventa:
@@ -47,27 +47,5 @@ describe("eventRegion", () => {
 
   it("UF no fim vence cidade do nome (São Paulo, PA seria Pará)", () => {
     expect(h("Festival São Paulo, MA")).toBe("MA");
-  });
-});
-
-describe("getRegions", () => {
-  it("ordena UFs alfabéticas e manda buckets pro fim", () => {
-    const regions = getRegions([
-      { location: "Mumbai", format: "presencial" },
-      { location: "Recife, PE", format: "presencial" },
-      { location: "Online", format: "online" },
-      { location: "Belém, PA", format: "hibrido" },
-      { location: "Brazil", format: "presencial" },
-    ]);
-    expect(regions).toEqual(["PA", "PE", "online", "brasil", "exterior"]);
-  });
-
-  it("deduplica e omite buckets vazios", () => {
-    expect(
-      getRegions([
-        { location: "Alphaville, SP", format: "presencial" },
-        { location: "São Paulo", format: "presencial" },
-      ]),
-    ).toEqual(["SP"]);
   });
 });
