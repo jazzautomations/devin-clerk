@@ -3,6 +3,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { CERT_KIND_LABEL, formatCertDate, getCertificate } from "@/lib/certificates";
+import { ShareBar } from "@/components/ShareBar";
+import { absoluteUrl } from "@/lib/seo";
+import { linkedinAddCertificationUrl } from "@/lib/social";
 
 // Verificação pública do certificado (spec 033 US6): quem recebe o PDF abre
 // esse link e confere nome, edição, tipo e data. Não indexa — é dado pessoal.
@@ -20,6 +23,17 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
   const { code } = await params;
   const c = await getCertificate(code);
   if (!c) notFound();
+
+  const certUrl = absoluteUrl(`/c/${c.code}`);
+  const kindLabel = CERT_KIND_LABEL[c.kind];
+  const certName = `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} — ${c.hackathonName}`;
+  const addToLinkedin = linkedinAddCertificationUrl({
+    name: certName,
+    organizationName: "Hack Inova",
+    issuedAt: c.issuedAt,
+    certUrl,
+    certId: c.code,
+  });
 
   const rows: [string, ReactNode][] = [
     [
@@ -75,10 +89,14 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
             <a href={`/c/${c.code}/pdf`} className="btn">
               baixar PDF
             </a>
+            <a href={addToLinkedin} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+              adicionar ao LinkedIn
+            </a>
             <Link href={`/h/${c.hackathonId}`} className="btn-ghost">
               ver a edição
             </Link>
           </div>
+          <ShareBar url={certUrl} text={`Certificado de ${kindLabel} — ${c.hackathonName} (Hack Inova)`} label="compartilhar certificado" />
         </div>
       </div>
       <p className="font-mono text-xs text-muted">

@@ -1,5 +1,6 @@
 "use client";
 
+import { MAX_PERSONAS, PERSONAS } from "@/lib/personas";
 import { useState } from "react";
 import type { Member } from "@/lib/members";
 import { OPEN_TO } from "@/lib/openTo";
@@ -23,7 +24,9 @@ export function ProfileForm({
   const [twitter, setTwitter] = useState(member.twitter ?? "");
   const [website, setWebsite] = useState(member.website ?? "");
   const [headline, setHeadline] = useState(member.headline ?? "");
-  const [persona, setPersona] = useState(member.persona ?? "");
+  const [personas, setPersonas] = useState<string[]>(
+    member.personas.length ? member.personas : member.persona ? [member.persona] : [],
+  );
   const [phone, setPhone] = useState(contact?.phone ? formatBrPhone(contact.phone) : "");
   const [whatsappOptIn, setWhatsappOptIn] = useState(contact?.whatsappOptIn ?? false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
@@ -44,7 +47,7 @@ export function ProfileForm({
         twitter,
         website,
         headline,
-        persona,
+        personas,
         openTo,
         phone,
         whatsappOptIn,
@@ -90,26 +93,33 @@ export function ProfileForm({
           placeholder="typescript, react, solidity"
         />
       </label>
-      <label className="flex flex-col gap-1.5">
+      <fieldset className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
-          quem tu é no ecossistema
+          quem tu é no ecossistema — até {MAX_PERSONAS}, o primeiro é o principal
         </span>
-        <select
-          className={input}
-          value={persona}
-          onChange={(e) => setPersona(e.target.value)}
-        >
-          <option value="">escolhe…</option>
-          <option value="dev">dev</option>
-          <option value="empreendedor">empreendedor</option>
-          <option value="investidor">investidor</option>
-          <option value="professor">professor</option>
-          <option value="marca">marca / empresa</option>
-          <option value="mentor">mentor</option>
-          <option value="estudante">estudante</option>
-          <option value="organizador">organizador</option>
-        </select>
-      </label>
+        <div className="flex flex-wrap gap-2">
+          {PERSONAS.map((p) => {
+            const on = personas.includes(p.key);
+            const full = !on && personas.length >= MAX_PERSONAS;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                aria-pressed={on}
+                disabled={full}
+                onClick={() =>
+                  setPersonas((cur) => (on ? cur.filter((k) => k !== p.key) : [...cur, p.key]))
+                }
+                className={`border-[1.5px] px-2.5 py-1 font-mono text-[12px] disabled:opacity-40 ${
+                  on ? "border-accent bg-mint text-accent" : "border-line text-foreground hover:border-accent"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
       <fieldset className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
           open to — como empresas podem te chamar (te lista em /talento)

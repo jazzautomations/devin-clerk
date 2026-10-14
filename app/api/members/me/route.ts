@@ -4,6 +4,8 @@ import { checkBadges } from "@/lib/xp";
 import { isOpenToValue } from "@/lib/openTo";
 import { setOpenTo } from "@/lib/talent";
 import { applyContactPatch, parseContactPatch } from "@/lib/contact";
+import { normalizeSocial, type SocialKind } from "@/lib/social";
+import { parsePersonas, personaLabel } from "@/lib/personas";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
@@ -37,18 +39,36 @@ export async function PATCH(req: Request) {
     }
   }
   if (member && openTo !== undefined) await setOpenTo(member.id, openTo);
+  // redes: guarda o handle canônico; valor inválido volta 400 com o motivo
+  const social: Partial<Record<SocialKind, string>> = {};
+  for (const kind of ["github", "linkedin", "twitter", "website"] as const) {
+    if (typeof body[kind] !== "string") continue;
+    const n = normalizeSocial(kind, body[kind]);
+    if ("error" in n) return Response.json({ error: n.error }, { status: 400 });
+    social[kind] = n.value;
+  }
+  let personas: string[] | undefined;
+  if (body.personas !== undefined) {
+    const p = parsePersonas(body.personas);
+    if ("error" in p) return Response.json({ error: p.error }, { status: 400 });
+    personas = p.value;
+  }
+  if (typeof body.persona === "string" && body.persona !== "" && !personaLabel(body.persona)) {
+    return Response.json({ error: `persona desconhecida: ${body.persona}` }, { status: 400 });
+  }
   await updateMemberProfile(userId, {
     name: typeof body.name === "string" ? body.name : undefined,
     bio: typeof body.bio === "string" ? body.bio : undefined,
     skills: Array.isArray(body.skills)
       ? body.skills.filter((s: unknown) => typeof s === "string")
       : undefined,
-    github: typeof body.github === "string" ? body.github : undefined,
-    linkedin: typeof body.linkedin === "string" ? body.linkedin : undefined,
-    twitter: typeof body.twitter === "string" ? body.twitter : undefined,
-    website: typeof body.website === "string" ? body.website : undefined,
+    github: social.github,
+    linkedin: social.linkedin,
+    twitter: social.twitter,
+    website: social.website,
     headline: typeof body.headline === "string" ? body.headline : undefined,
     persona: typeof body.persona === "string" ? body.persona : undefined,
+    personas,
   });
   const newBadges = member ? (await checkBadges(member.id)).map((b) => b.id) : [];
   return Response.json({ ok: true, newBadges });

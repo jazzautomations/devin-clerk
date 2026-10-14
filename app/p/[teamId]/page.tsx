@@ -8,6 +8,8 @@ import { getLatestDeployForTeam } from "@/lib/deploys";
 import { getMemberByClerkId } from "@/lib/members";
 import { hasVoted, voteCountFor } from "@/lib/votes";
 import { VoteButton } from "@/components/VoteButton";
+import { ShareBar } from "@/components/ShareBar";
+import { absoluteUrl } from "@/lib/seo";
 
 type Props = { params: Promise<{ teamId: string }> };
 
@@ -70,6 +72,11 @@ export default async function ProjectPage({ params }: Props) {
           {" · "}
           {data.teamName}
         </p>
+        <ShareBar
+          url={absoluteUrl(`/p/${data.teamId}`)}
+          text={`${data.project.title} — projeto do time ${data.teamName} no ${data.hackathonName}`}
+          label="compartilhar projeto"
+        />
         {place >= 1 && place <= 3 && (
           <span
             className={`w-fit border px-2 py-1 font-mono text-xs ${

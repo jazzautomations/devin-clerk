@@ -13,6 +13,9 @@ import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
 import { CollectibleCard } from "@/components/CollectibleCard";
 import { Avatar } from "@/components/Avatar";
+import { ShareBar } from "@/components/ShareBar";
+import { profileUrl } from "@/lib/social";
+import { personaLabel } from "@/lib/personas";
 
 // spec 029 — desfecho de cada edição do arco → chip da trajetória:
 // pódio nas cores de raridade, entrega em accent, presença em muted
@@ -88,6 +91,15 @@ export default async function PublicProfilePage({
   ).length;
   const delivered = arc.filter((e) => e.hasProject).length;
   const { level } = levelFor(member.xp);
+  const socialLinks: [string, string][] = [];
+  for (const [label, href] of [
+    ["github", profileUrl("github", member.github)],
+    ["linkedin", profileUrl("linkedin", member.linkedin)],
+    ["x", profileUrl("twitter", member.twitter)],
+    ["site", profileUrl("website", member.website)],
+  ] as const) {
+    if (href) socialLinks.push([label, href]);
+  }
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 [&>*]:max-w-3xl">
@@ -112,66 +124,34 @@ export default async function PublicProfilePage({
           <span className="border border-line bg-surface px-1.5 font-mono text-[12px] text-foreground">
             LV{level.n}
           </span>
-          {member.persona && (
-            <span className="border border-line bg-mint px-1.5 font-mono text-[12px] text-accent">
-              {member.persona}
+          {(member.personas.length ? member.personas : member.persona ? [member.persona] : []).map((k) => (
+            <span key={k} className="border border-line bg-mint px-1.5 font-mono text-[12px] text-accent">
+              {personaLabel(k) ?? k}
             </span>
-          )}
+          ))}
         </div>
         {member.headline && (
           <p className="font-mono text-sm text-foreground">{member.headline}</p>
         )}
         {member.bio && <p className="max-w-xl text-muted">{member.bio}</p>}
         <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {member.github && (
+          {socialLinks.map(([label, href]) => (
             <a
-              href={`https://github.com/${member.github.replace(/^@/, "")}`}
+              key={label}
+              href={href}
               target="_blank"
               rel="noopener"
               className="font-mono text-xs text-accent hover:underline"
             >
-              github/{member.github.replace(/^@/, "")} →
+              {label} →
             </a>
-          )}
-          {member.linkedin && (
-            <a
-              href={
-                member.linkedin.startsWith("http")
-                  ? member.linkedin
-                  : `https://linkedin.com/${member.linkedin.replace(/^@/, "")}`
-              }
-              target="_blank"
-              rel="noopener"
-              className="font-mono text-xs text-accent hover:underline"
-            >
-              linkedin →
-            </a>
-          )}
-          {member.twitter && (
-            <a
-              href={`https://x.com/${member.twitter.replace(/^@/, "")}`}
-              target="_blank"
-              rel="noopener"
-              className="font-mono text-xs text-accent hover:underline"
-            >
-              x/{member.twitter.replace(/^@/, "")} →
-            </a>
-          )}
-          {member.website && (
-            <a
-              href={
-                member.website.startsWith("http")
-                  ? member.website
-                  : `https://${member.website}`
-              }
-              target="_blank"
-              rel="noopener"
-              className="font-mono text-xs text-accent hover:underline"
-            >
-              site →
-            </a>
-          )}
+          ))}
         </div>
+        <ShareBar
+          url={absoluteUrl(`/u/${member.username}`)}
+          text={`${member.name ?? `@${member.username}`} no HackaHub — hackathons, projetos e certificados`}
+          label="compartilhar perfil"
+        />
       </div>
 
       {member.skills.length > 0 && (

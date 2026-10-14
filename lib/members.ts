@@ -22,6 +22,7 @@ export type Member = {
   website: string | null;
   headline: string | null;
   persona: string | null;
+  personas: string[];
   role: "member" | "admin";
   xp: number;
   badges?: number;
@@ -30,10 +31,10 @@ export type Member = {
   createdAt: string;
 };
 
-type MemberRow = Omit<Member, "skills"> & { skills: string };
+type MemberRow = Omit<Member, "skills" | "personas"> & { skills: string; personas: string };
 
 function toMember(row: MemberRow): Member {
-  return { ...row, skills: JSON.parse(row.skills) };
+  return { ...row, skills: JSON.parse(row.skills), personas: JSON.parse(row.personas ?? "[]") };
 }
 
 export function adminEmails(): string[] {
@@ -172,6 +173,7 @@ export async function updateMemberProfile(
     website?: string;
     headline?: string;
     persona?: string;
+    personas?: string[];
   },
 ): Promise<void> {
   await db.prepare(
@@ -184,7 +186,8 @@ export async function updateMemberProfile(
        twitter = COALESCE(@twitter, twitter),
        website = COALESCE(@website, website),
        headline = COALESCE(@headline, headline),
-       persona = COALESCE(@persona, persona)
+       persona = CASE WHEN @personasSet::int = 1 THEN @primary ELSE COALESCE(@persona, persona) END,
+       personas = COALESCE(@personas, personas)
      WHERE clerkId = @clerkId`,
   ).run({
     clerkId,
@@ -197,5 +200,8 @@ export async function updateMemberProfile(
     website: patch.website ?? null,
     headline: patch.headline ?? null,
     persona: patch.persona ?? null,
+    personasSet: patch.personas ? 1 : 0,
+    primary: patch.personas?.[0] ?? null,
+    personas: patch.personas ? JSON.stringify(patch.personas) : null,
   });
 }
