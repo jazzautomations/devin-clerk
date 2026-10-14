@@ -59,11 +59,11 @@ export default async function EntryPage({ params }: PageProps<"/h/[id]/entrega">
         />
       ) : (
         <p className="border-[1.5px] border-line px-5 py-6 text-muted">
-          Tu ainda não tens time nesta edição.{" "}
-          <Link href={`/h/${id}`} className="text-accent underline-offset-4 hover:underline">
-            Cria o time na página da edição
+          Você ainda não tem time nesta edição.{" "}
+          <Link href={`/h/${id}#meu-time`} className="text-accent underline underline-offset-4">
+            Crie o time na página da edição
           </Link>{" "}
-          e volta aqui pra montar a entrega.
+          e volte aqui pra montar a entrega.
         </p>
       )}
     </div>

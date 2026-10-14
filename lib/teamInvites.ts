@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { notify } from "@/lib/notifications";
-import { assertFormationOpen, memberTeamFor, TeamError } from "@/lib/teams";
+import { deactivateBoardEntry } from "@/lib/teamboard";
+import { assertFormationOpen, lockMemberInEdition, memberTeamFor, TeamError } from "@/lib/teams";
 
 // Frente N #4 — aceite de membro de time (migration 016). Pôr alguém num
 // time sem perguntar era o furo apontado no QA: o nome da pessoa ia pro
@@ -10,6 +11,12 @@ import { assertFormationOpen, memberTeamFor, TeamError } from "@/lib/teams";
 // significando "está no time" — os membros que já existiam seguem aceitos.
 
 export type InviteStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+/** quem não recebeu convite, e por quê (a tela mostra o motivo de cada um) */
+export type IgnoredInvite = {
+  username: string;
+  reason: "nao_existe" | "nao_aprovado" | "ja_tem_time" | "ja_convidado";
+};
 
 export type MyInvite = {
   id: number;
@@ -64,7 +71,7 @@ export async function createInvites(
     await notify(m.id, {
       type: "team_invite",
       actorUsername: inviterUsername,
-      text: `@${inviterUsername} te convidou pro time "${teamName}" — aceita ou recusa na página da edição`,
+      text: `@${inviterUsername} convidou você pro time "${teamName}". Aceite ou recuse na página da edição.`,
       href: inviteHref(hackathonId),
     });
   }
@@ -72,35 +79,57 @@ export async function createInvites(
 }
 
 /**
+ * Separa quem pode receber convite (membro com inscrição APROVADA na edição e
+ * ainda sem time) de quem não pode, com o motivo. Normaliza "@Fulano" e tira
+ * repetidos e o próprio autor.
+ */
+export async function classifyInvitees(
+  hackathonId: string,
+  inviterUsername: string,
+  raw: unknown[],
+): Promise<{ ok: string[]; ignored: IgnoredInvite[] }> {
+  const ok: string[] = [];
+  const ignored: IgnoredInvite[] = [];
+  const seen = new Set<string>([inviterUsername]);
+  for (const r of raw) {
+    const username = normUsername(r);
+    if (!username || seen.has(username)) continue;
+    seen.add(username);
+    const row = await db
+      .prepare(
+        `SELECT m.id, r.status FROM members m
+         LEFT JOIN registrations r ON r.memberId = m.id AND r.hackathonId = ?
+         WHERE m.username = ?`,
+      )
+      .get<{ id: number; status: string | null }>(hackathonId, username);
+    if (!row) ignored.push({ username, reason: "nao_existe" });
+    else if (row.status !== "approved") ignored.push({ username, reason: "nao_aprovado" });
+    else if (await memberTeamFor(hackathonId, username)) ignored.push({ username, reason: "ja_tem_time" });
+    else ok.push(username);
+  }
+  return { ok, ignored };
+}
+
+/**
  * Integrante convida mais gente pro próprio time. Mesmas regras do
- * submitTeam: só inscrito APROVADO na edição e ainda sem time; o resto
- * volta em ignored.
+ * submitTeam (classifyInvitees); quem já tinha convite pendente volta como
+ * ja_convidado.
  */
 export async function inviteToTeam(
   hackathonId: string,
   inviter: { username: string },
   rawUsernames: unknown[],
-): Promise<{ invited: string[]; ignored: string[] }> {
+): Promise<{ invited: string[]; ignored: IgnoredInvite[] }> {
   const team = await memberTeamFor(hackathonId, inviter.username);
-  if (!team) throw new TeamError("tu ainda não tens time nesta edição", 404);
+  if (!team) throw new TeamError("você ainda não tem time nesta edição", 404);
   await assertFormationOpen(hackathonId);
-  const ok: string[] = [];
-  const ignored: string[] = [];
-  for (const raw of rawUsernames) {
-    const username = normUsername(raw);
-    if (!username || username === inviter.username || ok.includes(username) || ignored.includes(username)) continue;
-    const registered = await db
-      .prepare(
-        `SELECT 1 FROM registrations r JOIN members m ON m.id = r.memberId
-         WHERE r.hackathonId = ? AND m.username = ? AND r.status = 'approved'`,
-      )
-      .get(hackathonId, username);
-    if (registered && !(await memberTeamFor(hackathonId, username))) ok.push(username);
-    else ignored.push(username);
-  }
+  const { ok, ignored } = await classifyInvitees(hackathonId, inviter.username, rawUsernames);
   if (ok.length === 0 && ignored.length === 0) throw new TeamError("informe ao menos um username", 400);
   const invited = await createInvites(hackathonId, team.id, inviter.username, team.name, ok);
-  return { invited, ignored: [...ignored, ...ok.filter((u) => !invited.includes(u))] };
+  for (const u of ok) {
+    if (!invited.includes(u)) ignored.push({ username: u, reason: "ja_convidado" });
+  }
+  return { invited, ignored };
 }
 
 /** convites pendentes do membro na edição (o que aparece no "meu time") */
@@ -177,9 +206,10 @@ export async function respondInvite(
     const approved = await db
       .prepare("SELECT 1 FROM registrations WHERE memberId = ? AND hackathonId = ? AND status = 'approved'")
       .get(member.id, inv.hackathonId);
-    if (!approved) throw new TeamError("só inscrito aprovado entra em time", 403);
+    if (!approved) throw new TeamError("só quem tem inscrição aprovada entra em time", 403);
+    await lockMemberInEdition(inv.hackathonId, member.username);
     if (await memberTeamFor(inv.hackathonId, member.username)) {
-      throw new TeamError("tu já tens time nesta edição", 409);
+      throw new TeamError("você já tem time nesta edição", 409);
     }
     await assertFormationOpen(inv.hackathonId);
     await db
@@ -195,6 +225,8 @@ export async function respondInvite(
          WHERE memberId = ? AND hackathonId = ? AND status = 'pending' AND id <> ?`,
       )
       .run(member.id, inv.hackathonId, inv.id);
+    // achou time: o anúncio "procuro time" sai do ar
+    await deactivateBoardEntry(member.id, inv.hackathonId);
     if (inv.invitedBy) {
       await notify(inv.invitedBy, {
         type: "team_invite_accepted",

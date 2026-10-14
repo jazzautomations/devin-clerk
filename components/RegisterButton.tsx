@@ -44,8 +44,15 @@ export function RegisterButton({
 
   const cancellable = status === "approved" || status === "pending" || status === "waitlist";
 
-  async function toggle() {
-    if (!cancellable && consentText && !consent) {
+  // erro que a API não explicou: rate limit, cadastro ainda sendo criado, falha
+  function fallbackError(res: Response, data: { error?: unknown } | null): string {
+    if (res.status === 429 && typeof data?.error === "string") return data.error;
+    if (res.status === 404) return "seu cadastro ainda está sendo criado. Tente de novo em alguns segundos.";
+    return "não deu pra concluir agora. Tente de novo.";
+  }
+
+  async function register() {
+    if (consentText && !consent) {
       setError("marque o aceite acima pra se inscrever");
       return;
     }
@@ -53,9 +60,9 @@ export function RegisterButton({
     setError(null);
     try {
       const res = await fetch(`/api/hackathons/${hackathonId}/register`, {
-        method: cancellable ? "DELETE" : "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: cancellable ? undefined : JSON.stringify({ consent, publicListing: listed }),
+        body: JSON.stringify({ consent, publicListing: listed }),
       });
       if (res.status === 401) {
         router.push("/sign-in");
@@ -67,15 +74,15 @@ export function RegisterButton({
         setStatus(next);
         setPosition(typeof data.position === "number" ? data.position : null);
         if (next === "approved") {
-          const parts = [data.xp ? `${data.xp} xp` : null]
+          const parts = [data.xp && data.xp !== "+0" ? `${data.xp} xp` : null]
             .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
-            .concat(data.newBadges?.length ? [`badge nova: ${data.newBadges.join(", ")}`] : [])
+            .concat(data.newBadges?.length ? [`conquista nova: ${data.newBadges.join(", ")}`] : [])
             .filter(Boolean);
-          setReward(parts.join(" · "));
+          setReward(parts.join(" · ") || "inscrição confirmada");
         } else if (next === "pending") {
-          setReward("pedido enviado — a curadoria revisa tua presença");
+          setReward("pedido enviado. A curadoria vai analisar sua inscrição.");
         } else if (next === "waitlist") {
-          setReward("vagas esgotadas — tu entrou na fila e sobe sozinho se abrir vaga");
+          setReward("as vagas acabaram. Você entrou na fila e a inscrição é confirmada sozinha se abrir vaga.");
         } else {
           setReward(null);
         }
@@ -86,36 +93,64 @@ export function RegisterButton({
         setError(errorText(data.error));
       } else if (res.status === 400 && formHref) {
         router.push(formHref);
+      } else {
+        setError(fallbackError(res, data));
       }
     } finally {
       setLoading(false);
     }
   }
 
-  const label = loading
-    ? "…"
-    : status === "approved"
-      ? "✓ inscrito — cancelar inscrição"
+  async function cancel() {
+    const question =
+      status === "approved"
+        ? "Cancelar a inscrição? Sua vaga vai pra próxima pessoa da fila e não volta."
+        : status === "pending"
+          ? "Cancelar o pedido de inscrição?"
+          : "Sair da fila de espera? Se voltar depois, você entra no fim da fila.";
+    if (!window.confirm(question)) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/hackathons/${hackathonId}/register`, { method: "DELETE" });
+      if (res.status === 401) {
+        router.push("/sign-in");
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setStatus(null);
+        setPosition(null);
+        setReward(null);
+        router.refresh();
+      } else if (res.status === 409 && typeof data?.error === "string") {
+        setError(data.error);
+      } else {
+        setError(fallbackError(res, data));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const statusText =
+    status === "approved"
+      ? "✓ você está inscrito"
       : status === "pending"
-        ? "aguardando aprovação — cancelar pedido"
+        ? "pedido enviado, aguardando a curadoria"
         : status === "waitlist"
-          ? `fila de espera${position ? ` #${position}` : ""} — sair da fila`
+          ? `fila de espera${position ? ` #${position}` : ""}`
           : status === "rejected"
             ? "não rolou dessa vez"
-            : requiresApproval
-              ? "pedir lugar"
-              : full
-                ? "entrar na fila de espera"
-                : "inscrever-se em 1 clique";
+            : null;
+
+  const cancelLabel =
+    status === "approved" ? "cancelar inscrição" : status === "pending" ? "cancelar pedido" : "sair da fila";
 
   const cls =
-    status === "approved"
-      ? "border-[1.5px] border-band px-5 py-3 font-mono text-[13px] font-semibold text-band transition hover:bg-band hover:text-foreground disabled:opacity-50"
-      : status === "pending" || status === "waitlist"
-        ? "border-[1.5px] border-mint px-5 py-3 font-mono text-[13px] font-semibold text-mint transition hover:bg-mint hover:text-foreground disabled:opacity-50"
-        : status === "rejected"
-          ? "border-[1.5px] border-[#5e7869] px-5 py-3 font-mono text-[13px] text-[#b8cdc0]"
-          : "pix border-[1.5px] border-band bg-band px-5 py-1.5 text-[24px] leading-[1.4] text-foreground transition hover:border-background hover:bg-background disabled:opacity-50";
+    status === "rejected"
+      ? "border-[1.5px] border-[#5e7869] px-5 py-3 font-mono text-[13px] text-[#b8cdc0]"
+      : "pix border-[1.5px] border-band bg-band px-5 py-1.5 text-[24px] leading-[1.4] text-foreground transition hover:border-background hover:bg-background disabled:opacity-50";
 
   // edição com formulário: quem ainda não se inscreveu vai pra página do form
   if (status === null && formHref) {
@@ -129,16 +164,36 @@ export function RegisterButton({
     );
   }
 
+  if (cancellable || status === "rejected") {
+    return (
+      <div className="flex flex-col gap-2" data-testid="registration-status">
+        <p className={`font-mono text-[13px] font-semibold ${status === "rejected" ? "text-[#b8cdc0]" : "text-mint"}`}>
+          {statusText}
+        </p>
+        {cancellable && (
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={loading}
+            className="min-h-11 w-fit font-mono text-[12px] text-[#b8cdc0] underline underline-offset-4 transition hover:text-[#f2b880] disabled:opacity-50"
+          >
+            {loading ? "cancelando…" : cancelLabel}
+          </button>
+        )}
+        {error && <p role="alert" className="font-mono text-[13px] text-[#f2b880]">{error}</p>}
+        {reward && <p className="font-mono text-[13px] text-band">{reward}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      {status === null && consentText && (
-        <ConsentBox text={consentText} checked={consent} onChange={setConsent} tone="dark" />
-      )}
-      {status === null && <PublicListingBox checked={listed} onChange={setListed} tone="dark" />}
-      <button onClick={toggle} disabled={loading || status === "rejected"} className={cls}>
-        {label}
+      {consentText && <ConsentBox text={consentText} checked={consent} onChange={setConsent} tone="dark" />}
+      <PublicListingBox checked={listed} onChange={setListed} tone="dark" />
+      <button onClick={register} disabled={loading} className={cls}>
+        {loading ? "…" : requiresApproval ? "pedir lugar" : full ? "entrar na fila de espera" : "inscrever-se em 1 clique"}
       </button>
-      {error && <p role="alert" className="font-mono text-[13px] text-[#f2b880]">{error}</p>}
+      <p role="alert" className="font-mono text-[13px] text-[#f2b880] empty:hidden">{error}</p>
       {reward && <p className="font-mono text-[13px] text-band">{reward}</p>}
     </div>
   );

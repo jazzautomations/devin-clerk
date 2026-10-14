@@ -3,7 +3,8 @@ import { notify } from "@/lib/notifications";
 import { getEditionRoles, hasEditionRole } from "@/lib/roles";
 
 // Canal de dúvidas da edição (spec 033 US3, FR-004). Lê e escreve quem está
-// inscrito (approved/pending) e quem tem papel na edição; organização e
+// inscrito (approved/pending/fila de espera — quem está na fila recebe os
+// avisos da edição e pode perguntar sobre eles) e quem tem papel na edição; organização e
 // mentores respondem e marcam resolvida. Substitui o "alguém sabe…" do zap.
 
 type Actor = { id: number; role: string; username?: string };
@@ -14,7 +15,7 @@ export async function canUseQuestions(actor: Actor | null, hackathonId: string):
   const reg = await db
     .prepare("SELECT status FROM registrations WHERE hackathonId = ? AND memberId = ?")
     .get<{ status: string }>(hackathonId, actor.id);
-  if (reg && (reg.status === "approved" || reg.status === "pending")) return true;
+  if (reg && reg.status !== "rejected") return true;
   return (await getEditionRoles(hackathonId, actor.id)).length > 0;
 }
 
@@ -107,7 +108,7 @@ export async function answerQuestion(
   await notify(q.memberId, {
     type: "answer",
     actorUsername: author.username,
-    text: `@${author.username} respondeu tua dúvida em ${h?.name ?? "uma edição"}`,
+    text: `@${author.username} respondeu sua dúvida em ${h?.name ?? "uma edição"}`,
     href: `/h/${hackathonId}/duvidas#q${questionId}`,
   });
   return row!.id;

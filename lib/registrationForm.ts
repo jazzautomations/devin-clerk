@@ -6,7 +6,11 @@ import {
   register,
   type RegistrationStatus,
 } from "@/lib/registrations";
+import { getHackathon, isOver, isRegistrationClosed } from "@/lib/hackathons";
+import { parseEventTime } from "@/lib/eventTime";
 import {
+  DIET_OPTIONS,
+  type DietOption,
   getEditionTerms,
   imagePurposeFor,
   saveRegistrationTerms,
@@ -490,13 +494,20 @@ export async function submitRegistration(input: {
   publicListing?: boolean;
   /** termos do evento (lib/eventTerms): nascimento, responsável, conduta, imagem, dieta */
   terms?: unknown;
+  now?: Date;
 }): Promise<SubmitResult> {
   const { memberId, hackathonId } = input;
+  const now = input.now ?? new Date();
+  // inscrição é só pras edições da Hack Inova (as do radar inscrevem fora)
+  const h = await getHackathon(hackathonId);
+  if (!h || !h.active || !h.partner) return { ok: false, error: "not_found" };
   const existing = await getRegistrationStatus(memberId, hackathonId);
   if (existing) {
     const r = await register(memberId, hackathonId);
     return { ok: true, status: r.status, created: false, position: r.position };
   }
+  // prazo de inscrição vencido ou edição encerrada: nada é gravado
+  if (isRegistrationClosed(h, now) || isOver(h, now)) return { ok: false, error: "registration_closed" };
   // frente E — quem se candidatou pra ajudar (pendente ou aprovado) não
   // compete na mesma edição; jurado (por candidatura ou convite) nunca.
   const helper = await db
@@ -583,6 +594,71 @@ export async function submitRegistration(input: {
     return rest;
   }
   return result;
+}
+
+// ---------- restrição alimentar depois da inscrição ----------
+
+export type MyDiet = { diet: DietOption[]; allergies: string | null; allergySevere: boolean };
+
+/** o que a pessoa informou de dieta nesta edição (null sem inscrição/termos) */
+export async function getMyDiet(memberId: number, hackathonId: string): Promise<MyDiet | null> {
+  const row = await db
+    .prepare(
+      `SELECT t.diet, t.allergies, t.allergySevere FROM registration_terms t
+       JOIN registrations r ON r.id = t.registrationId
+       WHERE r.memberId = ? AND r.hackathonId = ? AND r.status <> 'rejected'`,
+    )
+    .get<{ diet: string; allergies: string | null; allergySevere: number }>(memberId, hackathonId);
+  if (!row) return null;
+  let diet: DietOption[] = [];
+  try {
+    const parsed = JSON.parse(row.diet);
+    if (Array.isArray(parsed)) diet = parsed.filter((d): d is DietOption => (DIET_OPTIONS as readonly string[]).includes(d));
+  } catch {
+    diet = [];
+  }
+  return { diet, allergies: row.allergies, allergySevere: row.allergySevere === 1 };
+}
+
+/**
+ * Corrige restrição alimentar e alergia depois de inscrito, até o início do
+ * evento (o relatório de refeições da organização lê o valor atual). Mesma
+ * validação da inscrição.
+ */
+export async function updateMyDiet(
+  memberId: number,
+  hackathonId: string,
+  raw: unknown,
+  now = new Date(),
+): Promise<{ ok: true; value: MyDiet } | { ok: false; error: string; status: number }> {
+  const b = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const [h, terms, current] = await Promise.all([
+    getHackathon(hackathonId),
+    getEditionTerms(hackathonId),
+    getMyDiet(memberId, hackathonId),
+  ]);
+  if (!h || !current) return { ok: false, error: "sem inscrição nesta edição", status: 404 };
+  if (!terms.dietEnabled) return { ok: false, error: "esta edição não pergunta restrição alimentar", status: 400 };
+  const start = parseEventTime(h.startsAt);
+  if (start && now.getTime() >= start.getTime()) {
+    return { ok: false, error: "a edição já começou; fale com a organização pelas dúvidas", status: 409 };
+  }
+  const rawDiet = Array.isArray(b.diet) ? b.diet : [];
+  if (rawDiet.some((x) => typeof x !== "string" || !(DIET_OPTIONS as readonly string[]).includes(x))) {
+    return { ok: false, error: "restrição alimentar inválida", status: 400 };
+  }
+  const diet = [...new Set(rawDiet as DietOption[])];
+  const a = typeof b.allergies === "string" ? b.allergies.trim() : "";
+  if (a.length > 500) return { ok: false, error: "alergias: até 500 caracteres", status: 400 };
+  const allergies = a || null;
+  const allergySevere = Boolean(allergies) && b.allergySevere === true;
+  await db
+    .prepare(
+      `UPDATE registration_terms SET diet = ?, allergies = ?, allergySevere = ?
+       WHERE registrationId = (SELECT id FROM registrations WHERE memberId = ? AND hackathonId = ?)`,
+    )
+    .run(JSON.stringify(diet), allergies, allergySevere ? 1 : 0, memberId, hackathonId);
+  return { ok: true, value: { diet, allergies, allergySevere } };
 }
 
 // ---------- admin: inscritos com respostas + CSV ----------

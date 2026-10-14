@@ -230,11 +230,15 @@ describe("painel do organizador — anônimo", () => {
     expect(JSON.stringify(r.nps)).not.toContain("rubrica longa");
   });
 
-  it("exportar meus dados traz a minha resposta; excluir a conta apaga", async () => {
+  it("exportar meus dados traz a minha resposta; excluir a conta apaga o texto e mantém a nota anônima", async () => {
     const exp = await exportMemberData(staff.id);
     expect(exp!.data["nps_responses.memberId"]).toEqual([expect.objectContaining({ hackathonId: H, score: 6 })]);
+    const before = (await getNpsSummary(H)).overall.responses;
     await deleteMemberData(staff.id);
-    expect(await db.prepare("SELECT 1 FROM nps_responses WHERE memberId = ?").all(staff.id)).toEqual([]);
-    expect((await getNpsSummary(H)).overall.responses).toBe(3);
+    // a nota fica na média (auditoria 041: privacidade-pos-evento); o texto livre sai
+    expect(await db.prepare("SELECT score, worked, improve FROM nps_responses WHERE memberId = ?").all(staff.id)).toEqual([
+      { score: 6, worked: null, improve: null },
+    ]);
+    expect((await getNpsSummary(H)).overall.responses).toBe(before);
   });
 });

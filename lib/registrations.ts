@@ -3,6 +3,9 @@ import { XP, type Badge } from "@/lib/game";
 import { awardXp, checkBadges, mintCard } from "@/lib/xp";
 import { notify } from "@/lib/notifications";
 import { queueTicketEmail } from "@/lib/ticketEmail";
+import { parseEventTime } from "@/lib/eventTime";
+import { deactivateBoardEntry } from "@/lib/teamboard";
+import { leaveEditionTeam } from "@/lib/teams";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
 // este módulo sem passar por members.ts
@@ -11,6 +14,17 @@ import { queueTicketEmail } from "@/lib/ticketEmail";
 // requiresApproval mora em hackathons; status/reviewedAt em registrations —
 // este arquivo é o dono do schema de inscrição (lib/db.ts não é tocado).
 export type RegistrationStatus = "pending" | "approved" | "rejected" | "waitlist";
+
+/** cancelamento recusado — a rota devolve status + mensagem */
+export class RegistrationError extends Error {
+  constructor(
+    readonly code: "rejected" | "event_started" | "checked_in",
+    message: string,
+    readonly status = 409,
+  ) {
+    super(message);
+  }
+}
 
 export async function editionRequiresApproval(hackathonId: string): Promise<boolean> {
   const row = await db
@@ -96,7 +110,7 @@ async function fillFromWaitlist(hackathonId: string, capacity: number | null): P
       .get<{ username: string; email: string }>(next.memberId);
     await notify(next.memberId, {
       type: "waitlist_promoted",
-      text: "abriu vaga: tua inscrição saiu da fila de espera e está confirmada",
+      text: "abriu vaga: sua inscrição saiu da fila de espera e está confirmada",
       href: `/h/${hackathonId}`,
     });
     promoted.push({
@@ -224,20 +238,71 @@ export async function register(
   })();
 }
 
-// cancelar libera a vaga: se quem saiu era aprovado, o 1º da fila sobe
-// na mesma transação. Respostas do formulário caem junto (CASCADE).
+/**
+ * Quem perde a inscrição sai do que dependia dela na edição: do time (o time
+ * é avisado), dos convites de time pendentes e do anúncio "procuro time".
+ * Sem isso o time ficava preso com um integrante sem inscrição e não
+ * conseguia enviar a entrega.
+ */
+export async function dropFromEdition(
+  memberId: number,
+  hackathonId: string,
+  kind: "sem_inscricao" | "conta_excluida" = "sem_inscricao",
+): Promise<void> {
+  const m = await db.prepare("SELECT username FROM members WHERE id = ?").get<{ username: string }>(memberId);
+  if (m) await leaveEditionTeam(hackathonId, m.username, { kind });
+  await db
+    .prepare(
+      `UPDATE team_invites SET status = 'cancelled', respondedAt = sqlite_now()
+       WHERE memberId = ? AND hackathonId = ? AND status = 'pending'`,
+    )
+    .run(memberId, hackathonId);
+  await deactivateBoardEntry(memberId, hackathonId);
+}
+
+const hasStarted = (startsAt: string | null | undefined, now: Date) => {
+  const start = parseEventTime(startsAt);
+  return !!start && now.getTime() >= start.getTime();
+};
+
+/**
+ * Cancelar a própria inscrição. Recusa (RegistrationError, 409):
+ *  - inscrição recusada: a decisão é da organização, a linha fica;
+ *  - edição já começou: a vaga não volta pra fila com o evento rolando;
+ *  - check-in feito: a presença é registro do evento.
+ * Se quem saiu era aprovado, o 1º da fila sobe na mesma transação. Respostas
+ * do formulário e termos caem junto (CASCADE); a recompensa já paga fica
+ * (registration_rewards), então se inscrever de novo não paga outra vez.
+ */
 export async function unregister(
   memberId: number,
   hackathonId: string,
+  now = new Date(),
+  dropKind: "sem_inscricao" | "conta_excluida" = "sem_inscricao",
 ): Promise<{ promoted: Promoted[] }> {
   return db.transaction(async () => {
     const ed = await lockEdition(hackathonId);
-    const gone = await db
+    const reg = await db
       .prepare(
-        `DELETE FROM registrations WHERE memberId = ? AND hackathonId = ? RETURNING status`,
+        `SELECT r.id, r.status, h.startsAt,
+                EXISTS (SELECT 1 FROM checkins c WHERE c.registrationId = r.id) AS "checkedIn"
+         FROM registrations r JOIN hackathons h ON h.id = r.hackathonId
+         WHERE r.memberId = ? AND r.hackathonId = ? FOR UPDATE OF r`,
       )
-      .get<{ status: RegistrationStatus }>(memberId, hackathonId);
-    if (!ed || gone?.status !== "approved") return { promoted: [] };
+      .get<{ id: number; status: RegistrationStatus; startsAt: string; checkedIn: boolean }>(memberId, hackathonId);
+    if (!reg) return { promoted: [] };
+    if (reg.status === "rejected") {
+      throw new RegistrationError("rejected", "a organização recusou esta inscrição; só ela pode mudar isso");
+    }
+    if (reg.checkedIn) {
+      throw new RegistrationError("checked_in", "você já fez check-in nesta edição; fale com a organização");
+    }
+    if (hasStarted(reg.startsAt, now)) {
+      throw new RegistrationError("event_started", "a edição já começou; não dá mais pra cancelar a inscrição");
+    }
+    await db.prepare("DELETE FROM registrations WHERE id = ?").run(reg.id);
+    await dropFromEdition(memberId, hackathonId, dropKind);
+    if (!ed || reg.status !== "approved") return { promoted: [] };
     return { promoted: await fillFromWaitlist(hackathonId, ed.capacity) };
   })();
 }
@@ -316,11 +381,20 @@ export async function getPublicListing(memberId: number, hackathonId: string): P
 
 // a recompensa da inscrição efetivada — ÚNICO caminho de XP + carta +
 // badges de inscrição: o register instantâneo (edição aberta) e a
-// aprovação admin (edição curada) passam por aqui; pendente nunca chega
+// aprovação admin (edição curada) passam por aqui; pendente nunca chega.
+// Paga uma vez só por (membro, edição): cancelar e se inscrever de novo
+// não rende outro +50 (registration_rewards, migration 020).
 export async function completeRegistration(
   memberId: number,
   hackathonId: string,
 ): Promise<{ xp: string; cardSerial: number | null; newBadges: Badge[] }> {
+  const first = await db
+    .prepare(
+      `INSERT INTO registration_rewards (memberId, hackathonId) VALUES (?, ?)
+       ON CONFLICT DO NOTHING RETURNING memberId`,
+    )
+    .get(memberId, hackathonId);
+  if (!first) return { xp: "+0", cardSerial: null, newBadges: [] };
   await awardXp(memberId, XP.register);
   const cardSerial = await mintCard(memberId, hackathonId);
   const newBadges = await checkBadges(memberId);
@@ -339,30 +413,47 @@ export type ReviewResult =
   | { status: "waitlist"; position: number | null };
 
 // decisão do admin sobre o pedido (spec 032). approve: a transição
-// não-aprovado → aprovado dispara completeRegistration UMA vez — re-approve
-// é no-op sem recompensa (awardXp não é idempotente). Com a edição cheia
-// (spec 033 FR-009) o aprovado vai pra fila de espera e sobe sozinho quando
-// abrir vaga. reject: marca 'rejected' (inclusive revogação de quem já era
-// aprovado — carta/XP pagos NÃO são estornados, mas a vaga volta pra fila);
-// a linha fica como registro honesto da decisão.
+// não-aprovado → aprovado dispara completeRegistration (que paga uma vez só
+// por membro+edição). Com a edição cheia (spec 033 FR-009) o aprovado vai
+// pra fila de espera e sobe sozinho quando abrir vaga. reject: marca
+// 'rejected' (inclusive revogação de quem já era aprovado — carta/XP pagos
+// NÃO são estornados; a vaga volta pra fila se o evento não começou) e tira
+// a pessoa do time; a linha fica como registro honesto da decisão.
+// Toda decisão vira notificação pra pessoa (o e-mail do ingresso depende do
+// driver; o aviso na plataforma não).
 // null = não existe inscrição pro par memberId+edição → a rota mapeia 404.
 export async function reviewRegistration(
   memberId: number,
   hackathonId: string,
   action: "approve" | "reject",
+  now = new Date(),
 ): Promise<ReviewResult | null> {
   return db.transaction(async (): Promise<ReviewResult | null> => {
     const ed = await lockEdition(hackathonId);
     const status = await getRegistrationStatus(memberId, hackathonId);
     if (status === null) return null;
+    const h = await db
+      .prepare("SELECT name, startsAt FROM hackathons WHERE id = ?")
+      .get<{ name: string; startsAt: string }>(hackathonId);
+    const name = h?.name ?? "a edição";
     if (action === "reject") {
       await db.prepare(
         `UPDATE registrations
          SET status = 'rejected', reviewedAt = datetime('now')
          WHERE memberId = ? AND hackathonId = ?`,
       ).run(memberId, hackathonId);
+      await dropFromEdition(memberId, hackathonId);
+      if (status !== "rejected") {
+        await notify(memberId, {
+          type: "registration_rejected",
+          text: `sua inscrição em ${name} não foi aprovada desta vez. Outras edições abertas estão no radar.`,
+          href: "/radar",
+        });
+      }
       const promoted =
-        status === "approved" && ed ? await fillFromWaitlist(hackathonId, ed.capacity) : [];
+        status === "approved" && ed && !hasStarted(h?.startsAt, now)
+          ? await fillFromWaitlist(hackathonId, ed.capacity)
+          : [];
       return { status: "rejected", promoted };
     }
     if (status === "approved") {
@@ -381,7 +472,15 @@ export async function reviewRegistration(
              waitlistedAt = COALESCE(waitlistedAt, datetime('now'))
          WHERE memberId = ? AND hackathonId = ?`,
       ).run(memberId, hackathonId);
-      return { status: "waitlist", position: await getWaitlistPosition(memberId, hackathonId) };
+      const position = await getWaitlistPosition(memberId, hackathonId);
+      if (status !== "waitlist") {
+        await notify(memberId, {
+          type: "registration_waitlist",
+          text: `sua inscrição em ${name} foi aprovada e entrou na fila de espera${position ? ` (#${position})` : ""}, porque as vagas acabaram. Se abrir vaga, ela é confirmada sozinha.`,
+          href: `/h/${hackathonId}/inscricao`,
+        });
+      }
+      return { status: "waitlist", position };
     }
     await db.prepare(
       `UPDATE registrations
@@ -390,7 +489,12 @@ export async function reviewRegistration(
     ).run(memberId, hackathonId);
     const reward = await completeRegistration(memberId, hackathonId);
     await queueTicketEmail(memberId, hackathonId);
-    return { status: "approved", rewarded: true, ...reward };
+    await notify(memberId, {
+      type: "registration_approved",
+      text: `sua inscrição em ${name} foi aprovada. Seu ingresso já está disponível.`,
+      href: `/h/${hackathonId}/ingresso`,
+    });
+    return { status: "approved", rewarded: reward.xp !== "+0", ...reward };
   })();
 }
 

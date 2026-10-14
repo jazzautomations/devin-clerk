@@ -139,7 +139,15 @@ describe("convite → aceite", () => {
     await submitTeam(HID, busy, { name: "Busy Team" });
     const r = await inviteToTeam(HID, cap, ["i_solo", "i_busy", "i_out", "fantasma"]);
     expect(r.invited).toEqual(["i_solo"]);
-    expect(r.ignored).toEqual(["i_busy", "i_out", "fantasma"]);
+    // cada ignorado volta com o motivo (a tela mostra)
+    expect(r.ignored).toEqual([
+      { username: "i_busy", reason: "ja_tem_time" },
+      { username: "i_out", reason: "nao_aprovado" },
+      { username: "fantasma", reason: "nao_existe" },
+    ]);
+    // convite pendente repetido não notifica de novo
+    const again = await inviteToTeam(HID, cap, ["i_solo"]);
+    expect(again).toEqual({ invited: [], ignored: [{ username: "i_solo", reason: "ja_convidado" }] });
   });
 });
 

@@ -127,7 +127,7 @@ export function EntriesSettingsForm({ hackathonId, initial }: { hackathonId: str
       </div>
       <p className="text-[13px] text-muted">
         Título, tagline, descrição, trabalho anterior e tecnologias são sempre obrigatórios. Campo vazio de data = sem
-        aquele prazo; sem prazo de entrega a edição fica no modo antigo.
+        aquele prazo. Sem prazo de entrega, todo time cadastrado vai pro júri e nada trava.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={busy} className="btn disabled:opacity-50">

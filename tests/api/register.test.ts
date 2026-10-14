@@ -46,7 +46,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
     expect(data.registered).toBe(true);
     expect(data.xp).toBe("+50");
     expect(data.cardSerial).toBe(1);
-    expect(data.newBadges).toContain("debut");
+    expect(data.newBadges).toContain("1ª campanha"); // nome, não o id
     expect(data.newBadges).toContain("pioneiro");
   });
 

@@ -1,5 +1,6 @@
 import db from "@/lib/db";
-import { unregister } from "@/lib/registrations";
+import { parseEventTime } from "@/lib/eventTime";
+import { dropFromEdition, RegistrationError, unregister } from "@/lib/registrations";
 
 // Direitos do titular (LGPD art. 18): exportar e excluir. Genérico de
 // propósito — descobre pelo catálogo do Postgres toda coluna que referencia
@@ -15,8 +16,23 @@ type MemberRef = { table: string; column: string };
 // members são ator de ação sobre terceiros (grantedBy, reviewedBy…) e ficam
 // apontando pra linha anonimizada.
 const OWNER_COLUMNS = new Set(["memberId", "judgeMemberId"]);
-// mantidas (anonimizadas pela linha de members) pra não distorcer o agregado
-const KEEP_TABLES = new Set(["registrations", "members"]);
+// mantidas (anonimizadas pela linha de members) pra não distorcer o agregado:
+// a nota do júri e o voto do público seguem no ranking publicado, a resposta
+// do NPS na média e o certificado continua verificável pelo código. O texto
+// livre dessas linhas é apagado (FREE_TEXT).
+const KEEP_TABLES = new Set([
+  "registrations",
+  "members",
+  "scores",
+  "live_votes",
+  "votes",
+  "nps_responses",
+  "certificates",
+]);
+const FREE_TEXT: Record<string, { column: string; fields: string[] }> = {
+  scores: { column: "judgeMemberId", fields: ["comment", "feedback"] },
+  nps_responses: { column: "memberId", fields: ["worked", "improve"] },
+};
 // export: referências que NÃO entram (ator sobre dado de terceiros — quem
 // tratou uma denúncia não recebe a denúncia no próprio export) e colunas
 // internas omitidas (nota interna da organização sobre a denúncia).
@@ -78,19 +94,34 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
 
   await db.transaction(async () => {
     // inscrições: pedido/fila sai de vez; aprovado em edição que ainda não
-    // começou libera a vaga pelo cancelamento normal (promove a fila); só
-    // edição em andamento/encerrada guarda a linha anonimizada (contagem)
+    // começou libera a vaga pelo cancelamento normal (promove a fila e tira
+    // a pessoa do time, que segue podendo entregar); edição em andamento ou
+    // encerrada guarda a linha anonimizada (contagem, arquivo, certificado).
+    // "Começou" usa o mesmo parser das datas da edição (horário de Brasília).
+    const now = Date.now();
     const regs = await db
       .prepare(
-        `SELECT r.hackathonId, r.status, to_ts(h.startsAt) > now() AS future
+        `SELECT r.hackathonId, r.status, h.startsAt
          FROM registrations r JOIN hackathons h ON h.id = r.hackathonId
          WHERE r.memberId = ?`,
       )
-      .all<{ hackathonId: string; status: string; future: boolean }>(memberId);
+      .all<{ hackathonId: string; status: string; startsAt: string }>(memberId);
     for (const r of regs) {
-      if (r.status === "approved" && !r.future) continue;
-      if (r.status === "approved") await unregister(memberId, r.hackathonId);
-      else await db.prepare("DELETE FROM registrations WHERE memberId = ? AND hackathonId = ?").run(memberId, r.hackathonId);
+      const start = parseEventTime(r.startsAt);
+      const future = !start || start.getTime() > now;
+      if (r.status === "approved" && !future) continue;
+      if (r.status === "approved") {
+        try {
+          await unregister(memberId, r.hackathonId, new Date(now), "conta_excluida");
+          continue;
+        } catch (e) {
+          // check-in na véspera: a presença fica, anonimizada
+          if (e instanceof RegistrationError) continue;
+          throw e;
+        }
+      }
+      await db.prepare("DELETE FROM registrations WHERE memberId = ? AND hackathonId = ?").run(memberId, r.hackathonId);
+      if (future) await dropFromEdition(memberId, r.hackathonId, "conta_excluida");
     }
     // dependentes sem cascade dos posts da pessoa
     await db.prepare("DELETE FROM likes WHERE postId IN (SELECT id FROM posts WHERE memberId = ?)").run(memberId);
@@ -112,6 +143,11 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
     for (const { table, column } of refs) {
       if (!OWNER_COLUMNS.has(column) || KEEP_TABLES.has(table)) continue;
       await db.prepare(`DELETE FROM ${ident(table)} WHERE ${ident(column)} = ?`).run(memberId);
+    }
+    for (const [table, { column, fields }] of Object.entries(FREE_TEXT)) {
+      await db
+        .prepare(`UPDATE ${ident(table)} SET ${fields.map((f) => `${ident(f)} = NULL`).join(", ")} WHERE ${ident(column)} = ?`)
+        .run(memberId);
     }
     await db.prepare("UPDATE team_members SET username = ? WHERE username = ?").run(anon, member.username);
     // inscrição mantida pela contagem não aparece mais na lista pública

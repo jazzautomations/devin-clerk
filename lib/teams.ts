@@ -1,6 +1,8 @@
 import db from "@/lib/db";
-import { createInvites } from "@/lib/teamInvites";
-import { getArchive, type ArchiveTeam } from "@/lib/archive";
+import { notify } from "@/lib/notifications";
+import { classifyInvitees, createInvites, type IgnoredInvite } from "@/lib/teamInvites";
+import { deactivateBoardEntry } from "@/lib/teamboard";
+import type { ArchiveTeam, TeamProject } from "@/lib/archive";
 import {
   assertEvaluatedEditable,
   deadlinePassed,
@@ -31,21 +33,145 @@ const normUsername = (u: unknown) =>
     .replace(/^@/, "")
     .toLowerCase();
 
+type TeamRow = { id: number; name: string; placement: number; projectTitle: string | null } & Omit<TeamProject, "title">;
+
+/** time por id no formato do arquivo — 2 queries (time+projeto, integrantes) */
+async function teamView(where: string, ...args: unknown[]): Promise<ArchiveTeam | null> {
+  const t = await db
+    .prepare(
+      `SELECT t.id, t.name, t.placement, tp.title AS "projectTitle", tp.description,
+              tp.repoUrl, tp.demoUrl, tp.videoUrl, tp.logoUrl
+       FROM teams t LEFT JOIN team_projects tp ON tp.teamId = t.id
+       WHERE ${where} ORDER BY t.id LIMIT 1`,
+    )
+    .get<TeamRow>(...args);
+  if (!t) return null;
+  const members = await db
+    .prepare("SELECT username FROM team_members WHERE teamId = ? ORDER BY username")
+    .all<{ username: string }>(t.id);
+  return {
+    id: t.id,
+    name: t.name,
+    placement: t.placement,
+    members: members.map((m) => m.username),
+    project:
+      t.projectTitle === null
+        ? null
+        : {
+            title: t.projectTitle,
+            description: t.description,
+            repoUrl: t.repoUrl,
+            demoUrl: t.demoUrl,
+            videoUrl: t.videoUrl,
+            logoUrl: t.logoUrl,
+          },
+  };
+}
+
 // time do membro na edição (um membro = um time por edição — submitTeam
 // garante o invariante) — null quando não participa de nenhum
 export async function memberTeamFor(
   hackathonId: string,
   username: string,
 ): Promise<ArchiveTeam | null> {
-  const row = await db
-    .prepare(
-      `SELECT t.id FROM teams t
-       JOIN team_members tm ON tm.teamId = t.id
-       WHERE t.hackathonId = ? AND tm.username = ?`,
-    )
-    .get(hackathonId, username) as { id: number } | undefined;
-  if (!row) return null;
-  return (await getArchive(hackathonId)).teams.find((t) => t.id === row.id) ?? null;
+  return teamView(
+    "t.hackathonId = ? AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.teamId = t.id AND tm.username = ?)",
+    hackathonId,
+    username,
+  );
+}
+
+// um membro = um time por edição. Criar time e aceitar convite checam isso
+// e escrevem dentro desta trava (por edição + username): dois cliques ou duas
+// abas ao mesmo tempo não colocam a pessoa em dois times.
+export async function lockMemberInEdition(hackathonId: string, username: string): Promise<void> {
+  await db.prepare("SELECT pg_advisory_xact_lock(hashtext(?::text)) AS ok").get(`team:${hackathonId}:${username}`);
+}
+
+/**
+ * Tira a pessoa do time dela na edição e avisa quem ficou. Chamado quando
+ * ela sai, é removida por um colega, cancela a inscrição, é recusada ou
+ * exclui a conta. Devolve o id do time (null se não tinha time).
+ */
+export async function leaveEditionTeam(
+  hackathonId: string,
+  username: string,
+  how: { kind: "saiu" | "removido" | "sem_inscricao" | "conta_excluida"; by?: string },
+): Promise<number | null> {
+  return db.transaction(async () => {
+    const team = await db
+      .prepare(
+        `SELECT t.id, t.name FROM teams t JOIN team_members tm ON tm.teamId = t.id
+         WHERE t.hackathonId = ? AND tm.username = ? ORDER BY t.id LIMIT 1 FOR UPDATE OF t`,
+      )
+      .get<{ id: number; name: string }>(hackathonId, username);
+    if (!team) return null;
+    await db.prepare("DELETE FROM team_members WHERE teamId = ? AND username = ?").run(team.id, username);
+    const text =
+      how.kind === "removido"
+        ? `@${how.by} tirou @${username} do time "${team.name}"`
+        : how.kind === "sem_inscricao"
+          ? `@${username} não tem mais inscrição nesta edição e saiu do time "${team.name}"`
+          : how.kind === "conta_excluida"
+            ? `um integrante excluiu a conta e saiu do time "${team.name}"`
+            : `@${username} saiu do time "${team.name}"`;
+    const stay = await db
+      .prepare(
+        `SELECT m.id FROM team_members tm JOIN members m ON m.username = tm.username
+         WHERE tm.teamId = ? ORDER BY m.id`,
+      )
+      .all<{ id: number }>(team.id);
+    for (const m of stay) {
+      await notify(m.id, { type: "team_member_left", actorUsername: how.by, text, href: `/h/${hackathonId}#meu-time` });
+    }
+    if (how.kind === "removido") {
+      const gone = await db.prepare("SELECT id FROM members WHERE username = ?").get<{ id: number }>(username);
+      if (gone) {
+        await notify(gone.id, {
+          type: "team_member_removed",
+          actorUsername: how.by,
+          text: `@${how.by} tirou você do time "${team.name}"`,
+          href: `/h/${hackathonId}#meu-time`,
+        });
+      }
+    }
+    return team.id;
+  })();
+}
+
+// depois da trava da entrega o time fica como foi enviado
+async function assertTeamEditable(teamId: number): Promise<void> {
+  try {
+    await assertEvaluatedEditable(teamId);
+  } catch (e) {
+    if (e instanceof EntryError) throw new TeamError("a entrega já travou; fale com a organização pra mudar o time", 409);
+    throw e;
+  }
+}
+
+/** o próprio integrante sai do time (a inscrição continua) */
+export async function leaveTeam(hackathonId: string, member: { id: number; username: string }): Promise<void> {
+  const team = await memberTeamFor(hackathonId, member.username);
+  if (!team) throw new TeamError("você não está em nenhum time nesta edição", 404);
+  await assertTeamEditable(team.id);
+  await leaveEditionTeam(hackathonId, member.username, { kind: "saiu" });
+}
+
+/** integrante tira um colega do time (ex.: quem não apareceu) */
+export async function removeTeamMember(
+  hackathonId: string,
+  actor: { username: string },
+  rawTarget: unknown,
+): Promise<ArchiveTeam> {
+  const target = normUsername(rawTarget);
+  if (!target) throw new TeamError("informe quem sai do time", 400);
+  const team = await memberTeamFor(hackathonId, actor.username);
+  if (!team) throw new TeamError("você não está em nenhum time nesta edição", 404);
+  if (target === actor.username) throw new TeamError("pra sair do time, use \"sair do time\"", 400);
+  if (!team.members.includes(target)) throw new TeamError(`@${target} não está no seu time`, 404);
+  await assertTeamEditable(team.id);
+  await leaveEditionTeam(hackathonId, target, { kind: "removido", by: actor.username });
+  return (await teamView("t.id = ?", team.id))!;
 }
 
 export type ProjectInput = {
@@ -113,73 +239,59 @@ export async function assertFormationOpen(hackathonId: string): Promise<void> {
 // o inscrito cria o time da edição — placement é SEMPRE 0: pódio é
 // condecoração do organizador (admin), nunca autoatribuição. O autor
 // entra automaticamente; colegas só entram se forem membros INSCRITOS
-// na edição e ainda sem time — o resto volta em ignoredUsernames.
+// na edição e ainda sem time — o resto volta em ignored, com o motivo.
 // Frente N #4: colega não entra direto — recebe convite (notificação
 // in-app) e só vira integrante quando aceita (lib/teamInvites).
 export async function submitTeam(
   hackathonId: string,
-  member: { username: string },
+  member: { username: string; id?: number },
   input: {
     name: string;
     memberUsernames?: string[];
     project?: ProjectInput | null;
   },
-): Promise<{ team: ArchiveTeam; ignoredUsernames: string[]; invitedUsernames: string[] }> {
+): Promise<{
+  team: ArchiveTeam;
+  ignoredUsernames: string[];
+  ignored: IgnoredInvite[];
+  invitedUsernames: string[];
+}> {
   const name = String(input.name ?? "").trim();
   if (!name) throw new TeamError("nome do time obrigatório", 400);
   const project = validateProject(input.project);
 
   await assertFormationOpen(hackathonId);
 
-  if (await memberTeamFor(hackathonId, member.username)) {
-    throw new TeamError("tu já tens time nesta edição", 409);
-  }
-  const nameTaken = await db
-    .prepare("SELECT 1 FROM teams WHERE hackathonId = ? AND name = ?")
-    .get(hackathonId, name);
-  if (nameTaken) {
-    throw new TeamError(`já existe um time "${name}" nesta edição`, 409);
-  }
-
   // colegas: normaliza/dedup, exige inscrição APROVADA na edição (spec 034:
   // integrante só aprovado) e nenhum time ainda
-  const isRegistered = db.prepare(
-    `SELECT 1 FROM registrations r
-     JOIN members m ON m.id = r.memberId
-     WHERE r.hackathonId = ? AND m.username = ? AND r.status = 'approved'`,
-  );
-  const ignoredUsernames: string[] = [];
-  const colegas: string[] = [];
-  for (const raw of input.memberUsernames ?? []) {
-    const username = normUsername(raw);
-    if (!username || username === member.username) continue;
-    if (colegas.includes(username) || ignoredUsernames.includes(username)) {
-      continue;
-    }
-    const ok =
-      await isRegistered.get(hackathonId, username) &&
-      !await memberTeamFor(hackathonId, username);
-    if (ok) colegas.push(username);
-    else ignoredUsernames.push(username);
-  }
+  const { ok: colegas, ignored } = await classifyInvitees(hackathonId, member.username, input.memberUsernames ?? []);
 
-  const tx = db.transaction(async () => {
+  const teamId = await db.transaction(async () => {
+    await lockMemberInEdition(hackathonId, member.username);
+    if (await memberTeamFor(hackathonId, member.username)) {
+      throw new TeamError("você já tem time nesta edição", 409);
+    }
+    const nameTaken = await db
+      .prepare("SELECT 1 FROM teams WHERE hackathonId = ? AND name = ?")
+      .get(hackathonId, name);
+    if (nameTaken) {
+      throw new TeamError(`já existe um time "${name}" nesta edição`, 409);
+    }
     const res = await db
       .prepare(
         "INSERT INTO teams (hackathonId, name, placement) VALUES (?, ?, 0)",
       )
       .run(hackathonId, name);
-    const teamId = Number(res.lastInsertRowid);
-    const link = db.prepare(
-      "INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)",
-    );
-    await link.run(teamId, member.username);
+    const id = Number(res.lastInsertRowid);
+    await db
+      .prepare("INSERT OR IGNORE INTO team_members (teamId, username) VALUES (?, ?)")
+      .run(id, member.username);
     if (project) {
       await db.prepare(
         `INSERT INTO team_projects (teamId, title, description, repoUrl, demoUrl, videoUrl, logoUrl)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
-        teamId,
+        id,
         project.title,
         project.description,
         project.repoUrl,
@@ -188,14 +300,18 @@ export async function submitTeam(
         project.logoUrl,
       );
     }
-    return teamId;
-  });
-  const teamId = await tx();
+    return id;
+  })();
+  // já tem time: o anúncio "procuro time" sai do ar
+  const memberId =
+    member.id ??
+    (await db.prepare("SELECT id FROM members WHERE username = ?").get<{ id: number }>(member.username))?.id;
+  if (memberId) await deactivateBoardEntry(memberId, hackathonId);
   const invitedUsernames = await createInvites(hackathonId, teamId, member.username, name, colegas);
 
-  const team = (await getArchive(hackathonId)).teams.find((t) => t.id === teamId);
+  const team = await teamView("t.id = ?", teamId);
   if (!team) throw new TeamError("falha ao criar time", 500);
-  return { team, ignoredUsernames, invitedUsernames };
+  return { team, ignoredUsernames: ignored.map((i) => i.username), ignored, invitedUsernames };
 }
 
 export type ProjectPatch = {

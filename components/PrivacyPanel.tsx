@@ -25,12 +25,21 @@ export function PrivacyPanel() {
 
   return (
     <section id="dados" className="flex flex-col gap-4 border-t-2 border-line pt-6">
-      <h2 className="text-xl font-extrabold tracking-[-0.03em]">Teus dados</h2>
+      <h2 className="text-xl font-extrabold tracking-[-0.03em]">Seus dados</h2>
       <p className="max-w-prose text-sm text-muted">
-        Tu pode baixar tudo que o HackaHub guarda sobre ti ou excluir tua conta. Excluir apaga
-        perfil, posts, comentários, notificações, papéis e certificados; tuas inscrições viram
-        anônimas pra a edição não perder a contagem.
+        Você pode baixar tudo que o HackaHub guarda sobre você ou excluir sua conta.
       </p>
+      <ul className="max-w-prose list-disc pl-5 text-sm text-muted">
+        <li>Perfil, posts, comentários, notificações e papéis são apagados.</li>
+        <li>
+          Inscrição em edição que ainda não começou é cancelada: a vaga vai pra próxima pessoa da fila e você sai do
+          time.
+        </li>
+        <li>
+          Em edição em andamento ou encerrada, a inscrição, o time, as notas de júri, os votos e os certificados
+          ficam sem o seu nome, pra não mudar a contagem nem o resultado. Comentários escritos são apagados.
+        </li>
+      </ul>
       <div className="flex flex-wrap gap-3">
         <a href="/api/members/me/export" className="btn-ghost">
           baixar meus dados (JSON)
@@ -56,7 +65,7 @@ export function PrivacyPanel() {
           >
             {state === "deleting" ? "excluindo…" : "excluir conta e dados"}
           </button>
-          {state === "error" && <p className="text-sm text-[#ba3919]">Não deu certo. Tenta de novo.</p>}
+          {state === "error" && <p className="text-sm text-[#ba3919]">Não deu certo. Tente de novo.</p>}
         </div>
       </details>
     </section>

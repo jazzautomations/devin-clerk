@@ -1,13 +1,21 @@
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
-import { getPublicListing, getRegistrationStatus, setPublicListing, unregister } from "@/lib/registrations";
-import { submitRegistration } from "@/lib/registrationForm";
+import {
+  getPublicListing,
+  getRegistrationStatus,
+  RegistrationError,
+  setPublicListing,
+  unregister,
+} from "@/lib/registrations";
+import { submitRegistration, updateMyDiet } from "@/lib/registrationForm";
 import { limitOrNull } from "@/lib/ratelimit";
 
 // spec 032 — edição curada (requiresApproval): POST grava o pedido como
 // 'pending' SEM recompensa (201 quando cria, 200 quando já estava pendente
-// ou rejeitado — INSERT OR IGNORE nunca reabre/rebaixa o status salvo);
+// ou rejeitado — o status salvo nunca reabre/rebaixa, e o DELETE não apaga
+// inscrição recusada). Prazo vencido ou edição encerrada = 409; edição que
+// não é da Hack Inova = 404.
 // edição aberta efetiva na hora e paga o pacote completo via
 // completeRegistration — a MESMA porta que a aprovação admin usa.
 export async function POST(
@@ -55,14 +63,14 @@ export async function POST(
   });
   if (!result.ok) {
     // frente E — candidato a voluntário/mentor/jurado não compete na mesma edição
-    const conflict = result.error.startsWith("conflict_role:");
+    const conflict = result.error.startsWith("conflict_role:") || result.error === "registration_closed";
     return Response.json(
       {
         error: result.error,
         questionId: result.questionId ?? null,
         ...(result.message ? { message: result.message } : {}),
       },
-      { status: conflict ? 409 : 400 },
+      { status: result.error === "not_found" ? 404 : conflict ? 409 : 400 },
     );
   }
   const { status, created, position } = result;
@@ -78,7 +86,8 @@ export async function POST(
     hackathonId: hackathon.id,
     xp: result.reward?.xp ?? "+0",
     cardSerial: result.reward?.cardSerial ?? null,
-    newBadges: (result.reward?.newBadges ?? []).map((b) => b.id),
+    // nome legível da conquista (o id é interno)
+    newBadges: (result.reward?.newBadges ?? []).map((b) => b.name),
   });
 }
 
@@ -110,7 +119,9 @@ export async function GET(
 }
 
 // frente N #6 — liga/desliga a exibição na lista pública de inscritos
-// (dar e revogar o consentimento a qualquer momento: LGPD art. 8º §5º)
+// (dar e revogar o consentimento a qualquer momento: LGPD art. 8º §5º).
+// { diet, allergies, allergySevere } corrige a restrição alimentar até o
+// início do evento.
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -124,7 +135,13 @@ export async function PATCH(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const body = (await req.json().catch(() => null)) as { publicListing?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as
+    | { publicListing?: unknown; diet?: unknown; allergies?: unknown; allergySevere?: unknown }
+    | null;
+  if (body && ("diet" in body || "allergies" in body)) {
+    const r = await updateMyDiet(member.id, id, body);
+    return r.ok ? Response.json(r.value) : Response.json({ error: r.error }, { status: r.status });
+  }
   if (typeof body?.publicListing !== "boolean") {
     return Response.json({ error: "publicListing deve ser booleano" }, { status: 400 });
   }
@@ -147,8 +164,17 @@ export async function DELETE(
   if (!member) {
     return Response.json({ error: "Member not found" }, { status: 404 });
   }
-  // cancelar um aprovado promove o 1º da fila de espera (spec 033 FR-009)
-  const { promoted } = await unregister(member.id, id);
+  // cancelar um aprovado promove o 1º da fila de espera (spec 033 FR-009);
+  // recusada, com check-in ou com o evento começado não cancela (409)
+  let promoted;
+  try {
+    ({ promoted } = await unregister(member.id, id));
+  } catch (e) {
+    if (e instanceof RegistrationError) {
+      return Response.json({ error: e.message, code: e.code }, { status: e.status });
+    }
+    throw e;
+  }
   return Response.json({
     registered: false,
     status: null,

@@ -627,15 +627,22 @@ export async function submitEntry(
       .all<{ username: string }>(team.hackathonId, teamId)
   ).map((r) => r.username);
   if (notApproved.length > 0) {
+    const who = notApproved.map((u) => `@${u}`).join(", ");
     throw new EntryError(
-      `integrante sem inscrição aprovada: ${notApproved.map((u) => `@${u}`).join(", ")}`,
+      `${who} ${notApproved.length === 1 ? "está" : "estão"} no time sem inscrição aprovada nesta edição. Remova em "Meu time", na página da edição, pra enviar.`,
       400,
       ["integrantes aprovados"],
     );
   }
 
   const snapshot: Snapshot = { ...entry.fields, members: entry.members };
+  // dois integrantes clicando "enviar" ao mesmo tempo: a trava no time põe um
+  // depois do outro (versão 1 e 2), em vez de os dois lerem o mesmo MAX e um
+  // estourar o UNIQUE(teamId, version)
   const version = await db.transaction(async () => {
+    await db.prepare("SELECT id FROM teams WHERE id = ? FOR UPDATE").get(teamId);
+    // a trava pode ter mudado entre a checagem lá em cima e a fila do lock
+    await assertEvaluatedEditable(teamId, now);
     const row = await db
       .prepare(
         `INSERT INTO project_submissions (teamId, version, snapshot, submittedBy, submittedAt)
@@ -816,27 +823,75 @@ export type AdminEntryRow = {
   dirty: boolean;
 };
 
+// painel do organizador: 6 queries por edição (não 6 por time). O snapshot
+// só vem da última versão de cada time, pra calcular o "mudança não enviada".
 export async function listEntriesForAdmin(hackathonId: string, now = new Date()): Promise<AdminEntryRow[]> {
-  const ids = await db
-    .prepare("SELECT id FROM teams WHERE hackathonId = ? ORDER BY name")
-    .all<{ id: number }>(hackathonId);
-  const entries = await Promise.all(ids.map((r) => getEntry(r.id, now)));
-  return entries
-    .filter((e): e is Entry => !!e)
-    .map((e) => ({
-      teamId: e.teamId,
-      teamName: e.teamName,
-      members: e.members,
-      title: e.fields?.title ?? null,
-      status: e.status,
-      versions: e.versions.length,
-      lastSubmittedAt: e.versions.at(-1)?.submittedAt ?? null,
-      lastSavedAt: e.lastSavedAt,
-      reopenedUntil: e.reopenedUntil,
-      stageVideoUrl: e.stageVideoUrl,
-      finalist: e.finalist,
-      dirty: e.dirty,
-    }));
+  const [settings, teams, projects, members, challenges, versions, lastSnapshots] = await Promise.all([
+    getSubmissionSettings(hackathonId),
+    db
+      .prepare("SELECT id, name, finalist, reopenedUntil FROM teams WHERE hackathonId = ? ORDER BY name")
+      .all<{ id: number; name: string; finalist: number; reopenedUntil: string | null }>(hackathonId),
+    db
+      .prepare("SELECT tp.* FROM team_projects tp JOIN teams t ON t.id = tp.teamId WHERE t.hackathonId = ?")
+      .all<ProjectRow & { teamId: number }>(hackathonId),
+    db
+      .prepare(
+        `SELECT tm.teamId, tm.username FROM team_members tm JOIN teams t ON t.id = tm.teamId
+         WHERE t.hackathonId = ? ORDER BY tm.username`,
+      )
+      .all<{ teamId: number; username: string }>(hackathonId),
+    db
+      .prepare(
+        `SELECT pc.teamId, pc.challengeId FROM project_challenges pc JOIN teams t ON t.id = pc.teamId
+         WHERE t.hackathonId = ? ORDER BY pc.challengeId`,
+      )
+      .all<{ teamId: number; challengeId: string }>(hackathonId),
+    db
+      .prepare(
+        `SELECT ps.teamId, ps.version, ps.submittedAt FROM project_submissions ps JOIN teams t ON t.id = ps.teamId
+         WHERE t.hackathonId = ? ORDER BY ps.teamId, ps.version`,
+      )
+      .all<{ teamId: number; version: number; submittedAt: string }>(hackathonId),
+    db
+      .prepare(
+        `SELECT DISTINCT ON (ps.teamId) ps.teamId, ps.snapshot FROM project_submissions ps
+         JOIN teams t ON t.id = ps.teamId WHERE t.hackathonId = ?
+         ORDER BY ps.teamId, ps.version DESC`,
+      )
+      .all<{ teamId: number; snapshot: string }>(hackathonId),
+  ]);
+  const group = <T extends { teamId: number }>(rows: T[]) => {
+    const m = new Map<number, T[]>();
+    for (const r of rows) m.set(r.teamId, [...(m.get(r.teamId) ?? []), r]);
+    return m;
+  };
+  const projectBy = new Map(projects.map((p) => [p.teamId, p]));
+  const membersBy = group(members);
+  const challengesBy = group(challenges);
+  const versionsBy = group(versions);
+  const snapshotBy = new Map(lastSnapshots.map((r) => [r.teamId, r.snapshot]));
+  return teams.map((t) => {
+    const project = projectBy.get(t.id);
+    const fields = project ? fieldsFrom(project, (challengesBy.get(t.id) ?? []).map((c) => c.challengeId)) : null;
+    const vs = versionsBy.get(t.id) ?? [];
+    const last = vs.at(-1);
+    const snapshot = snapshotBy.get(t.id);
+    const locked = isLocked(settings, t.reopenedUntil, now);
+    return {
+      teamId: t.id,
+      teamName: t.name,
+      members: (membersBy.get(t.id) ?? []).map((m) => m.username),
+      title: fields?.title ?? null,
+      status: deriveStatus(vs.length > 0, locked),
+      versions: vs.length,
+      lastSubmittedAt: last?.submittedAt ?? null,
+      lastSavedAt: project?.lastSavedAt ?? null,
+      reopenedUntil: t.reopenedUntil,
+      stageVideoUrl: project?.stageVideoUrl ?? null,
+      finalist: t.finalist === 1,
+      dirty: !!fields && (!snapshot || !sameFields(fields, parseSnapshot(snapshot))),
+    };
+  });
 }
 
 export type EntryEvent = {

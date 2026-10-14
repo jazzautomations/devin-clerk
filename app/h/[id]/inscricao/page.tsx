@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { getHackathon, isOver } from "@/lib/hackathons";
+import { getHackathon, isOver, isRegistrationClosed } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
 import { getEditionCapacity, getRegistrationStatus, getWaitlistPosition } from "@/lib/registrations";
-import { consentPurpose, listQuestions } from "@/lib/registrationForm";
+import { consentPurpose, getMyDiet, listQuestions } from "@/lib/registrationForm";
 import { RegistrationForm } from "@/components/RegistrationForm";
+import { DietEditor } from "@/components/DietEditor";
+import { emailDriver } from "@/lib/notify/email";
+import { parseEventTime } from "@/lib/eventTime";
 import { KIND_LABEL, getMyApplications, type ApplicationKind } from "@/lib/roleApplications";
 import { eventDay, getEditionTerms, imagePurpose } from "@/lib/eventTerms";
 
@@ -18,10 +21,12 @@ export async function generateMetadata({ params }: PageProps<"/h/[id]/inscricao"
 
 const STATUS_TEXT: Record<string, string> = {
   approved: "Você está inscrito nesta edição.",
-  pending: "Seu pedido está com a curadoria. Você recebe a resposta por aqui.",
+  pending: "Seu pedido está com a curadoria. Quando sair a resposta, você recebe um aviso na plataforma e o status muda aqui.",
   rejected: "A curadoria não aprovou o pedido desta vez.",
-  waitlist: "Você está na fila de espera. Se abrir vaga, a inscrição é confirmada sozinha.",
+  waitlist: "Você está na fila de espera. Se abrir vaga, a inscrição é confirmada sozinha e você recebe um aviso.",
 };
+
+const stepLink = "flex min-h-11 items-center font-mono text-[13px] text-accent underline underline-offset-4";
 
 // spec 033 US1 — inscrição pelo formulário da edição (substitui o Google
 // Forms). Pública pra leitura: anon vê as perguntas e o aceite; enviar pede login.
@@ -31,7 +36,9 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
   if (!h || !h.active || !h.partner) notFound();
 
   const now = new Date();
-  const closed = isOver(h, now) || (h.registrationDeadline !== null && new Date(h.registrationDeadline) < now);
+  const closed = isOver(h, now) || isRegistrationClosed(h, now);
+  const start = parseEventTime(h.startsAt);
+  const started = !!start && now.getTime() >= start.getTime();
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
   const [questions, purpose, cap, status, myApps, terms] = await Promise.all([
@@ -44,7 +51,12 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
   ]);
   // frente E — candidato pendente/aprovado a voluntário/mentor/jurado não compete
   const helping = (Object.entries(myApps) as [ApplicationKind, string][]).find(([, st]) => st !== "rejected");
-  const position = member && status === "waitlist" ? await getWaitlistPosition(member.id, h.id) : null;
+  const [position, diet] = await Promise.all([
+    member && status === "waitlist" ? getWaitlistPosition(member.id, h.id) : Promise.resolve(null),
+    member && status && status !== "rejected" && terms.dietEnabled && !started
+      ? getMyDiet(member.id, h.id)
+      : Promise.resolve(null),
+  ]);
   const full = !h.requiresApproval && cap.remaining === 0;
 
   return (
@@ -80,9 +92,32 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
           {position !== null && (
             <p className="pix text-[28px] leading-none">#{position} na fila</p>
           )}
-          <Link href={`/h/${h.id}`} className="font-mono text-[13px] text-accent underline">
-            voltar pra edição
-          </Link>
+          <nav aria-label="próximos passos" className="flex flex-col">
+            {status === "approved" && (
+              <>
+                <Link href={`/h/${h.id}/ingresso`} className={stepLink}>
+                  meu ingresso (QR do check-in)
+                </Link>
+                <Link href={`/h/${h.id}#meu-time`} className={stepLink}>
+                  montar ou entrar num time
+                </Link>
+              </>
+            )}
+            {status !== "rejected" && (
+              <Link href={`/h/${h.id}/duvidas`} className={stepLink}>
+                tirar dúvidas com a organização
+              </Link>
+            )}
+            {status === "rejected" && (
+              <Link href="/radar" className={stepLink}>
+                ver outras edições abertas
+              </Link>
+            )}
+            <Link href={`/h/${h.id}`} className={stepLink}>
+              voltar pra edição
+            </Link>
+          </nav>
+          {diet && <DietEditor hackathonId={h.id} initial={diet} />}
         </section>
       ) : helping ? (
         <p className="border-[1.5px] border-line p-5 text-[15px] text-muted" data-testid="register-blocked-helper">
@@ -129,6 +164,7 @@ export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscr
               conductVersion: terms.conductVersion,
               eventDay: eventDay(h.startsAt),
               imagePurpose: imagePurpose(h.organizer, h.name),
+              emailEnabled: emailDriver().name !== "log",
             }}
           />
         </>

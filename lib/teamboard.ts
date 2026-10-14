@@ -16,6 +16,12 @@ export type BoardEntry = {
   xp: number;
 };
 
+/**
+ * O que a página da edição mostra. Sem memberId nunca; a nota só pra quem tem
+ * inscrição aprovada na edição (o GET anônimo não leva a nota).
+ */
+export type BoardCard = Omit<BoardEntry, "memberId" | "note"> & { note?: string | null };
+
 type Row = Omit<BoardEntry, "skills" | "active"> & {
   skills: string;
   active: number;
@@ -52,18 +58,18 @@ export function validateBoardInput(b: {
 }): BoardInput {
   const need = typeof b.need === "string" ? b.need.trim() : "";
   if (!need || need.length > NEED_MAX) {
-    throw new Error(`need obrigatório (1–${NEED_MAX} chars)`);
+    throw new Error(`diga o que falta no time (até ${NEED_MAX} caracteres)`);
   }
   let note: string | null = null;
   if (b.note !== undefined && b.note !== null) {
-    if (typeof b.note !== "string") throw new Error("note inválido");
+    if (typeof b.note !== "string") throw new Error("nota inválida");
     const n = b.note.trim();
-    if (n.length > NOTE_MAX) throw new Error(`note longo demais (máx ${NOTE_MAX})`);
+    if (n.length > NOTE_MAX) throw new Error(`nota longa demais (até ${NOTE_MAX} caracteres)`);
     note = n || null;
   }
   let skills: string[] = [];
   if (b.skills !== undefined && b.skills !== null) {
-    if (!Array.isArray(b.skills)) throw new Error("skills deve ser array");
+    if (!Array.isArray(b.skills)) throw new Error("habilidades inválidas");
     skills = [
       ...new Set(
         b.skills
@@ -77,9 +83,25 @@ export function validateBoardInput(b: {
   return { skills, need, note };
 }
 
-// board público da edição — cronológico, só ativos (edição passada vira
-// histórico: o dado fica, a UI decide se mostra o composer)
-export async function listBoardEntries(hackathonId: string): Promise<BoardEntry[]> {
+// telefone ou e-mail dentro da nota (menor de idade não pode publicar contato)
+const CONTACT_RE = /(\d[\d\s().-]{7,}\d)|(\S+@\S+\.\S+)/;
+export const hasContact = (note: string | null) => !!note && CONTACT_RE.test(note);
+
+/** idade na data do evento < 18 (vem do aceite dos termos na inscrição) */
+export async function isMinorAtEdition(memberId: number, hackathonId: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT 1 AS y FROM registration_terms WHERE memberId = ? AND hackathonId = ? AND ageAtEvent < 18")
+    .get(memberId, hackathonId);
+  return !!row;
+}
+
+// board da edição — cronológico, só ativos (edição passada vira histórico:
+// o dado fica, a UI decide se mostra o composer). memberId nunca sai; a nota
+// só com withNotes (quem tem inscrição aprovada na edição).
+export async function listBoardEntries(
+  hackathonId: string,
+  opts: { withNotes?: boolean } = {},
+): Promise<BoardCard[]> {
   return (
     await db
       .prepare(
@@ -87,7 +109,11 @@ export async function listBoardEntries(hackathonId: string): Promise<BoardEntry[
          ORDER BY l.createdAt ASC, l.id ASC`,
       )
       .all(hackathonId) as Row[]
-  ).map(toEntry);
+  ).map((r) => {
+    const { memberId: _m, note, ...card } = toEntry(r);
+    void _m;
+    return opts.withNotes ? { ...card, note } : card;
+  });
 }
 
 // visão admin: inclui inativos pra moderação (reativar entry escondida)

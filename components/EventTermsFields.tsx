@@ -17,6 +17,8 @@ export type TermsConfig = {
   /** "YYYY-MM-DD" do início do evento */
   eventDay: string;
   imagePurpose: string;
+  /** o e-mail da plataforma está ligado? (sem ele o responsável não recebe nada) */
+  emailEnabled: boolean;
 };
 
 export type TermsValue = {
@@ -79,10 +81,13 @@ export function TermsPersonalFields({
   cfg,
   value: v,
   onChange,
+  birthDateError,
 }: {
   cfg: TermsConfig;
   value: TermsValue;
   onChange: (patch: Partial<TermsValue>) => void;
+  /** erro da validação do formulário (aparece embaixo do campo) */
+  birthDateError?: string;
 }) {
   const age = ageOnDay(v.birthDate, cfg.eventDay);
   const below = age !== null && age < cfg.minAge;
@@ -94,20 +99,28 @@ export function TermsPersonalFields({
       <fieldset className="flex flex-col gap-2 border-t border-line pt-4">
         <legend className="sr-only">idade</legend>
         <label htmlFor="birthDate" className="text-[17px] leading-snug font-bold">
-          Data de nascimento<span className="ml-1 text-orange" aria-label="obrigatória">*</span>
+          Data de nascimento<span className="ml-1 text-orange" aria-hidden="true">*</span>
+          <span className="sr-only"> (obrigatória)</span>
         </label>
         <input
           id="birthDate"
           name="birthDate"
+          data-field="birthDate"
           type="date"
           required
+          aria-invalid={birthDateError ? true : undefined}
           max={today}
           min="1900-01-01"
           className={`${field} sm:max-w-60`}
           value={v.birthDate}
           onChange={(e) => onChange({ birthDate: e.target.value })}
-          aria-describedby="birthDate-help"
+          aria-describedby={birthDateError ? "birthDate-err birthDate-help" : "birthDate-help"}
         />
+        {birthDateError && (
+          <p id="birthDate-err" className="font-mono text-[13px] text-orange">
+            {birthDateError}
+          </p>
+        )}
         <p id="birthDate-help" className="text-[13px] leading-snug text-muted">
           {cfg.minAge >= 18
             ? `Esta edição é para maiores de ${cfg.minAge} anos na data do evento.`
@@ -125,8 +138,9 @@ export function TermsPersonalFields({
         <fieldset className="flex flex-col gap-3 border-[1.5px] border-line p-4" data-testid="guardian-fields">
           <legend className="px-1 text-[15px] font-bold">Responsável legal</legend>
           <p className="text-[13px] leading-snug text-muted">
-            Você tem {age} anos na data do evento. Informe quem responde por você: essa pessoa recebe um e-mail com os
-            detalhes da edição e pode cancelar a inscrição se não tiver autorizado.
+            {cfg.emailEnabled
+              ? `Você tem ${age} anos na data do evento. Informe quem responde por você: essa pessoa recebe um e-mail com os detalhes da edição e pode cancelar a inscrição se não tiver autorizado.`
+              : `Você tem ${age} anos na data do evento. Informe quem responde por você: a organização guarda esse contato e fala com essa pessoa se precisar.`}
           </p>
           <label className="flex flex-col gap-1.5">
             <span className={label}>nome completo</span>
@@ -157,8 +171,8 @@ export function TermsPersonalFields({
               onChange={(e) => onChange({ guardianAccepted: e.target.checked })}
             />
             <span>
-              Meu responsável legal conhece e autorizou minha participação nesta edição. Sei que ele ou ela vai
-              receber um e-mail de confirmação.
+              Meu responsável legal conhece e autorizou minha participação nesta edição.
+              {cfg.emailEnabled && " Sei que ele ou ela vai receber um e-mail de confirmação."}
             </span>
           </label>
         </fieldset>
@@ -223,17 +237,26 @@ export function TermsAcceptBoxes({
   cfg,
   value: v,
   onChange,
+  conductInvalid = false,
 }: {
   cfg: TermsConfig;
   value: TermsValue;
   onChange: (patch: Partial<TermsValue>) => void;
+  conductInvalid?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex cursor-pointer items-start gap-3 border-[1.5px] border-line p-3.5 text-[13px] leading-snug">
+      <label
+        className={`flex cursor-pointer items-start gap-3 border-[1.5px] p-3.5 text-[13px] leading-snug ${
+          conductInvalid ? "border-orange" : "border-line"
+        }`}
+      >
         <input
           type="checkbox"
           name="conduct"
+          data-field="conduct"
+          aria-required="true"
+          aria-invalid={conductInvalid || undefined}
           className="mt-0.5 size-5 shrink-0 accent-[#047a43]"
           checked={v.conduct}
           onChange={(e) => onChange({ conduct: e.target.checked })}
@@ -243,7 +266,8 @@ export function TermsAcceptBoxes({
           <Link href={`/h/${cfg.hackathonId}/conduta`} target="_blank" className="text-accent underline">
             código de conduta desta edição
           </Link>{" "}
-          (versão {cfg.conductVersion}).<span className="ml-1 text-orange" aria-label="obrigatório">*</span>
+          (versão {cfg.conductVersion}).<span className="ml-1 text-orange" aria-hidden="true">*</span>
+          <span className="sr-only"> (obrigatório)</span>
         </span>
       </label>
       <label

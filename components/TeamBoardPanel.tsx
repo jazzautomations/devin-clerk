@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { levelFor } from "@/lib/game";
-import type { BoardEntry } from "@/lib/teamboard";
+import type { BoardCard } from "@/lib/teamboard";
 
 const input =
   "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
 
 // board "procuro time" da edição — leitura pública; inscrito (canPost)
 // anuncia/desativa o próprio. Lista vem do server e refaz fetch após mutação.
+// A nota de cada anúncio só chega pra quem tem inscrição aprovada (o GET
+// com sessão traz; a lista da página não traz), então o inscrito busca de
+// novo ao abrir.
 export function TeamBoardPanel({
   hackathonId,
   canPost,
@@ -20,7 +23,7 @@ export function TeamBoardPanel({
   hackathonId: string;
   canPost: boolean;
   myUsername: string | null;
-  initialEntries: BoardEntry[];
+  initialEntries: BoardCard[];
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
@@ -44,7 +47,21 @@ export function TeamBoardPanel({
     }
   }
 
-  function openForm(prefill?: BoardEntry) {
+  useEffect(() => {
+    if (!canPost) return;
+    let live = true;
+    fetch(`/api/hackathons/${hackathonId}/team-board`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (live && data?.entries) setEntries(data.entries);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [canPost, hackathonId]);
+
+  function openForm(prefill?: BoardCard) {
     setSkills(prefill?.skills.join(", ") ?? "");
     setNeed(prefill?.need ?? "");
     setNote(prefill?.note ?? "");
@@ -74,7 +91,7 @@ export function TeamBoardPanel({
     }
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      setErr(data?.error ?? "erro ao anunciar");
+      setErr(typeof data?.error === "string" ? data.error : "não deu pra anunciar. Tente de novo.");
       setBusy(false);
       return;
     }
@@ -91,6 +108,12 @@ export function TeamBoardPanel({
     });
     if (res.status === 401) {
       router.push("/sign-in");
+      return;
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setErr(typeof data?.error === "string" ? data.error : "não deu pra desativar. Tente de novo.");
+      setBusy(false);
       return;
     }
     await refresh();
@@ -137,7 +160,7 @@ export function TeamBoardPanel({
                 )}
                 {mine?.id === e.id && (
                   <span className="ml-auto font-mono text-[12px] text-accent">
-                    ← teu anúncio
+                    ← seu anúncio
                   </span>
                 )}
               </div>
@@ -209,7 +232,7 @@ export function TeamBoardPanel({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-xs text-muted">
-              tuas skills (separadas por vírgula)
+              suas habilidades (separadas por vírgula)
             </span>
             <input
               value={skills}
@@ -220,7 +243,7 @@ export function TeamBoardPanel({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-xs text-muted">
-              nota (opcional — contato, disponibilidade)
+              nota (opcional: disponibilidade, o que você quer construir)
             </span>
             <textarea
               value={note}
@@ -228,8 +251,13 @@ export function TeamBoardPanel({
               rows={2}
               maxLength={300}
               placeholder="chego sexta à noite, prefiro time presencial"
+              aria-describedby="board-note-help"
               className={`${input} resize-none`}
             />
+            <span id="board-note-help" className="font-mono text-[12px] text-muted">
+              Só quem tem inscrição aprovada nesta edição vê a nota. Não coloque telefone nem e-mail: quem se
+              interessar chama você pelo perfil.
+            </span>
           </label>
           <div className="flex items-center gap-3">
             <button
@@ -246,15 +274,12 @@ export function TeamBoardPanel({
             >
               cancelar
             </button>
-            {err && (
-              <span className="font-mono text-xs text-orange">
-                {""}
-                {err}
-              </span>
-            )}
           </div>
         </form>
       )}
+      <p role="alert" className="font-mono text-xs text-orange empty:hidden">
+        {err}
+      </p>
     </div>
   );
 }

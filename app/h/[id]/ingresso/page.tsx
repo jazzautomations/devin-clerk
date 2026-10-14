@@ -5,7 +5,9 @@ import { auth } from "@clerk/nextjs/server";
 import QRCode from "qrcode";
 import { formatCheckinTime, getTicket } from "@/lib/checkins";
 import { getHackathon } from "@/lib/hackathons";
+import { parseEventTime } from "@/lib/eventTime";
 import { getMemberByClerkId } from "@/lib/members";
+import { getRegistrationStatus, getWaitlistPosition } from "@/lib/registrations";
 
 // Ingresso do inscrito (spec 033 US4): QR com o token assinado — nunca o id
 // cru da inscrição. SVG gerado no servidor, sem JS no cliente.
@@ -23,8 +25,11 @@ export default async function TicketPage({ params }: PageProps<"/h/[id]/ingresso
   const h = await getHackathon(id);
   if (!h || !h.active) notFound();
   const member = await getMemberByClerkId(userId);
-  const ticket = member ? await getTicket(member.id, h.id) : null;
+  // o token assinado do QR só existe pra quem está aprovado
+  const status = member ? await getRegistrationStatus(member.id, h.id) : null;
+  const ticket = member && status === "approved" ? await getTicket(member.id, h.id) : null;
   const approved = ticket?.status === "approved";
+  const position = member && status === "waitlist" ? await getWaitlistPosition(member.id, h.id) : null;
   const svg = approved
     ? await QRCode.toString(ticket.token, {
         type: "svg",
@@ -37,7 +42,8 @@ export default async function TicketPage({ params }: PageProps<"/h/[id]/ingresso
     day: "2-digit",
     month: "long",
     year: "numeric",
-  }).format(new Date(h.startsAt));
+    timeZone: "America/Sao_Paulo",
+  }).format(parseEventTime(h.startsAt) ?? new Date(h.startsAt));
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-10">
@@ -81,9 +87,17 @@ export default async function TicketPage({ params }: PageProps<"/h/[id]/ingresso
           </div>
         ) : (
           <div className="border-t border-line py-5 text-[15px]">
-            {ticket?.status === "pending" ? (
+            {status === "pending" ? (
               <p>Seu pedido de inscrição ainda está em análise. O ingresso aparece aqui quando for aprovado.</p>
-            ) : ticket?.status === "rejected" ? (
+            ) : status === "waitlist" ? (
+              <div className="flex flex-col gap-2" data-testid="ticket-waitlist">
+                <p className="pix text-[28px] leading-none">fila de espera{position ? ` #${position}` : ""}</p>
+                <p>
+                  Você está na fila de espera. Se abrir vaga, sua inscrição é confirmada sozinha, você recebe um aviso
+                  e o ingresso aparece aqui.
+                </p>
+              </div>
+            ) : status === "rejected" ? (
               <p>Sua inscrição nesta edição não foi aprovada, então não há ingresso.</p>
             ) : (
               <p>

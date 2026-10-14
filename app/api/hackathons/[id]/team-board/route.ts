@@ -1,10 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
-import { getHackathon } from "@/lib/hackathons";
+import { getHackathon, isOver } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
 import {
   deactivateBoardEntry,
   getBoardEntryById,
+  hasContact,
+  isMinorAtEdition,
   listBoardEntries,
   setBoardEntryActive,
   upsertBoardEntry,
@@ -14,7 +16,11 @@ import { XP } from "@/lib/game";
 import { awardXp, checkBadges } from "@/lib/xp";
 import { limitOrNull } from "@/lib/ratelimit";
 
-// leitura pública — o board é vitrine/prova social; anunciar exige inscrição
+const NOT_APPROVED = "só quem tem inscrição aprovada nesta edição pode fazer isso";
+
+// leitura pública — o board é vitrine/prova social; anunciar exige inscrição.
+// A nota (disponibilidade etc.) só aparece pra quem tem inscrição aprovada na
+// edição; ninguém recebe o memberId.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -24,7 +30,10 @@ export async function GET(
   if (!h || !h.active) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  return Response.json({ entries: await listBoardEntries(h.id) });
+  const { userId } = await auth();
+  const member = userId ? await getMemberByClerkId(userId) : null;
+  const withNotes = !!member && (await getRegistrationIds(member.id)).includes(h.id);
+  return Response.json({ entries: await listBoardEntries(h.id, { withNotes }) });
 }
 
 export async function POST(
@@ -51,7 +60,10 @@ export async function POST(
   }
   // sem inscrição o board vira spam — FR-002
   if (!(await getRegistrationIds(member.id)).includes(h.id)) {
-    return Response.json({ error: "inscreve-te primeiro" }, { status: 403 });
+    return Response.json({ error: NOT_APPROVED }, { status: 403 });
+  }
+  if (isOver(h)) {
+    return Response.json({ error: "esta edição já terminou" }, { status: 409 });
   }
   const body = await req.json().catch(() => null);
   let input;
@@ -60,6 +72,13 @@ export async function POST(
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Anúncio inválido" },
+      { status: 400 },
+    );
+  }
+  // menor de idade na data do evento não publica telefone nem e-mail
+  if (hasContact(input.note) && (await isMinorAtEdition(member.id, h.id))) {
+    return Response.json(
+      { error: "tire o telefone e o e-mail da nota; quem se interessar chama você pelo perfil" },
       { status: 400 },
     );
   }

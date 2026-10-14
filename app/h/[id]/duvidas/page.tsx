@@ -33,7 +33,7 @@ export default async function DuvidasPage({ params }: PageProps<"/h/[id]/duvidas
         </Link>
         <h1 className="text-[clamp(2rem,6vw,3rem)] leading-none font-extrabold tracking-[-0.04em]">Dúvidas</h1>
         <p className="text-[15px] text-muted">
-          Pergunta aqui em vez de no grupo. A organização e os mentores respondem e marcam o que já foi resolvido.
+          Pergunte aqui. A organização e os mentores respondem e marcam o que já foi resolvido.
         </p>
       </header>
       {allowed ? (

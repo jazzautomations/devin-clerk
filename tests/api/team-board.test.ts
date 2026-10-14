@@ -134,7 +134,7 @@ describe("POST /api/hackathons/[id]/team-board", () => {
     const res = await POST(req("POST", { need: "dados" }), ctx());
     expect(res.status).toBe(403);
     const { error } = await res.json();
-    expect(error).toMatch(/inscreve/i);
+    expect(error).toMatch(/inscrição aprovada/i);
   });
 
   it("401 — deslogado; clerkId sem member também 401", async () => {

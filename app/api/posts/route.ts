@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     }
     if (!(await getRegistrationIds(member.id)).includes(edition.id)) {
       return Response.json(
-        { error: "inscreve-te primeiro" },
+        { error: "só quem tem inscrição aprovada nesta edição pode fazer isso" },
         { status: 403 },
       );
     }

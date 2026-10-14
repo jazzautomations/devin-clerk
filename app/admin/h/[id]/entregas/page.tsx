@@ -67,8 +67,9 @@ export default async function EntriesPanel({ params }: PageProps<"/admin/h/[id]/
         ))}
       </dl>
       {!settings.submissionDeadline && (
-        <p className="border-[1.5px] border-orange px-4 py-3 font-mono text-[13px] text-orange">
-          Sem prazo de entrega: a edição está no modo antigo (sem trava, todo time vai pro júri). Configure o prazo abaixo.
+        <p className="border-[1.5px] border-line px-4 py-3 font-mono text-[13px] text-muted">
+          Sem prazo de entrega ainda: todo time cadastrado vai pro júri e nada trava. Pra ter versão enviada e trava no
+          horário, defina o prazo abaixo.
         </p>
       )}
 

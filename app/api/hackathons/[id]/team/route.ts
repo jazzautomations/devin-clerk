@@ -4,7 +4,9 @@ import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
 import { getRegistrationIds } from "@/lib/registrations";
 import {
+  leaveTeam,
   memberTeamFor,
+  removeTeamMember,
   submitTeam,
   TeamError,
   updateTeamProject,
@@ -47,7 +49,8 @@ export async function GET(
   if (!team) {
     return Response.json({ error: "sem time nesta edição" }, { status: 404 });
   }
-  return Response.json({ team });
+  // me: quem está vendo (o painel não oferece "remover" na própria linha)
+  return Response.json({ team, me: member.username });
 }
 
 export async function POST(
@@ -74,14 +77,17 @@ export async function POST(
   }
   // time é coisa de quem vai ao evento — mesmo gate do board (012)
   if (!(await getRegistrationIds(member.id)).includes(h.id)) {
-    return Response.json({ error: "inscreve-te primeiro" }, { status: 403 });
+    return Response.json(
+      { error: "só quem tem inscrição aprovada nesta edição pode fazer isso" },
+      { status: 403 },
+    );
   }
   const b = await req.json().catch(() => null);
   if (!b || typeof b.name !== "string" || !b.name.trim()) {
     return Response.json({ error: "name obrigatório" }, { status: 400 });
   }
   try {
-    const { team, ignoredUsernames, invitedUsernames } = await submitTeam(h.id, member, {
+    const { team, ignoredUsernames, ignored, invitedUsernames } = await submitTeam(h.id, member, {
       name: b.name,
       memberUsernames: Array.isArray(b.memberUsernames)
         ? b.memberUsernames
@@ -94,10 +100,11 @@ export async function POST(
       {
         team,
         ignoredUsernames,
+        ignored,
         // frente N #4 — colegas recebem convite e só entram quando aceitam
         invitedUsernames,
         xp: `+${XP.teamSubmit}`,
-        newBadges: newBadges.map((b) => b.id),
+        newBadges: newBadges.map((b) => b.name),
       },
       { status: 201 },
     );
@@ -111,7 +118,9 @@ export async function POST(
 
 // integrante edita o projeto do próprio time — {teamId, title?,
 // description?, repoUrl?, demoUrl?, videoUrl?, logoUrl?} (030);
-// o time precisa ser desta edição
+// o time precisa ser desta edição.
+// {action: "leave"} = sair do time; {action: "remove", username} = tirar um
+// colega (quem ficou e quem saiu recebem aviso)
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -130,6 +139,20 @@ export async function PATCH(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   const b = await req.json().catch(() => null);
+  if (b?.action === "leave" || b?.action === "remove") {
+    try {
+      if (b.action === "leave") {
+        await leaveTeam(h.id, member);
+        return Response.json({ team: null });
+      }
+      return Response.json({ team: await removeTeamMember(h.id, member, b.username) });
+    } catch (e) {
+      return Response.json(
+        { error: e instanceof Error ? e.message : "Erro" },
+        { status: toStatus(e) },
+      );
+    }
+  }
   const teamId =
     b && typeof b.teamId === "number" && Number.isInteger(b.teamId)
       ? b.teamId

@@ -74,7 +74,7 @@ describe("POST /api/posts com hackathonId", () => {
     const res = await POST(req({ body: "oi", hackathonId: ED }));
     expect(res.status).toBe(403);
     const { error } = await res.json();
-    expect(error).toBe("inscreve-te primeiro");
+    expect(error).toBe("só quem tem inscrição aprovada nesta edição pode fazer isso");
   });
 
   it("201 — inscrito posta no mural; post traz hackathonId + hackathonName", async () => {

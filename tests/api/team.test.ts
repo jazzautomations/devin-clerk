@@ -179,14 +179,14 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
     expect(ghost.status).toBe(401);
   });
 
-  it("403 — membro não inscrito recebe 'inscreve-te primeiro'", async () => {
+  it("403 — membro não inscrito recebe 'só quem tem inscrição aprovada'", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
     clerk.uid = "clerk_noreg";
     await memberId("clerk_noreg"); // sem registration
     const res = await POST(req("POST", { name: "X" }), ctx());
     expect(res.status).toBe(403);
     const { error } = await res.json();
-    expect(error).toMatch(/inscreve/i);
+    expect(error).toMatch(/inscrição aprovada/i);
   });
 
   it("404 — edição inexistente", async () => {
@@ -401,7 +401,7 @@ describe("/api/hackathons/[id]/team/invites — aceite de time (frente N #4)", (
     await registerMember(third);
     const more = await inv.POST(req("POST", { usernames: ["@third_inv", "nao_existe"] }), ctx());
     expect(more.status).toBe(200);
-    expect(await more.json()).toMatchObject({ invited: ["third_inv"], ignored: ["nao_existe"], pending: ["third_inv"] });
+    expect(await more.json()).toMatchObject({ invited: ["third_inv"], ignored: [{ username: "nao_existe", reason: "nao_existe" }], pending: ["third_inv"] });
     expect((await inv.POST(req("POST", { usernames: "x" }), ctx())).status).toBe(400);
   });
 });

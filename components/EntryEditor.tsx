@@ -159,6 +159,18 @@ export function EntryEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, locked]);
 
+  // sair da página com alteração não salva pede confirmação do navegador
+  // (sem título o autosave não roda, então o texto só existe aqui)
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
   function set<K extends keyof Form>(k: K, v: Form[K]) {
     dirtyRef.current = true;
     setSave("pending");
@@ -166,7 +178,7 @@ export function EntryEditor({
   }
 
   async function submit() {
-    if (busy) return;
+    if (busy || entry.missing.length > 0) return;
     if (!window.confirm(`Enviar a versão ${entry.versions.length + 1}? O júri avalia a última versão enviada até o prazo.`)) return;
     setBusy(true);
     setSubmitMsg("");
@@ -202,6 +214,7 @@ export function EntryEditor({
   const techs = toPayload(form).technologies;
   const lastVersion = entry.versions.at(-1);
   const missing = entry.missing;
+  const needsTitle = !form.title.trim();
   const statusTone =
     entry.status === "rascunho" || entry.status === "nao_entregue" ? "border-orange text-orange" : "border-accent text-accent";
 
@@ -245,7 +258,18 @@ export function EntryEditor({
         <legend className="mb-4 font-mono text-[12px] tracking-widest text-muted uppercase">projeto · avaliado pelo júri</legend>
         <label className="flex flex-col gap-1.5">
           <span className={label}>título *</span>
-          <input value={form.title} onChange={(e) => set("title", e.target.value)} maxLength={120} className={input} />
+          <input
+            value={form.title}
+            onChange={(e) => set("title", e.target.value)}
+            maxLength={120}
+            aria-describedby={needsTitle ? "entry-title-hint" : undefined}
+            className={input}
+          />
+          {needsTitle && (
+            <span id="entry-title-hint" className="font-mono text-[12px] text-orange">
+              preencha o título pra começar a salvar o rascunho
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1.5">
           <span className={label}>
@@ -411,14 +435,28 @@ export function EntryEditor({
       {!locked && (
         <div className="flex flex-col gap-3 border-t-2 border-line pt-5">
           {missing.length > 0 && (
-            <p className="font-mono text-[12px] text-orange">falta pra enviar: {missing.join(", ")}</p>
+            <p id="entry-missing" className="font-mono text-[12px] text-orange">
+              falta pra enviar: {missing.join(", ")}
+            </p>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={submit} disabled={busy || !form.title.trim()} className="btn disabled:opacity-50">
+            <button
+              type="button"
+              onClick={submit}
+              disabled={busy || missing.length > 0}
+              aria-describedby={missing.length > 0 ? "entry-missing" : undefined}
+              className="btn disabled:opacity-50"
+            >
               {busy ? "enviando…" : `enviar versão ${entry.versions.length + 1}`}
             </button>
             <span className="text-[13px] text-muted">dá pra reenviar até o prazo; cada envio vira uma versão</span>
           </div>
+          {err && (
+            <p role="alert" className="font-mono text-[13px] text-orange">
+              {err}
+            </p>
+          )}
+          {submitMsg && <p className="font-mono text-[13px] text-accent">{submitMsg}</p>}
         </div>
       )}
 
@@ -438,14 +476,13 @@ export function EntryEditor({
         <button type="button" onClick={saveAfter} disabled={busy || !entry.fields} className="btn w-fit disabled:opacity-50">
           salvar
         </button>
+        {locked && err && (
+          <p role="alert" className="font-mono text-[13px] text-orange">
+            {err}
+          </p>
+        )}
+        {locked && submitMsg && <p className="font-mono text-[13px] text-accent">{submitMsg}</p>}
       </section>
-
-      {err && (
-        <p role="alert" className="font-mono text-[13px] text-orange">
-          {err}
-        </p>
-      )}
-      {submitMsg && <p className="font-mono text-[13px] text-accent">{submitMsg}</p>}
     </div>
   );
 }
