@@ -1,17 +1,18 @@
-import db from "@/lib/db";
+import { limitOrNull } from "@/lib/ratelimit";
+import { subscribe } from "@/lib/subscribers";
 
+// Newsletter da landing. Pública, então tem limite por IP (5/h) e honeypot.
+// O consentimento fica gravado (data + versão da política) e a newsletter
+// só sai pra quem confirmar pelo link do e-mail (lib/subscribers).
 export async function POST(req: Request) {
+  const limited = limitOrNull(req, "subscribe");
+  if (limited) return limited;
   const body = await req.json().catch(() => null);
-  const email = typeof body?.email === "string" ? body.email.trim() : "";
   const website = typeof body?.website === "string" ? body.website : "";
   if (website) {
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, confirm: "pending" });
   }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return Response.json({ error: "E-mail inválido" }, { status: 400 });
-  }
-  await db.prepare("INSERT OR IGNORE INTO subscribers (email) VALUES (?)").run(
-    email.toLowerCase(),
-  );
-  return Response.json({ ok: true });
+  const r = await subscribe(body?.email);
+  if (!r.ok) return Response.json({ error: r.error }, { status: 400 });
+  return Response.json(r);
 }

@@ -3,17 +3,22 @@
 import { MAX_PERSONAS, PERSONAS } from "@/lib/personas";
 import { useState } from "react";
 import type { Member } from "@/lib/members";
-import { OPEN_TO } from "@/lib/openTo";
+import { OPEN_TO, openToLabel } from "@/lib/openTo";
 import { formatBrPhone } from "@/lib/notify/phone";
+import type { ChannelsEnabled } from "@/lib/notify/reach";
+import { userMessage } from "@/lib/apiError";
 
 export function ProfileForm({
   member,
   openTo: initialOpenTo = [],
   contact,
+  channels = { email: false, whatsapp: false },
 }: {
   member: Member;
   openTo?: string[];
   contact?: { phone: string | null; whatsappOptIn: boolean };
+  /** canais que saem de verdade neste ambiente: a copy só promete o que existe */
+  channels?: ChannelsEnabled;
 }) {
   const [name, setName] = useState(member.name ?? "");
   const [openTo, setOpenTo] = useState<string[]>(initialOpenTo);
@@ -65,7 +70,7 @@ export function ProfileForm({
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setErrorMsg(typeof data.error === "string" ? data.error : null);
+      setErrorMsg(userMessage(res, data, "não deu pra salvar. Tente de novo."));
     }
     setStatus(res.ok ? "saved" : "error");
   }
@@ -115,7 +120,7 @@ export function ProfileForm({
       </label>
       <fieldset className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
-          quem tu é no ecossistema — até {MAX_PERSONAS}, o primeiro é o principal
+          quem você é no ecossistema: até {MAX_PERSONAS}, o primeiro é o principal
         </span>
         <div className="flex flex-wrap gap-2">
           {PERSONAS.map((p) => {
@@ -142,7 +147,7 @@ export function ProfileForm({
       </fieldset>
       <fieldset className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
-          open to — como empresas podem te chamar (te lista em /talento)
+          disponível para: como empresas podem chamar você (aparece em /talento)
         </span>
         <div className="flex flex-wrap gap-2">
           {OPEN_TO.map((v) => {
@@ -163,7 +168,7 @@ export function ProfileForm({
                     : "border-line text-foreground hover:bg-mint"
                 }`}
               >
-                {v}
+                {openToLabel(v)}
               </button>
             );
           })}
@@ -171,7 +176,7 @@ export function ProfileForm({
       </fieldset>
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
-          headline — título @ empresa (aparece no wall da comunidade)
+          título: cargo @ empresa (aparece no seu perfil e em /membros)
         </span>
         <input
           className={input}
@@ -187,7 +192,7 @@ export function ProfileForm({
             className={input}
             value={github}
             onChange={(e) => setGithub(e.target.value)}
-            placeholder="teuusuario"
+            placeholder="seuusuario"
           />
         </label>
         <label className="flex flex-col gap-1.5">
@@ -196,7 +201,7 @@ export function ProfileForm({
             className={input}
             value={linkedin}
             onChange={(e) => setLinkedin(e.target.value)}
-            placeholder="in/teuusuario"
+            placeholder="in/seuusuario"
           />
         </label>
         <label className="flex flex-col gap-1.5">
@@ -205,7 +210,7 @@ export function ProfileForm({
             className={input}
             value={twitter}
             onChange={(e) => setTwitter(e.target.value)}
-            placeholder="@teuusuario"
+            placeholder="@seuusuario"
           />
         </label>
         <label className="flex flex-col gap-1.5">
@@ -214,7 +219,7 @@ export function ProfileForm({
             className={input}
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
-            placeholder="teusite.dev"
+            placeholder="seusite.dev"
           />
         </label>
       </div>
@@ -222,7 +227,9 @@ export function ProfileForm({
       <fieldset id="contato" className="flex scroll-mt-24 flex-col gap-3 border-t border-line pt-4">
         <legend className="sr-only">contato para avisos</legend>
         <span className="font-mono text-xs text-muted">
-          avisos das edições — chegam sempre no app e no teu e-mail
+          {channels.email
+            ? "avisos das edições: chegam no sino do HackaHub e no seu e-mail"
+            : "avisos das edições: chegam no sino do HackaHub e na página da edição"}
         </span>
         <label className="flex flex-col gap-1.5">
           <span className="font-mono text-xs text-muted">celular com DDD</span>
@@ -244,8 +251,13 @@ export function ProfileForm({
             onChange={(e) => setWhatsappOptIn(e.target.checked)}
           />
           <span>
-            Quero receber os avisos das edições em que estou inscrito também pelo WhatsApp,
-            em mensagem individual (nunca grupo). Dá pra desmarcar quando quiser.
+            Quero receber os avisos das edições em que tenho inscrição também pelo WhatsApp,
+            em mensagem individual. Dá pra desmarcar quando quiser.
+            {!channels.whatsapp && (
+              <span className="mt-1 block font-mono text-[12px] text-muted">
+                O envio por WhatsApp ainda não está ligado. Sua escolha fica salva e vale quando ligar.
+              </span>
+            )}
           </span>
         </label>
       </fieldset>
@@ -261,8 +273,8 @@ export function ProfileForm({
             : "salvar perfil"}
       </button>
       {status === "error" && (
-        <p className="font-mono text-xs text-orange">
-          {errorMsg ?? "erro ao salvar — tenta de novo"}
+        <p role="alert" className="font-mono text-xs text-orange">
+          {errorMsg ?? "não deu pra salvar. Tente de novo."}
         </p>
       )}
     </div>

@@ -102,6 +102,8 @@ describe("API", () => {
     "/api/health",
     "/api/leads",
     "/api/subscribe",
+    "/api/subscribe/confirm",
+    "/api/subscribe/unsubscribe",
     "/api/webhooks/resend",
     "/api/cron/rsvp",
     "/api/rsvp/tok",
