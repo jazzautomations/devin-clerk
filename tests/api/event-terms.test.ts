@@ -166,16 +166,43 @@ describe("POST /incidents — canal de denúncia", () => {
     expect(rows.map((r) => r.reporterId)).toEqual([null, null, await idOf("clerk_t_usr")]);
   });
 
-  it("rate-limit forte: 4ª denúncia do mesmo IP na hora → 429", async () => {
+  it("anônimo no mesmo wifi (NAT): 10 denúncias do mesmo IP passam; teto é 20/h por IP e edição", async () => {
+    // auditoria 041 incidente-anonimo-nat: com 3/h por IP, a 4ª vítima no
+    // mesmo wifi do evento levava 429
     const { POST } = await import("@/app/api/hackathons/[id]/incidents/route");
     asUser(null);
     const send = () =>
       POST(
-        req("POST", { kind: "outro", description: "spam spam spam spam" }, "http://t/", { "x-forwarded-for": "10.9.9.9" }),
+        req("POST", { kind: "outro", description: "relato de quem está no wifi do evento" }, "http://t/", {
+          "x-forwarded-for": "10.9.9.9",
+        }),
         ctx(),
       );
+    for (let i = 0; i < 10; i++) expect((await send()).status).toBe(201);
+    for (let i = 10; i < 20; i++) expect((await send()).status).toBe(201);
+    expect((await send()).status).toBe(429);
+  });
+
+  it("logado continua com 3/h por membro", async () => {
+    const { POST } = await import("@/app/api/hackathons/[id]/incidents/route");
+    asUser("clerk_t_usr");
+    const send = () => POST(req("POST", { kind: "outro", description: "relato identificado aqui" }), ctx());
     for (let i = 0; i < 3; i++) expect((await send()).status).toBe(201);
     expect((await send()).status).toBe(429);
+  });
+
+  it("honeypot preenchido responde 201 e não grava", async () => {
+    const { POST } = await import("@/app/api/hackathons/[id]/incidents/route");
+    asUser(null);
+    const res = await POST(
+      req("POST", { kind: "outro", description: "robô preenchendo tudo", website: "http://spam" }, "http://t/", {
+        "x-forwarded-for": "10.7.7.7",
+      }),
+      ctx(),
+    );
+    expect(res.status).toBe(201);
+    const n = await db.prepare("SELECT COUNT(*)::int AS n FROM incidents WHERE hackathonId = ?").get<{ n: number }>(ED);
+    expect(Number(n?.n)).toBe(0);
   });
 
   it("edição inexistente → 404", async () => {
