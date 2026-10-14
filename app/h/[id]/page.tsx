@@ -41,6 +41,8 @@ import {
   type ApplicationStatus,
 } from "@/lib/roleApplications";
 import { StageCta } from "@/components/StageCta";
+import { EditionDeadlines } from "@/components/EditionDeadlines";
+import { visibleArchive } from "@/lib/entriesPublic";
 
 const FORMAT_LABEL: Record<string, string> = {
   online: "online",
@@ -132,7 +134,8 @@ export default async function HackathonPage({
   const cardRarity = await getCardRarity(h.id);
   const cardSupply = await getCardSupply(h.id);
   const myCard = member ? await getMemberCard(member.id, h.id) : null;
-  const archive = await getArchive(h.id);
+  // spec 034 — antes do prazo de entrega o arquivo não expõe projeto
+  const archive = await visibleArchive(h.id, await getArchive(h.id), now);
   const hasArchive = archive.teams.length > 0 || archive.assets.length > 0;
   const challenges = await getChallenges(h.id);
   const boardEntries = await listBoardEntries(h.id);
@@ -301,6 +304,8 @@ export default async function HackathonPage({
               </div>
             </div>
           )}
+
+          <EditionDeadlines hackathonId={h.id} username={myTeam ? member!.username : null} />
 
           {/* spec 021 — inscrito submete/edita o próprio time; edição encerrada
               vira arquivo e o painel some (o time já tá em "resultado") */}

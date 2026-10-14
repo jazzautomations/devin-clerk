@@ -197,3 +197,24 @@ describe("listProjects — placar do povo no índice", () => {
     expect(votesOrder[2]).toBe(zero);
   });
 });
+
+describe("voto popular × entrega (spec 034)", () => {
+  it("edição com prazo de entrega: projeto sem versão enviada não recebe voto", async () => {
+    const h = "voto-entrega-h";
+    await db
+      .prepare(
+        `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, submissionDeadline)
+         VALUES (?, 'Voto Entrega', 'Hack Inova', '2099-01-01', 'presencial', 'https://x.dev', '2099-01-02 12:00:00')
+         ON CONFLICT (id) DO NOTHING`,
+      )
+      .run(h);
+    const t = await db
+      .prepare("INSERT INTO teams (hackathonId, name) VALUES (?, 'Rascunho FC') RETURNING id")
+      .get<{ id: number }>(h);
+    await db.prepare("INSERT INTO team_projects (teamId, title) VALUES (?, 'Ainda em rascunho')").run(t!.id);
+    const voter = await db
+      .prepare("INSERT INTO members (clerkId, username, email) VALUES ('c_vt_entrega', 'vtentrega', 'v@e.dev') RETURNING id")
+      .get<{ id: number }>();
+    await expect(toggleVote(voter!.id, t!.id)).rejects.toThrow(/não encontrado/);
+  });
+});

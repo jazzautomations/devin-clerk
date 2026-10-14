@@ -84,6 +84,10 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
        JOIN team_projects tp ON tp.teamId = t.id
        JOIN hackathons h ON h.id = t.hackathonId
        WHERE (@h::text IS NULL OR t.hackathonId = @h)
+         -- spec 034: edição com prazo só expõe projeto ENVIADO e depois da trava
+         AND (h.submissionDeadline IS NULL
+              OR (to_ts(h.submissionDeadline) + make_interval(mins => h.submissionGraceMinutes) < now()
+                  AND EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = t.id)))
          AND (@q::text IS NULL
               OR tp.title LIKE @q ESCAPE '\\'
               OR tp.description LIKE @q ESCAPE '\\'

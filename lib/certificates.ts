@@ -4,7 +4,11 @@ import { isPublished } from "@/lib/jury";
 
 // Certificado verificável (spec 033 US6, FR-007). Emissão é idempotente por
 // (membro, edição, tipo): reemitir não duplica nem troca o código, só
-// atualiza o detalhe (ex.: pódio republicado). O código é curto, aleatório e
+// atualiza o detalhe (ex.: pódio republicado).
+// spec 034 — premiação é por categoria de prêmio (prizeCategoryId): a mesma
+// pessoa pode levar o geral e um desafio. Com categorias, só integrante
+// PRESENTE (check-in) do time vencedor recebe; sem categorias vale o pódio
+// antigo (teams.placement), pra todo o time. O código é curto, aleatório e
 // não sequencial; /c/[code] é o link público de verificação.
 
 export const CERT_KINDS = ["participacao", "mentoria", "jurado", "organizacao", "premiacao"] as const;
@@ -46,7 +50,7 @@ export async function attendeesForCertificates(hackathonId: string): Promise<num
   return rows.map((r) => r.memberId);
 }
 
-type Grant = { memberId: number; kind: CertKind; detail: string | null };
+type Grant = { memberId: number; kind: CertKind; detail: string | null; prizeCategoryId?: number | null };
 
 const PLACE = (n: number) => `${n}º lugar`;
 
@@ -75,9 +79,38 @@ async function grantsFor(hackathonId: string): Promise<Grant[]> {
     });
   }
 
-  // premiação só com resultado do júri publicado; vale pra todo o time do
-  // pódio (o pódio já pressupõe que o time apresentou)
-  if (await isPublished(hackathonId)) {
+  // premiação só com resultado do júri publicado. Com categorias: um
+  // certificado por categoria, só pra integrante presente do time vencedor
+  const published = await isPublished(hackathonId);
+  const categoryWinners = published
+    ? await db
+        .prepare(
+          `SELECT m.id AS memberId, w.place, w.categoryId, pc.name AS category, t.name
+           FROM prize_winners w
+           JOIN prize_categories pc ON pc.id = w.categoryId
+           JOIN teams t ON t.id = w.teamId
+           JOIN team_members tm ON tm.teamId = t.id
+           JOIN members m ON m.username = tm.username
+           JOIN registrations r ON r.memberId = m.id AND r.hackathonId = pc.hackathonId AND r.status = 'approved'
+           WHERE pc.hackathonId = ? AND EXISTS (SELECT 1 FROM checkins c WHERE c.registrationId = r.id)
+           ORDER BY w.categoryId, m.id`,
+        )
+        .all<{ memberId: number; place: number; categoryId: number; category: string; name: string }>(hackathonId)
+    : [];
+  const hasCategories = !!(await db
+    .prepare("SELECT 1 FROM prize_categories WHERE hackathonId = ? LIMIT 1")
+    .get(hackathonId));
+  for (const w of categoryWinners) {
+    grants.push({
+      memberId: w.memberId,
+      kind: "premiacao",
+      detail: `${PLACE(w.place)} em ${w.category} com o time ${w.name}`,
+      prizeCategoryId: w.categoryId,
+    });
+  }
+  // modo antigo (sem categorias): pódio vale pra todo o time (o pódio já
+  // pressupõe que o time apresentou)
+  if (!hasCategories && published) {
     const winners = await db
       .prepare(
         `SELECT m.id AS memberId, t.placement, t.name FROM teams t
@@ -109,12 +142,13 @@ export async function issueCertificates(hackathonId: string): Promise<{ created:
         }
         const row = await db
           .prepare(
-            `INSERT INTO certificates (code, memberId, hackathonId, kind, detail)
-             VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT (memberId, hackathonId, kind) DO UPDATE SET detail = EXCLUDED.detail
+            `INSERT INTO certificates (code, memberId, hackathonId, kind, detail, prizeCategoryId)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT (memberId, hackathonId, kind, (COALESCE(prizeCategoryId, 0)))
+             DO UPDATE SET detail = EXCLUDED.detail
              RETURNING code`,
           )
-          .get<{ code: string }>(code, g.memberId, hackathonId, g.kind, g.detail);
+          .get<{ code: string }>(code, g.memberId, hackathonId, g.kind, g.detail, g.prizeCategoryId ?? null);
         if (row?.code === code) created++;
         break;
       }

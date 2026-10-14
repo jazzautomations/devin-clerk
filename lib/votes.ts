@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { isEligibleForVoting } from "@/lib/entries";
 
 // schema próprio (idempotente) — não edita lib/db.ts (pattern lib/leads.ts)
 // escolha do povo (spec 025): um voto por membro por projeto, em toggle.
@@ -68,7 +69,9 @@ export async function toggleVote(
   memberId: number,
   teamId: number,
 ): Promise<{ voted: boolean }> {
-  if (!Number.isInteger(teamId) || !await hasProject(teamId)) {
+  // fluxo de entrega (spec 034): só projeto enviado entra no voto; edição sem
+  // prazo de entrega continua no modo antigo (basta ter projeto)
+  if (!Number.isInteger(teamId) || !await hasProject(teamId) || !await isEligibleForVoting(teamId)) {
     throw new VoteError("projeto não encontrado", 404);
   }
   if (await isTeamMember(teamId, memberId)) {
