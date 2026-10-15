@@ -45,7 +45,8 @@ export function CommunityRows({
                   )}
                 </span>
                 <span className="mt-1 block truncate font-mono text-[12.5px] text-muted">
-                  {communityPlace(c)} · {c.members} {c.members === 1 ? "membro" : "membros"}
+                  {communityPlace(c)}
+                  {c.members > 0 && ` · ${c.members} ${c.members === 1 ? "membro" : "membros"}`}
                   {c.hackathons > 0 && ` · ${c.hackathons} ${c.hackathons === 1 ? "hackathon" : "hackathons"}`}
                 </span>
               </span>

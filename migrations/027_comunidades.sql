@@ -82,6 +82,10 @@ CREATE INDEX idx_hackathons_community ON hackathons ("communityId");
 -- antigas ficam sem data; só as novas ganham o default.
 ALTER TABLE hackathons ADD COLUMN "createdAt" TEXT;
 ALTER TABLE hackathons ALTER COLUMN "createdAt" SET DEFAULT sqlite_now();
+-- quem organiza sozinho escreve a descrição e o link do evento (site,
+-- Instagram) direto no HackaHub
+ALTER TABLE hackathons ADD COLUMN "description" TEXT;
+ALTER TABLE hackathons ADD COLUMN "infoUrl" TEXT;
 
 -- mural da comunidade: o mesmo feed, com escopo
 ALTER TABLE posts ADD COLUMN "communityId" INTEGER REFERENCES communities("id");

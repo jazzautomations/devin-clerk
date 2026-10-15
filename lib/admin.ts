@@ -14,6 +14,8 @@ export type HackathonPatch = {
   registrationUrl?: string;
   registrationDeadline?: string | null;
   prize?: string | null;
+  description?: string | null;
+  infoUrl?: string | null;
   tags?: string[];
   active?: boolean;
   requiresApproval?: boolean;
@@ -76,6 +78,14 @@ export async function updateHackathon(
   if (patch.prize !== undefined) {
     sets.push("prize = @prize");
     values.prize = patch.prize;
+  }
+  if (patch.description !== undefined) {
+    sets.push("description = @description");
+    values.description = patch.description;
+  }
+  if (patch.infoUrl !== undefined) {
+    sets.push("infoUrl = @infoUrl");
+    values.infoUrl = patch.infoUrl;
   }
   if (patch.tags !== undefined) {
     sets.push("tags = @tags");

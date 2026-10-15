@@ -14,8 +14,9 @@ type Stat = { label: string; n: number; testId: string; href?: string };
 // Visão geral do painel: em que fase a edição está, o que falta pra essa
 // fase (cada item leva pra aba que resolve) e os números da inscrição. O
 // funil de confirmação de presença mora na aba presença; aqui só o resumo.
-export default async function EditionPanelHome({ params }: PageProps<"/admin/h/[id]">) {
+export default async function EditionPanelHome({ params, searchParams }: PageProps<"/admin/h/[id]">) {
   const { id } = await params;
+  const novo = (await searchParams).novo === "1";
   // quem só é de patrocinador (migration 017) não vê a visão geral da
   // operação: vai direto pro relatório da própria marca
   const member = await currentMember();
@@ -51,6 +52,12 @@ export default async function EditionPanelHome({ params }: PageProps<"/admin/h/[
 
   return (
     <div className="flex flex-col gap-8">
+      {novo && manage && checklist.phase === "rascunho" && (
+        <p className="border-2 border-line bg-mint px-4 py-3 text-[15px]" data-testid="ov-novo">
+          <b>Rascunho criado.</b> Só a equipe vê por enquanto. Siga os próximos passos e publique
+          {h.communityName ? `: quem está na ${h.communityName} recebe o aviso.` : "."}
+        </p>
+      )}
       <section className="flex flex-col gap-2 border-[1.5px] border-line p-4 sm:p-5" data-testid="ov-status">
         <p className="font-mono text-[12px] tracking-widest text-muted uppercase">fase</p>
         <p className="text-[1.3rem] leading-tight font-extrabold tracking-[-0.02em]" data-testid="ov-phase">

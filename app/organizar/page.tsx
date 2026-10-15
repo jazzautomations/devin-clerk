@@ -2,21 +2,20 @@ import type { Metadata } from "next";
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import { LeadForm } from "@/components/LeadForm";
-import { getOpenHackathons } from "@/lib/hackathons";
+import imgComunidade from "@/assets/organizar/comunidade.webp";
+import imgHackathon from "@/assets/organizar/abrir-hackathon.webp";
 import imgInscritos from "@/assets/organizar/inscritos.webp";
-import imgPresenca from "@/assets/organizar/presenca.webp";
-import imgCheckin from "@/assets/organizar/checkin.webp";
-import imgPalco from "@/assets/organizar/palco.webp";
 import imgCertificados from "@/assets/organizar/certificados.webp";
 
-// spec 039 — porta de quem organiza: o que o painel da edição faz, etapa
-// por etapa, com print real da tela (dados de demonstração), e o contato
-// que cai na fila de leads do /admin com aviso pros admins.
+// /organizar — self-service: crie sua comunidade e abra seu hackathon.
+// Passo a passo curto, cada passo com print real da tela (dados de
+// demonstração), o que vem no painel da edição e um contato pra dúvida.
+// Hoje é grátis organizar e participar; nada aqui promete o futuro.
 
 export const metadata: Metadata = {
-  title: "organizar uma edição",
+  title: "organizar um hackathon",
   description:
-    "Rode seu hackathon no HackaHub: formulário de inscrição, fila de espera, confirmação de presença, check-in por QR, júri, voto ao vivo e certificado com carga horária num painel só.",
+    "Crie a comunidade e abra seu hackathon no HackaHub: inscrição, avisos, check-in por QR, júri e certificado com carga horária num painel só. Hoje é grátis.",
   alternates: { canonical: "/organizar" },
 };
 
@@ -42,67 +41,32 @@ const PAINEL = [
   "nps",
 ];
 
-const etapas: { k: string; title: string; items: string[]; img: StaticImageData; alt: string }[] = [
+const passos: { k: string; title: string; items: string[]; img: StaticImageData; alt: string }[] = [
   {
-    k: "inscrição",
-    title: "Formulário da edição e lista de inscritos",
-    items: [
-      "perguntas próprias, além do que já vem do perfil",
-      "confirmação na hora ou curadoria com aprovação",
-      "limite de vagas com fila de espera que anda sozinha",
-      "aceite LGPD versionado e uso de imagem em caixa separada",
-      "exportação em CSV",
-    ],
+    k: "crie a comunidade",
+    title: "Nome, cidade e pronto",
+    items: ["página própria pra divulgar no grupo", "quem entra recebe o aviso dos seus hackathons", "chame quem organiza junto pelo e-mail"],
+    img: imgComunidade,
+    alt: "Página de uma comunidade: nome, cidade, membros, próximos hackathons e mural",
+  },
+  {
+    k: "abra o hackathon",
+    title: "Rascunho em um minuto",
+    items: ["nome, datas, local, vagas e descrição", "só a equipe vê até você publicar", "o checklist mostra o que falta antes de ir pro ar"],
+    img: imgHackathon,
+    alt: "Painel de uma edição em rascunho: fase, botão de publicar e checklist com os próximos passos",
+  },
+  {
+    k: "inscrição e avisos",
+    title: "Formulário, fila e lista de inscritos",
+    items: ["perguntas próprias e curadoria, se quiser", "limite de vagas com fila de espera que anda sozinha", "avisos pra todos ou só pros aprovados", "exportação em CSV"],
     img: imgInscritos,
     alt: "Aba inscritos do painel: contagem por status e lista de inscrições aprovadas com data",
   },
   {
-    k: "confirmação",
-    title: "Presença confirmada antes do evento",
-    items: [
-      "convite de confirmação dias antes, com prazo",
-      "lembretes na véspera e horas antes",
-      "quem não confirma libera a vaga pra fila",
-      "avisos pra todos, aprovados, presentes ou um time, por e-mail e WhatsApp",
-    ],
-    img: imgPresenca,
-    alt: "Aba presença do painel: configuração do convite, prazo e sobrevenda",
-  },
-  {
-    k: "dia do evento",
-    title: "Check-in por QR, mesmo sem internet",
-    items: [
-      "cada inscrito tem ingresso com QR pessoal",
-      "pacote offline pro credenciamento quando o Wi-Fi cai",
-      "crachás em PDF pra imprimir na véspera",
-      "programação com agora/a seguir e arquivo .ics",
-      "refeições e restrições alimentares pro buffet",
-    ],
-    img: imgCheckin,
-    alt: "Aba check-in do painel: inscritos, aprovados, presentes, modo offline e leitor de QR",
-  },
-  {
-    k: "entrega e final",
-    title: "Entrega no prazo, júri e voto ao vivo",
-    items: [
-      "entrega com prazo, tolerância e trava; rascunho e versão enviada",
-      "desafios de patrocinador escolhidos pelo time",
-      "júri com rubrica, atribuição de projetos e feedback pro time",
-      "palco com cronômetro de pitch e voto do público no telão",
-    ],
-    img: imgPalco,
-    alt: "Aba palco do painel: cronômetro do pitch e fila de apresentações",
-  },
-  {
-    k: "depois",
-    title: "Certificado com carga horária",
-    items: [
-      "carga horária por papel: participante, staff, mentoria, júri, organização",
-      "código verificável e PDF pra cada pessoa",
-      "planilha de horas pra coordenação de curso",
-      "pesquisa de satisfação só pra quem esteve lá",
-      "relatório pronto pro patrocinador",
-    ],
+    k: "no dia e depois",
+    title: "Check-in, júri e certificado",
+    items: ["check-in por QR, mesmo sem internet", "júri com rubrica e comentário pra cada time", "certificado com carga horária e código verificável"],
     img: imgCertificados,
     alt: "Aba certificados do painel: carga horária por papel e emissão",
   },
@@ -122,32 +86,29 @@ const cuidado = [
   { title: "Papéis por edição", desc: "Organização, staff, mentoria e júri, cada um vendo só a aba que usa." },
 ];
 
-export default async function OrganizarPage() {
-  const open = await getOpenHackathons(new Date());
-  const exemplo = open.find((h) => h.hosted) ?? null;
-
+export default function OrganizarPage() {
   return (
     <div className="overflow-x-clip">
       {/* hero */}
       <section aria-labelledby="org-title" className="mx-auto grid max-w-6xl gap-10 px-4 pt-10 pb-14 sm:px-6 sm:pt-16 lg:grid-cols-[1.35fr_1fr] lg:items-end lg:gap-14 lg:pt-20">
         <div className="rise min-w-0">
           <p className="tag">PRA QUEM ORGANIZA</p>
-          <h1 id="org-title" className="mt-6 text-[clamp(2.6rem,7.6vw,5.6rem)] leading-[0.9] font-extrabold tracking-[-0.05em]">
-            Seu hackathon,
+          <h1 id="org-title" className="mt-6 text-[clamp(2.5rem,7.2vw,5.2rem)] leading-[0.92] font-extrabold tracking-[-0.05em]">
+            Crie sua comunidade.
             <br />
-            <span className="text-accent">do formulário ao certificado.</span>
+            <span className="text-accent">Abra seu hackathon.</span>
           </h1>
-          <p className="mt-7 max-w-[52ch] text-[clamp(1.05rem,1.6vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
-            Sua faculdade, comunidade ou empresa monta a edição aqui. Os participantes fazem
-            tudo pela plataforma, da inscrição ao certificado, e você acompanha cada etapa no painel.
+          <p className="mt-7 max-w-[50ch] text-[clamp(1.05rem,1.6vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
+            Você faz tudo daqui: cria a comunidade, abre o hackathon e publica quando o checklist estiver pronto.
+            Quem está na comunidade recebe o aviso. Hoje é grátis.
           </p>
           <div className="mt-9 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
-            <a href="#contato" className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="organizar-cta-contato">
-              Falar com o HackaHub →
-            </a>
-            <Link href={exemplo ? `/h/${exemplo.id}` : "/radar"} className="cta-link go self-start text-[clamp(1.1rem,2vw,1.3rem)] sm:self-auto">
-              {exemplo ? "Ver uma edição no ar" : "Ver hackathons abertos"}
+            <Link href="/comunidades/nova" className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="organizar-cta-criar">
+              Criar comunidade →
             </Link>
+            <a href="#contato" className="cta-link go self-start text-[clamp(1.05rem,2vw,1.25rem)] sm:self-auto" data-testid="organizar-cta-contato">
+              Tenho uma dúvida
+            </a>
           </div>
         </div>
 
@@ -169,21 +130,21 @@ export default async function OrganizarPage() {
         </aside>
       </section>
 
-      {/* ciclo da edição, com a tela de cada etapa */}
-      <section aria-labelledby="ciclo-title" className="border-t-2 border-line">
+      {/* passo a passo, com a tela de cada passo */}
+      <section aria-labelledby="passos-title" className="border-t-2 border-line">
         <div className="mx-auto max-w-6xl px-4 pt-14 sm:px-6 sm:pt-20">
           <p className="eyebrow">
-            <b>[01]</b> o ciclo da edição
+            <b>[01]</b> passo a passo
           </p>
-          <h2 id="ciclo-title" className="mt-4 max-w-[22ch] text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-            Cinco etapas, uma tela pra cada.
+          <h2 id="passos-title" className="mt-4 max-w-[22ch] text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
+            Quatro passos, uma tela pra cada.
           </h2>
           <ol className="mt-10 flex flex-col">
-            {etapas.map((e, i) => (
+            {passos.map((e, i) => (
               <li
                 key={e.k}
                 className="grid gap-6 border-t-2 border-line py-10 lg:grid-cols-[1fr_1.35fr] lg:gap-12"
-                data-testid="organizar-etapa"
+                data-testid="organizar-passo"
               >
                 <div className="flex flex-col gap-3">
                   <p className="font-mono text-[13px] font-medium tracking-[0.04em] text-accent uppercase">
@@ -200,25 +161,24 @@ export default async function OrganizarPage() {
                       </li>
                     ))}
                   </ul>
+                  {i === 0 && (
+                    <Link href="/comunidades/nova" className="cta-link go mt-2 self-start text-[17px]">
+                      Criar comunidade
+                    </Link>
+                  )}
                 </div>
                 <figure className="min-w-0">
                   <div className="border-2 border-line">
                     <p className="tbar">
-                      <span className="title">painel / {e.k}</span>
+                      <span className="title">{e.k}</span>
                       <span className="dots" aria-hidden>
                         <b />
                         <b />
                       </span>
                     </p>
-                    <Image
-                      src={e.img}
-                      alt={e.alt}
-                      sizes="(min-width: 1024px) 640px, 100vw"
-                      placeholder="blur"
-                      className="block h-auto w-full"
-                    />
+                    <Image src={e.img} alt={e.alt} sizes="(min-width: 1024px) 640px, 100vw" placeholder="blur" className="block h-auto w-full" />
                   </div>
-                  <figcaption className="mt-2 font-mono text-[12px] text-muted">tela real do painel · dados de demonstração</figcaption>
+                  <figcaption className="mt-2 font-mono text-[12px] text-muted">tela real · dados de demonstração</figcaption>
                 </figure>
               </li>
             ))}
@@ -271,18 +231,18 @@ export default async function OrganizarPage() {
         </div>
       </section>
 
-      {/* contato */}
+      {/* contato pra dúvida */}
       <section id="contato" aria-labelledby="contato-title" className="scroll-mt-20 border-b-2 border-line bg-mint">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
           <div className="flex flex-col gap-4">
             <p className="eyebrow">
-              <b>[04]</b> contato
+              <b>[04]</b> dúvida
             </p>
             <h2 id="contato-title" className="text-[clamp(2rem,4.4vw,3rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
-              Conte sobre a sua edição.
+              Ficou alguma dúvida?
             </h2>
             <p className="max-w-[42ch] text-[16px] leading-relaxed text-[#2b2b2b]">
-              Quando, onde, quantas pessoas e o tema, se já tiver. A mensagem cai direto na fila do HackaHub.
+              Pergunte aqui. A equipe do HackaHub responde no seu e-mail.
             </p>
             <p className="font-mono text-[13px] text-muted">
               É marca querendo patrocinar?{" "}

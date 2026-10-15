@@ -45,6 +45,9 @@ export type Hackathon = {
   // primeira vez que a edição ficou no ar (migration 019). Fora do ar com
   // publishedAt = arquivada; sem publishedAt = rascunho.
   publishedAt?: string | null;
+  // texto e link do evento escritos por quem organiza (migration 027)
+  description?: string | null;
+  infoUrl?: string | null;
   // comunidade dona (migration 027). Nulo = evento externo do radar.
   communityId?: number | null;
   communitySlug?: string | null;

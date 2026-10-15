@@ -89,6 +89,21 @@ export function EditionTeaser({
               <strong className="font-bold text-foreground">{h.organizer}</strong>
             )}
           </p>
+          {h.description && (
+            <p className="mt-5 max-w-[60ch] text-[16.5px] leading-relaxed whitespace-pre-line text-[#1e1e1e]" data-testid="edition-description">
+              {h.description}
+            </p>
+          )}
+          {h.infoUrl && (
+            <a
+              href={h.infoUrl}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="mt-3 inline-block font-mono text-[13px] text-accent underline-offset-4 hover:underline"
+            >
+              site do evento ↗
+            </a>
+          )}
           {h.tags.length > 0 && (
             <div className="mt-5 flex flex-wrap gap-1.5">
               {h.tags.map((t) => (

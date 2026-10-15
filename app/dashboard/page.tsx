@@ -118,7 +118,7 @@ export default async function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-4 border-[1.5px] border-line p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div>
-              <p className="text-[20px] font-extrabold tracking-[-0.02em]">Tu ainda não tá em nenhuma edição.</p>
+              <p className="text-[20px] font-extrabold tracking-[-0.02em]">Você ainda não está em nenhuma edição.</p>
               <p className="mt-1 text-[15px] text-muted">
                 {proxima
                   ? `${proxima.name} tem inscrição aberta no HackaHub, em ${fmtData.format(new Date(proxima.startsAt))}.`

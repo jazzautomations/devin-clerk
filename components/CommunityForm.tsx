@@ -186,8 +186,14 @@ export function CommunityForm({ initial, slug }: { initial?: Partial<Values>; sl
         </label>
       </div>
 
-      <fieldset className="flex flex-col gap-4 border-t border-line pt-5">
-        <legend className={label}>onde encontrar vocês (opcional)</legend>
+      <details open={editing} className="group border-t border-line pt-4">
+        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between font-mono text-[13px] text-accent">
+          links e imagens (opcional)
+          <span aria-hidden className="group-open:rotate-45">+</span>
+        </summary>
+        <div className="mt-3 flex flex-col gap-6">
+      <fieldset className="flex flex-col gap-4">
+        <legend className={label}>onde encontrar vocês</legend>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           {LINKS.map((l) => (
             <label key={l.k} className="flex flex-col gap-1.5">
@@ -207,7 +213,7 @@ export function CommunityForm({ initial, slug }: { initial?: Partial<Values>; sl
       </fieldset>
 
       <fieldset className="flex flex-col gap-4 border-t border-line pt-5">
-        <legend className={label}>imagens (opcional, link https)</legend>
+        <legend className={label}>imagens (link https)</legend>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-[14px] font-semibold">logo (quadrado)</span>
@@ -233,6 +239,8 @@ export function CommunityForm({ initial, slug }: { initial?: Partial<Values>; sl
           </label>
         </div>
       </fieldset>
+        </div>
+      </details>
 
       {error && (
         <p role="alert" className="font-mono text-[13px] text-orange">

@@ -10,9 +10,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # HackaHub
 
-A plataforma onde a **Hack Inova** organiza as edições dela (inscrição, avisos,
-check-in, júri, certificado) e a
-rede/vitrine dos hackathons no Brasil. Produto e escopo: `specs/000-prd.md` e
+A comunidade de hackathon do Brasil: um lugar pra juntar as pessoas por
+**comunidade** (faculdade, coletivo, cidade, empresa) e organizar hackathon
+sem depender de ninguém (inscrição, avisos, check-in, júri, certificado), mais
+o radar dos hackathons abertos no Brasil e no mundo. A Hack Inova é uma
+comunidade como qualquer outra (`hack-inova`, verificada, sem dono). Produto e escopo: `specs/000-prd.md` e
 `specs/033-hackinova-ops/spec.md` (a spec vigente). Copy e UI em PT-BR, tom
 direto, sem emoji na UI. Copy fala do que o HackaHub faz, nunca contra
 ferramenta ou pessoa (nada de "sem Forms"/"sem grupo de zap").
@@ -46,7 +48,10 @@ horizontal nas rotas novas.
   lock). Nunca `CREATE`/`ALTER` em módulo de lib nem em teste. Identificadores
   camelCase entre aspas na migration. Datas são TEXT `YYYY-MM-DD HH:MM:SS`
   UTC (`DEFAULT sqlite_now()`); `to_ts(text)` compara datas.
-- `lib/seed.ts` = dados de base idempotentes (edições Hack Inova).
+- `lib/seed.ts` = dados de base idempotentes (edições da comunidade Hack Inova).
+- "Roda no HackaHub" (`hosted`): `source IN ('seed','painel') OR communityId
+  IS NOT NULL` (`isHostedRow`/`hostedSql` em `lib/hackathons.ts`). O nome do
+  organizador não decide nada.
 - Nada de `.map(async …)` solto: `await Promise.all(...)`. Nada de busca de
   dado dentro do JSX: calcule antes do `return`.
 
@@ -62,10 +67,16 @@ horizontal nas rotas novas.
   por todos. Convite por e-mail (`inviteToEdition`).
 - Painel da edição: `/admin/h/[id]` (layout com abas por papel). Feature de
   operação de evento ganha aba própria em `/admin/h/[id]/<aba>`.
+- Comunidades (`lib/communities.ts`, guardas em `lib/communityAuth.ts`):
+  dono | organizador | membro por comunidade. Dono/organizador edita, abre
+  hackathon (nasce rascunho e quem cria vira `organizador` da edição) e
+  publica pelo checklist; o dono chama organizador por e-mail. Admin global
+  administra todas, esconde (`hidden`) e dá selo (`verified`). Hackathon
+  publicado avisa só os membros da comunidade dele (`lib/editionLaunch.ts`).
 
 ## UI
 
-Sistema visual da Hack Inova (`app/globals.css`): papel `#fefefe`, tinta
+Sistema visual do HackaHub (`app/globals.css`): papel `#fefefe`, tinta
 `#0c0c0c`, verde de ação `#047a43`, menta `#d8f4e5`, laranja de foco/erro
 `#ba3919`; Archivo nos títulos, JetBrains Mono em dados/labels, VT323 (`.pix`)
 só como acento. Fios de 1–1.5px, raio 0 (6px em botão/campo), sem gradiente,

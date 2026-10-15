@@ -13,6 +13,8 @@ export type EditableEvent = {
   location: string | null;
   registrationUrl: string;
   registrationDeadline: string | null;
+  description?: string | null;
+  infoUrl?: string | null;
   tags: string[];
   active: boolean;
   requiresApproval: boolean;
@@ -74,6 +76,8 @@ export function EditEventForm({ event, isAdmin = false }: { event: EditableEvent
         format: f.get("format"),
         location: opt("location"),
         registrationDeadline: opt("registrationDeadline"),
+        description: opt("description"),
+        infoUrl: opt("infoUrl"),
         ...(isAdmin && opt("registrationUrl") ? { registrationUrl: opt("registrationUrl") } : {}),
         tags: String(f.get("tags") ?? "")
           .split(",")
@@ -185,6 +189,14 @@ export function EditEventForm({ event, isAdmin = false }: { event: EditableEvent
           />
         </label>
       )}
+      <label className="flex flex-col gap-1.5 sm:col-span-2">
+        <span className="font-mono text-xs text-muted">descrição (aparece na página do hackathon)</span>
+        <textarea name="description" rows={4} maxLength={2000} defaultValue={event.description ?? ""} className={`${input} resize-y`} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-xs text-muted">link do evento (site, Instagram; opcional)</span>
+        <input name="infoUrl" type="url" defaultValue={event.infoUrl ?? ""} className={input} />
+      </label>
       <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">
           tags (separadas por vírgula)

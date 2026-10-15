@@ -50,6 +50,8 @@ export default async function EdicaoPage({ params }: PageProps<"/admin/h/[id]/ed
           location: h.location,
           registrationUrl: h.registrationUrl,
           registrationDeadline: h.registrationDeadline,
+          description: h.description ?? null,
+          infoUrl: h.infoUrl ?? null,
           tags: h.tags,
           active: h.active,
           requiresApproval: h.requiresApproval,

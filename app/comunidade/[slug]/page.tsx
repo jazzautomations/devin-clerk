@@ -71,7 +71,8 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
         path={`/comunidade/${c.slug}`}
         facts={[
           ["onde", communityPlace(c)],
-          ["membros", String(c.members)],
+          // zero não é prova de nada: a linha some até alguém entrar
+          ...(c.members > 0 ? ([["membros", String(c.members)]] as [string, string][]) : []),
           ...(c.verified ? ([["selo", "verificada pelo HackaHub"]] as [string, string][]) : []),
         ]}
         extra={
@@ -325,10 +326,12 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
             )}
           </section>
 
-          <div className="flex flex-col gap-3 border-t border-line pt-4">
-            {isAdmin && <ModerationToggles slug={c.slug} hidden={c.hidden} verified={c.verified} />}
-            {!canManage && <ReportLink slug={c.slug} />}
-          </div>
+          {(isAdmin || !canManage) && (
+            <div className="flex flex-col gap-3 border-t border-line pt-4">
+              {isAdmin && <ModerationToggles slug={c.slug} hidden={c.hidden} verified={c.verified} />}
+              {!canManage && <ReportLink slug={c.slug} />}
+            </div>
+          )}
         </aside>
       </div>
     </div>

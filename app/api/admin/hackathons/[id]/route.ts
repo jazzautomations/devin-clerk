@@ -5,6 +5,7 @@ import { getPublishBlockers } from "@/lib/editionChecklist";
 import { announceEditionLaunch } from "@/lib/editionLaunch";
 import { EventTimeError, normalizeEventTime, parseEventTime } from "@/lib/eventTime";
 import { shiftSchedule } from "@/lib/schedule";
+import { cleanUrl } from "@/lib/communities";
 
 const FORMATS = ["online", "presencial", "hibrido"];
 
@@ -74,6 +75,18 @@ export async function PATCH(
       }
       patch[k] = typeof b[k] === "string" && b[k] ? b[k] : null;
     }
+  }
+  // descrição e link do evento (organizador escreve)
+  if ("description" in b) {
+    if (b.description !== null && typeof b.description !== "string") return bad("descrição inválida");
+    const d = typeof b.description === "string" ? b.description.trim() : "";
+    if (d.length > 2000) return bad("descrição: até 2000 caracteres");
+    patch.description = d || null;
+  }
+  if ("infoUrl" in b) {
+    const u = cleanUrl(b.infoUrl);
+    if ("error" in u) return bad(`${u.error} (link do evento)`);
+    patch.infoUrl = u.value;
   }
   if ("tags" in b) {
     if (

@@ -114,14 +114,14 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
       )}
       <label htmlFor="lead-message" className="flex flex-col gap-1.5">
         <span className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
-          {org ? "conta da edição (opcional)" : "mensagem (opcional)"}
+          {org ? "sua dúvida (opcional)" : "mensagem (opcional)"}
         </span>
         <textarea
           id="lead-message"
           rows={3}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder={org ? "quando, onde, quantas pessoas, tema…" : "contexto, a edição que você tem em mente, orçamento…"}
+          placeholder={org ? "o que você quer saber antes de começar" : "contexto, a edição que você tem em mente, orçamento…"}
           className={inputCls}
         />
       </label>
