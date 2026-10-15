@@ -209,7 +209,7 @@ export default async function HackathonPage({
     .toUpperCase();
   const ano = startDate.getFullYear();
   const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(startDate);
-  const canRegister = !past && !closed && h.partner;
+  const canRegister = !past && !closed && h.hosted;
   // spec 033 US1/FR-009 — formulário da edição, aceite LGPD e vagas
   // frente L — inscrição sempre passa pelo formulário (data de nascimento,
   // código de conduta e uso de imagem não cabem em 1 clique)
@@ -218,7 +218,7 @@ export default async function HackathonPage({
     getEditionCapacity(h.id),
     member && myStatus === "waitlist" ? getWaitlistPosition(member.id, h.id) : Promise.resolve(null),
     // frente E — "Quer ajudar?": tipos de candidatura abertos pela organização
-    !past && h.partner ? getOpenKinds(h.id) : Promise.resolve([] as ApplicationKind[]),
+    !past && h.hosted ? getOpenKinds(h.id) : Promise.resolve([] as ApplicationKind[]),
     member ? getMyApplications(member.id, h.id) : Promise.resolve({} as Partial<Record<ApplicationKind, ApplicationStatus>>),
     member && myStatus ? getImageConsent(member.id, h.id) : Promise.resolve(null),
   ]);
@@ -255,7 +255,7 @@ export default async function HackathonPage({
           <span>
             {past
               ? "ARQUIVO DA EDIÇÃO"
-              : !h.partner
+              : !h.hosted
                 ? "EVENTO NO RADAR"
                 : closed
                   ? "INSCRIÇÕES ENCERRADAS"
@@ -269,7 +269,7 @@ export default async function HackathonPage({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="tag uppercase">{past ? "arquivo" : "hackathon"}</p>
-            {h.partner && <span className="chip bare">edição hack inova</span>}
+            <span className="chip bare" data-testid="edition-chip-inscricao">{h.hosted ? "inscrição no HackaHub" : "site oficial"}</span>
             <span className="chip bare">{FORMAT_LABEL[h.format]}</span>
           </div>
           <h1 className="mt-5 text-[clamp(2.4rem,7vw,5.25rem)] leading-[0.92] font-extrabold tracking-[-0.045em] break-words">
@@ -309,7 +309,7 @@ export default async function HackathonPage({
               <dt className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">formato</dt>
               <dd className="font-semibold">
                 {FORMAT_LABEL[h.format]}
-                {h.partner && (
+                {h.hosted && (
                   <span className="font-normal text-muted">
                     {" "}
                     · {cap.approved} {cap.approved === 1 ? "inscrito" : "inscritos"}
@@ -336,7 +336,7 @@ export default async function HackathonPage({
       </header>
 
       {/* evento do radar: alcance, quem pode, prazos e prêmio antes do site oficial */}
-      {!h.partner && !past && (
+      {!h.hosted && !past && (
         <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
           <RadarEventFacts h={h} now={now} />
         </div>
@@ -702,7 +702,7 @@ export default async function HackathonPage({
         <aside className="flex min-w-0 flex-col gap-8 lg:sticky lg:top-24 lg:self-start">
           <StageCta hackathonId={h.id} />
 
-          {h.partner && (
+          {h.hosted && (
             <nav aria-label="Nesta edição" data-testid="safety-links" className="flex flex-col border-[1.5px] border-line">
               <h2 className="border-b border-line px-4 py-2.5 font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
                 nesta edição

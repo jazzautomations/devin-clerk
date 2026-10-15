@@ -70,8 +70,8 @@ async function edition(
   await db
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl,
-         capacity, rsvpEnabled, overbookPercent)
-       VALUES (?, ?, 'Hack Inova', ?, ?, 'presencial', 'Rua Teste, 100 — São Paulo', 'https://x.dev', ?, ?, ?)
+         capacity, rsvpEnabled, overbookPercent, source)
+       VALUES (?, ?, 'Hack Inova', ?, ?, 'presencial', 'Rua Teste, 100 — São Paulo', 'https://x.dev', ?, ?, ?, 'painel')
        ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, endsAt = excluded.endsAt,
          capacity = excluded.capacity, rsvpEnabled = excluded.rsvpEnabled, overbookPercent = excluded.overbookPercent`,
     )

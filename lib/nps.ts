@@ -31,27 +31,27 @@ export const NPS_ROLE_LABEL: Record<NpsRole, string> = {
 /** perguntas fixas por papel: a nota muda de objeto, as abertas são as mesmas duas */
 export const NPS_QUESTIONS: Record<NpsRole, { score: string; worked: string; improve: string }> = {
   participante: {
-    score: "De 0 a 10, quanto você recomendaria participar de uma edição da Hack Inova pra um amigo?",
+    score: "De 0 a 10, quanto você recomendaria participar desta edição pra um amigo?",
     worked: "O que funcionou no evento?",
     improve: "O que a gente precisa melhorar pra próxima?",
   },
   staff: {
-    score: "De 0 a 10, quanto você recomendaria ser staff numa edição da Hack Inova?",
+    score: "De 0 a 10, quanto você recomendaria ser staff numa edição como esta?",
     worked: "O que funcionou na operação do dia?",
     improve: "O que travou ou faltou pra equipe?",
   },
   mentor: {
-    score: "De 0 a 10, quanto você recomendaria ser mentor numa edição da Hack Inova?",
+    score: "De 0 a 10, quanto você recomendaria ser mentor numa edição como esta?",
     worked: "O que funcionou na mentoria?",
     improve: "O que faltou pra você ajudar melhor os times?",
   },
   jurado: {
-    score: "De 0 a 10, quanto você recomendaria ser jurado numa edição da Hack Inova?",
+    score: "De 0 a 10, quanto você recomendaria ser jurado numa edição como esta?",
     worked: "O que funcionou na avaliação?",
     improve: "O que melhorar na rubrica, nos prazos ou na plataforma do júri?",
   },
   patrocinador: {
-    score: "De 0 a 10, quanto você recomendaria patrocinar uma edição da Hack Inova?",
+    score: "De 0 a 10, quanto você recomendaria patrocinar uma edição como esta?",
     worked: "O que deu retorno pra sua marca?",
     improve: "O que faltou pra valer mais o investimento?",
   },

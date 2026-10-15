@@ -80,7 +80,7 @@ test.describe("pacote E — /perfil", () => {
     await db
       .prepare(
         `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, active, source)
-         VALUES (?, 'E2E E Marcas', 'Hack Inova E2E', '2027-03-01', 'presencial', 'https://e2e.dev/e', '[]', 1, 'e2e')
+         VALUES (?, 'E2E E Marcas', 'Hack Inova E2E', '2027-03-01', 'presencial', 'https://e2e.dev/e', '[]', 1, 'painel')
          ON CONFLICT(id) DO NOTHING`,
       )
       .run(ED);
@@ -127,7 +127,7 @@ test.describe("pacote E — avisos com e-mail desligado", () => {
     await db
       .prepare(
         `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, active, source)
-         VALUES (?, 'E2E E Marcas', 'Hack Inova E2E', '2027-03-01', 'presencial', 'https://e2e.dev/e', '[]', 1, 'e2e')
+         VALUES (?, 'E2E E Marcas', 'Hack Inova E2E', '2027-03-01', 'presencial', 'https://e2e.dev/e', '[]', 1, 'painel')
          ON CONFLICT(id) DO NOTHING`,
       )
       .run(ED);

@@ -7,7 +7,7 @@ const H = "hack-teste";
 const base: NextStepFacts = {
   hackathonId: H,
   phase: "open",
-  partner: true,
+  hosted: true,
   registrationUrl: "https://exemplo.dev/inscricao",
   registrationClosed: false,
   requiresApproval: false,
@@ -31,18 +31,18 @@ const approved = (over: Partial<NextStepFacts> = {}) => f({ signedIn: true, stat
 
 describe("nextStep — evento do radar", () => {
   it("aberto: inscrição externa", () => {
-    const s = nextStep(f({ partner: false }));
+    const s = nextStep(f({ hosted: false }));
     expect(s.key).toBe("externo");
     expect(s.action).toEqual({ label: "inscrever no site oficial", href: "https://exemplo.dev/inscricao", external: true });
     expect(s.involved).toBe(false);
   });
   it("inscrição fechada: sem ação", () => {
-    const s = nextStep(f({ partner: false, registrationClosed: true }));
+    const s = nextStep(f({ hosted: false, registrationClosed: true }));
     expect(s.key).toBe("externo-fechado");
     expect(s.action).toBeNull();
   });
   it("encerrado", () => {
-    expect(nextStep(f({ partner: false, phase: "ended" })).key).toBe("encerrada");
+    expect(nextStep(f({ hosted: false, phase: "ended" })).key).toBe("encerrada");
   });
 });
 

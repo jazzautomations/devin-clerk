@@ -52,9 +52,9 @@ beforeEach(async () => {
   ).run();
   await db.prepare(
     `INSERT OR IGNORE INTO hackathons
-       (id, name, organizer, startsAt, format, registrationUrl, tags, requiresApproval)
+       (id, name, organizer, startsAt, format, registrationUrl, tags, requiresApproval, source)
      VALUES (?, 'Curada API', 'Hack Inova', '2099-06-01', 'online',
-             'https://x.dev', '[]', 1)`,
+             'https://x.dev', '[]', 1, 'painel')`,
   ).run(CURATED);
   await db.prepare("UPDATE hackathons SET requiresApproval = 1 WHERE id = ?").run(
     CURATED,

@@ -110,7 +110,7 @@ export const BADGES: Record<string, Badge> = {
   organizador: {
     id: "organizador",
     name: "organizador",
-    desc: "organiza sessões hack inova",
+    desc: "organiza edições no HackaHub",
     glyph: "⬟",
   },
 };

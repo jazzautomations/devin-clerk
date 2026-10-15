@@ -16,7 +16,7 @@ async function ensureEdition(request: APIRequestContext) {
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, format, registrationUrl, tags, active, source)
        VALUES (?, 'E2E Checkin Jam', 'Hack Inova E2E', ?, 'presencial',
-               'https://e2e.dev/checkin', '[]', 1, 'e2e')
+               'https://e2e.dev/checkin', '[]', 1, 'painel')
        ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt, active = 1`,
     )
     .run(H, future);

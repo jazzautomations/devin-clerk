@@ -42,7 +42,7 @@ const faq = [
 export default async function Home() {
   const now = new Date();
   const upcoming = await getOpenHackathons(now);
-  const proxima = upcoming.find((h) => h.partner) ?? null;
+  const proxima = upcoming.find((h) => h.hosted) ?? null;
   // amostra de 4: Brasil (edições da casa e hackathons daqui) + 1–2 globais
   // grandes abertos pra brasileiros, sem o que fecha em menos de 48h
   // (lib/radar.ts). Loop de curiosidade: o radar completo é de quem tem
@@ -92,7 +92,7 @@ export default async function Home() {
         <section id="proxima" aria-labelledby="proxima-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pb-16 sm:px-6" data-testid="landing-proxima-em-breve">
           <div className="grid gap-6 bg-foreground p-7 text-background sm:p-9 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-12">
             <div className="flex flex-col gap-3">
-              <p className="pix text-[20px] leading-none text-band">PRÓXIMA EDIÇÃO HACK INOVA</p>
+              <p className="pix text-[20px] leading-none text-band">PRÓXIMA EDIÇÃO NO HACKAHUB</p>
               <h2 id="proxima-title" className="text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.95] font-extrabold tracking-[-0.04em]">
                 Em breve.
               </h2>
@@ -174,8 +174,8 @@ export default async function Home() {
         <div className="flex flex-col gap-3 bg-foreground p-7 text-background sm:p-9" data-testid="landing-organizar">
           <h2 className="text-[clamp(1.7rem,3vw,2.3rem)] leading-[1] font-extrabold tracking-[-0.035em]">Organiza na sua cidade?</h2>
           <p className="max-w-[40ch] text-[15.5px] leading-relaxed text-[#b8cdc0]">
-            Faculdade, coletivo ou empresa: sua comunidade roda a edição dela aqui, com as mesmas ferramentas da
-            Hack Inova, e quem participa já chega com perfil.
+            Faculdade, coletivo ou empresa: sua comunidade roda a edição dela aqui, e quem participa já chega
+            com perfil.
           </p>
           <Link href="/organizar" className="mt-2 self-start font-mono text-[14px] text-band underline-offset-4 hover:underline">
             Como funciona pra organizar →

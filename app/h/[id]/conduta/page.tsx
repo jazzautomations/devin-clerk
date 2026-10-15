@@ -7,7 +7,7 @@ import { getEditionTerms } from "@/lib/eventTerms";
 export async function generateMetadata({ params }: PageProps<"/h/[id]/conduta">): Promise<Metadata> {
   const { id } = await params;
   const h = await getHackathon(id);
-  if (!h || !h.partner) return { title: "edição não encontrada" };
+  if (!h || !h.hosted) return { title: "edição não encontrada" };
   return {
     title: `Código de conduta · ${h.name}`,
     description: `Como a gente se trata em ${h.name} e como relatar um problema.`,
@@ -47,7 +47,7 @@ function blocks(text: string): Block[] {
 export default async function CondutaPage({ params }: PageProps<"/h/[id]/conduta">) {
   const { id } = await params;
   const h = await getHackathon(id);
-  if (!h || !h.partner) notFound();
+  if (!h || !h.hosted) notFound();
   const terms = await getEditionTerms(h.id);
   const body = blocks(terms.conductText);
   // o título do texto padrão ("Código de conduta") já está no h1

@@ -33,7 +33,7 @@ const stepLink = "flex min-h-11 items-center font-mono text-[13px] text-accent u
 export default async function InscricaoPage({ params }: PageProps<"/h/[id]/inscricao">) {
   const { id } = await params;
   const h = await getHackathon(id);
-  if (!h || !h.active || !h.partner) notFound();
+  if (!h || !h.active || !h.hosted) notFound();
 
   const now = new Date();
   const closed = isOver(h, now) || isRegistrationClosed(h, now);

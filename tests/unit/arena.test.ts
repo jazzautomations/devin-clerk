@@ -29,7 +29,7 @@ function makeH(overrides: Partial<Hackathon> = {}): Hackathon {
     prize: null,
     tags: [],
     active: true,
-    partner: true,
+    hosted: true,
     requiresApproval: false,
     ...overrides,
   };

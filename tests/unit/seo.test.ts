@@ -77,7 +77,7 @@ describe("eventJsonLd — schema Event", () => {
       prize: "R$ 5 mil",
       tags: ["ia"],
       active: true,
-      partner: true,
+      hosted: true,
       requiresApproval: false,
     });
     expect(ld["@type"]).toBe("Event");
@@ -106,7 +106,7 @@ describe("eventJsonLd — schema Event", () => {
       prize: null,
       tags: [],
       active: true,
-      partner: false,
+      hosted: false,
       requiresApproval: false,
     });
     expect(ld.location).toMatchObject({ "@type": "VirtualLocation" });

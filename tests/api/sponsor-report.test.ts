@@ -66,8 +66,8 @@ beforeAll(async () => {
   for (const id of [H, OTHER]) {
     await db
       .prepare(
-        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl)
-         VALUES (?, 'Edição Patrocinada', 'Hack Inova', '2026-09-01 12:00:00', '2026-09-02 20:00:00', 'presencial', 'https://x.dev')`,
+        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, source)
+         VALUES (?, 'Edição Patrocinada', 'Hack Inova', '2026-09-01 12:00:00', '2026-09-02 20:00:00', 'presencial', 'https://x.dev', 'painel')`,
       )
       .run(id);
   }

@@ -29,7 +29,7 @@ async function seed(request: APIRequestContext) {
       `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags,
          active, source, requiresApproval, capacity, publishedAt)
        VALUES (?, 'E2E Jornada do Participante', 'Hack Inova E2E', ?, NULL, 'presencial', 'Campus E2E',
-               '/h/e2e-jornada-c', '[]', 1, 'e2e', 0, 1, sqlite_now())
+               '/h/e2e-jornada-c', '[]', 1, 'painel', 0, 1, sqlite_now())
        ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, active = 1, capacity = 1, requiresApproval = 0`,
     )
     .run(ED, start);

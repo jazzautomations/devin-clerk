@@ -18,7 +18,7 @@ async function seed(request: APIRequestContext, tag: string) {
   await db
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, format, location, registrationUrl, tags, active, source, rsvpEnabled)
-       VALUES (?, 'E2E RSVP Jam', 'Hack Inova E2E', ?, 'presencial', 'Av. Paulista, 1000 — São Paulo', 'https://e2e.dev/rsvp', '[]', 1, 'e2e', 1)
+       VALUES (?, 'E2E RSVP Jam', 'Hack Inova E2E', ?, 'presencial', 'Av. Paulista, 1000 — São Paulo', 'https://e2e.dev/rsvp', '[]', 1, 'painel', 1)
        ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt, active = 1, rsvpEnabled = 1`,
     )
     .run(HACK, start.toISOString());

@@ -47,8 +47,8 @@ beforeEach(async () => {
   }
   await db
     .prepare(
-      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
-       VALUES (?, 'Cand API', 'Hack Inova', '2099-05-01', 'online', 'https://x.dev', '[]')`,
+      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, source)
+       VALUES (?, 'Cand API', 'Hack Inova', '2099-05-01', 'online', 'https://x.dev', '[]', 'painel')`,
     )
     .run(ED);
   for (const t of ["role_applications", "registrations", "edition_questions", "consents", "edition_open_kinds", "edition_roles"]) {

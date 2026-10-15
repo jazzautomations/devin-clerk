@@ -28,7 +28,7 @@ async function seed(request: APIRequestContext) {
     await db
       .prepare(
         `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, source)
-         VALUES (?, ?, 'Hack Inova E2E', ?, ?, 'presencial', 'Campus E2E', 'https://e2e.dev/prog', '[]', 1, 'e2e')
+         VALUES (?, ?, 'Hack Inova E2E', ?, ?, 'presencial', 'Campus E2E', 'https://e2e.dev/prog', '[]', 1, 'painel')
          ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt, endsAt = excluded.endsAt, active = 1`,
       )
       .run(id, name, s.toISOString(), e.toISOString());

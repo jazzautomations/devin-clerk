@@ -54,14 +54,14 @@ beforeAll(async () => {
   // edição terminou há 2h; a outra ainda nem começou
   await db
     .prepare(
-      `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl)
-       VALUES (?, 'NPS Jam', 'Hack Inova', ?, ?, 'presencial', 'https://x.dev')`,
+      `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, source)
+       VALUES (?, 'NPS Jam', 'Hack Inova', ?, ?, 'presencial', 'https://x.dev', 'painel')`,
     )
     .run(H, sql(hoursAgo(30)), sql(hoursAgo(2)));
   await db
     .prepare(
-      `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl)
-       VALUES (?, 'NPS Futura', 'Hack Inova', ?, ?, 'presencial', 'https://x.dev')`,
+      `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, source)
+       VALUES (?, 'NPS Futura', 'Hack Inova', ?, ?, 'presencial', 'https://x.dev', 'painel')`,
     )
     .run(FUTURE, sql(new Date(Date.now() + 86_400_000 * 5)), sql(new Date(Date.now() + 86_400_000 * 6)));
   org = await member({ edition: "organizador" });

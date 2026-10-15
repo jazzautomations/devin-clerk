@@ -30,7 +30,7 @@ function ev(id: string, f: Partial<Hackathon> = {}): Hackathon {
     prize: null,
     tags: [],
     active: true,
-    partner: false,
+    hosted: false,
     requiresApproval: false,
     region: null,
     source: "sympla",
@@ -66,7 +66,7 @@ describe("closesSoon — fecha em menos de 48h", () => {
 });
 
 describe("landingSample — Brasil + 1–2 globais abertos pra brasileiro, nada de última hora", () => {
-  const casa = ev("casa", { partner: true, source: null, location: "Alphaville, SP" });
+  const casa = ev("casa", { hosted: true, source: null, location: "Alphaville, SP" });
   const sp = ev("sp", { location: "São Paulo, SP", region: "br" });
   const onlineBr = ev("onlinebr", { format: "online", region: "online-br" });
   const gringo = ev("gringo", { format: "online", region: "online-mundo", source: "devpost", prize: "$50,000" });
@@ -95,7 +95,7 @@ describe("dashboardList — mesma regra, cidade/UF do perfil na frente", () => {
       ev("olinda", { location: "Olinda, PE", region: "br" }),
       ev("recife", { location: "Cais do Porto, Recife, PE", region: "br" }),
       ev("gringo", { format: "online", region: "online-mundo", source: "devpost" }),
-      ev("casa", { partner: true, source: null, location: "Alphaville, SP" }),
+      ev("casa", { hosted: true, source: null, location: "Alphaville, SP" }),
     ];
     const ids = dashboardList(list, NOW, { city: "Recife", exclude: new Set(["casa"]) }).map((h) => h.id);
     expect(ids).toEqual(["recife", "olinda", "sp"]);
@@ -136,7 +136,7 @@ describe("integração com o banco — region gravada chega na lista da landing"
     expect(ids).not.toContain("rb-amanha");
     // Hack Inova (seed) vem antes do radar
     const firstRadar = ids.indexOf("rb-canoas");
-    expect(ids.slice(0, firstRadar).every((id) => open.find((h) => h.id === id)?.partner)).toBe(true);
+    expect(ids.slice(0, firstRadar).every((id) => open.find((h) => h.id === id)?.hosted)).toBe(true);
   });
 });
 

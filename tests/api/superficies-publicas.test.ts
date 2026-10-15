@@ -21,13 +21,14 @@ async function member(clerkId?: string): Promise<number> {
     .get<{ id: number }>(clerkId ?? `clerk_${tag}`, `u_${tag}`, `${tag}@t.dev`);
   return row!.id;
 }
-async function edition(id: string, organizer: string, active = 1) {
+// source 'painel' = roda no HackaHub; fonte do radar = evento externo
+async function edition(id: string, organizer: string, active = 1, source = "painel") {
   await db
     .prepare(
-      `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, active)
-       VALUES (?, ?, ?, '2027-01-01', 'presencial', 'https://x.dev', ?)`,
+      `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, active, source)
+       VALUES (?, ?, ?, '2027-01-01', 'presencial', 'https://x.dev', ?, ?)`,
     )
-    .run(id, `Ed ${id}`, organizer, active);
+    .run(id, `Ed ${id}`, organizer, active, source);
 }
 
 beforeEach(() => {
@@ -46,11 +47,11 @@ describe("/empresas — números da casa e com piso", () => {
     ).toEqual(["edicoes"]);
   });
 
-  it("conta só edições Hack Inova e membros que não excluíram a conta", async () => {
+  it("conta só edições que rodam no HackaHub e membros que não excluíram a conta", async () => {
     // o boot roda o seed (edições reais da Hack Inova): mede a partir dele
     const base = await db
       .prepare(
-        `SELECT (SELECT COUNT(*) FROM hackathons h WHERE lower(h.organizer) LIKE '%hack inova%'
+        `SELECT (SELECT COUNT(*) FROM hackathons h WHERE h.source IN ('seed', 'painel')
                    AND (h.active = 1 OR EXISTS (SELECT 1 FROM registrations r WHERE r.hackathonId = h.id)
                         OR EXISTS (SELECT 1 FROM teams t WHERE t.hackathonId = h.id))) AS e,
                 (SELECT COUNT(*) FROM members WHERE clerkId NOT LIKE 'deleted:%') AS m`,
@@ -59,9 +60,11 @@ describe("/empresas — números da casa e com piso", () => {
     const e0 = Number(base?.e ?? 0);
     const m0 = Number(base?.m ?? 0);
     await edition("hi-1", "Hack Inova");
-    await edition("hi-2", "Hack Inova · PUC");
+    await edition("hi-2", "Comunidade de Sorocaba");
     await edition("hi-rascunho", "Hack Inova", 0);
-    for (let i = 0; i < 5; i++) await edition(`devpost-${i}`, "Devpost");
+    // o nome do organizador não decide: "Hack Inova" raspado do radar é externo
+    await edition("hi-radar", "Hack Inova", 1, "sympla");
+    for (let i = 0; i < 5; i++) await edition(`devpost-${i}`, "Devpost", 1, "devpost");
     for (let i = m0; i < STAT_FLOOR.membros; i++) await member();
     await db.prepare("UPDATE members SET clerkId = 'deleted:' || id WHERE id = (SELECT MAX(id) FROM members)").run();
     const stats = await empresaStats();

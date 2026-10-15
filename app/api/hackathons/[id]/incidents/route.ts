@@ -12,7 +12,7 @@ import { clientIp, limitOrNull } from "@/lib/ratelimit";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const h = await getHackathon(id);
-  if (!h || !h.partner) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!h || !h.hosted) return Response.json({ error: "Not found" }, { status: 404 });
   const { userId } = await auth();
   const member = userId ? await getMemberByClerkId(userId) : null;
   const limited = member

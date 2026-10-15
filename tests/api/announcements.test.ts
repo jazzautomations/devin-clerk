@@ -53,8 +53,8 @@ beforeEach(async () => {
   afterQueue.jobs = [];
   await db
     .prepare(
-      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl)
-       VALUES (?, 'Avisos API', 'Hack Inova', '2027-01-01', 'presencial', 'https://x.dev')`,
+      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, source)
+       VALUES (?, 'Avisos API', 'Hack Inova', '2027-01-01', 'presencial', 'https://x.dev', 'painel')`,
     )
     .run(H);
 });

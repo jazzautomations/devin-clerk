@@ -45,8 +45,8 @@ beforeEach(async () => {
   }
   await db
     .prepare(
-      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
-       VALUES (?, 'Terms API', 'Hack Inova', ?, 'presencial', 'https://x.dev', '[]')`,
+      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, source)
+       VALUES (?, 'Terms API', 'Hack Inova', ?, 'presencial', 'https://x.dev', '[]', 'painel')`,
     )
     .run(ED, START);
   await db.prepare("DELETE FROM registrations WHERE hackathonId = ?").run(ED);

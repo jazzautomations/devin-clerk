@@ -30,8 +30,8 @@ async function registered(status: string) {
 beforeEach(async () => {
   await db
     .prepare(
-      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl)
-       VALUES (?, 'Dúvidas Unit', 'Hack Inova', '2027-01-01', 'presencial', 'https://x.dev')`,
+      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, source)
+       VALUES (?, 'Dúvidas Unit', 'Hack Inova', '2027-01-01', 'presencial', 'https://x.dev', 'painel')`,
     )
     .run(H);
 });

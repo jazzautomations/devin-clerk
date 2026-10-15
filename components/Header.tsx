@@ -20,7 +20,6 @@ export function Header() {
         >
           <span aria-hidden className="h-[11px] w-[11px] shrink-0 border-[1.5px] border-line bg-band" />
           <span className="text-[18px] font-extrabold tracking-[-0.02em] uppercase">{appConfig.name}</span>
-          <span className="hidden font-mono text-xs text-muted sm:inline">/hack inova</span>
         </Link>
 
         <AuthShow when="signed-in">

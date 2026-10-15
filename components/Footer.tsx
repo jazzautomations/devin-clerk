@@ -38,8 +38,8 @@ export function Footer() {
         <div className="flex flex-col gap-3">
           <p className="pix text-[28px] leading-none text-band">{appConfig.name.toUpperCase()}</p>
           <p className="max-w-[34ch] font-mono text-[13px] leading-relaxed text-[#b8cdc0]">
-            Realização Hack Inova. A comunidade de hackathon no Brasil: edições, times, projetos e
-            quem constrói.
+            A comunidade de hackathon do Brasil. Um lugar pra juntar sua turma e organizar o seu
+            hackathon sem complicação.
           </p>
         </div>
         {cols.map((c) => (

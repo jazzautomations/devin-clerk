@@ -209,7 +209,7 @@ export function StageScreen({
         .stage-grow { transform-origin: left; animation: stage-grow 1.1s cubic-bezier(.12,.23,.5,1) both }
       `}</style>
       <header className="strip flex items-center gap-[1.6vw] px-[1.6vw] py-[0.4vw] text-[clamp(18px,1.6vw,40px)]!">
-        <span>HACKINOVA.OS ▸ {snap.status === "ended" ? "RESULTADO" : "FINAL AO VIVO"}</span>
+        <span>HACKAHUB ▸ {snap.status === "ended" ? "RESULTADO" : "FINAL AO VIVO"}</span>
         <span className="min-w-0 flex-1 truncate text-background">{editionName}</span>
         {cur && (
           <span data-testid="stage-position">

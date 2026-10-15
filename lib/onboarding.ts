@@ -56,7 +56,7 @@ export type OnboardingNext = { title: string; detail: string; label: string; hre
 export function onboardingNext(opts: {
   intents: IntentKey[];
   redirectUrl: string | null;
-  /** próxima edição Hack Inova com inscrição aberta */
+  /** próxima edição com inscrição pelo HackaHub aberta */
   nextEdition: { id: string; name: string } | null;
   /** edição aberta recebendo candidatura de mentor/jurado */
   helpEdition: { id: string; name: string; kind: "mentor" | "jurado" | "voluntario" } | null;
@@ -82,7 +82,7 @@ export function onboardingNext(opts: {
         }
       : {
           title: "Acha teu hackathon",
-          detail: "Nenhuma edição da Hack Inova aberta agora; o radar tem os abertos no Brasil e no mundo.",
+          detail: "Nenhuma edição com inscrição pelo HackaHub aberta agora. O radar tem os abertos no Brasil e no mundo.",
           label: "ver hackathons abertos",
           href: "/radar",
         };

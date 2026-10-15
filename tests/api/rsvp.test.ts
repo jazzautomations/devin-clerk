@@ -47,8 +47,8 @@ beforeEach(async () => {
   as(null);
   await db
     .prepare(
-      `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, rsvpEnabled)
-       VALUES (?, 'RSVP API', 'Hack Inova', ?, 'presencial', 'https://x.dev', 1)
+      `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, rsvpEnabled, source)
+       VALUES (?, 'RSVP API', 'Hack Inova', ?, 'presencial', 'https://x.dev', 1, 'painel')
        ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, capacity = NULL`,
     )
     .run(H, future(5).toISOString());

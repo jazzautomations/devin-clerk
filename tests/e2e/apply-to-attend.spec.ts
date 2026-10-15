@@ -15,13 +15,13 @@ async function ensureCuratedEdition(
   await request.get("/api/health");
   const db = openE2eDb();
   const future = new Date(Date.now() + 30 * 86_400_000).toISOString();
-  // organizer 'Hack Inova' → partner → inscrição inline (não link externo)
+  // organizer 'Hack Inova' → hosted → inscrição inline (não link externo)
   await db.prepare(
     `INSERT INTO hackathons
        (id, name, organizer, startsAt, format, registrationUrl,
         tags, active, source, requiresApproval)
      VALUES (?, 'E2E Curada Jam', 'Hack Inova E2E', ?, 'presencial',
-             'https://e2e.dev/curada', '[]', 1, 'e2e', 1)
+             'https://e2e.dev/curada', '[]', 1, 'painel', 1)
      ON CONFLICT(id) DO UPDATE SET startsAt = excluded.startsAt,
        active = 1, requiresApproval = 1`,
   ).run(CURATED, future);

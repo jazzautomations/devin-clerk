@@ -20,7 +20,7 @@ async function edition(id: string, name: string) {
     .prepare(
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, format, registrationUrl, tags, active, source)
-       VALUES (?, ?, 'Hack Inova E2E', ?, 'presencial', 'https://e2e.dev/palco', '[]', 1, 'e2e')
+       VALUES (?, ?, 'Hack Inova E2E', ?, 'presencial', 'https://e2e.dev/palco', '[]', 1, 'painel')
        ON CONFLICT(id) DO UPDATE SET active = 1, "audienceMinVotes" = DEFAULT`,
     )
     .run(id, name, new Date(Date.now() - 3600_000).toISOString());

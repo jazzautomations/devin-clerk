@@ -203,8 +203,8 @@ describe("voto popular × entrega (spec 034)", () => {
     const h = "voto-entrega-h";
     await db
       .prepare(
-        `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, submissionDeadline)
-         VALUES (?, 'Voto Entrega', 'Hack Inova', '2099-01-01', 'presencial', 'https://x.dev', '2099-01-02 12:00:00')
+        `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, submissionDeadline, source)
+         VALUES (?, 'Voto Entrega', 'Hack Inova', '2099-01-01', 'presencial', 'https://x.dev', '2099-01-02 12:00:00', 'painel')
          ON CONFLICT (id) DO NOTHING`,
       )
       .run(h);

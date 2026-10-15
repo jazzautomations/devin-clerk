@@ -38,8 +38,8 @@ export function EditionTeaser({
   const ano = new Intl.DateTimeFormat("pt-BR", { year: "numeric", timeZone: tz }).format(d);
   const longo = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: tz }).format(d);
   const inscricao = `/h/${h.id}/inscricao`;
-  const signup = `/sign-up?redirect_url=${encodeURIComponent(h.partner ? inscricao : `/h/${h.id}`)}`;
-  const signin = `/sign-in?redirect_url=${encodeURIComponent(h.partner ? inscricao : `/h/${h.id}`)}`;
+  const signup = `/sign-up?redirect_url=${encodeURIComponent(h.hosted ? inscricao : `/h/${h.id}`)}`;
+  const signin = `/sign-in?redirect_url=${encodeURIComponent(h.hosted ? inscricao : `/h/${h.id}`)}`;
   const prizes = challenges.filter((c) => c.prize);
 
   const rows: [string, string][] = [
@@ -48,7 +48,7 @@ export function EditionTeaser({
     ["formato", FORMAT_LABEL[h.format]],
   ];
   if (h.prize) rows.push(["prêmio", h.prize]);
-  if (h.partner && !past) {
+  if (h.hosted && !past) {
     rows.push([
       "inscrições",
       closed
@@ -59,7 +59,7 @@ export function EditionTeaser({
     ]);
     if (capacity !== null && remaining !== null) rows.push(["vagas", remaining === 0 ? "esgotadas · fila aberta" : `${remaining} de ${capacity} livres`]);
   }
-  if (h.partner && approved > 0) rows.push(["inscritos", String(approved)]);
+  if (h.hosted && approved > 0) rows.push(["inscritos", String(approved)]);
 
   return (
     <div className="overflow-x-clip" data-testid="edition-teaser">
@@ -68,7 +68,7 @@ export function EditionTeaser({
           <span>
             {dia} {mes} {ano} · {FORMAT_LABEL[h.format].toUpperCase()} · {(h.location ?? "online").toUpperCase()}
           </span>
-          <span>{past ? "EDIÇÃO ENCERRADA" : !h.partner ? "EVENTO NO RADAR" : closed ? "INSCRIÇÕES ENCERRADAS" : "INSCRIÇÕES ABERTAS"}</span>
+          <span>{past ? "EDIÇÃO ENCERRADA" : !h.hosted ? "EVENTO NO RADAR" : closed ? "INSCRIÇÕES ENCERRADAS" : "INSCRIÇÕES ABERTAS"}</span>
         </div>
       </div>
 
@@ -76,7 +76,7 @@ export function EditionTeaser({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="tag uppercase">{past ? "arquivo" : "hackathon"}</p>
-            {h.partner && <span className="chip bare">edição hack inova</span>}
+            <span className="chip bare">{h.hosted ? "inscrição no HackaHub" : "site oficial"}</span>
           </div>
           <h1 className="mt-5 text-[clamp(2.4rem,7vw,5.25rem)] leading-[0.92] font-extrabold tracking-[-0.045em] break-words">{h.name}</h1>
           <p className="mt-4 text-[17px] text-muted">
@@ -110,7 +110,7 @@ export function EditionTeaser({
         </div>
       </header>
 
-      {!h.partner && !past && (
+      {!h.hosted && !past && (
         <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
           <RadarEventFacts h={h} now={new Date()} />
         </div>
@@ -122,12 +122,12 @@ export function EditionTeaser({
           <div className="grid gap-6 px-5 py-6 sm:px-7 sm:py-8 lg:grid-cols-[1.3fr_1fr] lg:items-center">
             <div>
               <p className="font-mono text-[12px] tracking-[0.06em] text-band uppercase">
-                {past ? "edição encerrada" : h.partner && !closed ? "participar" : "acompanhar"}
+                {past ? "edição encerrada" : h.hosted && !closed ? "participar" : "acompanhar"}
               </p>
               <p className="mt-2 text-[clamp(1.6rem,3.6vw,2.4rem)] leading-[1.02] font-extrabold tracking-[-0.03em]">
                 {past
                   ? "Resultado, projetos e pódio ficam pra quem tem conta."
-                  : h.partner && !closed
+                  : h.hosted && !closed
                     ? "Crie sua conta e siga direto pra inscrição."
                     : "Entre pra acompanhar a edição."}
               </p>
@@ -137,12 +137,12 @@ export function EditionTeaser({
             </div>
             <div className="flex flex-col gap-3 lg:items-end">
               <Link href={signup} className="btn-go w-full lg:w-auto" data-testid="teaser-signup">
-                {past ? "criar conta e ver o resultado" : h.partner && !closed ? "criar conta e se inscrever" : "criar conta"} →
+                {past ? "criar conta e ver o resultado" : h.hosted && !closed ? "criar conta e se inscrever" : "criar conta"} →
               </Link>
               <Link href={signin} className="font-mono text-[13px] text-band underline-offset-4 hover:underline">
                 já tenho conta · entrar
               </Link>
-              {!h.partner && !past && (
+              {!h.hosted && !past && (
                 <a href={h.registrationUrl} target="_blank" rel="noopener" className="font-mono text-[13px] text-[#b8cdc0] underline-offset-4 hover:underline">
                   inscrição no site oficial ↗
                 </a>
@@ -178,7 +178,7 @@ export function EditionTeaser({
         </section>
       )}
 
-      {h.partner && (
+      {h.hosted && (
         <p className="mx-auto max-w-6xl px-4 pt-10 font-mono text-[13px] text-muted sm:px-6">
           <Link href={`/h/${h.id}/conduta`} className="text-accent underline-offset-4 hover:underline">
             código de conduta da edição →

@@ -16,7 +16,7 @@ import imgCertificados from "@/assets/organizar/certificados.webp";
 export const metadata: Metadata = {
   title: "organizar uma edição",
   description:
-    "Rode um hackathon com a Hack Inova: formulário de inscrição, fila de espera, confirmação de presença, check-in por QR, júri, voto ao vivo e certificado com carga horária num painel só.",
+    "Rode seu hackathon no HackaHub: formulário de inscrição, fila de espera, confirmação de presença, check-in por QR, júri, voto ao vivo e certificado com carga horária num painel só.",
   alternates: { canonical: "/organizar" },
 };
 
@@ -124,7 +124,7 @@ const cuidado = [
 
 export default async function OrganizarPage() {
   const open = await getOpenHackathons(new Date());
-  const exemplo = open.find((h) => h.partner) ?? null;
+  const exemplo = open.find((h) => h.hosted) ?? null;
 
   return (
     <div className="overflow-x-clip">
@@ -138,12 +138,12 @@ export default async function OrganizarPage() {
             <span className="text-accent">do formulário ao certificado.</span>
           </h1>
           <p className="mt-7 max-w-[52ch] text-[clamp(1.05rem,1.6vw,1.2rem)] leading-relaxed text-[#1e1e1e]">
-            A Hack Inova monta a edição com a sua faculdade, comunidade ou empresa. Os participantes fazem
+            Sua faculdade, comunidade ou empresa monta a edição aqui. Os participantes fazem
             tudo pela plataforma, da inscrição ao certificado, e você acompanha cada etapa no painel.
           </p>
           <div className="mt-9 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
             <a href="#contato" className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="organizar-cta-contato">
-              Falar com a Hack Inova →
+              Falar com o HackaHub →
             </a>
             <Link href={exemplo ? `/h/${exemplo.id}` : "/radar"} className="cta-link go self-start text-[clamp(1.1rem,2vw,1.3rem)] sm:self-auto">
               {exemplo ? "Ver uma edição no ar" : "Ver hackathons abertos"}
@@ -282,7 +282,7 @@ export default async function OrganizarPage() {
               Conte sobre a sua edição.
             </h2>
             <p className="max-w-[42ch] text-[16px] leading-relaxed text-[#2b2b2b]">
-              Quando, onde, quantas pessoas e o tema, se já tiver. A mensagem cai direto na fila da Hack Inova.
+              Quando, onde, quantas pessoas e o tema, se já tiver. A mensagem cai direto na fila do HackaHub.
             </p>
             <p className="font-mono text-[13px] text-muted">
               É marca querendo patrocinar?{" "}

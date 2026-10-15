@@ -57,8 +57,8 @@ describe("exclusão × fila de espera (achado do QA)", () => {
     const H2 = "privacidade-fila";
     await db
       .prepare(
-        `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, capacity)
-         VALUES (?, 'Fila LGPD', 'Hack Inova', '2099-05-01', 'presencial', 'https://x.dev', 1)
+        `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, capacity, source)
+         VALUES (?, 'Fila LGPD', 'Hack Inova', '2099-05-01', 'presencial', 'https://x.dev', 1, 'painel')
          ON CONFLICT (id) DO NOTHING`,
       )
       .run(H2);

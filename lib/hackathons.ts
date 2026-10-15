@@ -18,7 +18,10 @@ export type Hackathon = {
   prize: string | null;
   tags: string[];
   active: boolean;
-  partner: boolean;
+  // roda no HackaHub: inscrição, time, entrega e certificado pela plataforma
+  // (edição de comunidade, do painel ou do seed). false = evento externo do
+  // radar, inscrição no site oficial. Regra única: isHostedRow / HOSTED_SQL.
+  hosted: boolean;
   // spec 032 — edição curada: register entra como 'pending' e a recompensa
   // só cai na aprovação do admin (a coluna nasce do ALTER de registrations)
   requiresApproval: boolean;
@@ -44,7 +47,7 @@ export type Hackathon = {
   publishedAt?: string | null;
 };
 
-type Row = Omit<Hackathon, "tags" | "active" | "partner" | "requiresApproval"> & {
+type Row = Omit<Hackathon, "tags" | "active" | "hosted" | "requiresApproval"> & {
   tags: string;
   active: number;
   requiresApproval?: number;
@@ -55,10 +58,22 @@ function toHackathon(row: Row): Hackathon {
     ...row,
     tags: JSON.parse(row.tags),
     active: row.active === 1,
-    partner: row.organizer.toLowerCase().includes("hack inova"),
+    hosted: isHostedRow(row),
     requiresApproval: row.requiresApproval === 1,
   };
 }
+
+/**
+ * "Roda no HackaHub": criada pela plataforma (seed ou painel). O nome do
+ * organizador não decide nada — antes era "contém hack inova", o que fazia
+ * da Hack Inova a dona da plataforma.
+ */
+export function isHostedRow(row: { source?: string | null }): boolean {
+  return row.source === "seed" || row.source === "painel";
+}
+
+/** a mesma regra em SQL, pra quem filtra no banco (alias da tabela hackathons) */
+export const hostedSql = (alias = "h") => `${alias}.source IN ('seed', 'painel')`;
 
 async function allActive(): Promise<Hackathon[]> {
   const rows = await db

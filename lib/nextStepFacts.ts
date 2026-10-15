@@ -30,8 +30,8 @@ export async function getNextStepFacts(
     member
       ? getMyApplications(member.id, h.id)
       : Promise.resolve({} as Partial<Record<ApplicationKind, ApplicationStatus>>),
-    h.partner ? getSubmissionSettings(h.id) : Promise.resolve(null),
-    h.partner && !over ? getSession(h.id) : Promise.resolve(null),
+    h.hosted ? getSubmissionSettings(h.id) : Promise.resolve(null),
+    h.hosted && !over ? getSession(h.id) : Promise.resolve(null),
   ]);
   const approved = status === "approved";
   const helpingEntry = (Object.entries(apps) as [ApplicationKind, ApplicationStatus][]).find(([, st]) => st !== "rejected");
@@ -82,7 +82,7 @@ export async function getNextStepFacts(
   return {
     hackathonId: h.id,
     phase,
-    partner: h.partner,
+    hosted: h.hosted,
     registrationUrl: h.registrationUrl,
     registrationClosed,
     requiresApproval: h.requiresApproval,

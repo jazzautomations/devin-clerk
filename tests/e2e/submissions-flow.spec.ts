@@ -23,7 +23,7 @@ async function edition(id: string, name: string, deadline: number) {
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, tags, active, source,
                                submissionDeadline, teamFormationDeadline, juryDeadline)
-       VALUES (?, ?, 'Hack Inova', ?, ?, 'presencial', 'https://e2e.dev/034', '[]', 1, 'e2e', ?, ?, ?)
+       VALUES (?, ?, 'Hack Inova', ?, ?, 'presencial', 'https://e2e.dev/034', '[]', 1, 'painel', ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET submissionDeadline = excluded.submissionDeadline`,
     )
     .run(id, name, iso(Date.now() - 24 * H), iso(Date.now() + 24 * H), iso(deadline), iso(deadline - 6 * H), iso(deadline + 6 * H));

@@ -500,7 +500,7 @@ export async function submitRegistration(input: {
   const now = input.now ?? new Date();
   // inscrição é só pras edições da Hack Inova (as do radar inscrevem fora)
   const h = await getHackathon(hackathonId);
-  if (!h || !h.active || !h.partner) return { ok: false, error: "not_found" };
+  if (!h || !h.active || !h.hosted) return { ok: false, error: "not_found" };
   const existing = await getRegistrationStatus(memberId, hackathonId);
   if (existing) {
     const r = await register(memberId, hackathonId);

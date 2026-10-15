@@ -239,7 +239,7 @@ export async function badgesPdf(
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Crachás — ${opts.hackathonName}`);
-  pdf.setAuthor("Hack Inova · HackaHub");
+  pdf.setAuthor("HackaHub");
   pdf.setSubject(`Folha ${SHEET.name}`);
   pdf.setCreationDate(new Date());
 

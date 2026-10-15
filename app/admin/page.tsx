@@ -2,6 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import db from "@/lib/db";
+import { hostedSql } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { listSubscribers } from "@/lib/admin";
 import { listChallenges } from "@/lib/challenges";
@@ -32,8 +33,8 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   });
   if (member.role !== "admin") notFound();
 
-  // Edições: separa as que a casa organiza (Hack Inova, criadas pelo painel
-  // ou com equipe) do catálogo raspado pelo radar. Um SELECT só com os
+  // Edições: separa as que rodam no HackaHub (criadas pelo painel, de
+  // comunidade ou com equipe) do catálogo raspado pelo radar. Um SELECT só com os
   // contadores; o detalhe (desafios, quadro, arquivo, editar) só carrega da
   // edição aberta (?h=), em vez de ~4 consultas por edição a cada visita.
   const sp = await searchParams;
@@ -48,7 +49,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
               (SELECT COUNT(*)::int FROM registrations r
                 WHERE r.hackathonId = h.id AND r.status = 'pending') AS pendentes,
               (SELECT COUNT(*)::int FROM schedule_items si WHERE si.hackathonId = h.id) AS "scheduleItems",
-              (h.organizer ILIKE 'hack inova%' OR h.source IN ('painel', 'seed')
+              (${hostedSql("h")}
                 OR EXISTS (SELECT 1 FROM edition_roles er WHERE er.hackathonId = h.id)) AS "ours"
        FROM hackathons h
        WHERE (@q = '' OR lower(h.name) LIKE @like ESCAPE '\\' OR h.id LIKE @like ESCAPE '\\')
@@ -110,7 +111,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className={`${mono} tracking-widest text-muted uppercase`}>
-            edições que você organiza ({ours.length})
+            edições no HackaHub ({ours.length})
           </h2>
           <form action="/admin" className="flex w-full gap-2 sm:w-auto" role="search">
             <input

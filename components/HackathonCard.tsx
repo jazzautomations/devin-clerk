@@ -39,7 +39,7 @@ export function HackathonCard({
 
   useEffect(() => {
     // pendente (curada) e fila de espera (spec 033) só aparecem pelo GET
-    if (!hackathon.partner || status !== null) return;
+    if (!hackathon.hosted || status !== null) return;
     let alive = true;
     fetch(`/api/hackathons/${hackathon.id}/register`)
       .then((r) => (r.ok ? r.json() : null))
@@ -50,7 +50,7 @@ export function HackathonCard({
     return () => {
       alive = false;
     };
-  }, [hackathon.id, hackathon.partner, status]);
+  }, [hackathon.id, hackathon.hosted, status]);
   const starts = new Date(hackathon.startsAt);
   const badges = radarBadges(hackathon, now);
   const brl = prizeBrlApprox(hackathon);
@@ -125,9 +125,13 @@ export function HackathonCard({
           <span className="border-[1.5px] border-line bg-background px-2 py-0.5 font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
             {FORMAT_LABEL[hackathon.format]}
           </span>
-          {hackathon.partner && (
+          {hackathon.hosted ? (
             <span className="border-[1.5px] border-accent bg-background px-2 py-0.5 font-mono text-[12px] tracking-[0.06em] text-accent uppercase">
-              parceiro
+              inscrição no hackahub
+            </span>
+          ) : (
+            <span className="border-[1.5px] border-line bg-background px-2 py-0.5 font-mono text-[12px] tracking-[0.06em] text-muted uppercase">
+              site oficial
             </span>
           )}
         </div>
@@ -211,7 +215,7 @@ export function HackathonCard({
         ))}
       </div>
 
-      {hackathon.partner && !closed ? (
+      {hackathon.hosted && !closed ? (
         <button
           onClick={toggleRegistration}
           disabled={loading || status === "rejected"}

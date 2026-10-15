@@ -1,13 +1,13 @@
 import db from "@/lib/db";
-import { getPastHackathons, type Hackathon } from "@/lib/hackathons";
+import { getPastHackathons, hostedSql, type Hackathon } from "@/lib/hackathons";
 
 // spec 039 — prova da landing, só com número que existe no banco. Quem
 // renderiza esconde o item zerado (e a seção, se tudo zerar).
 
 export type CommunityProof = {
-  /** edições Hack Inova já realizadas (encerradas) */
+  /** edições que rodaram no HackaHub (encerradas) */
   editions: number;
-  /** inscrições aprovadas em edições Hack Inova */
+  /** inscrições aprovadas em edições que rodam no HackaHub */
   registrations: number;
   /** projetos cadastrados por times */
   projects: number;
@@ -15,15 +15,15 @@ export type CommunityProof = {
   members: number;
 };
 
-const PARTNER = `lower(h.organizer) LIKE '%hack inova%'`;
+const HOSTED = hostedSql("h");
 
 export async function getCommunityProof(now = new Date()): Promise<CommunityProof> {
-  const past = (await getPastHackathons(now)).filter((h) => h.partner);
+  const past = (await getPastHackathons(now)).filter((h) => h.hosted);
   const count = async (sql: string) => Number((await db.prepare(sql).get<{ n: number | string }>())?.n ?? 0);
   const [registrations, projects, members] = await Promise.all([
     count(
       `SELECT COUNT(*) n FROM registrations r JOIN hackathons h ON h.id = r.hackathonId
-       WHERE r.status = 'approved' AND h.active = 1 AND ${PARTNER}`,
+       WHERE r.status = 'approved' AND h.active = 1 AND ${HOSTED}`,
     ),
     count(
       `SELECT COUNT(*) n FROM team_projects p JOIN teams t ON t.id = p.teamId

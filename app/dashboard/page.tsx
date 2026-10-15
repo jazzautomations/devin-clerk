@@ -55,11 +55,11 @@ export default async function DashboardPage() {
     listPosts(20, member.id),
   ]);
   const steps = await Promise.all(active.map(async (h) => ({ h, step: await getNextStep(h, member, now) })));
-  // abertos: Hack Inova primeiro, depois Brasil com a cidade/UF do perfil na
+  // abertos: edições do HackaHub primeiro, depois Brasil com a cidade/UF do perfil na
   // frente; sem repetir o que já está nos próximos passos
   const activeIds = new Set(active.map((h) => h.id));
   const abertos = dashboardList(open, now, { city: member.city, exclude: activeIds, limit: 5 });
-  const proxima = open.find((h) => h.partner && !activeIds.has(h.id)) ?? null;
+  const proxima = open.find((h) => h.hosted && !activeIds.has(h.id)) ?? null;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-14 px-4 py-10 sm:px-6 sm:py-14">
@@ -119,8 +119,8 @@ export default async function DashboardPage() {
               <p className="text-[20px] font-extrabold tracking-[-0.02em]">Tu ainda não tá em nenhuma edição.</p>
               <p className="mt-1 text-[15px] text-muted">
                 {proxima
-                  ? `A próxima da Hack Inova é ${proxima.name}, em ${fmtData.format(new Date(proxima.startsAt))}.`
-                  : "Quando a próxima edição da Hack Inova abrir, ela aparece aqui."}
+                  ? `${proxima.name} tem inscrição aberta no HackaHub, em ${fmtData.format(new Date(proxima.startsAt))}.`
+                  : "Quando abrir uma edição com inscrição no HackaHub, ela aparece aqui."}
               </p>
             </div>
             <Link href={proxima ? `/h/${proxima.id}` : "/radar"} className="btn shrink-0">

@@ -32,7 +32,7 @@ export default async function CandidaturaPage({ params }: PageProps<"/h/[id]/can
   const { userId, redirectToSignIn } = await auth();
   if (!userId) return redirectToSignIn({ returnBackUrl: `/h/${id}/candidatura/${kind}` });
   const h = await getHackathon(id);
-  if (!h || !h.active || !h.partner || !isApplicationKind(kind)) notFound();
+  if (!h || !h.active || !h.hosted || !isApplicationKind(kind)) notFound();
   const member = await getMemberByClerkId(userId);
   if (!member) notFound();
 

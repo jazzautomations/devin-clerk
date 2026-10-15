@@ -60,8 +60,8 @@ beforeEach(async () => {
   ] as const) {
     await db
       .prepare(
-        `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
-         VALUES (?, 'Terms UT', 'Hack Inova', ?, 'presencial', 'https://x.dev', '[]')`,
+        `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, source)
+         VALUES (?, 'Terms UT', 'Hack Inova', ?, 'presencial', 'https://x.dev', '[]', 'painel')`,
       )
       .run(id, starts);
   }
@@ -166,8 +166,8 @@ describe("configuração da edição", () => {
     const ed = `${ED}-v`;
     await db
       .prepare(
-        `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
-         VALUES (?, 'V', 'Hack Inova', '2099-01-01', 'online', 'https://x.dev', '[]')`,
+        `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, source)
+         VALUES (?, 'V', 'Hack Inova', '2099-01-01', 'online', 'https://x.dev', '[]', 'painel')`,
       )
       .run(ed);
     const text = "Regra nova da edição. ".repeat(6);

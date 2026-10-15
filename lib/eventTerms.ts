@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { hostedSql } from "@/lib/hackathons";
 import { emailDriver, emailReplyTo } from "@/lib/notify/email";
 import type { DriverEnv, SendOutcome } from "@/lib/notify/types";
 import { absoluteUrl } from "@/lib/seo";
@@ -444,7 +445,7 @@ export async function listMyImageConsents(memberId: number): Promise<MyEditionCo
            SELECT granted, createdAt FROM image_consents
            WHERE memberId = r.memberId AND hackathonId = r.hackathonId ORDER BY id DESC LIMIT 1
          ) ic ON true
-         WHERE r.memberId = ? AND lower(h.organizer) LIKE '%hack inova%'
+         WHERE r.memberId = ? AND ${hostedSql('h')}
          ORDER BY h.startsAt DESC`,
       )
       .all<{ hackathonId: string; name: string; granted: number | null; at: string | null }>(memberId)

@@ -22,7 +22,7 @@ async function seed(request: APIRequestContext): Promise<number> {
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, source)
        VALUES (?, 'E2E Sponsors Jam', 'Hack Inova E2E', '2026-09-01T12:00:00Z', '2026-09-02T20:00:00Z', 'presencial',
-               'São Paulo', 'https://e2e.dev/sponsors', '[]', 1, 'e2e')
+               'São Paulo', 'https://e2e.dev/sponsors', '[]', 1, 'painel')
        ON CONFLICT (id) DO UPDATE SET active = 1`,
     )
     .run(HACK);

@@ -58,8 +58,8 @@ beforeEach(async () => {
     await db
       .prepare(
         `INSERT OR IGNORE INTO hackathons
-           (id, name, organizer, startsAt, format, registrationUrl, tags, requiresApproval)
-         VALUES (?, 'Form UT', 'Hack Inova', '2099-03-01', 'presencial', 'https://x.dev', '[]', ?)`,
+           (id, name, organizer, startsAt, format, registrationUrl, tags, requiresApproval, source)
+         VALUES (?, 'Form UT', 'Hack Inova', '2099-03-01', 'presencial', 'https://x.dev', '[]', ?, 'painel')`,
       )
       .run(id, approval);
   }

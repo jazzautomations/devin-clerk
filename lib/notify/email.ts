@@ -11,7 +11,7 @@ import {
 // "log": marca skipped com o motivo e não chama rede — dev e testes nunca
 // mandam e-mail de verdade.
 export const RESEND_URL = "https://api.resend.com/emails";
-const DEFAULT_FROM = "Hack Inova <avisos@hackahub.dev>";
+const DEFAULT_FROM = "HackaHub <avisos@hackahub.dev>";
 
 /** endereço de resposta configurado, ou null (a copy só promete resposta quando existe) */
 export function emailReplyTo(env: DriverEnv = process.env): string | null {

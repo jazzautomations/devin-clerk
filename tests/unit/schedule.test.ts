@@ -68,8 +68,8 @@ const form = (over: Record<string, unknown> = {}) => ({
 beforeEach(async () => {
   await db
     .prepare(
-      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl)
-       VALUES (?, 'Prog Unit', 'Hack Inova', ?, ?, 'presencial', 'Alphaville', 'https://x.dev')`,
+      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, source)
+       VALUES (?, 'Prog Unit', 'Hack Inova', ?, ?, 'presencial', 'Alphaville', 'https://x.dev', 'painel')`,
     )
     .run(H, ED.startsAt, ED.endsAt);
   await db.prepare("DELETE FROM schedule_items").run();

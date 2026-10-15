@@ -24,8 +24,8 @@ export const stageIndex = (s: JourneyStage) => JOURNEY.findIndex((j) => j.key ==
 export type NextStepFacts = {
   hackathonId: string;
   phase: EditionPhase;
-  /** edição Hack Inova (inscrição pela plataforma); false = evento do radar */
-  partner: boolean;
+  /** roda no HackaHub (inscrição pela plataforma); false = evento do radar */
+  hosted: boolean;
   registrationUrl: string;
   registrationClosed: boolean;
   requiresApproval: boolean;
@@ -115,7 +115,7 @@ export function nextStep(f: NextStepFacts): NextStep {
   });
 
   // evento do radar: a inscrição é no site de quem organiza
-  if (!f.partner) {
+  if (!f.hosted) {
     if (over) return step("encerrada", "resultado", "Edição encerrada", null, null, { involved: false });
     if (f.registrationClosed) {
       return step("externo-fechado", "inscricao", "Inscrições encerradas", null, null, { involved: false });

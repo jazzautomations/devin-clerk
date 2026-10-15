@@ -47,8 +47,8 @@ const idOf = async (memberId: number, kind: string) =>
 beforeEach(async () => {
   await db
     .prepare(
-      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags)
-       VALUES (?, 'Cand UT', 'Hack Inova', '2099-03-01', 'presencial', 'https://x.dev', '[]')`,
+      `INSERT OR IGNORE INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, tags, source)
+       VALUES (?, 'Cand UT', 'Hack Inova', '2099-03-01', 'presencial', 'https://x.dev', '[]', 'painel')`,
     )
     .run(ED);
   await db.prepare("DELETE FROM role_applications WHERE hackathonId = ?").run(ED);

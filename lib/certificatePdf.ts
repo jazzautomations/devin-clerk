@@ -106,7 +106,7 @@ export async function certificatePdf(c: Certificate, baseUrl: string): Promise<U
   // barra de título estilo .tbar
   const top = H - M;
   page.drawRectangle({ x: M + 14, y: top - 30, width: W - 2 * M - 14, height: 30, color: INK });
-  label(page, monoBold, "hack inova · hackahub", left, top - 19.5, PAPER, 9.5);
+  label(page, monoBold, "hackahub", left, top - 19.5, PAPER, 9.5);
   const kindTxt = `certificado · ${CERT_KIND_LABEL[c.kind]}`;
   page.drawText(kindTxt.toUpperCase(), {
     x: right - monoBold.widthOfTextAtSize(kindTxt.toUpperCase(), 9.5),

@@ -33,7 +33,7 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
   const role = certRoleLabel(c);
   const addToLinkedin = linkedinAddCertificationUrl({
     name: certName,
-    organizationName: c.institution || "Hack Inova",
+    organizationName: c.institution || "HackaHub",
     issuedAt: c.issuedAt,
     certUrl,
     certId: c.code,
@@ -121,7 +121,7 @@ export default async function CertificatePage({ params }: PageProps<"/c/[code]">
           </div>
           )}
           {!c.revokedAt && (
-            <ShareBar url={certUrl} text={`Certificado de ${kindLabel} — ${c.hackathonName} (Hack Inova)`} label="compartilhar certificado" />
+            <ShareBar url={certUrl} text={`Certificado de ${kindLabel} — ${c.hackathonName}${c.institution ? ` (${c.institution})` : ""}`} label="compartilhar certificado" />
           )}
         </div>
       </div>

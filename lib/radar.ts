@@ -26,7 +26,7 @@ export type RadarEvent = {
   endsAt: string | null;
   registrationDeadline: string | null;
   prize: string | null;
-  partner: boolean;
+  hosted: boolean;
   region?: string | null;
   source?: string | null;
   // radar global (migration 026), gravado pelo scraper
@@ -48,7 +48,7 @@ export function radarRegion(h: RadarEvent): RadarRegion {
   if (h.region && (RADAR_REGIONS as string[]).includes(h.region)) return h.region as RadarRegion;
   // edição da casa (sem fonte) é brasileira
   const sources = (h.source ?? "").split("+");
-  const br = h.partner || !h.source || sources.some((s) => BR_SOURCES.has(s));
+  const br = h.hosted || !h.source || sources.some((s) => BR_SOURCES.has(s));
   const where = eventRegion(h);
   if (where.length === 2 || where === "brasil") return "br";
   if (h.format !== "online") return br && !h.location ? "br" : "exterior";
@@ -121,11 +121,11 @@ export function landingSample<T extends RadarEvent>(
 ): { sample: T[]; count: number } {
   const relevant = open.filter((h) => !closesSoon(h, now) && brazilCanJoin(h) !== "nao");
   const local = [
-    ...relevant.filter((h) => h.partner),
-    ...relevant.filter((h) => !h.partner && isBrasil(h)),
+    ...relevant.filter((h) => h.hosted),
+    ...relevant.filter((h) => !h.hosted && isBrasil(h)),
   ];
   const globals = relevant
-    .filter((h) => !h.partner && !isBrasil(h) && isOnline(h) && brazilCanJoin(h) === "sim")
+    .filter((h) => !h.hosted && !isBrasil(h) && isOnline(h) && brazilCanJoin(h) === "sim")
     .sort((a, b) => (b.prizeUsd ?? 0) - (a.prizeUsd ?? 0));
   const nGlobal = Math.min(globals.length, size, Math.max(size - local.length, 2));
   const sample = [...local.slice(0, size - nGlobal), ...globals.slice(0, nGlobal)];
@@ -140,7 +140,7 @@ export function dashboardList<T extends RadarEvent>(
   opts: { city?: string | null; exclude?: Set<string>; limit?: number } = {},
 ): T[] {
   const { city, exclude, limit = 5 } = opts;
-  const uf = city ? radarUf({ id: "", name: "", format: "presencial", location: city, startsAt: "", endsAt: null, registrationDeadline: null, prize: null, partner: false }) : null;
+  const uf = city ? radarUf({ id: "", name: "", format: "presencial", location: city, startsAt: "", endsAt: null, registrationDeadline: null, prize: null, hosted: false }) : null;
   const cityKey = city?.split(",")[0].trim().toLowerCase() || null;
   const score = (h: T) => {
     if (cityKey && h.location?.toLowerCase().includes(cityKey)) return 0;
@@ -148,11 +148,11 @@ export function dashboardList<T extends RadarEvent>(
     return 2;
   };
   const radar = open
-    .filter((h) => !h.partner && isBrasil(h) && !closesSoon(h, now))
+    .filter((h) => !h.hosted && isBrasil(h) && !closesSoon(h, now))
     .map((h, i) => ({ h, i }))
     .sort((a, b) => score(a.h) - score(b.h) || a.i - b.i)
     .map(({ h }) => h);
-  return [...open.filter((h) => h.partner), ...radar]
+  return [...open.filter((h) => h.hosted), ...radar]
     .filter((h) => !exclude?.has(h.id))
     .slice(0, limit);
 }

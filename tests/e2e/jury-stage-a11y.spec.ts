@@ -28,7 +28,7 @@ async function edition(id: string, name: string, startsAt: string, endsAt: strin
     .prepare(
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, source)
-       VALUES (?, ?, 'Hack Inova E2E', ?, ?, 'presencial', 'São Paulo', 'https://e2e.dev/d', '[]', 1, 'e2e')
+       VALUES (?, ?, 'Hack Inova E2E', ?, ?, 'presencial', 'São Paulo', 'https://e2e.dev/d', '[]', 1, 'painel')
        ON CONFLICT(id) DO UPDATE SET startsAt = EXCLUDED.startsAt, endsAt = EXCLUDED.endsAt, active = 1`,
     )
     .run(id, name, startsAt, endsAt);

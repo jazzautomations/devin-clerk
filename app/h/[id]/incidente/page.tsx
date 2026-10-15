@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: PageProps<"/h/[id]/incidente"
 export default async function IncidentePage({ params }: PageProps<"/h/[id]/incidente">) {
   const { id } = await params;
   const h = await getHackathon(id);
-  if (!h || !h.partner) notFound();
+  if (!h || !h.hosted) notFound();
   const { userId } = await auth();
   const kinds = INCIDENT_KINDS.map((k) => ({ value: k, label: INCIDENT_KIND_LABEL[k] }));
 

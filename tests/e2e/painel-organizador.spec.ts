@@ -28,7 +28,7 @@ async function seed(request: APIRequestContext) {
       `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags,
          active, source, requiresApproval, capacity)
        VALUES (?, 'E2E Painel do Organizador', 'Hack Inova E2E', ?, NULL, 'presencial', 'Campus E2E',
-               '/h/e2e-painel-org', '[]', 0, 'e2e', 1, NULL)
+               '/h/e2e-painel-org', '[]', 0, 'painel', 1, NULL)
        ON CONFLICT (id) DO UPDATE SET startsAt = excluded.startsAt, endsAt = NULL, active = 0, publishedAt = NULL,
          requiresApproval = 1, location = excluded.location`,
     )

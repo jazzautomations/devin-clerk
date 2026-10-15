@@ -50,7 +50,7 @@ export function renderAnnouncementEmail(a: AnnouncementContent): {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fefefe;">
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;border:2px solid #0c0c0c;background:#fefefe;">
-<tr><td style="background:#0c0c0c;padding:8px 16px;font-family:${mono};font-size:13px;letter-spacing:.06em;color:#3ecf8e;text-transform:uppercase;">Hack Inova · aviso da edição</td></tr>
+<tr><td style="background:#0c0c0c;padding:8px 16px;font-family:${mono};font-size:13px;letter-spacing:.06em;color:#3ecf8e;text-transform:uppercase;">HackaHub · aviso da edição</td></tr>
 <tr><td style="padding:28px 24px 8px;font-family:${sans};">
 <p style="margin:0 0 10px;font-family:${mono};font-size:12px;letter-spacing:.08em;color:#047a43;text-transform:uppercase;">${esc(a.hackathonName)}</p>
 <h1 style="margin:0 0 20px;font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.02em;color:#0c0c0c;">${esc(a.title)}</h1>

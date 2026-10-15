@@ -40,7 +40,7 @@ export default async function Image({
       ]
         .filter(Boolean)
         .join(" · ")
-    : "a plataforma da Hack Inova";
+    : "a comunidade de hackathon do Brasil";
 
   return new ImageResponse(
     (

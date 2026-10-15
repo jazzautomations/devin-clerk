@@ -18,8 +18,8 @@ async function member() {
 async function edition(id: string, capacity: number | null, rsvp = 1) {
   await db
     .prepare(
-      `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, capacity, rsvpEnabled)
-       VALUES (?, ?, 'Hack Inova', '2026-12-05T12:00:00Z', 'presencial', 'https://x.dev', ?, ?)`,
+      `INSERT INTO hackathons (id, name, organizer, startsAt, format, registrationUrl, capacity, rsvpEnabled, source)
+       VALUES (?, ?, 'Hack Inova', '2026-12-05T12:00:00Z', 'presencial', 'https://x.dev', ?, ?, 'painel')`,
     )
     .run(id, `Edição ${id}`, capacity, rsvp);
 }

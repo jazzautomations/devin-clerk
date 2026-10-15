@@ -5,7 +5,7 @@ import { listPosts } from "@/lib/blog";
 export const metadata: Metadata = {
   title: "blog",
   description:
-    "Guias de hackathon, recaps das edições do Hack Inova e tutoriais da plataforma — conteúdo da comunidade HackaHub.",
+    "Guias de hackathon, recaps de edições e tutoriais da plataforma, escritos pela comunidade HackaHub.",
   alternates: { canonical: "/blog" },
 };
 

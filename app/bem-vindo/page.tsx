@@ -36,7 +36,7 @@ export default async function BemVindoPage({ searchParams }: PageProps<"/bem-vin
   }
 
   const now = new Date();
-  const open = (await getOpenHackathons(now)).filter((h) => h.partner);
+  const open = (await getOpenHackathons(now)).filter((h) => h.hosted);
   const next = open.find((h) => !isRegistrationClosed(h, now)) ?? null;
   let help: { id: string; name: string; kind: "mentor" | "jurado" | "voluntario" } | null = null;
   for (const h of open) {

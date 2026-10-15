@@ -36,7 +36,7 @@ function ev(id: string, f: Partial<Hackathon> = {}): Hackathon {
     prize: null,
     tags: [],
     active: true,
-    partner: false,
+    hosted: false,
     requiresApproval: false,
     region: null,
     source: "sympla",
@@ -142,7 +142,7 @@ describe("selos do card", () => {
 
 describe("landingSample — mistura Brasil e global aberto pra brasileiro", () => {
   const br = Array.from({ length: 6 }, (_, i) => ev(`br-${i}`, { region: "br", location: "Recife, PE" }));
-  const casa = ev("casa", { partner: true, source: null, location: "Alphaville, SP" });
+  const casa = ev("casa", { hosted: true, source: null, location: "Alphaville, SP" });
   const amanha = ev("amanha", { ...meta, id: "amanha", registrationDeadline: at(1) });
 
   it("Brasil na frente e os 2 globais de maior prêmio no fim; fecha-em-48h fora", () => {

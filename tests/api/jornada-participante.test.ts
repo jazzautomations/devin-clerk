@@ -131,8 +131,8 @@ describe("inscrição fechada (inscricao-edicao-encerrada)", () => {
   async function edition(id: string, cols: { endsAt?: string; registrationDeadline?: string; organizer?: string }) {
     await db
       .prepare(
-        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, registrationDeadline, tags, active)
-         VALUES (?, ?, ?, ?, ?, 'presencial', '/x', ?, '[]', 1) ON CONFLICT (id) DO NOTHING`,
+        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, registrationDeadline, tags, active, source)
+         VALUES (?, ?, ?, ?, ?, 'presencial', '/x', ?, '[]', 1, ?) ON CONFLICT (id) DO NOTHING`,
       )
       .run(
         id,
@@ -141,6 +141,8 @@ describe("inscrição fechada (inscricao-edicao-encerrada)", () => {
         "2026-01-10T09:00:00-03:00",
         cols.endsAt ?? null,
         cols.registrationDeadline ?? null,
+        // sem organizador = edição que roda no HackaHub; com outro, evento do radar
+        cols.organizer ? "sympla" : "painel",
       );
   }
 
@@ -482,8 +484,8 @@ describe("RSVP libera a vaga pelo unregister sem regra de cancelamento", () => {
     await db.prepare("UPDATE hackathons SET rsvpEnabled = 0").run();
     await db
       .prepare(
-        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, rsvpEnabled)
-         VALUES (?, 'RSVP C', 'Hack Inova', ?, NULL, 'presencial', 'Rua Teste, 100', '/x', '[]', 1, 1)
+        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, rsvpEnabled, source)
+         VALUES (?, 'RSVP C', 'Hack Inova', ?, NULL, 'presencial', 'Rua Teste, 100', '/x', '[]', 1, 1, 'painel')
          ON CONFLICT (id) DO UPDATE SET rsvpEnabled = 1`,
       )
       .run(ED, START);

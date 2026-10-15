@@ -19,7 +19,7 @@ test.beforeAll(async () => {
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, tags, active, source, juryFeedbackReleased)
        VALUES (?, 'E2E Jam de Horas', 'Hack Inova E2E', '2026-09-12 12:00:00', '2026-09-13 21:00:00',
-               'presencial', 'São Paulo', 'https://e2e.dev/k', '[]', 1, 'e2e', 1)
+               'presencial', 'São Paulo', 'https://e2e.dev/k', '[]', 1, 'painel', 1)
        ON CONFLICT(id) DO UPDATE SET juryFeedbackReleased = 1`,
     )
     .run(H);
