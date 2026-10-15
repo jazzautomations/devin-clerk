@@ -27,6 +27,18 @@ export type Hackathon = {
   // deriva a região quando a coluna está vazia.
   region?: string | null;
   source?: string | null;
+  // radar global (migration 026): alcance (global/latam/brasil/pais/cidade),
+  // país, se brasileiro pode ('sim'/'nao'/null = não informado) com o trecho
+  // da regra e o link, prêmio aproximado em US$ (só ordena/filtra), prazo de
+  // entrega e marca por trás do evento. lib/radar.ts deriva o que faltar.
+  scope?: string | null;
+  country?: string | null;
+  brazilOk?: string | null;
+  eligibilityNote?: string | null;
+  eligibilityUrl?: string | null;
+  prizeUsd?: number | null;
+  submissionDeadline?: string | null;
+  brand?: string | null;
   // primeira vez que a edição ficou no ar (migration 019). Fora do ar com
   // publishedAt = arquivada; sem publishedAt = rascunho.
   publishedAt?: string | null;
@@ -94,14 +106,14 @@ export async function getPastHackathons(now = new Date()): Promise<Hackathon[]> 
 }
 
 // busca textual do radar (?q=, spec 023) — substring case-insensitive sobre
-// nome/local/tags. A lista já é materializada em JS (tags são JSON), então
+// nome/local/organizador/marca/país/tags. A lista já é materializada em JS (tags são JSON), então
 // filtrar aqui é mais honesto que LIKE na coluna serializada
 export async function searchHackathons(q: string, now = new Date()): Promise<Hackathon[]> {
   const list = await getOpenHackathons(now);
   const needle = q.trim().toLowerCase();
   if (!needle) return list;
   return list.filter((h) =>
-    [h.name, h.location ?? "", ...h.tags]
+    [h.name, h.location ?? "", h.organizer, h.brand ?? "", h.country ?? "", ...h.tags]
       .join("\n")
       .toLowerCase()
       .includes(needle),

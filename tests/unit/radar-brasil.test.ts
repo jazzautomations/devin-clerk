@@ -4,11 +4,9 @@ import { getOpenHackathons, type Hackathon } from "@/lib/hackathons";
 import {
   closesSoon,
   dashboardList,
-  landingList,
-  prizeInReais,
+  landingSample,
   shortLocation,
   radarRegion,
-  radarSections,
 } from "@/lib/radar";
 
 // Radar Brasil-first: landing sem gringo online e sem o que fecha em menos
@@ -67,7 +65,7 @@ describe("closesSoon — fecha em menos de 48h", () => {
   });
 });
 
-describe("landingList — Hack Inova + Brasil, nada de gringo nem de última hora", () => {
+describe("landingSample — Brasil + 1–2 globais abertos pra brasileiro, nada de última hora", () => {
   const casa = ev("casa", { partner: true, source: null, location: "Alphaville, SP" });
   const sp = ev("sp", { location: "São Paulo, SP", region: "br" });
   const onlineBr = ev("onlinebr", { format: "online", region: "online-br" });
@@ -75,18 +73,18 @@ describe("landingList — Hack Inova + Brasil, nada de gringo nem de última hor
   const fora = ev("fora", { location: "Stanford University", region: "exterior", source: "devpost" });
   const amanha = ev("amanha", { location: "Recife, PE", region: "br", startsAt: at(1) });
 
-  it("tira gringo online, presencial lá fora e o que fecha em 48h", () => {
-    const ids = landingList([sp, gringo, amanha, fora, onlineBr, casa], NOW).map((h) => h.id);
-    expect(ids).toEqual(["casa", "sp", "onlinebr"]);
+  it("tira gringo sem regra, presencial lá fora e o que fecha em 48h", () => {
+    const { sample } = landingSample([sp, gringo, amanha, fora, onlineBr, casa], NOW);
+    expect(sample.map((h) => h.id)).toEqual(["casa", "sp", "onlinebr"]);
   });
 
   it("sobrou pouco, mostra pouco (não completa com lixo)", () => {
-    expect(landingList([gringo, fora, casa], NOW).map((h) => h.id)).toEqual(["casa"]);
+    expect(landingSample([gringo, fora, casa], NOW).sample.map((h) => h.id)).toEqual(["casa"]);
   });
 
-  it("respeita o limite", () => {
+  it("respeita o tamanho", () => {
     const many = Array.from({ length: 10 }, (_, i) => ev(`br-${i}`, { region: "br", location: "Recife, PE" }));
-    expect(landingList(many, NOW, 6)).toHaveLength(6);
+    expect(landingSample(many, NOW, 6).sample).toHaveLength(6);
   });
 });
 
@@ -108,16 +106,6 @@ describe("dashboardList — mesma regra, cidade/UF do perfil na frente", () => {
   });
 });
 
-describe("prizeInReais — landing e painel só mostram real", () => {
-  it("R$ passa; ₹, € e US$ não", () => {
-    expect(prizeInReais("R$ 15 mil")).toBe("R$ 15 mil");
-    expect(prizeInReais("₹ 50,000")).toBeNull();
-    expect(prizeInReais("€10,680")).toBeNull();
-    expect(prizeInReais("$138,000")).toBeNull();
-    expect(prizeInReais(null)).toBeNull();
-  });
-});
-
 describe("shortLocation — cidade na frente do prédio", () => {
   it("corta o local quando termina em cidade, UF", () => {
     expect(shortLocation("Centro Universitário de Maceió – UNIMA/Afya, Maceió, AL")).toBe("Maceió, AL");
@@ -127,31 +115,12 @@ describe("shortLocation — cidade na frente do prédio", () => {
   });
 });
 
-describe("radarSections — ordem Brasil-first", () => {
-  it("Brasil (por UF, a mais cheia primeiro), online BR, online mundo, lá fora", () => {
-    const s = radarSections([
-      ev("gringo", { format: "online", region: "online-mundo", source: "devpost" }),
-      ev("fora", { region: "exterior", source: "devpost", location: "Boston" }),
-      ev("rs1", { region: "br", location: "Canoas, RS" }),
-      ev("pe", { region: "br", location: "Recife, PE" }),
-      ev("rs2", { region: "br", location: "Marau, RS" }),
-      ev("obr", { format: "online", region: "online-br" }),
-    ]);
-    expect(s.map((x) => x.region)).toEqual(["br", "online-br", "online-mundo", "exterior"]);
-    expect(s[0].groups.map((g) => g.uf)).toEqual(["RS", "PE"]);
-    expect(s[0].title).toBe("No Brasil");
-  });
-  it("seção vazia some", () => {
-    expect(radarSections([ev("pe", { region: "br", location: "Recife, PE" })]).map((x) => x.region)).toEqual(["br"]);
-  });
-});
-
 describe("integração com o banco — region gravada chega na lista da landing", () => {
   beforeEach(async () => {
     await db.exec("DELETE FROM hackathons WHERE id LIKE 'rb-%'");
   });
 
-  it("landing com dados do banco: Hack Inova + BR, sem Devpost online", async () => {
+  it("landing com dados do banco: Hack Inova + BR, sem Devpost online sem regra", async () => {
     const ins = db.prepare(
       `INSERT INTO hackathons (id, name, organizer, startsAt, format, location,
          registrationUrl, tags, active, source, region, prize)
@@ -161,7 +130,7 @@ describe("integração com o banco — region gravada chega na lista da landing"
     await ins.run("rb-paypal", "PayPal AI Hackathon", at(5), "online", null, "devpost", "online-mundo", "$67,500");
     await ins.run("rb-amanha", "Hack de Amanhã", at(1), "presencial", "Recife, PE", "sympla", "br", null);
     const open = await getOpenHackathons(NOW);
-    const ids = landingList(open, NOW).map((h) => h.id);
+    const ids = landingSample(open, NOW, 50).sample.map((h) => h.id);
     expect(ids).toContain("rb-canoas");
     expect(ids).not.toContain("rb-paypal");
     expect(ids).not.toContain("rb-amanha");

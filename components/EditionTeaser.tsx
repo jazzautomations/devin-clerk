@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RadarEventFacts } from "@/components/RadarEventFacts";
 import type { Hackathon } from "@/lib/hackathons";
 import type { EditionSponsor } from "@/lib/editionSponsors";
 import type { Challenge } from "@/lib/challenges";
@@ -108,6 +109,12 @@ export function EditionTeaser({
           </dl>
         </div>
       </header>
+
+      {!h.partner && !past && (
+        <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
+          <RadarEventFacts h={h} now={new Date()} />
+        </div>
+      )}
 
       {/* CTA: criar conta e cair direto na inscrição desta edição */}
       <div className="mx-auto max-w-6xl px-4 sm:px-6">

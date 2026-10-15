@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Show, SignUpButton } from "@clerk/nextjs";
 import { EditionRows } from "@/components/EditionRows";
 import { getOpenHackathons } from "@/lib/hackathons";
-import { landingList } from "@/lib/radar";
+import { landingSample } from "@/lib/radar";
 
 // Landing curta (escolha do dono, 14/10/2026), posicionada como comunidade:
 // rede de quem constrói, cada cidade/comunidade com sua edição e todo mundo
@@ -43,13 +43,12 @@ export default async function Home() {
   const now = new Date();
   const upcoming = await getOpenHackathons(now);
   const proxima = upcoming.find((h) => h.partner) ?? null;
-  // Hack Inova primeiro, depois hackathons do Brasil por data (sem gringo
-  // online e sem o que fecha em menos de 48h — lib/radar.ts)
-  // loop de curiosidade: a landing mostra uma amostra; o radar completo é
-  // de quem tem conta (a contagem do resto é real)
-  const todosAbertos = landingList(upcoming, now, 500);
-  const abertos = todosAbertos.slice(0, 4);
-  const restantes = todosAbertos.length - abertos.length;
+  // amostra de 4: Brasil (edições da casa e hackathons daqui) + 1–2 globais
+  // grandes abertos pra brasileiros, sem o que fecha em menos de 48h
+  // (lib/radar.ts). Loop de curiosidade: o radar completo é de quem tem
+  // conta, e a contagem do resto é real (o radar inteiro que vale pra você)
+  const { sample: abertos, count } = landingSample(upcoming, now, 4);
+  const restantes = count - abertos.length;
   // sem edição anunciada, a próxima é surpresa: quem deixa o e-mail fica
   // sabendo primeiro (decisão do dono, 14/10/2026)
   const primaryHref = proxima ? `/h/${proxima.id}` : "#proxima";
@@ -135,9 +134,10 @@ export default async function Home() {
               data-testid="landing-radar-trancado"
             >
               <p className="text-[clamp(1.1rem,2vw,1.35rem)] font-extrabold tracking-[-0.02em]">
-                +{restantes} {restantes === 1 ? "hackathon aberto" : "hackathons abertos"} no Brasil.
+                +{restantes} {restantes === 1 ? "hackathon aberto" : "hackathons abertos"} no radar.
                 <span className="block text-[15px] font-normal text-[#2b2b2b]">
-                  O radar completo, por estado, fica dentro da plataforma.
+                  O Brasil por estado e o online do mundo todo, com a regra de quem pode entrar. Fica dentro da
+                  plataforma.
                 </span>
               </p>
               <Show when="signed-out">

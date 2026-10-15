@@ -38,6 +38,7 @@ import { FeedSection } from "@/components/FeedSection";
 import { listPosts } from "@/lib/posts";
 import { NextStepPanel } from "@/components/NextStepPanel";
 import { EditionTeaser } from "@/components/EditionTeaser";
+import { RadarEventFacts } from "@/components/RadarEventFacts";
 import { getNextStep } from "@/lib/nextStepFacts";
 import { EditionAnnouncements } from "@/components/EditionAnnouncements";
 import {
@@ -333,6 +334,13 @@ export default async function HackathonPage({
           </dl>
         </div>
       </header>
+
+      {/* evento do radar: alcance, quem pode, prazos e prêmio antes do site oficial */}
+      {!h.partner && !past && (
+        <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
+          <RadarEventFacts h={h} now={now} />
+        </div>
+      )}
 
       {/* spec 039 — teu próximo passo: o estado da pessoa na edição e a ação */}
       <div className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">

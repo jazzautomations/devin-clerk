@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { nextDate, type Hackathon } from "@/lib/hackathons";
-import { prizeInReais, shortLocation } from "@/lib/radar";
+import { compactPrize, isBrasil, radarBadges, shortLocation } from "@/lib/radar";
 
 // spec 039 — lista de edições em linhas com fio (data pixel, nome, local,
-// selo). Landing ("próximas edições") e /dashboard ("hackathons abertos").
+// selo). Landing ("abertos agora", Brasil + globais) e /dashboard
+// ("hackathons abertos", só Brasil).
 const fmtDia = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "America/Sao_Paulo" });
 const fmtMes = new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: "America/Sao_Paulo" });
 const FORMAT_LABEL: Record<string, string> = { online: "online", presencial: "presencial", hibrido: "híbrido" };
@@ -26,8 +27,10 @@ export function EditionRows({
         const next = nextDate(h, now);
         const d = new Date(next.at);
         const mine = registeredIds.includes(h.id);
-        // landing e painel falam em real; ₹/€/US$ ficam no /radar
-        const prize = prizeInReais(h.prize);
+        // prêmio curto na moeda original ("US$ 50 mil"); o global da
+        // amostra da landing ganha o selo de alcance e de quem pode entrar
+        const prize = compactPrize(h.prize);
+        const global = !isBrasil(h) ? radarBadges(h, now) : null;
         return (
           <li key={h.id} className="border-t-2 border-line">
             <Link
@@ -45,12 +48,14 @@ export function EditionRows({
                   {h.name}
                 </span>
                 <span className="mt-1 block truncate font-mono text-[12.5px] text-muted">
-                  {shortLocation(h.location) ?? "online"} · {FORMAT_LABEL[h.format]} · {h.organizer}
+                  {[shortLocation(h.location), FORMAT_LABEL[h.format] ?? "online", h.organizer].filter(Boolean).join(" · ")}
                 </span>
               </span>
               <span className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-3 sm:justify-end">
                 {mine && <span className="chip bare bg-foreground! text-band!">inscrito</span>}
                 {h.partner && <span className="chip bare border-accent! bg-mint! text-accent!">edição hack inova</span>}
+                {global && <span className="chip bare">{global.where}</span>}
+                {global?.brazil === "sim" && <span className="chip bare border-accent! bg-mint! text-accent!">aberto pra brasileiros</span>}
                 {prize && <span className="chip bare max-w-[180px] truncate">{prize}</span>}
               </span>
             </Link>

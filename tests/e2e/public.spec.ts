@@ -16,15 +16,19 @@ test.describe("landing — explica o produto pra quem não tem conta (spec 039)"
 });
 
 test.describe("radar — descoberta (logado)", () => {
-  test("lista hackathons reais com sessões hack inova em destaque", async ({
+  test("lista hackathons reais com o Brasil primeiro, edição da casa junto", async ({
     memberPage: page,
   }) => {
     await page.goto("/radar");
     await expect(
       page.getByRole("heading", { name: /hackathons abertos/i }),
     ).toBeVisible();
-    await expect(page.getByText(/sessões hack inova/i)).toBeVisible();
-    // filtros por formato existem (duas seções de filtro: sessões + radar)
+    // a edição Hack Inova não tem vitrine própria: entra no Brasil como as outras
+    await page.goto("/radar?q=hack inova");
+    await expect(
+      page.getByTestId("radar-secao-brasil").locator("article", { hasText: /hack inova/i }).first(),
+    ).toBeVisible();
+    // filtros por formato existem
     await expect(
       page.getByRole("button", { name: "online" }).first(),
     ).toBeVisible();

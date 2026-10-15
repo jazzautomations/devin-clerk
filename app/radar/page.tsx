@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { HackathonCard } from "@/components/HackathonCard";
 import { RadarFeed } from "@/components/RadarFeed";
 import { SubmitEventForm } from "@/components/SubmitEventForm";
 import { getOpenHackathons, searchHackathons } from "@/lib/hackathons";
@@ -10,7 +9,7 @@ import { getRegistrationIds } from "@/lib/registrations";
 export const metadata: Metadata = {
   title: "radar",
   description:
-    "Hackathons abertos, com o Brasil na frente: edições Hack Inova com inscrição pelo HackaHub e eventos das fontes oficiais.",
+    "Hackathons abertos no Brasil e no mundo: formato, alcance, prazo, prêmio e se brasileiro pode participar.",
   alternates: { canonical: "/radar" },
 };
 
@@ -39,8 +38,6 @@ export default async function RadarPage({
   const hackathons = q
     ? await searchHackathons(q, now)
     : await getOpenHackathons(now);
-  const sessoes = hackathons.filter((h) => h.partner);
-  const radar = hackathons.filter((h) => !h.partner);
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6">
@@ -52,15 +49,16 @@ export default async function RadarPage({
           Hackathons abertos
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Primeiro o que rola no Brasil, por estado. Depois o que dá pra fazer
-          online. A lista é atualizada todo dia.
+          Primeiro o que rola no Brasil, por estado. Depois o que dá pra
+          fazer online de qualquer lugar, com a regra de quem pode entrar. A
+          lista é atualizada duas vezes por dia.
         </p>
         <form action="/radar" className="mt-1 flex gap-2">
           <input
             type="search"
             name="q"
             defaultValue={q}
-            placeholder="buscar por nome, cidade ou tema…"
+            placeholder="buscar por nome, cidade, marca ou tema…"
             aria-label="buscar no radar"
             className="w-full max-w-md border-[1.5px] border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
           />
@@ -79,27 +77,9 @@ export default async function RadarPage({
         </p>
       )}
 
-      {sessoes.length > 0 && (
-        <div className="flex flex-col gap-4">
-          <h2 className="font-mono text-xs tracking-[0.06em] text-accent uppercase">
-            sessões hack inova — inscrição direta
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sessoes.map((h) => (
-              <HackathonCard
-                key={h.id}
-                hackathon={h}
-                now={now}
-                registered={registeredIds.includes(h.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       {!(q && hackathons.length === 0) && (
         <RadarFeed
-          hackathons={radar}
+          hackathons={hackathons}
           now={now.toISOString()}
           registeredIds={registeredIds}
         />

@@ -8,6 +8,7 @@ import type { RegistrationStatus } from "@/lib/registrations";
 import { CardArt } from "@/components/CardArt";
 import { BADGES } from "@/lib/game";
 import { cleanTags } from "@/lib/radarTags";
+import { BRAZIL_LABEL, prizeBrlApprox, radarBadges } from "@/lib/radar";
 
 const FORMAT_LABEL: Record<Hackathon["format"], string> = {
   online: "online",
@@ -51,6 +52,8 @@ export function HackathonCard({
     };
   }, [hackathon.id, hackathon.partner, status]);
   const starts = new Date(hackathon.startsAt);
+  const badges = radarBadges(hackathon, now);
+  const brl = prizeBrlApprox(hackathon);
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "short",
@@ -142,6 +145,25 @@ export function HackathonCard({
           </p>
         </div>
 
+        {/* selos do radar: formato · alcance, se brasileiro pode e o prazo */}
+        <div className="flex flex-wrap gap-1.5 font-mono text-[12px]" data-testid="radar-selos">
+          <span className="border-[1.5px] border-line px-2 py-0.5">{badges.where}</span>
+          {badges.brazil && (
+            <span
+              className={
+                badges.brazil === "sim"
+                  ? "border-[1.5px] border-accent bg-mint px-2 py-0.5 text-accent"
+                  : "border-[1.5px] border-[#ba3919] px-2 py-0.5 text-[#ba3919]"
+              }
+            >
+              {BRAZIL_LABEL[badges.brazil]}
+            </span>
+          )}
+          {badges.closing && (
+            <span className="border-[1.5px] border-foreground bg-foreground px-2 py-0.5 text-band">{badges.closing}</span>
+          )}
+        </div>
+
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
         <div>
           <dt className="text-muted">data</dt>
@@ -160,7 +182,10 @@ export function HackathonCard({
         {hackathon.prize && (
           <div className="col-span-2">
             <dt className="sr-only">prêmio</dt>
-            <dd><span className="prize-badge text-lendario">{hackathon.prize}</span></dd>
+            <dd className="flex flex-wrap items-baseline gap-2">
+              <span className="prize-badge text-lendario">{badges.prize}</span>
+              {brl && <span className="text-muted">{brl}</span>}
+            </dd>
           </div>
         )}
         <div className="col-span-2">
