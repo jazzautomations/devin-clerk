@@ -16,21 +16,10 @@ beforeEach(async () => {
   await db.prepare("UPDATE challenges SET active = 1 WHERE id LIKE 'seed-%'").run();
 });
 
-describe("seeds — patrocínio real das edições", () => {
-  it("PUC tem o desafio Oracle da jornada do paciente", async () => {
-    const list = await getChallenges(PUC);
-    expect(list).toHaveLength(1);
-    expect(list[0].sponsor).toBe("Oracle");
-    expect(list[0].title).toContain("Jornada do paciente");
-    expect(list[0].prize).toContain("OCI");
-  });
-
-  it("Unifacens tem o desafio Oracle + Enterprise X Ventures", async () => {
-    const list = await getChallenges(UNIFACENS);
-    const c = list.find((x) => x.title.includes("IA aplicada"));
-    expect(c?.sponsor).toContain("Oracle");
-    expect(c?.sponsor).toContain("Enterprise X Ventures");
-    expect(c?.prize).toContain("R$5k");
+describe("seed não inventa patrocínio", () => {
+  it("edições do seed nascem sem desafio (os antigos eram inventados — migration 025)", async () => {
+    expect(await getChallenges(PUC)).toHaveLength(0);
+    expect(await getChallenges(UNIFACENS)).toHaveLength(0);
   });
 });
 

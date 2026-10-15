@@ -80,7 +80,7 @@ export function TeamForm({ hackathonId }: { hackathonId: string }) {
           name="name"
           required
           className={input}
-          placeholder="One Day Hospital"
+          placeholder="nome do projeto"
         />
       </label>
       <label className="flex flex-col gap-1.5">
@@ -121,7 +121,7 @@ export function TeamForm({ hackathonId }: { hackathonId: string }) {
               name="projectTitle"
               required
               className={input}
-              placeholder="One Day Hospital"
+              placeholder="nome do projeto"
             />
           </label>
           <label className="flex flex-col gap-1.5">

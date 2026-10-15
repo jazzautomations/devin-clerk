@@ -10,6 +10,11 @@ await db.prepare(
   "INSERT OR IGNORE INTO members (clerkId, username, email, role) VALUES ('clerk_notadmin','notadm','n@t.dev','member')",
 ).run();
 
+// desafio próprio do teste (o seed não traz mais desafio)
+await db.prepare(
+  "INSERT OR IGNORE INTO challenges (id, hackathonId, sponsor, title) VALUES ('teste-guarda-desafio', 'hack-inova-puc-saude-2026', 'S', 'T')",
+).run();
+
 const req = (method: string, body?: unknown) =>
   new Request("http://t", {
     method,
@@ -33,7 +38,7 @@ describe("guardas de admin — não-admin recebe 403", () => {
       "@/app/api/admin/challenges/[challengeId]/route"
     );
     const res = await PATCH(req("PATCH", { active: false }), {
-      params: Promise.resolve({ challengeId: "seed-puc-jornada-paciente" }),
+      params: Promise.resolve({ challengeId: "teste-guarda-desafio" }),
     });
     expect(res.status).toBe(403);
   });

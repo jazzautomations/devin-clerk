@@ -310,7 +310,7 @@ export function MyTeamPanel({
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={80}
-              placeholder="ex.: One Day Hospital"
+              placeholder="ex.: nome do time"
               className={input}
             />
           </label>

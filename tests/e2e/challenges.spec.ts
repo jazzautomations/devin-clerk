@@ -1,23 +1,25 @@
 import { expect } from "@playwright/test";
 import { test } from "./auth";
+import { seedArquivoE2E } from "./db";
 
 // BDD dos desafios patrocinados — spec 006. O sponsor na página pública
 // É o inventário que se vende; participante nunca paga.
 
 test.describe("desafios patrocinados — inventário de monetização", () => {
-  test("edição da PUC mostra desafio Oracle com prêmio em destaque", async ({
+  test("edição com desafio mostra a marca e o prêmio em destaque", async ({
     memberPage: page,
   }) => {
+    await seedArquivoE2E();
     await page.goto("/h/hack-inova-puc-saude-2026");
     await expect(page.getByText(/desafios patrocinados/i)).toBeVisible();
     // marca do sponsor proeminente — é o que se vende
     await expect(
-      page.getByText("Oracle", { exact: true }).first(),
+      page.getByText("Marca Teste", { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: /jornada do paciente/i }),
+      page.getByRole("heading", { name: /desafio e2e só texto/i }),
     ).toBeVisible();
-    await expect(page.getByText(/créditos OCI/i)).toBeVisible();
+    await expect(page.getByText(/prêmio de teste/i)).toBeVisible();
   });
 
   test("edição sem desafio NÃO mostra a seção (inventário vazio não renderiza)", async ({

@@ -1,15 +1,17 @@
 import { expect } from "@playwright/test";
 import { test } from "./auth";
+import { seedArquivoE2E } from "./db";
 
 // BDD das páginas de projeto — spec 010.
 // O funil Colosseum: hackathon (/h) → projeto (/p) → portfólio (/u).
 
-const HACK = "hack-inova-unifacens-2026"; // seed: One Day Hospital, 1º lugar
+const HACK = "hack-inova-unifacens-2026"; // seedArquivoE2E: E2E Campeão, 1º lugar
 
 test.describe("página do projeto — a URL que carrega o funil", () => {
   test("click-through: arquivo da edição → página do projeto", async ({
     memberPage: page,
   }) => {
+    await seedArquivoE2E();
     await page.goto(`/h/${HACK}`);
     // o título do projeto no pódio virou link pra /p/<teamId>
     const link = page.locator('a[href^="/p/"]').first();
@@ -19,7 +21,7 @@ test.describe("página do projeto — a URL que carrega o funil", () => {
 
     // ficha: título do projeto + edição linkada de volta
     await expect(
-      page.getByRole("heading", { name: "One Day Hospital", exact: true }),
+      page.getByRole("heading", { name: "E2E Campeão", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /Payment Shift/ }),
@@ -36,6 +38,7 @@ test.describe("página do projeto — a URL que carrega o funil", () => {
   });
 
   test("metadata carrega o projeto — og:title no head", async ({ memberPage: page }) => {
+    await seedArquivoE2E();
     // resolve o teamId real pelo link no arquivo (seed não garante id fixo)
     await page.goto(`/h/${HACK}`);
     const href = await page
@@ -45,13 +48,12 @@ test.describe("página do projeto — a URL que carrega o funil", () => {
     expect(href).toMatch(/^\/p\/\d+$/);
 
     await page.goto(href!);
-    await expect(page).toHaveTitle(/One Day Hospital/);
+    await expect(page).toHaveTitle(/E2E Campeão/);
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
       "content",
-      "One Day Hospital",
+      "E2E Campeão",
     );
-    // descrição do seed presente na página (meta og:description também cita — first())
-    await expect(page.getByText(/Oracle SP/).first()).toBeVisible();
+    await expect(page.getByText(/projeto de teste do e2e/).first()).toBeVisible();
   });
 
   test("perfil do membro também linka pra página do projeto", async ({

@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./auth";
-import { openE2eDb } from "./db";
+import { openE2eDb, seedArquivoE2E } from "./db";
 
 // BDD do CRM de sponsors — spec 019. O vínculo desafio→sponsor via API exige
 // admin logado (Clerk captcha bloqueia automação — ver AGENTS.md), então o
@@ -65,15 +65,16 @@ test.describe("sponsors — CRM de marcas na página pública", () => {
     ).toBeVisible();
   });
 
-  test("desafio só-texto (seed) continua sem link nem chip", async ({
+  test("desafio só-texto continua sem link nem chip", async ({
     memberPage: page,
   }) => {
+    await seedArquivoE2E();
     await page.goto("/h/hack-inova-puc-saude-2026");
-    // seed Oracle é texto puro — nenhum link "Oracle" nem chip de tier
+    // desafio só-texto — nenhum link da marca nem chip de tier
     await expect(
-      page.getByRole("link", { name: "Oracle", exact: true }),
+      page.getByRole("link", { name: "Marca Teste", exact: true }),
     ).toHaveCount(0);
-    await expect(page.getByText("Oracle", { exact: true })).toBeVisible();
+    await expect(page.getByText("Marca Teste", { exact: true }).first()).toBeVisible();
   });
 
   test("APIs de sponsor trancadas sem login → 401 JSON", async ({
