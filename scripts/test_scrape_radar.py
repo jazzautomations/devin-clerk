@@ -257,23 +257,17 @@ def test_upsert_stores_prize():
     ).fetchone()[0] is None
 
 
-def test_ethglobal_md_parser():
-    md = ("[![Image 1: Foo logo](https://cdn/x.png) ### ETHGlobal Lisboa 2026 "
-          "Jul 24th– Jul 26th, 2999 Jul 24th– Jul 26th, 2999 Hackathon]"
-          "(https://ethglobal.com/events/lisboa2999)"
-          "[![Image 2](https://cdn/y.png) ### Pragma Lisboa 2999 Jul 25th, 2999 "
-          "Jul 25th, 2999 Conference](https://ethglobal.com/events/pragma)")
-    out = sr.parse_ethglobal_md(md)
-    assert len(out) == 1, out                      # conference fora
+def test_ethglobal_fixture():
+    """Payload real do Next na /events (reduzido): só hackathon futuro."""
+    html = (FIX / "ethglobal_events.html").read_text()
+    out = sr.parse_ethglobal(html, now=NOW_FIX)
+    assert [e["name"] for e in out] == ["ETHGlobal Mumbai"], out
     e = out[0]
-    assert e["name"] == "ETHGlobal Lisboa 2026", e
-    assert e["startsAt"].startswith("2999-07-24"), e["startsAt"]
-    assert e["endsAt"].startswith("2999-07-26"), e["endsAt"]
-    assert e["source"] == "ethglobal"
-    # card passado não entra
-    md_past = ("### ETHGlobal Velho 2020 Jan 10th– Jan 12th, 2020 "
-               "Jan 10th– Jan 12th, 2020 Hackathon](https://ethglobal.com/e/v)")
-    assert sr.parse_ethglobal_md(md_past) == []
+    assert e["format"] == "presencial"
+    assert e["location"] == "Mumbai, Índia"
+    assert e["registrationDeadline"].startswith("2026-11-03")
+    assert e["registrationUrl"] == "https://ethglobal.com/events/mumbai"
+    assert sr.fill_reach(dict(e))["scope"] == "cidade"
 
 
 def test_is_expired_coalesce_boundary():
@@ -395,20 +389,29 @@ def test_evento_sobre_hackathon_nao_e_hackathon():
 
 def test_devpost_tira_o_lixo():
     ok = dict(source="devpost", registrations=300)
+    few = dict(source="devpost", registrations=40)
     assert sr.classify(_row(name="2026-2027 Fall ESE Senior Design",
                             organizer="university of pennsylvania", **ok)
                        ) == "disciplina"
+    # prêmio irrisório só derruba quando quase ninguém se inscreveu
     assert sr.classify(_row(name="Pumpkin Playground", organizer="ACM",
-                            prize="$30", **ok)) == "premio-irrisorio"
-    assert sr.classify(_row(name="Next Byte Hacks V5", organizer="NBH",
-                            prize="$100", **ok)) == "premio-irrisorio"
+                            prize="$30", **few)) == "premio-irrisorio"
     assert sr.classify(_row(name="InternWell Hack2.0", organizer="SLIET",
-                            prize="₹ 1,000", **ok)) == "premio-irrisorio"
+                            prize="₹ 1,000", **few)) == "premio-irrisorio"
+    assert sr.classify(_row(name="Next Byte Hacks V5", organizer="NBH",
+                            prize="$100", **ok)) is None  # 300 inscritos
     assert sr.classify(_row(name="Code for Humanity", organizer="nill",
                             **ok)) == "organizador-vazio"
     assert sr.classify(_row(name="Ghost Hack", organizer="Org",
                             source="devpost", registrations=3)
                        ) == "sem-inscritos"
+    # em breve, com prêmio, ainda sem inscrito: fica
+    assert sr.classify(_row(name="Ghost Hack", organizer="Org", prize="$5,000",
+                            source="devpost", registrations=3)) is None
+    # só pra membros de um clube/faculdade
+    assert sr.classify(_row(name="AI Lodge Hackathon 2026", organizer="SMU",
+                            restrictedTo="SMU BIA members", **ok)
+                       ) == "publico-restrito"
     # o que é bom fica
     assert sr.classify(_row(name="PayPal AI Hackathon", organizer="PayPal",
                             prize="$67,500", **ok)) is None
@@ -503,6 +506,9 @@ def test_reclassify_existing_desliga_lixo_antigo_e_poupa_casa():
         _row(id="comu-1", name="Encontro da comunidade", source="comunidade"),
     ])
     conn.execute("UPDATE hackathons SET region=NULL WHERE id='devpost-2'")
+    # linhas de rodadas anteriores (o que a rodada de hoje viu não é
+    # reclassificado: o banco não guarda inscritos)
+    conn.execute("UPDATE hackathons SET last_seen='2026-01-01T00:00:00+00:00'")
     off, filled = sr.reclassify_existing(conn)
     assert off == 2
     act = dict(conn.execute("SELECT id, active FROM hackathons").fetchall())
@@ -669,3 +675,296 @@ if __name__ == "__main__":
     finally:
         _drop_schemas()
     print(f"\n{len(fns)} testes OK")
+
+
+# ---------- radar global (fixtures reais, 15/10/2026) ----------
+
+def _fix(name):
+    return (FIX / name).read_text()
+
+
+def test_devpost_api_fixture():
+    d = sr.json.loads(_fix("devpost_api.json"))
+    out = {r["id"]: r for r in sr.parse_devpost_api(d)}
+    amz = out["devpost-30992"]
+    assert amz["format"] == "online" and amz["location"] is None
+    assert amz["prize"] == "$138,000"
+    assert amz["startsAt"].startswith("2026-08-31")
+    assert amz["endsAt"].startswith("2026-10-23")
+    assert amz["eligibilityUrl"] == "https://amazonappdev2026.devpost.com/rules"
+    # "Oct 05 - 25, 2026": o mês do início vale pro fim
+    assert out["devpost-29114"]["endsAt"].startswith("2026-10-25")
+    # presencial guarda o local; prêmio zerado vira None
+    loo = out["devpost-31744"]
+    assert loo["format"] == "presencial" and loo["location"].startswith("Spur")
+    assert loo["prize"] is None
+
+
+def test_elegibilidade_devpost_exclui_brasil():
+    """Caso real: Amazon (US$ 138 mil) — "standard exceptions" inclui o Brasil."""
+    el = sr.devpost_eligibility(_fix("devpost_page_30992.html"))
+    assert el["brazilOk"] == "nao"
+    assert "Brazil" in el["eligibilityNote"]
+    assert el["scope"] == "global"
+    assert el["submissionDeadline"].startswith("2026-10-23")
+    # lista no modal da página, não no tooltip
+    el = sr.devpost_eligibility(_fix("devpost_page_31503.html"))
+    assert el["brazilOk"] == "nao" and "China" in el["eligibilityNote"]
+
+
+def test_elegibilidade_devpost_aberto_a_todos():
+    """Caso real: IEEE ClimateChain — só exclui a Coreia do Norte."""
+    el = sr.devpost_eligibility(_fix("devpost_page_29114.html"))
+    assert el["brazilOk"] == "sim"
+    assert "Korea" in el["eligibilityNote"] and "Brazil" not in el["eligibilityNote"]
+    assert el["scope"] == "global"
+
+
+def test_elegibilidade_devpost_so_um_pais():
+    el = sr.devpost_eligibility(_fix("devpost_page_31113.html"))
+    assert el["brazilOk"] == "nao"
+    assert el["scope"] == "pais" and el["country"] == "Vietnã"
+    el = sr.devpost_eligibility(_fix("devpost_page_31617.html"))
+    assert el["brazilOk"] == "nao"
+    assert el["scope"] == "pais" and el["country"] == "EUA"
+    assert el["eligibilityNote"] == "US only"
+
+
+def test_elegibilidade_sem_info():
+    """Página sem o bloco (ou texto sem regra): não informado, nunca 'sim'."""
+    el = sr.devpost_eligibility("<html><body><h1>Hackathon</h1></body></html>")
+    assert el["brazilOk"] is None and el["eligibilityNote"] is None
+    # descrições reais do lablab não falam de país
+    for e in sr.flight_array(sr.next_flight(_fix("lablab_hackathons.html")),
+                             "sortedEvents"):
+        assert sr.text_eligibility(e.get("description"))["brazilOk"] is None
+    # evento online de fora sem regra: fica sem resposta
+    r = sr.fill_reach(_row(name="Global AI Jam", source="lablab"))
+    assert r["brazilOk"] is None and r["scope"] == "global"
+
+
+def test_elegibilidade_texto_livre():
+    t = sr.text_eligibility
+    assert t("The hackathon is open to participants worldwide, 18+.")["brazilOk"] == "sim"
+    assert t("Open only to legal residents of the United States.")["brazilOk"] == "nao"
+    assert t("Open to all countries except Brazil, Cuba and Iran.")["brazilOk"] == "nao"
+    assert t("A global hackathon for builders.")["brazilOk"] is None
+
+
+def test_devpost_enrich_usa_cache_e_tem_teto():
+    rows = sr.parse_devpost_api(sr.json.loads(_fix("devpost_api.json")))
+    pages = {"https://amazonappdev2026.devpost.com/": _fix("devpost_page_30992.html")}
+
+    class R:
+        def __init__(self, t):
+            self.ok, self.text = True, t
+    calls = []
+
+    def fetch(url):
+        calls.append(url)
+        return R(pages.get(url, "<html></html>"))
+    sr.ELIG_CACHE.clear()
+    sr.ELIG_CACHE["devpost-29114"] = {"brazilOk": "sim", "eligibilityNote": "x"}
+    old = sr.DEVPOST_ELIG_SLEEP
+    sr.DEVPOST_ELIG_SLEEP = 0
+    try:
+        n = sr.devpost_enrich(rows, fetch=fetch, max_fetch=2)
+    finally:
+        sr.DEVPOST_ELIG_SLEEP = old
+        sr.ELIG_CACHE.clear()
+    assert n == 2 and len(calls) == 2
+    # maior prêmio primeiro: Amazon foi lida
+    assert calls[0] == "https://amazonappdev2026.devpost.com/"
+    by = {r["id"]: r for r in rows}
+    assert by["devpost-30992"]["brazilOk"] == "nao"
+    # inscrição vai até o prazo de entrega da página, com hora e fuso
+    assert by["devpost-30992"]["registrationDeadline"] == "2026-10-23T15:00:00-04:00"
+    assert by["devpost-29114"]["brazilOk"] == "sim"  # veio do cache
+
+
+def test_luma_fixture():
+    sp = sr.parse_luma_entries(sr.json.loads(_fix("luma_discover_sp.json"))["entries"])
+    by = {r["name"]: r for r in sp}
+    shiva = by["Shiva Hack #8 – Stripe + Dalea AI"]
+    assert shiva["organizer"] == "Shiva Hacks"
+    assert shiva["location"] == "São Paulo, SP"
+    assert shiva["registrationUrl"] == "https://luma.com/4iunw1xl"
+    r = sr.fill_reach(dict(shiva))
+    assert r["region"] == "br" and r["brazilOk"] == "sim" and r["scope"] == "cidade"
+    # Luma exige termo de hackathon no nome
+    assert sr.classify(by["Lovable Day São Paulo"]) == "nao-hackathon"
+    assert sr.classify(shiva) is None
+    assert sr.classify(by["DevDay Exchange Community Hackathon: São Paulo"]) is None
+    gl = sr.parse_luma_entries(sr.json.loads(_fix("luma_discover_global.json"))["entries"])
+    mtc = next(r for r in gl if r["name"] == "MTCHacks")
+    r = sr.fill_reach(dict(mtc))
+    assert r["region"] == "exterior" and r["country"] == "EUA"
+    assert r["brazilOk"] is None
+
+
+def test_mlh_fixture():
+    out = sr.parse_mlh(_fix("mlh_season.html"))
+    assert len(out) >= 4
+    sw = next(r for r in out if r["name"] == "SwampHacks XII")
+    assert sw["location"] == "Gainesville, Florida, EUA"
+    assert sw["registrationUrl"] == "https://swamphacks.com/"
+    assert sw["startsAt"].startswith("2026-10-16")
+    assert any(r["format"] == "hibrido" for r in out)
+
+
+def test_devfolio_fixture():
+    out = {r["id"]: r for r in sr.parse_devfolio(sr.json.loads(_fix("devfolio_open.json")))}
+    h = out["devfolio-hackonhills8"]
+    assert h["location"] == "Hamirpur, Índia" and h["format"] == "presencial"
+    assert h["registrationDeadline"].startswith("2026-10-15")
+    assert out["devfolio-arkiv"]["format"] == "online"
+
+
+def test_lablab_fixture():
+    out = sr.parse_lablab(_fix("lablab_hackathons.html"), now=NOW_FIX)
+    names = {r["name"] for r in out}
+    assert "Vultr: Agent Rush Hackathon" in names
+    v = next(r for r in out if r["name"] == "Vultr: Agent Rush Hackathon")
+    assert v["format"] == "hibrido"
+    # híbrido sem cidade conta como online
+    assert sr.fill_reach(dict(v))["region"] == "online-mundo"
+
+
+def test_hackclub_fixture():
+    out = sr.parse_hackclub(sr.json.loads(_fix("hackclub_upcoming.json")))
+    peel = next(r for r in out if r["name"] == "Hack Peel")
+    assert peel["location"] == "Mississauga, Ontario, Canadá"
+    pix = next(r for r in out if r["name"] == "Pixel Forge Mega Jam")
+    assert pix["format"] == "online" and pix["location"] is None
+
+
+def test_taikai_datas_pelas_etapas():
+    d = {"data": {"challenges": [
+        {"name": "CASSINI Hackathons", "slug": "cassini", "isClosed": False,
+         "prize": 30000, "prizeCurrency": {"name": "EUR"},
+         "organization": {"name": "EU", "slug": "eu"},
+         "steps": [{"name": " Registration Deadline", "startDate": "2026-11-20T10:00:00Z"},
+                   {"name": "Registrations open", "startDate": "2026-09-28T10:00:00Z"},
+                   {"name": "Submission Deadline", "startDate": "2026-11-29T10:00:00Z"},
+                   {"name": "Demo Day and Awards", "startDate": "2026-12-02T10:00:00Z"}]},
+        {"name": "Velho", "slug": "velho", "isClosed": True, "steps": [
+            {"name": "x", "startDate": "2026-01-01"}]},
+    ]}}
+    out = sr.parse_taikai(d)
+    assert len(out) == 1
+    c = out[0]
+    assert c["startsAt"].startswith("2026-09-28") and c["endsAt"].startswith("2026-12-02")
+    assert c["registrationDeadline"].startswith("2026-11-20")
+    assert c["submissionDeadline"].startswith("2026-11-29")
+    assert c["prize"] == "€30,000"
+
+
+def test_marca_e_premio_em_dolar():
+    r = sr.fill_reach(_row(name="Nebius x NVIDIA Global AI Hackathon",
+                           organizer="Nebius", prize="$50,000"))
+    assert r["brand"] == "NVIDIA" and r["prizeUsd"] == 50000
+    assert sr.brand_of({"name": "NASA Space Apps Challenge", "organizer": "NASA"}) == "NASA"
+    assert sr.brand_of({"name": "Meta Llama Hackathon", "organizer": "x"}) == "Meta"
+    assert sr.brand_of({"name": "Hackathon do TJPA", "organizer": "TJPA"}) is None
+
+
+def test_upsert_grava_elegibilidade_e_cache():
+    conn = _db()
+    row = _row(id="devpost-1", name="Amazon Hackathon", prize="$138,000",
+               brazilOk="nao", eligibilityNote="All countries/territories, excluding: Brazil",
+               eligibilityUrl="https://a.devpost.com/rules", scope="global",
+               eligibilityCheckedAt=sr.NOW.isoformat(),
+               submissionDeadline="2999-01-02T18:00:00-03:00")
+    sr.upsert(conn, [row])
+    got = conn.execute(
+        "SELECT brazilOk, scope, prizeUsd, eligibilityUrl, submissionDeadline"
+        " FROM hackathons WHERE id='devpost-1'").fetchone()
+    assert got == ("nao", "global", 138000, "https://a.devpost.com/rules",
+                   "2999-01-02T18:00:00-03:00")
+    # rodada seguinte sem ler a página (cache) não apaga a regra
+    sr.upsert(conn, [_row(id="devpost-1", name="Amazon Hackathon", prize="$138,000")])
+    assert conn.execute("SELECT brazilOk FROM hackathons WHERE id='devpost-1'"
+                        ).fetchone()[0] == "nao"
+    cache = sr.load_elig_cache(conn)
+    assert cache["devpost-1"]["brazilOk"] == "nao"
+
+
+def test_lablab_pagina_do_evento_traz_premio():
+    d = sr.lablab_page_details(_fix("lablab_evento_vultr.html"))
+    assert d["prize"] == "$9,000"
+    assert "brazilOk" not in d  # a página não fala de país
+
+
+def test_pais_explicito_nao_vira_uf():
+    """"Cluj-Napoca, RO" é Romênia, não Rondônia."""
+    r = sr.fill_reach(_row(name="Arcade Game Jam", source="luma",
+                           format="presencial", location="Cluj-Napoca, Romania",
+                           country="RO"))
+    assert r["region"] == "exterior"
+    assert sr.region_of(_row(source="mlh", format="presencial",
+                             location="Timișoara, Timiș, RO", country="RO")) == "exterior"
+    # jam de improviso não é hackathon
+    assert sr.classify(_row(name="BIPOC Improv Jam", source="luma")) == "nao-hackathon"
+    assert sr.classify(_row(name="Women Game Jam Brazil", source="luma")) is None
+
+
+def test_pagina_oficial_meta():
+    """Meta Global AI Developer Hackathon: US$ 1 mi, virtual, aberto ao mundo
+    menos países sob sanção — o Brasil não está na lista."""
+    r = sr.parse_brand_page(_fix("meta_global_hackathon.html"),
+                            "meta-global-ai-hackathon",
+                            "https://dev.meta.ai/events/global-hackathon", "Meta")
+    assert r["name"] == "Meta Global AI Developer Hackathon"
+    assert r["prize"] == "$1,000,000"
+    assert r["format"] == "online"
+    # hora e fuso da página: "Oct 25, 11:59 PM ET"
+    assert r["registrationDeadline"] == "2026-10-25T23:59:00-04:00"
+    assert r["startsAt"].startswith("2026-10-26")
+    assert r["submissionDeadline"] == "2026-11-04T21:00:00-05:00"  # 9 PM ET, já sem horário de verão
+    assert r["endsAt"].startswith("2026-11-09")
+    assert r["brazilOk"] == "sim"
+    assert r["eligibilityNote"].lower().startswith("open worldwide")
+    f = sr.fill_reach(dict(r))
+    assert f["scope"] == "global" and f["brand"] == "Meta" and f["prizeUsd"] == 1_000_000
+
+
+def test_import_wohackers_dry_run(tmp_path):
+    """Importador da planilha WoHackers (só roda com OK do dono): lê o
+    formato do CSV, dá crédito e pula o que já passou."""
+    import import_wohackers as iw
+    csv = tmp_path / "w.csv"
+    csv.write_text(
+        "MÊS,DIA DA SEMANA,,,,,,,,EVENTO,COMUNIDADE e Parcerias,Inscrição,"
+        "INSCRIÇÃO / Link sobre,LOCAL,CIDADE,UF\n"
+        "NOV,,,,,,15,,,Hack Teste,Org X,09/11/2026,https://x.dev/h,"
+        "Impact Hub,Florianópolis,SC\n"
+        "MAR,,,,,,7,,,Hack Velho,Org Y,01/03/2026,https://x.dev/v,On-line,,\n"
+        "NOV,,,,,,,,,Sem link,Org Z,,,,,\n", encoding="utf-8")
+    rows = iw.parse_rows(str(csv), now=NOW_FIX)
+    assert [r["name"] for r in rows] == ["Hack Teste"]
+    r = rows[0]
+    assert r["organizer"] == "Org X · via calendário WoHackers"
+    assert r["registrationUrl"] == "https://x.dev/h"
+    assert r["location"] == "Florianópolis, SC" and r["source"] == "curadoria"
+    assert r["registrationDeadline"].startswith("2026-11-09")
+
+
+def test_upsert_recalcula_sim_derivado():
+    """'sim' que veio de heurística (e não de regra lida) é recalculado: o
+    evento que deixou de ser do Brasil perde o 'sim'."""
+    conn = _db()
+    sr.upsert(conn, [_row(id="luma-x", name="Arcade Game Jam", source="luma",
+                          format="presencial", location="Cluj-Napoca, RO")])
+    conn.execute("UPDATE hackathons SET brazilOk='sim' WHERE id='luma-x'")
+    sr.upsert(conn, [_row(id="luma-x", name="Arcade Game Jam", source="luma",
+                          format="presencial", location="Cluj-Napoca, Romania",
+                          country="RO")])
+    assert conn.execute("SELECT brazilOk, region FROM hackathons WHERE id='luma-x'"
+                        ).fetchone() == (None, "exterior")
+
+
+def test_portugues_sozinho_nao_prova_brasileiro():
+    r = sr.fill_reach(_row(name="Hack4Guimarães 2035 — inovação", source="taikai"))
+    assert r["region"] == "online-br" and r["brazilOk"] is None
+    r = sr.fill_reach(_row(name="Hackathon Online", source="sympla"))
+    assert r["brazilOk"] == "sim"

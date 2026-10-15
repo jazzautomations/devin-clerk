@@ -257,75 +257,134 @@ depois de mergeada; nunca mais de 3 builds simultâneas.
 `ops/scrape.sh <stage|prod>` roda `scripts/scrape_radar.py` do release
 atual contra o banco do ambiente. Testes: `pytest scripts/test_scrape_radar.py`
 (fixtures reais em `scripts/fixtures/radar`; os de banco usam um schema
-descartável no `DATABASE_URL` e apagam no fim).
+descartável no `DATABASE_URL` e apagam no fim). Pra rodar à mão, use o
+banco `hackahub_dev`, nunca prod nem stage.
 
-O radar é Brasil-first e só lista hackathon.
+O radar é do Brasil e do mundo, e só lista hackathon. Cada evento diz
+formato, alcance, se brasileiro pode participar (com o trecho da regra),
+prêmio e prazos.
 
-**Fontes**
+**Fontes** (status em 15/10/2026, abertos depois do filtro)
 
-| fonte | como lê | status em 14/10 |
+| fonte | como lê | status |
 |---|---|---|
-| Sympla | busca pública (`/eventos?s=`) via Jina, termos hackathon, hackaton, game jam, datathon, space apps; robots `Allow: /` | ok, ~20 BR (só a 1ª página de cada termo) |
-| Doity | busca HTML do servidor + JSON-LD da página do evento (só abre card com cara de hackathon); robots `Allow: /` | ok, 1 BR |
-| Shawee | página de inscrições abertas; avisa no log quando abrir | ok, 0 (sem inscrição aberta) |
-| Devpost | API pública | ok, quase tudo online-mundo/exterior |
-| TAIKAI | GraphQL | ok, eventos expiram rápido (sem data de fim) |
+| Sympla | busca pública (`/eventos?s=`) via Jina: hackathon, hackaton, game jam, datathon, ideathon, space apps; robots `Allow: /` | ok, ~20 BR |
+| Doity | busca HTML do servidor + JSON-LD da página do evento | ok, 1 BR |
+| Shawee | página de inscrições abertas; avisa no log quando abrir | ok, 0 |
 | Meetup | Jina, 3 cidades | ok, quase sempre 0 depois do filtro |
+| Luma | API pública do discover (`api.lu.ma/discover/get-paginated-events?query=`), por termo no mundo, por termo em SP e RJ e calendários de comunidade (`/calendar/get-items`, lista em `LUMA_CALENDARS`) | ok, ~150 (5 BR). O 0 antigo era o Jina: a página é JS e o Jina via geobloqueio. A API responde do Brasil |
+| Devpost | API pública `/api/hackathons?status[]=open` e `upcoming`, todas as páginas (40 por página), + a página de cada hackathon pra ler "Who can participate" | ok, ~107 de ~150 |
+| TAIKAI | GraphQL; datas pelas etapas (`steps`) | ok, ~5 |
+| ETHGlobal | payload do Next em `/events` (tipo, formato, datas, prazo, cidade) | ok, 1 (Mumbai) |
+| MLH | JSON da página da temporada em www.mlh.com (`data-page`) | ok, ~66, quase tudo universidade nos EUA |
+| Devfolio | API pública `POST api.devfolio.co/api/search/hackathons` | ok, ~16, quase tudo Índia |
+| lablab.ai | payload do Next em `/ai-hackathons` + página de cada um (prêmio) | ok, 2–5 |
+| Hack Club | API `hackathons.hackclub.com/api/events/upcoming/` | ok, ~15, ensino médio |
+| marcas | página oficial de evento de marca grande (`BRAND_PAGES`, hoje a da Meta) | ok, 1 |
 | curadoria | lista à mão no scraper | ok |
-| ETHGlobal, Luma | Jina | degraded (geogate) |
-| MLH | Scrapling | precisa de `playwright` na venv; o parser voltou 0 em 14/10 |
-| Even3 | — | degraded: busca pede reCAPTCHA, não burlamos |
-| Eventbrite | — | degraded: 405 pra robô |
+| DoraHacks | — | degraded: página e API atrás de captcha AWS WAF |
+| HackerEarth | — | degraded: 403 pra robô |
+| events.openai.com | — | degraded: 403 (desafio Cloudflare) |
+| Kaggle | — | degraded: lista de competições só com login |
+| Cerebral Valley | API pública | degraded: só devolve evento de 2024/25 |
+| Gupy | — | degraded: sem busca pública; hackathon de banco fica na curadoria |
+| Even3, Eventbrite | — | degraded: reCAPTCHA / 405 |
 
-Testadas e fora: Devpost não tem filtro por país e a busca "Brasil" não
-traz nada brasileiro; gov.br só tem notícia (sem data estruturada);
-Liga Ventures, Distrito, Rocketseat, DIO e os hackathons de banco (CCR,
-Itaú, Bradesco, BB) não publicam agenda legível. Esses entram pela
-curadoria ou pela indicação no `/radar`.
+Avaliadas e fora: Unstop (API pública funciona, mas é volume grande de
+evento universitário indiano, quase sempre só pra Índia), Colosseum (nenhum
+hackathon aberto agora; o próximo abre em abril e entra pela curadoria),
+AI Tinkerers (os hackathons de SP são publicados no Luma, que já entra),
+itch.io (milhares de game jams pequenas; fica pra quando tiver filtro de
+relevância), NASA Space Apps (o site recusa o certificado da VPS; os
+eventos locais do Brasil entram pelo Sympla). Instagram, LinkedIn e Google
+Forms não dá pra ler: entram pela curadoria ou pela indicação no `/radar`.
 
 **Critério de hackathon** (`classify` no scraper)
 
 1. Termo no nome (ou na descrição, quando a fonte manda): hackathon,
    hackaton, hacka*, hack day, datathon, ideathon, buildathon, makeathon,
-   designathon, game jam, maratona de programação/inovação, desafio de
-   inovação, NASA Space Apps.
+   designathon, game jam (e code/ai/dev jam; "jam" sozinho não), maratona
+   de programação/inovação, desafio de inovação, NASA Space Apps.
 2. Palavra de "evento sobre o hackathon" antes do termo derruba:
    workshop, curso, palestra, mentoria, abertura, premiação, inscrição de
    mentores/jurados/voluntários, "learn to".
 3. Sympla, Doity, Meetup e Luma exigem o termo. Nome neutro fica fora.
-4. Devpost, TAIKAI, ETHGlobal e MLH só listam hackathon: nome neutro passa,
-   mas sai projeto de disciplina ("Senior Design", capstone), prêmio abaixo
-   de US$ 200 (câmbio aproximado, só pra comparar), organizador vazio
-   ("nill") e Devpost com menos de 10 inscritos.
+4. Devpost, TAIKAI, ETHGlobal, MLH, Devfolio, lablab, Hack Club e marcas só
+   listam hackathon: nome neutro passa, mas sai projeto de disciplina,
+   organizador vazio ("nill"), evento só pra membros de um clube ou
+   faculdade (Devpost, linha extra no "Who can participate"), prêmio abaixo
+   de US$ 200 com menos de 100 inscritos, e Devpost com menos de 10
+   inscritos sem prêmio nem destaque. Prêmio pequeno com muita gente fica.
 5. Curadoria, indicação aprovada (`comunidade`) e evento do admin (`admin`)
    não passam pelo filtro.
 
 Recusado que já estava no banco vira `active=0` com `excludedReason`
 (nada é apagado). A cada rodada o scraper também reclassifica as linhas
-ativas de Meetup/Devpost que a busca do dia não trouxe.
+ativas que a busca do dia não trouxe.
 
-**Região** (`hackathons.region`, migration 023): `br` (presencial/híbrido
-no Brasil), `online-br` (online de fonte brasileira, em português ou com
-prêmio em real), `online-mundo`, `exterior`. Vazio = o app deriva igual
-(`lib/radar.ts`).
+**Brasileiro pode participar?** (`brazilOk`, migration 026)
 
-**Onde aparece**: `/radar` em seções (Brasil por UF, online em português,
-online no mundo, presencial lá fora). Landing e painel só mostram edição
-Hack Inova + `br`/`online-br`, nada que feche em menos de 48h, e prêmio só
-em real. O painel põe a cidade/UF do perfil na frente.
+`sim` e `nao` só com evidência; sem evidência fica vazio ("não informado").
+O trecho da regra vai em `eligibilityNote` e o link em `eligibilityUrl`.
 
-**Frescor**: o cron roda 1x por dia (05:15 stage / 05:20 prod UTC).
-Expirado sai da lista na hora pelo filtro `isOver`, sem depender do cron.
-Hackathon brasileiro abre inscrição com semanas de antecedência, então uma
-rodada por dia já pega quase tudo. Proposta (não aplicada): segunda rodada
-às 17:20 UTC (14:20 BRT) só em prod, pra pegar evento publicado de manhã e
-o fecha-em-48h ficar mais justo. Custo: ~11 requisições ao Jina e ~6 ao
-Doity por rodada.
+- Devpost: bloco "Who can participate" da página. "All countries,
+  excluding …" e "Specific countries excluded" (lista no tooltip ou no
+  modal): `nao` se o Brasil está na lista. "Only specific countries
+  included" e "US only": `sim` só se o Brasil está incluído. **A lista
+  "standard exceptions" do Devpost inclui o Brasil** (lei de sorteio), então
+  quase todo hackathon global de lá não aceita brasileiro (106 de 107 em
+  15/10).
+- Texto livre (página da marca, lablab, Devfolio): só frase explícita vale,
+  tipo "Open worldwide, except …" ou "open only to residents of …".
+  "Global hackathon" sozinho não prova nada.
+- Evento no Brasil (presencial aqui ou online de fonte brasileira): `sim`,
+  nota "Acontece no Brasil."
+- O resto fica vazio. ETHGlobal, MLH, Luma de fora, Devfolio e Hack Club não
+  publicam regra de país legível.
+
+A página do Devpost só é lida pra quem passou no filtro, no máximo 120 por
+rodada (1 por segundo, maior prêmio primeiro). O resultado fica no banco
+(`eligibilityCheckedAt`) e só é relido depois de 3 dias.
+
+**Alcance** (`scope`): `global`, `latam`, `brasil`, `pais` (com `country`,
+ex.: "só EUA") ou `cidade`. **Região** (`region`, migration 023) continua:
+`br`, `online-br`, `online-mundo`, `exterior`. País explícito da fonte manda
+sobre a heurística de UF ("Cluj-Napoca, RO" é Romênia).
+
+**Onde aparece**
+
+- `/radar`: "No Brasil" (por UF), "Online e abertos pra brasileiros" (por
+  prazo e, no mesmo dia, maior prêmio), "Presencial lá fora", "Não
+  informado se brasileiro pode" e, fechado no fim, "Não aceitam
+  brasileiros". 12 cards por seção e "mostrar mais". Filtros: onde
+  (Brasil/global/outros países), estado, formato, aberto pra brasileiros,
+  prazo (semana/mês), prêmio (com prêmio/US$ 10 mil+) e tema. Card com
+  selos: "online · global", "aberto pra brasileiros", "US$ 50 mil",
+  "fecha em 3 dias". A edição Hack Inova entra no Brasil como as outras.
+- Landing: amostra de 4 com edições da casa e Brasil na frente e 1–2
+  globais online abertos pra brasileiros (maior prêmio). Nada que feche em
+  menos de 48h. O "+N" conta o radar inteiro que ainda dá pra entrar e não
+  exclui brasileiro.
+- `/h/[id]` de evento externo: bloco "antes de se inscrever" com alcance,
+  brasileiro pode (trecho e link da regra), prazos, prêmio (moeda original
+  e aproximado em real, câmbio fixo de 5,5) e o CTA do site oficial.
+- Painel: só Brasil, com a UF do perfil na frente.
+
+**Frescor**: o cron roda 05:20 e 17:20 UTC em prod (05:15 stage). Expirado
+sai da lista na hora pelo filtro `isOver`, sem depender do cron. Custo por
+rodada: ~4 páginas da API do Devpost + até 120 páginas de regra (na prática
+~30 com o cache), ~25 chamadas à API do Luma, ~12 ao Jina, ~10 nas outras
+fontes. Uma rodada leva uns 5 minutos.
 
 **Curadoria manual**: no `/admin`, "indicações" aprova com 1 clique (vira
 evento `comunidade`). O formulário de criar edição aceita link oficial e
-prêmio; organizador que não é Hack Inova grava `source='admin'` e fica no
-radar (antes o seed desativava no boot seguinte).
+prêmio; organizador que não é Hack Inova grava `source='admin'`.
+
+**Calendário WoHackers** (`scripts/import_wohackers.py`): importa a
+planilha-calendário da comunidade WoHackers como curadoria, com crédito
+"via calendário WoHackers" no organizador e o link original. **Não está
+rodando**: a planilha é trabalho da comunidade e só entra depois que o dono
+combinar com ela. Sem `--apply` o script só mostra o que entraria.
 
 ## Variáveis de ambiente (`~/hackahub-secrets/<env>.env`)
 

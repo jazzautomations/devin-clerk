@@ -1,0 +1,367 @@
+{
+ "hits": {
+  "total": {
+   "value": 13
+  },
+  "hits": [
+   {
+    "_source": {
+     "country": "India",
+     "devfolio_official": null,
+     "featured": null,
+     "private": false,
+     "starts_at": "2026-10-31T06:30:00+00:00",
+     "hosted_by": null,
+     "hashtags": [],
+     "apply_mode": "both",
+     "city": "Hamirpur",
+     "timezone": "Asia/Calcutta",
+     "rating": 0,
+     "type": "HACKATHON",
+     "uuid": "bafa728dabdc4269bb2bebeca040d418",
+     "themes": [],
+     "hackathon_setting": {
+      "winner_announce_at": null,
+      "reg_starts_at": "2026-06-02T06:30:00+00:00",
+      "winner_announced": false,
+      "women_only": false,
+      "reg_ends_at": "2026-10-15T18:29:00+00:00",
+      "facebook": null,
+      "telegram": null,
+      "medium": null,
+      "instagram": "https://www.instagram.com/hackonhills/",
+      "linkedin": "https://www.linkedin.com/company/hack-on-hills-nith/",
+      "external_apply_url": null,
+      "primary_color": "#383838",
+      "uuid": "9e53fe0c128d4bc3b83ad566948ba073",
+      "contact_email": "hackonhills@gmail.com",
+      "twitter": "https://x.com/hackonhills",
+      "site": "https://hackonhills8.in/",
+      "discord": null,
+      "review": false,
+      "slack": null,
+      "logo": "https://assets.devfolio.co/hackathons/bafa728dabdc4269bb2bebeca040d418/assets/logo/926.png",
+      "subdomain": "hackonhills8",
+      "farcaster": null
+     },
+     "ends_at": "2026-11-01T20:00:00+00:00",
+     "is_online": false,
+     "state": "Himachal Pradesh",
+     "slug": "hackonhills8",
+     "team_min": 2,
+     "themed": false,
+     "discover": false,
+     "participants_count": 2921,
+     "team_size": 4,
+     "verified": true,
+     "prizes": [
+      {
+       "parent_prize_uuid": null,
+       "name": "Best Project Built with ElevenLabs",
+       "is_sponsor_prize": false,
+       "uuid": "a9970f788b0c43c29774b2049f29b057",
+       "desc": "Each team member receives 3 months of ElevenLabs Scale tier access ($897 value per member, 1.8M credits/month)."
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Overall Winners \u2013 Powered by ElevenLabs",
+       "is_sponsor_prize": false,
+       "uuid": "767f51cb6121428d8da605baedfbdb08",
+       "desc": "Each team member receives 3 months of ElevenLabs Pro tier access ($297 value per member, 600k credits/month)."
+      }
+     ],
+     "projects_submitted": 0,
+     "name": "Hack On Hills 8.0",
+     "tagline": "The Age of Autonomous Agents",
+     "location": "NIT Hamirpur, NIT, Hamirpur, Himachal Pradesh, India",
+     "cover_img": "https://assets.devfolio.co/hackathons/bafa728dabdc4269bb2bebeca040d418/assets/cover/529.png",
+     "status": "publish",
+     "user_hackathon": null,
+     "user_hackathon_reminder": null
+    }
+   },
+   {
+    "_source": {
+     "country": null,
+     "devfolio_official": false,
+     "featured": false,
+     "private": false,
+     "starts_at": "2026-10-09T11:00:00+00:00",
+     "hosted_by": null,
+     "hashtags": [],
+     "apply_mode": "both",
+     "city": null,
+     "timezone": "Europe/London",
+     "rating": 0,
+     "type": "HACKATHON",
+     "uuid": "55466cd6b4be4f63936a9f55032825f2",
+     "themes": [
+      {
+       "name": "Blockchain",
+       "verified": true,
+       "uuid": "106931c0a88e4e4893333524fe66ef5d"
+      }
+     ],
+     "hackathon_setting": {
+      "winner_announce_at": "2026-10-23T17:00:00+00:00",
+      "reg_starts_at": "2026-10-07T09:00:00+00:00",
+      "winner_announced": false,
+      "women_only": false,
+      "reg_ends_at": "2026-10-18T22:59:00+00:00",
+      "facebook": null,
+      "telegram": null,
+      "medium": null,
+      "instagram": null,
+      "linkedin": null,
+      "external_apply_url": null,
+      "primary_color": "#181ea9",
+      "uuid": "64de8dac5e2049079e72d349ff02495d",
+      "contact_email": "santiago.zuluaga@golem.network",
+      "twitter": "https://x.com/arkivnetwork",
+      "site": "https://arkiv.network",
+      "discord": "https://discord.gg/arkiv",
+      "review": false,
+      "slack": null,
+      "logo": "https://assets.devfolio.co/hackathons/55466cd6b4be4f63936a9f55032825f2/assets/logo/844.png",
+      "subdomain": "arkiv",
+      "farcaster": null
+     },
+     "ends_at": "2026-10-18T22:59:00+00:00",
+     "is_online": true,
+     "state": null,
+     "slug": "arkiv",
+     "team_min": 1,
+     "themed": false,
+     "discover": false,
+     "participants_count": 136,
+     "team_size": 5,
+     "verified": true,
+     "prizes": [
+      {
+       "parent_prize_uuid": null,
+       "name": "Best Indian Use Case",
+       "is_sponsor_prize": false,
+       "uuid": "f8028eaf532846c68a6d8970c143fd89",
+       "desc": "Devcon 8 ticket + $2,000 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Censorship Resistance (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "c1d3b89ed5664da08df37ea72a266262",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Open Source (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "fa4bf2ca093f4d62a47592671cff59a4",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Privacy (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "51e13abae36a403482321de7729420b0",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Security (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "fc870b52fbbe468cb19eb470314bc610",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      }
+     ],
+     "projects_submitted": 7,
+     "name": "Arkiv: Global Tour Stop \ud83c\udf0d",
+     "tagline": "A special edition on the road to Devcon 8 Mumbai. Ten days to build on Arkiv, the Web3 database.",
+     "location": null,
+     "cover_img": "https://assets.devfolio.co/hackathons/55466cd6b4be4f63936a9f55032825f2/assets/cover/456.png",
+     "status": "publish",
+     "user_hackathon": null,
+     "user_hackathon_reminder": null
+    }
+   },
+   {
+    "_source": {
+     "country": "India",
+     "devfolio_official": null,
+     "featured": null,
+     "private": false,
+     "starts_at": "2026-10-23T02:30:00+00:00",
+     "hosted_by": null,
+     "hashtags": [],
+     "apply_mode": "both",
+     "city": "New Chandigarh",
+     "timezone": "Asia/Calcutta",
+     "rating": 0,
+     "type": "HACKATHON",
+     "uuid": "3376db42dfbe44a8a4b576d4d52dae28",
+     "themes": [],
+     "hackathon_setting": {
+      "winner_announce_at": null,
+      "reg_starts_at": "2026-09-18T18:45:00+00:00",
+      "winner_announced": false,
+      "women_only": false,
+      "reg_ends_at": "2026-10-20T17:30:00+00:00",
+      "facebook": null,
+      "telegram": null,
+      "medium": null,
+      "instagram": "https://www.instagram.com/srijansetu_igc",
+      "linkedin": "https://www.linkedin.com/company/srijan-setu/",
+      "external_apply_url": null,
+      "primary_color": "#eb144c",
+      "uuid": "0d25ee51d5d740d097e5c54584eeda7f",
+      "contact_email": "hackathon.igc@gmail.com",
+      "twitter": "https://x.com/SrijanSetu",
+      "site": "https://srijan-setu.vercel.app/",
+      "discord": null,
+      "review": false,
+      "slack": null,
+      "logo": "https://assets.devfolio.co/hackathons/3376db42dfbe44a8a4b576d4d52dae28/assets/logo/914.png",
+      "subdomain": "srijan-setu",
+      "farcaster": null
+     },
+     "ends_at": "2026-10-24T04:30:00+00:00",
+     "is_online": false,
+     "state": "Punjab",
+     "slug": "srijan-setu",
+     "team_min": 1,
+     "themed": false,
+     "discover": false,
+     "participants_count": 416,
+     "team_size": 4,
+     "verified": true,
+     "prizes": [
+      {
+       "parent_prize_uuid": null,
+       "name": "ElevenLabs",
+       "is_sponsor_prize": false,
+       "uuid": "020f9a6d5b464de683e78e482a70a798",
+       "desc": ""
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "n8n",
+       "is_sponsor_prize": false,
+       "uuid": "b973a60cc0614573a6366ec12b4971e9",
+       "desc": ""
+      }
+     ],
+     "projects_submitted": 0,
+     "name": "Srijan Setu",
+     "tagline": "Bridging Problems & Solutions",
+     "location": "Indo Global Colleges, New Chandigarh, Abhipur, Punjab, India",
+     "cover_img": "https://assets.devfolio.co/hackathons/3376db42dfbe44a8a4b576d4d52dae28/assets/cover/452.png",
+     "status": "publish",
+     "user_hackathon": null,
+     "user_hackathon_reminder": null
+    }
+   },
+   {
+    "_source": {
+     "country": null,
+     "devfolio_official": false,
+     "featured": false,
+     "private": false,
+     "starts_at": "2026-10-09T11:00:00+00:00",
+     "hosted_by": null,
+     "hashtags": [],
+     "apply_mode": "both",
+     "city": null,
+     "timezone": "Europe/London",
+     "rating": 0,
+     "type": "HACKATHON",
+     "uuid": "55466cd6b4be4f63936a9f55032825f2",
+     "themes": [
+      {
+       "name": "Blockchain",
+       "verified": true,
+       "uuid": "106931c0a88e4e4893333524fe66ef5d"
+      }
+     ],
+     "hackathon_setting": {
+      "winner_announce_at": "2026-10-23T17:00:00+00:00",
+      "reg_starts_at": "2026-10-07T09:00:00+00:00",
+      "winner_announced": false,
+      "women_only": false,
+      "reg_ends_at": "2026-10-18T22:59:00+00:00",
+      "facebook": null,
+      "telegram": null,
+      "medium": null,
+      "instagram": null,
+      "linkedin": null,
+      "external_apply_url": null,
+      "primary_color": "#181ea9",
+      "uuid": "64de8dac5e2049079e72d349ff02495d",
+      "contact_email": "santiago.zuluaga@golem.network",
+      "twitter": "https://x.com/arkivnetwork",
+      "site": "https://arkiv.network",
+      "discord": "https://discord.gg/arkiv",
+      "review": false,
+      "slack": null,
+      "logo": "https://assets.devfolio.co/hackathons/55466cd6b4be4f63936a9f55032825f2/assets/logo/844.png",
+      "subdomain": "arkiv",
+      "farcaster": null
+     },
+     "ends_at": "2026-10-18T22:59:00+00:00",
+     "is_online": true,
+     "state": null,
+     "slug": "arkiv",
+     "team_min": 1,
+     "themed": false,
+     "discover": false,
+     "participants_count": 136,
+     "team_size": 5,
+     "verified": true,
+     "prizes": [
+      {
+       "parent_prize_uuid": null,
+       "name": "Best Indian Use Case",
+       "is_sponsor_prize": false,
+       "uuid": "f8028eaf532846c68a6d8970c143fd89",
+       "desc": "Devcon 8 ticket + $2,000 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Censorship Resistance (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "c1d3b89ed5664da08df37ea72a266262",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Open Source (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "fa4bf2ca093f4d62a47592671cff59a4",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Privacy (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "51e13abae36a403482321de7729420b0",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      },
+      {
+       "parent_prize_uuid": null,
+       "name": "Security (Global)",
+       "is_sponsor_prize": false,
+       "uuid": "fc870b52fbbe468cb19eb470314bc610",
+       "desc": "Devcon 8 ticket + $750 USDC"
+      }
+     ],
+     "projects_submitted": 7,
+     "name": "Arkiv: Global Tour Stop \ud83c\udf0d",
+     "tagline": "A special edition on the road to Devcon 8 Mumbai. Ten days to build on Arkiv, the Web3 database.",
+     "location": null,
+     "cover_img": "https://assets.devfolio.co/hackathons/55466cd6b4be4f63936a9f55032825f2/assets/cover/456.png",
+     "status": "publish",
+     "user_hackathon": null,
+     "user_hackathon_reminder": null
+    }
+   }
+  ]
+ }
+}

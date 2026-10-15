@@ -1,0 +1,2285 @@
+{
+ "entries": [
+  {
+   "api_id": "evt-wwhB3B1jEcsSuCF",
+   "event": {
+    "api_id": "evt-wwhB3B1jEcsSuCF",
+    "calendar_api_id": "cal-MJ28KU4lOJNFNHk",
+    "cover_url": "https://images.lumacdn.com/uploads/17/b2ef9cd3-960a-4984-a8e6-c742a380338b.png",
+    "end_at": "2026-11-15T22:00:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "CIQ Supercomputing Local AI Hackathon",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": false,
+    "social_image_url": "https://images.lumacdn.com/event-social/vq/96fd9451-6498-4f4f-ab90-66d8aff7c4fa.png",
+    "start_at": "2026-11-13T23:00:00.000Z",
+    "timezone": "America/Chicago",
+    "url": "local-ai-hack-chicago",
+    "user_api_id": "usr-fgWuHfPAh8UZSam",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "mode": "obfuscated",
+     "city": "Chicago",
+     "city_state": "Chicago, IL",
+     "sublocality": "Fulton Market District",
+     "country": "United States",
+     "country_code": "US",
+     "region": "Illinois",
+     "region_short": "IL"
+    },
+    "geo_address_visibility": "guests-only",
+    "coordinate": {
+     "latitude": 41.886848016130976,
+     "longitude": -87.65227855215623
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "active"
+   },
+   "cover_image": {
+    "colors": [
+     "#040305",
+     "#f2f6f5",
+     "#114db8",
+     "#b78b35"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#040305",
+       "percentage": 49.35
+      },
+      {
+       "color": "#f2f6f5",
+       "percentage": 5.67
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#114db8",
+       "percentage": 1.69
+      },
+      {
+       "color": "#ec1b17",
+       "percentage": 0.43
+      },
+      {
+       "color": "#b78b35",
+       "percentage": 0.75
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-MJ28KU4lOJNFNHk",
+    "avatar_url": "https://images.lumacdn.com/calendars/2h/7236c1b7-05e8-4c8a-9bd2-58782f6efbb8.png",
+    "coordinate": null,
+    "cover_image_url": "https://images.lumacdn.com/calendar-cover-images/6f/6df88eaa-674f-43d6-8e1e-afc17d84be36.jpg",
+    "description_short": "Explore upcoming events hosted by NVIDIA. This is the official calendar of the NVIDIA Developer Community Team. Got questions? Reach out to community@nvidia.com \u2014 we\u2019re here to help!",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": null,
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": null,
+    "location": null,
+    "luma_plan": "plus",
+    "luma_plus_active": true,
+    "meta_pixel_id": null,
+    "name": "NVIDIA",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "nvidia-events",
+    "social_image_url": null,
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": null,
+    "tint_color": "#76b900",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": null,
+    "verified_at": "2025-10-21T20:01:59.616Z",
+    "website": "https://developer.nvidia.com/community",
+    "youtube_handle": null,
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": null
+   },
+   "start_at": "2026-11-13T23:00:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-fgWuHfPAh8UZSam",
+     "avatar_url": "https://images.lumacdn.com/uploads/ry/c93b93f4-e184-434b-8e3c-c8f6ede151a0.png",
+     "bio_short": "Developer Community @ NVIDIA",
+     "first_name": "NVIDIA",
+     "last_name": "",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/ayesha-a-asif",
+     "name": "NVIDIA",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": "nvidiadeveloper",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-sSk21YNj74KMXyM",
+     "avatar_url": "https://images.lumacdn.com/uploads/vc/ca72cf2d-489e-427e-b499-c10ec29f117e.png",
+     "bio_short": null,
+     "first_name": "Kiana",
+     "last_name": "Steele (NVIDIA)",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/kianasteele",
+     "name": "Kiana Steele (NVIDIA)",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": "ksteele",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-fbujH090mnvMRGE",
+     "avatar_url": "https://cdn.lu.ma/avatars/r4/0c9d7ef4-4ce9-4cc0-b09a-49b9f1eee540",
+     "bio_short": "Chicagomaxxing",
+     "first_name": "Landon",
+     "last_name": "Campbell",
+     "instagram_handle": "landon20s",
+     "is_verified": false,
+     "linkedin_handle": "/in/landon20s",
+     "name": "Landon Campbell",
+     "tiktok_handle": null,
+     "timezone": "America/Chicago",
+     "twitter_handle": "landon20s",
+     "username": "LANDON",
+     "website": "https://landonsloop.com",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-7GKXiA6GGTBtbN7",
+     "avatar_url": "https://images.lumacdn.com/uploads/f1/5ed85618-ffd1-4c3d-a2cb-1bebe08a86d3.png",
+     "bio_short": "CIQ builds the infrastructure the world trusts to run AI in production, from the team behind Rocky Linux. Learn more at ciq.com.",
+     "first_name": "",
+     "last_name": "",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/ctrliq",
+     "name": "CIQ",
+     "tiktok_handle": null,
+     "timezone": "America/New_York",
+     "twitter_handle": "ctrliq",
+     "username": "CIQ",
+     "website": "https://ciq.com",
+     "youtube_handle": "ctrliq"
+    }
+   ],
+   "guest_count": 0,
+   "ticket_count": 0,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 100,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": null
+  },
+  {
+   "api_id": "evt-eBC6Wha2BzL5BkO",
+   "event": {
+    "api_id": "evt-eBC6Wha2BzL5BkO",
+    "calendar_api_id": "cal-wCAuJnLlgB9N0iD",
+    "cover_url": "https://images.lumacdn.com/uploads/eu/9b21cb6f-470c-40fc-9328-fcec37b7641f.png",
+    "end_at": "2026-10-25T19:00:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "MTCHacks",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": false,
+    "social_image_url": "https://images.lumacdn.com/event-social/1y/d0a6cc0f-efc3-48bd-bb50-06ca5dceb5a5.png",
+    "start_at": "2026-10-23T22:00:00.000Z",
+    "timezone": "America/Chicago",
+    "url": "sqaeqt24",
+    "user_api_id": "usr-9uvl35aPcG6ElXd",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "city": "Chicago",
+     "type": "google",
+     "region": "Illinois",
+     "address": "Chicago",
+     "country": "United States",
+     "place_id": "ChIJ7cv00DwsDogRAMDACa2m4K8",
+     "localized": null,
+     "city_state": "Chicago, IL",
+     "description": "",
+     "sublocality": null,
+     "country_code": "US",
+     "full_address": "Chicago, IL, USA",
+     "region_short": "IL",
+     "short_address": "Chicago",
+     "place_coordinate": {
+      "latitude": 41.88325,
+      "longitude": -87.6323879
+     },
+     "apple_maps_place_id": null,
+     "mode": "shown"
+    },
+    "geo_address_visibility": "public",
+    "coordinate": {
+     "longitude": -87.6323879,
+     "latitude": 41.88325
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "enabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#111111"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#0e0e0e",
+       "percentage": 47.23
+      },
+      {
+       "color": "#101010",
+       "percentage": 18.93
+      },
+      {
+       "color": "#181818",
+       "percentage": 11.76
+      }
+     ],
+     "vibrant": []
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-wCAuJnLlgB9N0iD",
+    "avatar_url": "https://images.lumacdn.com/calendars/bi/66e653a2-a40c-4270-8e5a-ae86c15e4b2d",
+    "coordinate": {
+     "longitude": -88.20727,
+     "latitude": 40.110588
+    },
+    "cover_image_url": "https://images.lumacdn.com/calendar-cover-images/5h/391d372a-591a-4250-b11f-dfc8ffb56d5d",
+    "description_short": "The Muslim Tech Collaborative chapter, at UIUC.",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": "mtcuiuc",
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": "/company/105301389",
+    "location": {
+     "city": "Urbana",
+     "region": "Illinois",
+     "country": "United States",
+     "place_id": "ChIJj0KEhJbXDIgRQWUMOa3LjfQ",
+     "timezone": "America/Chicago",
+     "country_code": "US"
+    },
+    "luma_plan": "free",
+    "luma_plus_active": false,
+    "meta_pixel_id": null,
+    "name": "MTC Illinois",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "mtcuiuc",
+    "social_image_url": "https://images.lumacdn.com/uploads/yw/5adfa2f8-51d5-48b2-a06d-502e154271f0.jpg",
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": null,
+    "tint_color": "#DBE5E7",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": null,
+    "verified_at": "2026-03-02T16:38:30.979Z",
+    "website": null,
+    "youtube_handle": null,
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": "America/Chicago"
+   },
+   "start_at": "2026-10-23T22:00:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-9uvl35aPcG6ElXd",
+     "avatar_url": "https://images.lumacdn.com/avatars/0p/088fee03-3b12-4ab3-8a7e-9c2dad62b618",
+     "bio_short": null,
+     "first_name": "UIUC Muslim Tech Collaborative",
+     "last_name": null,
+     "instagram_handle": "mtcuiuc",
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "mtcuiuc",
+     "tiktok_handle": null,
+     "timezone": "America/Chicago",
+     "twitter_handle": null,
+     "username": "mtcuiuc",
+     "website": null,
+     "youtube_handle": ""
+    }
+   ],
+   "guest_count": 0,
+   "ticket_count": 0,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 250,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": null
+  },
+  {
+   "api_id": "evt-jAGUm2MPggH8J6w",
+   "event": {
+    "api_id": "evt-jAGUm2MPggH8J6w",
+    "calendar_api_id": "cal-TqlnE35lpsiFp1N",
+    "cover_url": "https://images.lumacdn.com/uploads/b5/779771c6-6544-470b-8a21-8fc86cc849d3.png",
+    "end_at": "2026-10-19T23:30:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "Cline, Parallel, & Composio Hackathon",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": true,
+    "social_image_url": "https://images.lumacdn.com/event-social/yl/4f066a5e-d92c-469a-8460-ab103b68ca41.png",
+    "start_at": "2026-10-19T18:00:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "url": "m8euvq9n",
+    "user_api_id": "usr-hH7YzsoZGVcJ3KF",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "mode": "obfuscated",
+     "city": "San Francisco",
+     "city_state": "San Francisco, CA",
+     "sublocality": "Mid-Market",
+     "country": "United States",
+     "country_code": "US",
+     "region": "California",
+     "region_short": "CA"
+    },
+    "geo_address_visibility": "guests-only",
+    "coordinate": {
+     "latitude": 37.78252462456423,
+     "longitude": -122.41227556454989
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "enabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#ffffff",
+     "#2bfefc",
+     "#000000",
+     "#fba5ae"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#000000",
+       "percentage": 3.34
+      },
+      {
+       "color": "#ffffff",
+       "percentage": 68.58
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#1273f6",
+       "percentage": 5.87
+      },
+      {
+       "color": "#2bfefc",
+       "percentage": 6.57
+      },
+      {
+       "color": "#fba5ae",
+       "percentage": 0.27
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-TqlnE35lpsiFp1N",
+    "avatar_url": "https://images.lumacdn.com/calendars/ho/bdc360fd-c7cd-4478-ba9d-66b2e2521095.png",
+    "coordinate": {
+     "longitude": -122.419416,
+     "latitude": 37.77493
+    },
+    "cover_image_url": "https://images.lumacdn.com/calendar-cover-images/9x/579af5e4-f704-4ab4-bed6-cf013fdccf00.png",
+    "description_short": "",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": "composio.dev",
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": null,
+    "location": {
+     "city": "San Francisco",
+     "region": "California",
+     "country": "United States",
+     "place_id": "ChIJIQBpAG2ahYAR_6128GcTUEo",
+     "timezone": "America/Los_Angeles",
+     "country_code": "US"
+    },
+    "luma_plan": "plus",
+    "luma_plus_active": true,
+    "meta_pixel_id": null,
+    "name": "Composio Events",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "composiohq",
+    "social_image_url": "https://images.lumacdn.com/calendar-cover-images/ii/53d79d4d-7b17-446c-a8f9-de30a489c408.png",
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": "insidecomposio",
+    "tint_color": "#F8712B",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": "composio",
+    "verified_at": "2025-04-29T21:27:04.683Z",
+    "website": "https://composio.dev",
+    "youtube_handle": "Composio",
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": "America/Los_Angeles"
+   },
+   "start_at": "2026-10-19T18:00:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-hH7YzsoZGVcJ3KF",
+     "avatar_url": "https://images.lumacdn.com/uploads/ek/3fd271e7-eb09-4c56-8354-85ed6e9449de.jpg",
+     "bio_short": "Developer Marketing Lead at Composio",
+     "first_name": "Brendan",
+     "last_name": "O'Leary",
+     "instagram_handle": "olearycrew",
+     "is_verified": false,
+     "linkedin_handle": "/in/olearycrew",
+     "name": "Brendan O'Leary",
+     "tiktok_handle": null,
+     "timezone": "America/New_York",
+     "twitter_handle": "olearycrew",
+     "username": "composio_bdo",
+     "website": "https://boleary.dev",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-cIsY8E4S5lA7zxC",
+     "avatar_url": "https://images.lumacdn.com/uploads/iy/396932c7-4dfc-48f5-b3d9-f8124bb0e357.jpg",
+     "bio_short": null,
+     "first_name": "Etisha",
+     "last_name": "Garg",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/etisha-garg",
+     "name": "Etisha Garg",
+     "tiktok_handle": null,
+     "timezone": "Asia/Kolkata",
+     "twitter_handle": "GargEtisha",
+     "username": null,
+     "website": null,
+     "youtube_handle": "EtishaGarg"
+    },
+    {
+     "api_id": "usr-bsJVNk94vOQwGLL",
+     "avatar_url": "https://images.lumacdn.com/uploads/ud/52482950-1a87-474e-a81c-02f7089c5e2c.png",
+     "bio_short": "Web infrastructure for agents. Search, extract, enrich, and monitor anything online.",
+     "first_name": "Parallel",
+     "last_name": "Web Systems",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/company/parallel-web",
+     "name": "Parallel Web Systems",
+     "tiktok_handle": null,
+     "timezone": "America/New_York",
+     "twitter_handle": "p0",
+     "username": "parallelweb",
+     "website": "https://parallel.ai",
+     "youtube_handle": "parallelwebsystems"
+    }
+   ],
+   "guest_count": 202,
+   "ticket_count": 202,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 48,
+    "is_near_capacity": false,
+    "require_approval": false
+   },
+   "registration_availability": "open",
+   "featured_guests": [
+    {
+     "api_id": "usr-R0C3ktcZHlH646F",
+     "avatar_url": "https://images.lumacdn.com/uploads/zw/595d3cda-1c3a-4af1-9119-ef38d220b175.png",
+     "bio_short": null,
+     "first_name": "Alisher",
+     "last_name": "Begmatov, MBA",
+     "instagram_handle": "alisherbegmatov",
+     "is_verified": false,
+     "linkedin_handle": "/in/alisherbegmatov",
+     "name": "Alisher Begmatov, MBA",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": "alisherbegmatov",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-eGSJGfTk1d78QEQ",
+     "avatar_url": "https://images.lumacdn.com/avatars/t7/1118a6bf-76a3-495a-9625-9c94b01d6679.jpg",
+     "bio_short": "Danilo Costa is the CEO and founder of Coderblock, a pioneering vibe coding platform specializing in AI code generation",
+     "first_name": "Danilo",
+     "last_name": "Costa",
+     "instagram_handle": "dan.c0sta",
+     "is_verified": false,
+     "linkedin_handle": "/in/danilo-costa-96264661",
+     "name": "Danilo Costa",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "DanPhyxius",
+     "username": "DanCosta",
+     "website": "https://www.coderblock.com",
+     "youtube_handle": ""
+    },
+    {
+     "api_id": "usr-CwH6CM1vidLV8x9",
+     "avatar_url": "https://images.lumacdn.com/uploads/w7/cf9faf86-58c8-4bb6-aa02-048115cdaf44.png",
+     "bio_short": "ReStructure Manpower by ReStructure AI. We restructure careers: top AI, FDE and engineering talent, placed fast. re-structure.ai/careers",
+     "first_name": "ReStructure",
+     "last_name": "Manpower",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/company/restructureai",
+     "name": "ReStructureManpower",
+     "tiktok_handle": null,
+     "timezone": "America/New_York",
+     "twitter_handle": "ReStructureMP",
+     "username": "ReStructureMP",
+     "website": "https://re-structure.ai",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-MqBLTLnWmz4ikIZ",
+     "avatar_url": "https://images.lumacdn.com/avatars/r6/4bf6ba13-df22-4811-95b9-3266a4bee9de.jpg",
+     "bio_short": "",
+     "first_name": "Abdelmounaim",
+     "last_name": "El Amrani",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/monaim-el-amrani-3b1154155",
+     "name": "Monaim El Amrani",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "moonsgambino",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-td0k5bi7MwmXFI7",
+     "avatar_url": "https://images.lumacdn.com/uploads/s3/607f0ccb-9899-43b7-b480-24d7f262557e.jpg",
+     "bio_short": "Caesar Xu \u2014 Gen-Z serial entrepreneur; built a 50M-user global product. AI agent builder & US equities investor. MiraclePlus/Columbia alum.",
+     "first_name": "Caesar",
+     "last_name": "Xu",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/caesarxu123x",
+     "name": "CaesarXu.eth",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "Caesarxueth",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-3BfIeXbXRxpW8hf",
+     "avatar_url": "https://images.lumacdn.com/avatars/89/01f508de-c385-42f9-8916-2ee95c089cca.png",
+     "bio_short": null,
+     "first_name": "Douglas",
+     "last_name": "Lacerda",
+     "instagram_handle": "douglas",
+     "is_verified": false,
+     "linkedin_handle": "/in/douglac",
+     "name": "Douglas Lacerda",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "dougplac",
+     "username": "douglac",
+     "website": null,
+     "youtube_handle": ""
+    },
+    {
+     "api_id": "usr-WfAWzxowPaLhqr3",
+     "avatar_url": "https://images.lumacdn.com/avatars/3d/d1f6693c-07c3-4938-b952-9cd7bda82c7b.jpg",
+     "bio_short": "Founder, restaurant tech.",
+     "first_name": "Saddiq",
+     "last_name": "Jeelani",
+     "instagram_handle": "watchesntrails",
+     "is_verified": false,
+     "linkedin_handle": "/in/saddiq-jeelani",
+     "name": "Saddiq Jeelani",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-bemSskV7tlNOBFE",
+     "avatar_url": "https://images.lumacdn.com/avatars/7p/4c70a708-361b-48a3-86d0-b27ae9a5d06e.jpg",
+     "bio_short": "Better Market is a place where global \nfood buyers & suppliers meet.",
+     "first_name": "Tomas",
+     "last_name": "Indriunas",
+     "instagram_handle": "indriunas_",
+     "is_verified": false,
+     "linkedin_handle": "/in/indriunas",
+     "name": "Tomas Indriunas",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "bettermarket_io",
+     "username": null,
+     "website": "https://www.bettermarket.io",
+     "youtube_handle": "bettermarketio"
+    },
+    {
+     "api_id": "usr-LIvXWEEvcMQxxli",
+     "avatar_url": "https://images.lumacdn.com/uploads/76/00a4418b-ee58-49ff-81a7-eb2e03e2c6ef.jpg",
+     "bio_short": null,
+     "first_name": "Kartik",
+     "last_name": "Hans",
+     "instagram_handle": "kartikhans",
+     "is_verified": false,
+     "linkedin_handle": "/in/kartikhans",
+     "name": "Kartik",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": "kplush",
+     "website": "https://kartikhans.github.io",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-alao6yEcDlxhYVz",
+     "avatar_url": "https://images.lumacdn.com/avatars/oz/82dfb654-cff9-4880-a753-46600a9275ed.jpg",
+     "bio_short": "",
+     "first_name": "Chris",
+     "last_name": "C.",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/christiancamach",
+     "name": "Chris C.",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "MindThe0ry",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    }
+   ],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": {
+    "api_id": "discplace-BDj7GNbGlsF7Cka",
+    "name": "San Francisco",
+    "slug": "sf"
+   }
+  },
+  {
+   "api_id": "evt-p6TmzT9HhWLNeAJ",
+   "event": {
+    "api_id": "evt-p6TmzT9HhWLNeAJ",
+    "calendar_api_id": "cal-tIVlGWmxHLpUZ0Y",
+    "cover_url": "https://images.lumacdn.com/uploads/c5/6cfbbc28-0452-4643-8c53-f236da0fd9bb.png",
+    "end_at": "2026-11-21T17:30:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "HACKCEPTION: A hack within a hack \ud83c\udf00",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": true,
+    "social_image_url": "https://images.lumacdn.com/event-social/vd/5f385fe7-3aab-4e5a-8641-34552ac1f796.png",
+    "start_at": "2026-11-21T09:30:00.000Z",
+    "timezone": "Europe/London",
+    "url": "xjd0fs6x",
+    "user_api_id": "usr-5weTp6epCQyHdXS",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "mode": "obfuscated",
+     "city": "London",
+     "city_state": "London, United Kingdom",
+     "sublocality": null,
+     "country": "United Kingdom",
+     "country_code": "GB",
+     "region": null,
+     "region_short": null
+    },
+    "geo_address_visibility": "guests-only",
+    "coordinate": {
+     "latitude": 51.50416186959394,
+     "longitude": -0.11718722189425729
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "enabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#061370",
+     "#ffffff",
+     "#5da2a6",
+     "#976f24"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#061370",
+       "percentage": 38.54
+      },
+      {
+       "color": "#ffffff",
+       "percentage": 16.74
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#976f24",
+       "percentage": 5.03
+      },
+      {
+       "color": "#405f9a",
+       "percentage": 2.09
+      },
+      {
+       "color": "#5da2a6",
+       "percentage": 5.47
+      },
+      {
+       "color": "#b6a65a",
+       "percentage": 4.36
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-tIVlGWmxHLpUZ0Y",
+    "avatar_url": "https://images.lumacdn.com/uploads/vc/90303d91-fb1d-4b87-bbc3-6904b72d7dee.png",
+    "coordinate": null,
+    "cover_image_url": null,
+    "description_short": "Lovable London brings together people across the city to experiment, build and ship.",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": null,
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": null,
+    "location": null,
+    "luma_plan": "free",
+    "luma_plus_active": false,
+    "meta_pixel_id": null,
+    "name": "Lovable London",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "lovablelondon",
+    "social_image_url": null,
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": null,
+    "tint_color": "#AB46DD",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": null,
+    "verified_at": null,
+    "website": "https://london-lovable-community.lovable.app/",
+    "youtube_handle": null,
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": null
+   },
+   "start_at": "2026-11-21T09:30:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-5weTp6epCQyHdXS",
+     "avatar_url": "https://images.lumacdn.com/uploads/39/b6a90611-6d48-430e-aad1-8c811d6cd7f1.jpg",
+     "bio_short": "",
+     "first_name": "Rachel",
+     "last_name": "Macnaghten",
+     "instagram_handle": "rachel.macnaghten",
+     "is_verified": false,
+     "linkedin_handle": "/in/rachelmacnaghten",
+     "name": "Rachel Macnaghten",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-JyJCMizioKIaTTi",
+     "avatar_url": "https://images.lumacdn.com/uploads/hr/fb6ef583-16a5-4f35-bf33-1939cc1a69b4.jpg",
+     "bio_short": "prev draperU, palantir fellow. i love hacks and hosting events :)",
+     "first_name": "Aru",
+     "last_name": "N",
+     "instagram_handle": "arujam.co",
+     "is_verified": false,
+     "linkedin_handle": "/in/aruzhan-n",
+     "name": "Aru N",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "arukanism",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-dcLloDCwYgGXXuQ",
+     "avatar_url": "https://images.lumacdn.com/avatars/s5/a2c350de-f39a-46ec-b7d4-12eabf647b78.jpg",
+     "bio_short": "Social Entrepreneur | Accenture | WEF Global Shaper | Diana Award | Speaker (100+ talks) | LSE",
+     "first_name": "Reese",
+     "last_name": "Wong",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/reesewong1",
+     "name": "Reese Wong",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": "https://www.reesewong.com/",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-58BkwEBuTASMzwf",
+     "avatar_url": "https://images.lumacdn.com/avatars/8h/021041df-4745-47d5-ba22-16d476459dfc.png",
+     "bio_short": "",
+     "first_name": "Grace",
+     "last_name": "Greer",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/gracegreer2000",
+     "name": "Grace Greer",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": ""
+    }
+   ],
+   "guest_count": 50,
+   "ticket_count": 50,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 150,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [
+    {
+     "api_id": "usr-OFiCnl5BJA4cDPu",
+     "avatar_url": "https://images.lumacdn.com/avatars/s6/218e57d3-2f61-4a5e-8a32-c4d7f90210f0.jpg",
+     "bio_short": "Product Marketing @ Google. Co-Founder of AI After 5.",
+     "first_name": "M\u00e9lissa",
+     "last_name": "Chan-Cheape",
+     "instagram_handle": "melchancheape",
+     "is_verified": false,
+     "linkedin_handle": "/in/melissachancheape",
+     "name": "M\u00e9lissa Chan-Cheape",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "mchancheape",
+     "username": null,
+     "website": "https://aiafter5.com",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-xSp5vAB8WYwUMXv",
+     "avatar_url": "https://images.lumacdn.com/avatars/pp/f99e9524-df7b-47ff-a1cb-b9e61af8273c.jpg",
+     "bio_short": "",
+     "first_name": "Anqi",
+     "last_name": "Cai",
+     "instagram_handle": "angela_aqi",
+     "is_verified": false,
+     "linkedin_handle": "/in/anqi-angela-c-822272210",
+     "name": "Angie",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "AnqiCai55048",
+     "username": null,
+     "website": "https://www.angelacai.com",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-VzybR0ZD69arwzQ",
+     "avatar_url": "https://images.lumacdn.com/avatars/rc/18499f7b-4879-4beb-a027-048fb97d10b6.jpg",
+     "bio_short": "Statistics and ML",
+     "first_name": "Alejandro",
+     "last_name": "Treny Ortega",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/aleetreny",
+     "name": "Alejandro Treny Ortega",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "aleetreny",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-DP1h4IUJQm2GFtn",
+     "avatar_url": "https://images.lumacdn.com/uploads/qz/6dff1271-25e3-4648-8c6d-9e6ad689ca3b.jpg",
+     "bio_short": null,
+     "first_name": "Emre",
+     "last_name": "Yavuz",
+     "instagram_handle": "emre_yavuz_21",
+     "is_verified": false,
+     "linkedin_handle": "/in/dr-emre-yavuz-449216187",
+     "name": "Emre Yavuz",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "Emre_Yavuz_21",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-mDspQIFTZQwh24Q",
+     "avatar_url": "https://images.lumacdn.com/uploads/rt/0a93ece9-fdfb-46bb-81b8-630549d0af76.jpg",
+     "bio_short": "Founding Engineer at 8x. Won and hosted some hackathons before. Here to win more.",
+     "first_name": "Lu",
+     "last_name": "Min",
+     "instagram_handle": "l.mn_13",
+     "is_verified": false,
+     "linkedin_handle": "/in/lmnlmn",
+     "name": "Lu Min",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-QkgJCVPiyGMuDze",
+     "avatar_url": "https://images.lumacdn.com/uploads/rf/aa09f638-8478-4565-a88f-ef4e2de6c5e4.jpg",
+     "bio_short": "\u2022 AI Deployment and Adoption at a frontier AI Lab\n\u2022 10+ years in Big Tech at Meta and Adobe\n\u2022 Computational Neuroscience researcher",
+     "first_name": "Anna",
+     "last_name": "Peters",
+     "instagram_handle": "annawtkr",
+     "is_verified": false,
+     "linkedin_handle": "/in/annawtkr",
+     "name": "Anna W.",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "annawtkr",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-OoQXufET0kkGZLv",
+     "avatar_url": "https://images.lumacdn.com/avatars/pg/ce1fdac6-d276-4a1a-b741-787dc5a059a4.jpg",
+     "bio_short": "",
+     "first_name": "Kim",
+     "last_name": "Gao",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/kim-gao-71a295184",
+     "name": "Kim Gao",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-ySrJ9g6onbBJwMZ",
+     "avatar_url": "https://images.lumacdn.com/uploads/wu/ef2f9675-6d39-4f95-b0e1-ad23be1ef94b.jpg",
+     "bio_short": "Senior Behavioural researcher and consultant with 5+ years expertise in consumer insights",
+     "first_name": "Tanya",
+     "last_name": "Sengupta",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/tanya-sengupta",
+     "name": "Tanya Sengupta",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-2qSi3u3MBNQEOUN",
+     "avatar_url": "https://images.lumacdn.com/uploads/a3/3ea3beef-9ce9-4aa2-9901-74e97daea3f1.jpg",
+     "bio_short": "founding engineer @ qualia |\nn8n ambassador",
+     "first_name": "Efe",
+     "last_name": "Karakanli",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/efekarakanli",
+     "name": "Ziya Efe Karakanl\u0131",
+     "tiktok_handle": null,
+     "timezone": "Europe/Istanbul",
+     "twitter_handle": "ActuallyZefe",
+     "username": null,
+     "website": "https://github.com/actuallyzefe",
+     "youtube_handle": "actuallyzefe"
+    },
+    {
+     "api_id": "usr-AAPlBRW10GQMHXM",
+     "avatar_url": "https://images.lumacdn.com/avatars/ip/2bac931a-4748-4678-89bf-f53076513434",
+     "bio_short": "",
+     "first_name": "Dylan",
+     "last_name": "Kainth",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/dylan-kainth-455636112",
+     "name": "Dylan Kainth",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": "dylanka1nth",
+     "username": "dylankainth",
+     "website": "https://dylankainth.com",
+     "youtube_handle": ""
+    }
+   ],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": {
+    "api_id": "discplace-QCcNk3HXowOR97j",
+    "name": "London",
+    "slug": "london"
+   }
+  },
+  {
+   "api_id": "evt-AkcfOqCBJy6nPfX",
+   "event": {
+    "api_id": "evt-AkcfOqCBJy6nPfX",
+    "calendar_api_id": "cal-gCXlbIRwQI0Ge5I",
+    "cover_url": "https://images.lumacdn.com/uploads/15/494bd5d6-1b22-45f0-b27b-adddde178d8a.jpg",
+    "end_at": "2026-11-07T16:00:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "Zindua Community Hackathon",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": false,
+    "social_image_url": "https://images.lumacdn.com/event-social/oi/15b187c2-67be-4fd8-913a-9a2d2a0af9bd.png",
+    "start_at": "2026-11-07T04:00:00.000Z",
+    "timezone": "Africa/Nairobi",
+    "url": "n408ndnx",
+    "user_api_id": "usr-QSGKUmrKRnp15F5",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "mode": "obfuscated",
+     "city": "Nairobi",
+     "city_state": "Nairobi, Kenya",
+     "sublocality": "Westlands",
+     "country": "Kenya",
+     "country_code": "KE",
+     "region": "Nairobi County",
+     "region_short": "Nairobi County"
+    },
+    "geo_address_visibility": "guests-only",
+    "coordinate": {
+     "latitude": -1.271797635439028,
+     "longitude": 36.81006021638541
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "enabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#070604",
+     "#50181b",
+     "#fefbf8"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#070604",
+       "percentage": 35.99
+      },
+      {
+       "color": "#fefbf8",
+       "percentage": 4.11
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#50181b",
+       "percentage": 9.55
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-gCXlbIRwQI0Ge5I",
+    "avatar_url": "https://images.lumacdn.com/calendars/t4/faa1fd35-b4a8-419c-96c8-7d652d11a617",
+    "coordinate": {
+     "longitude": 36.76579,
+     "latitude": -1.292238
+    },
+    "cover_image_url": "https://images.unsplash.com/photo-1493119508027-2b584f234d6c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjQyMjF8MHwxfHNlYXJjaHw1fHx0ZWNofGVufDB8Mnx8fDE3MDQ4Nzg3NTl8Mg&ixlib=rb-4.0.3&q=80&w=1080",
+    "description_short": "Zindua School is a coding school that offers virtual part-time programs in Data Science and Software Development to students in emerging economies.",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": "zinduaschool",
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": "/in/zinduaschool",
+    "location": {
+     "city": "Nairobi",
+     "region": "Nairobi County",
+     "country": "Kenya",
+     "place_id": "ChIJp0lN2HIRLxgRTJKXslQCz_c",
+     "timezone": "Africa/Nairobi",
+     "localized": {
+      "sw": {
+       "city": "Nairobi",
+       "region": "Nairobi County",
+       "country": "Kenya"
+      }
+     },
+     "country_code": "KE"
+    },
+    "luma_plan": "free",
+    "luma_plus_active": false,
+    "meta_pixel_id": null,
+    "name": "Zindua School",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "ZinduaSchool",
+    "social_image_url": null,
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": "zinduaschool",
+    "tint_color": "#e83b47",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": "zinduaschool",
+    "verified_at": "2023-12-11T13:15:06.105Z",
+    "website": "https://zinduaschool.com",
+    "youtube_handle": "zinduaschool",
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": "Africa/Nairobi"
+   },
+   "start_at": "2026-11-07T04:00:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-QSGKUmrKRnp15F5",
+     "avatar_url": "https://images.lumacdn.com/avatars/9v/f32ae369-c122-4f26-8f34-6ca878226c1d",
+     "bio_short": "",
+     "first_name": "Zindua",
+     "last_name": "School",
+     "instagram_handle": "zinduaschool",
+     "is_verified": false,
+     "linkedin_handle": "/school/zinduaschool",
+     "name": "Zindua School",
+     "tiktok_handle": "zinduaschool",
+     "timezone": "Africa/Nairobi",
+     "twitter_handle": "zinduaschool",
+     "username": "zinduaschool",
+     "website": "https://zinduaschool.com",
+     "youtube_handle": "zinduaschool"
+    },
+    {
+     "api_id": "usr-VBSYVegQ27yAizc",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_20.png",
+     "bio_short": null,
+     "first_name": "Sonia",
+     "last_name": "Imorgan",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Imorgan Sonia",
+     "tiktok_handle": null,
+     "timezone": "Africa/Nairobi",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    }
+   ],
+   "guest_count": 0,
+   "ticket_count": 0,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 140,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": null
+  },
+  {
+   "api_id": "evt-qrJbFk9njHocTy4",
+   "event": {
+    "api_id": "evt-qrJbFk9njHocTy4",
+    "calendar_api_id": "cal-SqOCvXIx7faLvUg",
+    "cover_url": "https://images.lumacdn.com/uploads/mw/ebcc14ec-35ea-414c-9b64-df5d9137cb37.png",
+    "end_at": "2026-10-18T00:00:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "The GSD hackathon (Get s*** done!)",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": true,
+    "social_image_url": "https://images.lumacdn.com/event-social/pm/5c4274a8-7088-494c-ad91-17e0b3003f9e.png",
+    "start_at": "2026-10-17T16:00:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "url": "buo3rgvs",
+    "user_api_id": "usr-IvSMpnA6liEErtY",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "mode": "obfuscated",
+     "city": "San Francisco",
+     "city_state": "San Francisco, CA",
+     "sublocality": "South Beach",
+     "country": "United States",
+     "country_code": "US",
+     "region": "California",
+     "region_short": "CA"
+    },
+    "geo_address_visibility": "guests-only",
+    "coordinate": {
+     "latitude": 37.78139921897291,
+     "longitude": -122.38898210577202
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "enabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#ffffff",
+     "#000000",
+     "#aff2b2",
+     "#dd7d5d"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#000000",
+       "percentage": 2.5
+      },
+      {
+       "color": "#ffffff",
+       "percentage": 94.84
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#aff2b2",
+       "percentage": 0.11
+      },
+      {
+       "color": "#dd7d5d",
+       "percentage": 0.03
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-SqOCvXIx7faLvUg",
+    "avatar_url": "https://images.lumacdn.com/uploads/zk/96b0323e-1119-490e-9551-9feaf8497350.png",
+    "coordinate": {
+     "longitude": -122.41941550000001,
+     "latitude": 37.7749295
+    },
+    "cover_image_url": "https://images.lumacdn.com/uploads/hs/7a278d35-b907-4cc5-a457-322efef14b71.png",
+    "description_short": "",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": "wajo_ai",
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": "/company/wajo_ai",
+    "location": {
+     "city": "San Francisco",
+     "region": "California",
+     "country": "United States",
+     "place_id": "ChIJIQBpAG2ahYAR_6128GcTUEo",
+     "timezone": "America/Los_Angeles",
+     "country_code": "US"
+    },
+    "luma_plan": "plus",
+    "luma_plus_active": true,
+    "meta_pixel_id": null,
+    "name": "Wajo",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "wajo",
+    "social_image_url": "https://images.lumacdn.com/uploads/n3/3f97edc8-3783-48c9-b1db-e70367b4235c.png",
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": "wajo_ai",
+    "tint_color": "#231121",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": "wajo_ai",
+    "verified_at": "2026-06-19T05:55:27.410Z",
+    "website": "https://wajo.ai",
+    "youtube_handle": "wajo_ai",
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": "America/Los_Angeles"
+   },
+   "start_at": "2026-10-17T16:00:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-IvSMpnA6liEErtY",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_21.png",
+     "bio_short": "",
+     "first_name": "Ari",
+     "last_name": "Dzhaanbaeva",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Ari",
+     "tiktok_handle": null,
+     "timezone": "America/New_York",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-gyl1g4diKDEdH7C",
+     "avatar_url": "https://images.lumacdn.com/uploads/12/7277ca7b-a716-432d-8505-ad05158e6147.png",
+     "bio_short": null,
+     "first_name": "Rianna",
+     "last_name": "Zhou",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/ruohua",
+     "name": "Rianna Zhou",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "qqazzrh",
+     "username": "qqazzrh",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-SSaKh5RxqarvNK8",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_4.png",
+     "bio_short": null,
+     "first_name": "Sean",
+     "last_name": null,
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Sean",
+     "tiktok_handle": null,
+     "timezone": null,
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-lee3W9SUgPDXs76",
+     "avatar_url": "https://images.lumacdn.com/uploads/7n/7ba95b4b-d920-435c-9587-db23b4f02536.jpg",
+     "bio_short": "Curating events to remove boredom from people!",
+     "first_name": "Sahana",
+     "last_name": "Diwakar",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/sahana-diwakar",
+     "name": "Sahana Diwakar",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-ozsxG0C2ufRNrDG",
+     "avatar_url": "https://images.lumacdn.com/uploads/uy/2c58c103-5f83-47cf-8a6d-9be46bb21711.png",
+     "bio_short": "This is official Wajo AI luma channel",
+     "first_name": "Wajo",
+     "last_name": "AI",
+     "instagram_handle": "wajo_ai",
+     "is_verified": false,
+     "linkedin_handle": "/company/wajo-ai",
+     "name": "Wajo AI",
+     "tiktok_handle": "wajo_ai",
+     "timezone": "America/New_York",
+     "twitter_handle": "wajo_ai",
+     "username": "wajo",
+     "website": "https://wajo.ai/",
+     "youtube_handle": "wajo_ai"
+    },
+    {
+     "api_id": "usr-yNXPxn4SDjAAKf7",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_17.png",
+     "bio_short": "Product Growth @ Wajo.ai",
+     "first_name": "Nadiah",
+     "last_name": "Wong",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Nadiah Wong",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    }
+   ],
+   "guest_count": 66,
+   "ticket_count": 70,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 930,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [
+    {
+     "api_id": "usr-GX1aZMeiCI2maxf",
+     "avatar_url": "https://images.lumacdn.com/uploads/8e/27e0a7c5-d1f9-4c1a-8906-d5dd421813d0.jpg",
+     "bio_short": "CoFounder and CEO at trycherry.ai cross border tax.",
+     "first_name": "Santiago",
+     "last_name": "Carranc\u00e1",
+     "instagram_handle": "s_carranca",
+     "is_verified": false,
+     "linkedin_handle": "/in/scarranca",
+     "name": "Santiago Carranc\u00e1",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "s_carranca",
+     "username": "scarranca",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-iHdGWXUoZlscHC4",
+     "avatar_url": "https://images.lumacdn.com/uploads/8x/cf93bbdc-05ae-4fc9-a65c-3b137a58b504.jpg",
+     "bio_short": null,
+     "first_name": "Majeed",
+     "last_name": "Shaik",
+     "instagram_handle": "majeed.exe",
+     "is_verified": false,
+     "linkedin_handle": "/in/majeedshaik",
+     "name": "Majeed Shaik",
+     "tiktok_handle": null,
+     "timezone": "Asia/Kolkata",
+     "twitter_handle": "MajeedAGI",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-k10ej9iyvb5pXU5",
+     "avatar_url": "https://images.lumacdn.com/avatars/sr/b20adfe5-3692-4c45-96c5-68e676a2b471.jpg",
+     "bio_short": "living. learning. \nchristianancheta.com",
+     "first_name": "Christian",
+     "last_name": "Ancheta",
+     "instagram_handle": "csa.jpeg",
+     "is_verified": false,
+     "linkedin_handle": "/in/christian-s-ancheta",
+     "name": "Christian Ancheta",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "csa_txt",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-KhP7ZGInioNFpxC",
+     "avatar_url": "https://images.lumacdn.com/uploads/pz/8df3b026-f8a9-4d78-a269-162151f114e7.jpg",
+     "bio_short": "",
+     "first_name": "Bryan",
+     "last_name": "Tegomoh",
+     "instagram_handle": "bryantegomoh",
+     "is_verified": false,
+     "linkedin_handle": "/in/bryan-tegomoh-md-mph",
+     "name": "Bryan",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "BryanTegomoh",
+     "username": "BryanTegomoh",
+     "website": "https://bryantegomoh.com/",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-AXFRN0qkuG0PC70",
+     "avatar_url": "https://images.lumacdn.com/uploads/lk/b8d1fa52-56ab-4345-9a6c-17555abd9ce6.jpg",
+     "bio_short": "AI | Claude Ambassador",
+     "first_name": "Ricardo",
+     "last_name": "Lira de la Vega",
+     "instagram_handle": "richlira",
+     "is_verified": false,
+     "linkedin_handle": "/in/ricardolira",
+     "name": "Ricardo Lira de la Vega",
+     "tiktok_handle": null,
+     "timezone": "America/Cancun",
+     "twitter_handle": "soyrichlira",
+     "username": "richlira",
+     "website": "https://richlira.dev",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-wMjaC1u3S6mYRL1",
+     "avatar_url": "https://images.lumacdn.com/uploads/y8/bd2877e7-b5b9-4018-bf06-98be24e85aed.png",
+     "bio_short": "Founder. Jack of many trades. Passionate about regenerative systems design.",
+     "first_name": "Allen",
+     "last_name": "Litton Navasero",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/allen-thomas-litton-navasero-07532b100",
+     "name": "Allen Litton Navasero",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": "allenlitton",
+     "website": "https://allenlittonstudio.com/",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-upnbaB74GDZZseh",
+     "avatar_url": "https://images.lumacdn.com/uploads/qw/d2f7b262-985b-4f40-a2d8-ff40d9290aa1.jpg",
+     "bio_short": "co-founder croma",
+     "first_name": "Tomas",
+     "last_name": "Calle",
+     "instagram_handle": "tomas_calle",
+     "is_verified": false,
+     "linkedin_handle": "/in/tomas-calle",
+     "name": "Tomas Calle",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "tomas_calle",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-jzkXfqtJSSROpxf",
+     "avatar_url": "https://images.lumacdn.com/uploads/iz/55d9d46e-05f9-47f0-b47a-8dac99b7b409.jpg",
+     "bio_short": "AI Science",
+     "first_name": "Thomas",
+     "last_name": "Barrios",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/tbarrios2",
+     "name": "Thomas",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "tbarrios2",
+     "username": "tbarrios",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-fo3nSe2ITDXig45",
+     "avatar_url": "https://images.lumacdn.com/avatars/mo/21c410bb-0142-460f-b5ad-f53f72fc1e5d.jpg",
+     "bio_short": "Inventor @Onairos",
+     "first_name": "Zion",
+     "last_name": "D",
+     "instagram_handle": "Zion.darko",
+     "is_verified": false,
+     "linkedin_handle": "/in/zion-darko-8a0b78190",
+     "name": "Zion",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "BlasianHokage",
+     "username": null,
+     "website": "https://onairos.uk",
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-I7E8jOeCCmBxoaI",
+     "avatar_url": "https://images.lumacdn.com/avatars/ls/8eb2faf8-47f6-4a3c-8446-dc89045a072c.jpg",
+     "bio_short": "Building Good folks Ai",
+     "first_name": "Abhishek",
+     "last_name": "Tiwari",
+     "instagram_handle": "banditeagle",
+     "is_verified": false,
+     "linkedin_handle": "/in/banditeagle",
+     "name": "Abhishek Tiwari",
+     "tiktok_handle": null,
+     "timezone": "Asia/Kolkata",
+     "twitter_handle": "baanditeagle",
+     "username": null,
+     "website": "https://abhishektiwari.co",
+     "youtube_handle": null
+    }
+   ],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": null
+  },
+  {
+   "api_id": "evt-ye9vR1eTL2sLsJq",
+   "event": {
+    "api_id": "evt-ye9vR1eTL2sLsJq",
+    "calendar_api_id": "cal-sx2p8SLoDPbnHQB",
+    "cover_url": "https://images.lumacdn.com/uploads/q3/179aa26d-a1eb-43f2-976d-f8728ad7c25c.png",
+    "end_at": "2026-10-20T22:00:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "FinOps Hackathon",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": false,
+    "social_image_url": "https://images.lumacdn.com/event-social/yp/38bf0770-bff2-4cc8-915a-738463df1dc7.png",
+    "start_at": "2026-10-20T16:45:00.000Z",
+    "timezone": "Europe/London",
+    "url": "a8ig66i3",
+    "user_api_id": "usr-KHd7DBvAphNDPne",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "mode": "obfuscated",
+     "city": "London",
+     "city_state": "London, United Kingdom",
+     "sublocality": null,
+     "country": "United Kingdom",
+     "country_code": "GB",
+     "region": "England",
+     "region_short": "England"
+    },
+    "geo_address_visibility": "guests-only",
+    "coordinate": {
+     "latitude": 51.51320152243212,
+     "longitude": -0.07253922461771466
+    },
+    "waitlist_enabled": true,
+    "waitlist_status": "enabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#ebe2d4",
+     "#595fff",
+     "#f35301",
+     "#390d0c"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#390d0c",
+       "percentage": 3.29
+      },
+      {
+       "color": "#ebe2d4",
+       "percentage": 50.31
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#595fff",
+       "percentage": 18.14
+      },
+      {
+       "color": "#f35301",
+       "percentage": 4.71
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-sx2p8SLoDPbnHQB",
+    "avatar_url": "https://images.lumacdn.com/calendars/94/8f2f351b-8992-4b77-bb41-db5849fdae74.png",
+    "coordinate": {
+     "longitude": -6.2603097,
+     "latitude": 53.3498053
+    },
+    "cover_image_url": "https://images.lumacdn.com/uploads/qc/5f64e154-f962-486b-aa66-094485781dbb.png",
+    "description_short": "Seapoint is the financial home for startups. Automating finances end to end, it enables founders take control, gain clarity and extend runway - so they can scale faster.",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": null,
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": "/company/seapoint-finance",
+    "location": {
+     "city": "Dublin",
+     "region": "County Dublin",
+     "country": "Ireland",
+     "place_id": "ChIJL6wn6oAOZ0gRoHExl6nHAAo",
+     "timezone": "Europe/Dublin",
+     "country_code": "IE"
+    },
+    "luma_plan": "free",
+    "luma_plus_active": false,
+    "meta_pixel_id": null,
+    "name": "Seapoint",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "seapoint.co",
+    "social_image_url": null,
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": null,
+    "tint_color": "#682FFF",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": null,
+    "verified_at": "2026-04-21T15:01:18.015Z",
+    "website": null,
+    "youtube_handle": null,
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": "Europe/Dublin"
+   },
+   "start_at": "2026-10-20T16:45:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-KHd7DBvAphNDPne",
+     "avatar_url": "https://images.lumacdn.com/avatars/lf/ed099c13-cbc8-4f53-8c94-58aee901b974.jpg",
+     "bio_short": "Building community at Seapoint",
+     "first_name": "Marcela",
+     "last_name": "Donatello",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/marceladonatello",
+     "name": "Marcela Donatello",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": ""
+    },
+    {
+     "api_id": "usr-ZfJBZpvtZ5Bmx4E",
+     "avatar_url": "https://images.lumacdn.com/uploads/re/f25958fd-4276-4f90-bdf8-a6e82d3ef0ef.jpg",
+     "bio_short": null,
+     "first_name": "Joanna",
+     "last_name": "Wlazlak",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/joanna-wla",
+     "name": "Joanna Wlazlak",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-z3HAsdRT2uv3yvy",
+     "avatar_url": "https://images.lumacdn.com/uploads/oo/65ace94c-3cf2-4ed6-a5c4-97a347278917.jpg",
+     "bio_short": "",
+     "first_name": "Gamal",
+     "last_name": "Mubarak",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/gamal-mubarak-2a2461256",
+     "name": "Gamal Mubarak",
+     "tiktok_handle": null,
+     "timezone": "Europe/London",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    }
+   ],
+   "guest_count": 0,
+   "ticket_count": 0,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": 134,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": null
+  },
+  {
+   "api_id": "evt-S3MSmkvGKOLt6kA",
+   "event": {
+    "api_id": "evt-S3MSmkvGKOLt6kA",
+    "calendar_api_id": "cal-kQLf8Lts3EySj28",
+    "cover_url": "https://images.lumacdn.com/gallery-images/fv/9ca2825f-781f-48c2-bc21-7dd90ac2d3ef",
+    "end_at": "2026-10-18T03:00:00.000Z",
+    "event_type": "independent",
+    "hide_rsvp": false,
+    "location_type": "offline",
+    "name": "De Anza Hackathon 5.0",
+    "one_to_one": true,
+    "recurrence_id": null,
+    "show_guest_list": true,
+    "social_image_url": "https://images.lumacdn.com/event-social/fq/bd92c496-5e84-4076-b492-4698f288084e.png",
+    "start_at": "2026-10-16T15:00:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "url": "6p4w9p21",
+    "user_api_id": "usr-FDE8TQSMMjaGPAX",
+    "visibility": "public",
+    "virtual_info": {
+     "has_access": false
+    },
+    "geo_address_info": {
+     "city": "Cupertino",
+     "type": "google",
+     "region": "California",
+     "address": "De Anza College",
+     "country": "United States",
+     "place_id": "ChIJf3DZH060j4AREhWfvYVcD1Y",
+     "localized": null,
+     "city_state": "Cupertino, CA",
+     "description": "Conference Room A&B",
+     "sublocality": null,
+     "country_code": "US",
+     "full_address": "De Anza College, 21250 Stevens Creek Blvd, Cupertino, CA 95014, USA",
+     "region_short": "CA",
+     "short_address": "Physical Education Quad, 21250 Stevens Creek Blvd, Cupertino",
+     "place_coordinate": {
+      "latitude": 37.3192806,
+      "longitude": -122.04479189999998
+     },
+     "apple_maps_place_id": "IFC1B13F6FA980C8A",
+     "mode": "shown"
+    },
+    "geo_address_visibility": "public",
+    "coordinate": {
+     "longitude": -122.04479189999998,
+     "latitude": 37.3192806
+    },
+    "waitlist_enabled": false,
+    "waitlist_status": "disabled"
+   },
+   "cover_image": {
+    "colors": [
+     "#0b1d3f",
+     "#fb90f3",
+     "#ef66c1",
+     "#687d59"
+    ],
+    "palette": {
+     "neutral": [
+      {
+       "color": "#0d1a3c",
+       "percentage": 67.46
+      },
+      {
+       "color": "#19565f",
+       "percentage": 2.2
+      }
+     ],
+     "vibrant": [
+      {
+       "color": "#fd6fe1",
+       "percentage": 4.47
+      },
+      {
+       "color": "#51723e",
+       "percentage": 2.5
+      },
+      {
+       "color": "#9b7366",
+       "percentage": 0.86
+      }
+     ]
+    }
+   },
+   "calendar": {
+    "access_level": "public",
+    "api_id": "cal-kQLf8Lts3EySj28",
+    "avatar_url": "https://images.lumacdn.com/uploads/yn/2b611ac5-d3bc-4ba4-899f-f55441a0f967.png",
+    "coordinate": {
+     "longitude": -122.032182,
+     "latitude": 37.322998
+    },
+    "cover_image_url": "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjQyMjF8MHwxfHNlYXJjaHwzfHx0ZWNofGVufDB8fHx8MTc0NzY5MDIyMnwy&ixlib=rb-4.1.0&q=80&w=1080",
+    "description_short": "DA Hacks",
+    "end_date": null,
+    "event_submission_restriction": "open",
+    "google_measurement_id": null,
+    "instagram_handle": "deanzahacks",
+    "is_blocked": false,
+    "is_verified": false,
+    "launch_status": "launched",
+    "linkedin_handle": null,
+    "location": {
+     "city": "Cupertino",
+     "region": "California",
+     "country": "United States",
+     "place_id": "ChIJq3fTG1e0j4ARtHjho-E_TTk",
+     "timezone": "America/Los_Angeles",
+     "country_code": "US"
+    },
+    "luma_plan": "free",
+    "luma_plus_active": false,
+    "meta_pixel_id": null,
+    "name": "De Anza Hacks",
+    "personal_user_api_id": null,
+    "refund_policy": null,
+    "slug": "dahacks",
+    "social_image_url": "https://images.lumacdn.com/uploads/o8/14805140-6ad4-450c-8c6a-35547dab7796.png",
+    "start_date": null,
+    "stripe_account_id": null,
+    "tax_config": null,
+    "tiktok_handle": null,
+    "tint_color": "#43d1f2",
+    "track_meta_ads_from_luma": false,
+    "twitter_handle": null,
+    "verified_at": "2025-05-20T10:36:50.582Z",
+    "website": "https://deanzahacks.com",
+    "youtube_handle": null,
+    "is_personal": false,
+    "personal_user": null,
+    "timezone": "America/Los_Angeles"
+   },
+   "start_at": "2026-10-16T15:00:00.000Z",
+   "hosts": [
+    {
+     "api_id": "usr-FDE8TQSMMjaGPAX",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_25.png",
+     "bio_short": "",
+     "first_name": "Sean",
+     "last_name": "Lu",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/lifeadventurer",
+     "name": "Sean Lu",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": "lifeadventurer",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-VViw5EoC7Hsj3Cl",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_41.png",
+     "bio_short": "",
+     "first_name": "Reshmanraaj",
+     "last_name": "Singam",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Reshmanraaj Singam",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-v6Ji8UKtNumsQ0G",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_10.png",
+     "bio_short": null,
+     "first_name": "Melinda",
+     "last_name": "Nguyen",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Melinda Nguyen",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    }
+   ],
+   "guest_count": 150,
+   "ticket_count": 150,
+   "ticket_info": {
+    "price": null,
+    "is_free": true,
+    "max_price": null,
+    "is_sold_out": false,
+    "spots_remaining": null,
+    "is_near_capacity": false,
+    "require_approval": true
+   },
+   "registration_availability": "open",
+   "featured_guests": [
+    {
+     "api_id": "usr-vecmRdQtrrtkxVV",
+     "avatar_url": "https://images.lumacdn.com/uploads/e6/5eff669c-4dab-4d68-a821-6c76c7976016.png",
+     "bio_short": null,
+     "first_name": "Sammy",
+     "last_name": "Elzein",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Sammy Elzein",
+     "tiktok_handle": null,
+     "timezone": "Atlantic/Reykjavik",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-dZCCE1VO0NLXf13",
+     "avatar_url": "https://images.lumacdn.com/uploads/mg/213fccf1-f88b-4fe4-ad0a-f52b379b06ee.jpg",
+     "bio_short": "hello hello",
+     "first_name": "Yeowon",
+     "last_name": "\uc804",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Yeowon",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-pdvfiehutYFdDRz",
+     "avatar_url": "https://images.lumacdn.com/uploads/cm/e3e550fa-eabe-40db-a221-ac9e4fcb1f4f.jpg",
+     "bio_short": null,
+     "first_name": "Oak Soe",
+     "last_name": "Khant",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/oak-soe-khant-350252362",
+     "name": "Oak Soe Khant",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "0akSKhant",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-8nUDyGHswJ4UzMH",
+     "avatar_url": "https://images.lumacdn.com/uploads/wp/133314a7-7682-41d2-89cb-874d14001b9b.png",
+     "bio_short": "Doing a thing",
+     "first_name": "Blar",
+     "last_name": "Huang",
+     "instagram_handle": "blar__tw",
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Blar Huang",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": "blar",
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-vGPKDSgKD5pnjFo",
+     "avatar_url": "https://images.lumacdn.com/uploads/qt/1c617788-a058-4de0-906f-00c97e6f1328.jpg",
+     "bio_short": "dream do",
+     "first_name": "Henry",
+     "last_name": "Stallard",
+     "instagram_handle": "ordinhenry",
+     "is_verified": false,
+     "linkedin_handle": "/in/henrystallard",
+     "name": "Henry Stallard",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": "stllard",
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-5Pt5B1zUafkUPa3",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_31.png",
+     "bio_short": null,
+     "first_name": "Aizada",
+     "last_name": null,
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Aizada",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-mwThEqbTNpSB7Vn",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_42.png",
+     "bio_short": null,
+     "first_name": "\u77e5\u6a39",
+     "last_name": "\u82a6\u6fa4",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "\u82a6\u6fa4\u77e5\u6a39",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-7Y98HNV6eEyV1Be",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_25.png",
+     "bio_short": null,
+     "first_name": "Rion",
+     "last_name": "Negishi",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Rion Negishi",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-DC68ijHUQ6Dpi62",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_16.png",
+     "bio_short": null,
+     "first_name": "Cameron",
+     "last_name": "Nutter",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": null,
+     "name": "Cameron Nutter",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    },
+    {
+     "api_id": "usr-3lMOPL5HxXImCbu",
+     "avatar_url": "https://cdn.lu.ma/avatars-default/avatar_6.png",
+     "bio_short": "",
+     "first_name": "Nabiha",
+     "last_name": "Shahid",
+     "instagram_handle": null,
+     "is_verified": false,
+     "linkedin_handle": "/in/nabihashahid",
+     "name": "Nabiha Shahid",
+     "tiktok_handle": null,
+     "timezone": "America/Los_Angeles",
+     "twitter_handle": null,
+     "username": null,
+     "website": null,
+     "youtube_handle": null
+    }
+   ],
+   "manager_info": null,
+   "guest_info": null,
+   "host_info": null,
+   "waitlist_active": false,
+   "featured_city": null
+  }
+ ],
+ "has_more": false
+}

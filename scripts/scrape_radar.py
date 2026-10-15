@@ -1,22 +1,32 @@
-"""Radar scraper v2 — puxa hackathons reais de verdade pro HackaHub.
+"""Radar scraper v3 — puxa hackathons reais, do Brasil e do mundo, pro HackaHub.
 
-Fontes:
-  - Sympla      busca pública via Jina (BR; hackathon, game jam, datathon…)
-  - Doity       busca HTML + JSON-LD da página do evento (BR)
-  - Shawee      página de inscrições abertas (BR; só avisa quando abre)
-  - Devpost     API pública /api/hackathons (paginada: page/per_page)
+Fontes (docs/runbook.md, seção Radar, tem o status de cada uma):
+  Brasil
+  - Sympla      busca pública via Jina (hackathon, game jam, datathon…)
+  - Doity       busca HTML + JSON-LD da página do evento
+  - Shawee      página de inscrições abertas (só avisa quando abre)
+  - Meetup      Jina Reader, 3 cidades
+  - Curadoria   verificado à mão
+  Mundo
+  - Devpost     API pública /api/hackathons (abertos + em breve, todas as
+                páginas) + página de cada um pra ler "Who can participate"
+  - Luma        API pública do discover (busca por termo, SP/RJ e
+                calendários de comunidade)
+  - ETHGlobal   payload do Next na página /events
+  - MLH         JSON da página da temporada (www.mlh.com)
+  - Devfolio    API pública de busca
+  - lablab.ai   payload do Next na página /ai-hackathons
+  - Hack Club   API pública hackathons.hackclub.com
   - TAIKAI      GraphQL api.taikai.network
-  - ETHGlobal   Jina markdown, cards tipados (fallback: endpoints JSON)
-  - MLH         HTML via Scrapling (seasons 2026/2027)
-  - Meetup      Jina Reader (JS-rendered)
-  - Luma        Jina Reader (JS-rendered) — geogated, costuma dar 0
-  - Curadoria   BR verificado manualmente
 
-Pipeline: coletar → classificar (hackathon × resto, região) → deduplicar
-(dedupe_key = nome normalizado + data de início) → filtrar vs casa
-→ upsert (active=0 se expirado, first_seen/last_seen, region) → reconciliar
-dupes antigas → desativar recusados/reclassificar o que já estava no banco
-→ sweep de expirados.
+Pipeline: coletar → classificar (hackathon × resto) → alcance, região,
+elegibilidade e marca → deduplicar (nome normalizado + data de início) →
+filtrar vs casa → upsert → reconciliar dupes antigas → desativar
+recusados/reclassificar o que já estava no banco → sweep de expirados.
+
+Elegibilidade (brazilOk): 'sim' ou 'nao' só com evidência — a regra da
+fonte (Devpost "Who can participate") ou o evento acontecer no Brasil.
+Sem evidência fica None ("não informado"). Nunca chuta "sim".
 
 Uso:
   DATABASE_URL=postgres://… uv run --python .venv-scraper/bin/python scripts/scrape_radar.py
@@ -46,14 +56,26 @@ from dateutil import parser as dateparser
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 NOW = datetime.now(timezone.utc)
 
-DEVPOST_MAX_PAGES = 5
-DEVPOST_PER_PAGE = 24
+# Devpost: a API pública pagina em 40; abertos + em breve dão ~190 hoje.
+# Teto de páginas só pra não rodar sem fim se a API mudar.
+DEVPOST_MAX_PAGES = 10
+DEVPOST_PER_PAGE = 40
 DEVPOST_PAGE_SLEEP = 1.2
+# página de cada hackathon (elegibilidade): no máximo N por rodada, 1 req/s.
+# O resultado fica no banco (eligibilityCheckedAt) e só é relido depois de
+# DEVPOST_ELIG_TTL_DAYS — a 2ª rodada do dia quase não abre página.
+DEVPOST_ELIG_MAX_FETCH = 120
+DEVPOST_ELIG_SLEEP = 1.0
+DEVPOST_ELIG_TTL_DAYS = 3
+SLEEP = 1.0  # entre requisições da mesma fonte
 
-# todas as fontes passam pelo classificador (ver "classificação" abaixo);
-# ethglobal ainda filtra pelo tipo do card
-ZERO_IS_DEGRADED = {"ethglobal", "luma", "sympla", "doity"}  # 0 = log claro
-ZERO_IS_NORMAL = {"shawee"}  # só avisa quando abre inscrição
+# todas as fontes passam pelo classificador (ver "classificação" abaixo)
+ZERO_IS_DEGRADED = {"ethglobal", "luma", "sympla", "doity", "devpost", "mlh",
+                    "marcas"}
+ZERO_IS_NORMAL = {"shawee", "lablab", "devfolio", "hackclub"}
+
+# cache de elegibilidade lido do banco antes da coleta (main): id → campos
+ELIG_CACHE: dict[str, dict] = {}
 
 
 # ---------- helpers ----------
@@ -129,15 +151,16 @@ def taikai_prize(amount, currency_name: str | None) -> str | None:
     return f"{currency_name} {n}" if currency_name else n
 
 
+MERGE_FIELDS = (
+    "organizer", "endsAt", "format", "location",
+    "registrationUrl", "registrationDeadline", "prize",
+    "submissionDeadline", "brazilOk", "eligibilityNote", "eligibilityUrl",
+    "eligibilityCheckedAt", "scope", "country", "brand",
+)
+
+
 def metadata_score(row: dict) -> float:
-    s = sum(
-        1
-        for f in (
-            "organizer", "endsAt", "format", "location",
-            "registrationUrl", "registrationDeadline", "prize",
-        )
-        if row.get(f)
-    )
+    s = sum(1 for f in MERGE_FIELDS if row.get(f))
     s += len(row.get("tags") or [])
     if row.get("source") == "curadoria":
         s += 0.5  # curadoria é verificada à mão — desempata
@@ -151,10 +174,7 @@ def merge_rows(group: list[dict]) -> dict:
     for r in group:
         if r is win:
             continue
-        for f in (
-            "organizer", "endsAt", "format", "location",
-            "registrationUrl", "registrationDeadline", "prize",
-        ):
+        for f in MERGE_FIELDS:
             if not merged.get(f) and r.get(f):
                 merged[f] = r[f]
     tags: list[str] = []
@@ -191,15 +211,19 @@ def dedupe(rows: list[dict]) -> tuple[list[dict], int]:
 #      Game Jam", "Learn to Hack". "Data Summit — Hackathon oficial" passa.
 #   3. Fontes de busca genérica (Meetup, Sympla, Doity, Luma) exigem o termo:
 #      nome neutro tipo "30º BitDevs BH" ou "Front @ Uber" fica de fora.
-#   4. Fontes que só listam hackathon (Devpost, TAIKAI, ETHGlobal, MLH)
-#      aceitam nome neutro, mas tiram o lixo: projeto de disciplina ("Senior
-#      Design", "capstone"), prêmio irrisório (< US$ 200 somando tudo),
-#      organizador vazio ("nill") e Devpost com menos de 10 inscritos.
+#   4. Fontes que só listam hackathon (Devpost, TAIKAI, ETHGlobal, MLH,
+#      Devfolio, lablab, Hack Club) aceitam nome neutro, mas tiram o lixo:
+#      projeto de disciplina ("Senior Design", "capstone"), organizador
+#      vazio ("nill"), evento só pra membros de uma faculdade/clube
+#      (Devpost "SMU BIA members"), prêmio irrisório (< US$ 200) quando
+#      quase ninguém se inscreveu (< 100) e Devpost com menos de 10
+#      inscritos sem prêmio nem destaque. Prêmio pequeno com muita gente
+#      inscrita fica: é hackathon global de verdade.
 #   5. Curadoria é verificada à mão e não passa pelo filtro.
 
 HACK_RE = re.compile(
     r"(?i)hack|datathon|buildathon|ideathon|makeathon|designathon|"
-    r"game\s?jam|\bjam\b|codefest|"
+    r"(?:game|code|coding|hack|ai|dev|data|design|build|women)\s?jam\b|codefest|"
     r"maratona\s+(?:de\s+)?(?:programa|inova|hack|tecnolog|dados|ideias|"
     r"empreendedorismo|solu)|"
     r"desafio\s+(?:de\s+)?inova|space\s+apps"
@@ -227,7 +251,8 @@ PLACEHOLDER_ORG = {"", "nill", "nil", "null", "none", "n/a", "na", "-",
                    "test", "teste", "tbd"}
 
 STRICT_SOURCES = {"meetup", "sympla", "doity", "luma"}
-NATIVE_SOURCES = {"devpost", "taikai", "ethglobal", "mlh"}
+NATIVE_SOURCES = {"devpost", "taikai", "ethglobal", "mlh", "devfolio",
+                  "lablab", "hackclub", "marcas"}
 # Edições da casa, com página e inscrição no HackaHub: linhas antigas sem
 # source, o seed (lib/seed.ts → 'seed') e o painel (POST
 # /api/admin/hackathons → 'painel'). O scraper não mexe nelas em nada.
@@ -238,6 +263,7 @@ EDITION_WHERE = "(source IS NULL OR source IN ({}))".format(
 HOUSE_SOURCES = {"curadoria", "comunidade", "admin", *EDITION_SOURCES}
 
 MIN_PRIZE_USD = 200
+MIN_REGS_FOR_SMALL_PRIZE = 100
 DEVPOST_MIN_REGISTRATIONS = 10
 # câmbio aproximado só pra comparar ordem de grandeza (nunca exibido)
 USD_RATE = {"R$": 0.18, "US$": 1.0, "$": 1.0, "€": 1.1, "£": 1.3,
@@ -309,12 +335,16 @@ def classify(row: dict, description: str | None = None) -> str | None:
         org = (row.get("organizer") or "").strip().lower()
         if org in PLACEHOLDER_ORG:
             return "organizador-vazio"
+        if row.get("restrictedTo"):
+            return "publico-restrito"
         usd = prize_usd(row.get("prize"))
-        if usd is not None and usd < MIN_PRIZE_USD:
-            return "premio-irrisorio"
         regs = row.get("registrations")
+        if (usd is not None and usd < MIN_PRIZE_USD
+                and (regs is None or regs < MIN_REGS_FOR_SMALL_PRIZE)):
+            return "premio-irrisorio"
         if (src == "devpost" and regs is not None
-                and regs < DEVPOST_MIN_REGISTRATIONS):
+                and regs < DEVPOST_MIN_REGISTRATIONS
+                and not row.get("prize") and not row.get("featured")):
             return "sem-inscritos"
     return None
 
@@ -363,9 +393,17 @@ def region_of(row: dict) -> str:
     loc = row.get("location")
     srcs = set((row.get("source") or "").split("+"))
     br_src = bool(srcs & BR_SOURCES)
-    if is_br_location(loc):
+    country = country_pt(row.get("country"))
+    if country == "Brasil":
         return "br"
-    if row.get("format") != "online":
+    # país explícito de fora manda: "Cluj-Napoca, RO" é Romênia, não Rondônia
+    if not country and is_br_location(loc):
+        return "br"
+    online = row.get("format") == "online" or (
+        # híbrido sem cidade (lablab: online + sede lá fora) dá pra fazer
+        # de casa: conta como online
+        row.get("format") == "hibrido" and not loc and not br_src)
+    if not online:
         # presencial sem local vindo de fonte brasileira é Brasil
         return "br" if (br_src and not loc) else "exterior"
     pt = PT_RE.search(row.get("name") or "")
@@ -381,6 +419,246 @@ def is_expired(row: dict, now: datetime | None = None) -> bool:
         row.get("endsAt") or row.get("registrationDeadline")
         or row.get("startsAt") or "")
     return bool(dt) and _aware(dt) < (now or NOW)
+
+
+# ---------- elegibilidade: brasileiro pode participar? ----------
+#
+# 'sim' / 'nao' só com evidência; None = não informado. A nota guarda o
+# trecho da regra (no idioma da fonte) pra pessoa conferir.
+#
+# Devpost, bloco "Who can participate" da página do hackathon:
+#   "All countries/territories, excluding <lista>"   → nao se Brazil na lista
+#   "Specific countries/territories excluded" <lista> → idem (lista no
+#                                         tooltip ou no modal da página)
+#   "Only specific countries/territories included" <lista> → sim só se Brazil
+#   "US only" / "Canada only"                         → nao
+# A "standard exceptions" do Devpost inclui o Brasil (lei de sorteios), então
+# a maior parte dos hackathons globais de lá NÃO aceita brasileiro.
+
+BRAZIL_RE = re.compile(r"(?i)\b(brazil|brasil)\b")
+# linhas genéricas do bloco (idade, estudante, time); o resto é público
+# restrito ("SMU BIA members", "CETYS Students")
+DEVPOST_GENERIC_LI = re.compile(
+    r"(?i)^(above legal age|ages? \d|students only|college students only|"
+    r"high school students only|professionals/post grads only|team required|"
+    r"companies/professional organizations excluded|"
+    r"all countries|specific|only specific|[\w .]+ only$)"
+)
+COUNTRY_PT = {
+    "US": "EUA", "United States": "EUA", "USA": "EUA", "GB": "Reino Unido",
+    "United Kingdom": "Reino Unido", "UK": "Reino Unido", "IN": "Índia",
+    "India": "Índia", "CA": "Canadá", "Canada": "Canadá", "DE": "Alemanha",
+    "Germany": "Alemanha", "FR": "França", "France": "França",
+    "PT": "Portugal", "ES": "Espanha", "Spain": "Espanha", "MX": "México",
+    "Mexico": "México", "AR": "Argentina", "CL": "Chile", "CO": "Colômbia",
+    "Colombia": "Colômbia", "PE": "Peru", "UY": "Uruguai", "JP": "Japão",
+    "Japan": "Japão", "SG": "Singapura", "Singapore": "Singapura",
+    "AU": "Austrália", "Australia": "Austrália", "NL": "Holanda",
+    "IT": "Itália", "Italy": "Itália", "CH": "Suíça", "Switzerland": "Suíça",
+    "SE": "Suécia", "IE": "Irlanda", "KE": "Quênia", "NG": "Nigéria",
+    "AE": "Emirados Árabes", "VN": "Vietnã", "Vietnam": "Vietnã",
+    "TW": "Taiwan", "KR": "Coreia do Sul", "CN": "China", "HK": "Hong Kong",
+    "PK": "Paquistão", "BD": "Bangladesh", "TR": "Turquia", "PL": "Polônia",
+    "CZ": "Tchéquia", "BR": "Brasil", "Brazil": "Brasil",
+}
+LATAM = {"Brasil", "Argentina", "Chile", "Colômbia", "México", "Peru",
+         "Uruguai", "Paraguai", "Bolívia", "Equador", "Venezuela",
+         "Costa Rica", "Panamá", "Guatemala"}
+
+
+def country_pt(c: str | None) -> str | None:
+    if not c:
+        return None
+    c = c.strip()
+    return COUNTRY_PT.get(c, c)
+
+
+def _txt(fragment: str) -> str:
+    import html as htmllib
+    return " ".join(htmllib.unescape(re.sub(r"<[^>]+>", " ", fragment)).split())
+
+
+def devpost_eligibility(page: str) -> dict:
+    """Lê o bloco "Who can participate" da página do hackathon no Devpost.
+
+    Devolve {brazilOk, eligibilityNote, scope, country, restrictedTo,
+    submissionDeadline}; campos sem evidência ficam None."""
+    import html as htmllib
+    out: dict = {"brazilOk": None, "eligibilityNote": None, "scope": None,
+                 "country": None, "restrictedTo": None,
+                 "submissionDeadline": None}
+    dm = re.search(r'data-iso-date="([^"]+)"', page)
+    if dm:
+        out["submissionDeadline"] = dm.group(1)
+    m = re.search(r'<ul id="eligibility-list".*?</ul>', page, re.S)
+    if not m:
+        return out
+    items = re.findall(r"<li>(.*?)</li>", m.group(0), re.S)
+    country_li = None
+    for li in items:
+        t = _txt(li)
+        if re.search(r"(?i)countries/territories|\bonly$", t) and (
+                "countries" in t or re.fullmatch(r"(?i)[\w .]+ only", t)):
+            country_li = li
+        elif not DEVPOST_GENERIC_LI.search(t):
+            out["restrictedTo"] = t
+    if country_li is None:
+        return out
+    text = _txt(country_li)
+    tip = re.search(r'title="([^"]*)"', country_li)
+    if tip:
+        names = [htmllib.unescape(n).strip()
+                 for n in tip.group(1).split(",") if n.strip()]
+    else:
+        modal = re.search(
+            r'<ul id="eligibility-countries-modal-list".*?</ul>', page, re.S)
+        names = ([_txt(x) for x in re.findall(r"<li>(.*?)</li>",
+                                               modal.group(0), re.S)]
+                 if modal else [])
+    has_br = any(BRAZIL_RE.search(n) for n in names)
+    lst = ", ".join(names)
+    if re.match(r"(?i)only specific", text):
+        out["brazilOk"] = "sim" if has_br else "nao"
+        out["eligibilityNote"] = f"Only specific countries/territories included: {lst}"
+        pts = [country_pt(n) for n in names]
+        if pts and all(p in LATAM for p in pts) and len(pts) > 1:
+            out["scope"] = "latam"
+        else:
+            out["scope"] = "pais"
+            out["country"] = ", ".join(p for p in pts if p)
+    elif re.search(r"(?i)excluding|excluded", text):
+        if not names:
+            return out  # lista não veio: sem evidência
+        out["brazilOk"] = "nao" if has_br else "sim"
+        out["eligibilityNote"] = f"All countries/territories, excluding: {lst}"
+        out["scope"] = "global"
+    elif re.search(r"(?i)^all countries", text):
+        out["brazilOk"] = "sim"
+        out["eligibilityNote"] = "All countries/territories"
+        out["scope"] = "global"
+    else:
+        om = re.fullmatch(r"(?i)([\w .]+?) only", text)
+        if om:
+            c = country_pt(om.group(1))
+            out["brazilOk"] = "sim" if c == "Brasil" else "nao"
+            out["eligibilityNote"] = text
+            out["scope"] = "pais"
+            out["country"] = c
+    return out
+
+
+# Texto livre (descrição/regras de Luma, lablab, Devfolio): só frase explícita
+# vale. "global hackathon" sozinho não prova nada.
+OPEN_ALL_RE = re.compile(
+    r"(?i)(open worldwide|open to (?:participants|developers|builders|hackers|teams|everyone"
+    r"|anyone|all)[^.]{0,60}(?:worldwide|from (?:all|any) countr|around the"
+    r" world|globally|of all nationalities)|aberto a (?:pessoas de )?todos os"
+    r" pa[íi]ses|participants from (?:all|any) countr\w+ (?:are|can|may))")
+ONLY_RE = re.compile(
+    r"(?i)(?:open only to|only open to|exclusively (?:for|to)|restricted to)"
+    r" (?:legal )?(?:residents|citizens|students)(?: of| in)? (?:the )?"
+    r"([A-Z][A-Za-z ]{2,30})")
+EXCLUDE_BR_RE = re.compile(
+    r"(?i)(?:not open to|excluding|except|excluded)[^.]{0,200}\bbra[sz]il\b")
+
+
+def _sentence(t: str, m: re.Match) -> str:
+    """A frase inteira em volta do trecho que casou (até 300 caracteres)."""
+    a = max(t.rfind(". ", 0, m.start()) + 2, m.start() - 200, 0)
+    b = t.find(". ", m.end())
+    b = len(t) if b < 0 else b + 1
+    return t[a:min(b, a + 300)].strip()
+
+
+def text_eligibility(text: str | None) -> dict:
+    """Frase de regra num texto livre → {brazilOk, eligibilityNote}."""
+    out = {"brazilOk": None, "eligibilityNote": None}
+    t = " ".join((text or "").split())
+    if not t:
+        return out
+    m = EXCLUDE_BR_RE.search(t)
+    if m:
+        return {"brazilOk": "nao", "eligibilityNote": _sentence(t, m)}
+    m = ONLY_RE.search(t)
+    if m:
+        c = country_pt(m.group(1).strip())
+        return {"brazilOk": "sim" if c == "Brasil" else "nao",
+                "eligibilityNote": _sentence(t, m)}
+    m = OPEN_ALL_RE.search(t)
+    if m:
+        return {"brazilOk": "sim", "eligibilityNote": _sentence(t, m)}
+    return out
+
+
+# ---------- alcance, marca e prêmio ----------
+
+BRANDS = [
+    ("NASA", r"\bnasa\b|space apps"),
+    ("Meta", r"\bmeta\b|\bllama\b"),
+    ("NVIDIA", r"nvidia"),
+    ("Google", r"\bgoogle\b|\bgemini\b|\bgemma\b|\bgdg\b"),
+    ("AWS", r"\baws\b|amazon"),
+    ("Microsoft", r"microsoft|\bazure\b"),
+    ("OpenAI", r"openai|\bcodex\b|devday"),
+    ("Anthropic", r"anthropic|\bclaude\b"),
+    ("Solana", r"\bsolana\b|colosseum"),
+    ("Ethereum", r"ethglobal|ethereum|\beth[a-z]*\d{0,4}\b"),
+    ("AMD", r"\bamd\b"),
+    ("IBM", r"\bibm\b"),
+    ("Stripe", r"\bstripe\b"),
+    ("PayPal", r"paypal"),
+    ("GitLab", r"gitlab"),
+    ("Itaú", r"ita[úu]"),
+    ("MLH", r"^mlh$"),
+]
+
+
+def brand_of(row: dict) -> str | None:
+    hay = f"{row.get('name') or ''} | {row.get('organizer') or ''}"
+    for brand, rx in BRANDS:
+        if re.search(rf"(?i){rx}", hay):
+            return brand
+    return None
+
+
+def fill_reach(row: dict) -> dict:
+    """Completa alcance, país, brasileiro-pode, prêmio em US$ e marca.
+
+    Regra do brasileiro-pode: a elegibilidade da fonte manda; sem ela, só
+    evento no Brasil (presencial aqui ou online de fonte brasileira) vira
+    'sim'. O resto fica None — não informado."""
+    r = row
+    for k in ("brazilOk", "eligibilityNote", "scope", "country"):
+        r.setdefault(k, None)
+    region = r.get("region") or region_of(r)
+    r["region"] = region
+    if region == "br":
+        r.setdefault("country", "Brasil")
+        r["country"] = r.get("country") or "Brasil"
+        r["scope"] = r.get("scope") or ("cidade" if r.get("location") else "brasil")
+        if not r.get("brazilOk"):
+            r["brazilOk"] = "sim"
+            r["eligibilityNote"] = r.get("eligibilityNote") or "Acontece no Brasil."
+    elif region == "online-br":
+        r["scope"] = r.get("scope") or "brasil"
+        # fonte brasileira ou prêmio em real é evidência; português sozinho
+        # não (Hack4Guimarães, no TAIKAI, é de Portugal)
+        srcs = set((r.get("source") or "").split("+"))
+        if not r.get("brazilOk") and (srcs & BR_SOURCES or (
+                r.get("prize") or "").startswith("R$")):
+            r["brazilOk"] = "sim"
+            r["eligibilityNote"] = (r.get("eligibilityNote")
+                                    or "Evento online brasileiro.")
+    elif region == "online-mundo":
+        r["scope"] = r.get("scope") or "global"
+    else:  # exterior
+        r["scope"] = r.get("scope") or "cidade"
+    if r.get("country"):
+        r["country"] = country_pt(r["country"])
+    usd = prize_usd(r.get("prize"))
+    r["prizeUsd"] = int(round(usd)) if usd else None
+    r["brand"] = r.get("brand") or brand_of(r)
+    return r
 
 
 # ---------- schema / persistência ----------
@@ -432,11 +710,17 @@ def ensure_schema(conn) -> None:
 UPSERT_SQL = """INSERT INTO hackathons
   (id, name, organizer, startsAt, endsAt, format, location,
    registrationUrl, registrationDeadline, tags, active, source, prize,
-   region, excludedReason, first_seen, last_seen)
+   region, excludedReason, first_seen, last_seen, scope, country, brazilOk,
+   eligibilityNote, eligibilityUrl, eligibilityCheckedAt, prizeUsd,
+   submissionDeadline, brand)
 VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location,
    @registrationUrl, @registrationDeadline, @tags, @active, @source,
-   @prize, @region, NULL, @now, @now)
+   @prize, @region, NULL, @now, @now, @scope, @country, @brazilOk,
+   @eligibilityNote, @eligibilityUrl, @eligibilityCheckedAt, @prizeUsd,
+   @submissionDeadline, @brand)
 ON CONFLICT(id) DO UPDATE SET
+  -- regra lida da página (eligibilityCheckedAt) vale até a próxima leitura;
+  -- o resto (evento no Brasil, sem regra) é recalculado a cada rodada
   name=excluded.name, organizer=excluded.organizer,
   startsAt=excluded.startsAt, endsAt=excluded.endsAt,
   format=excluded.format, location=excluded.location,
@@ -444,7 +728,25 @@ ON CONFLICT(id) DO UPDATE SET
   registrationDeadline=excluded.registrationDeadline,
   tags=excluded.tags, active=excluded.active, source=excluded.source,
   prize=excluded.prize, region=excluded.region, excludedReason=NULL,
-  last_seen=excluded.last_seen"""
+  last_seen=excluded.last_seen, scope=excluded.scope,
+  country=excluded.country,
+  brazilOk=CASE WHEN excluded.eligibilityCheckedAt IS NULL
+                 AND hackathons.eligibilityCheckedAt IS NOT NULL
+                THEN hackathons.brazilOk ELSE excluded.brazilOk END,
+  eligibilityNote=CASE WHEN excluded.eligibilityCheckedAt IS NULL
+                 AND hackathons.eligibilityCheckedAt IS NOT NULL
+                THEN hackathons.eligibilityNote ELSE excluded.eligibilityNote END,
+  eligibilityUrl=COALESCE(excluded.eligibilityUrl, hackathons.eligibilityUrl),
+  eligibilityCheckedAt=COALESCE(excluded.eligibilityCheckedAt,
+                                hackathons.eligibilityCheckedAt),
+  prizeUsd=excluded.prizeUsd,
+  submissionDeadline=COALESCE(excluded.submissionDeadline,
+                              hackathons.submissionDeadline),
+  brand=excluded.brand"""
+
+ROW_DEFAULTS = ("prize", "scope", "country", "brazilOk", "eligibilityNote",
+                "eligibilityUrl", "eligibilityCheckedAt", "prizeUsd",
+                "submissionDeadline", "brand")
 
 
 def upsert(conn, rows: list[dict]) -> int:
@@ -453,15 +755,34 @@ def upsert(conn, rows: list[dict]) -> int:
     for r in rows:
         if not r.get("startsAt"):
             continue
-        r = dict(r)
+        r = fill_reach(dict(r))
         r["tags"] = json.dumps(r.get("tags") or [])
         r["active"] = 0 if is_expired(r) else 1
-        r.setdefault("prize", None)  # fonte sem prêmio grava NULL
-        r["region"] = r.get("region") or region_of(r)
+        for k in ROW_DEFAULTS:
+            r.setdefault(k, None)  # fonte sem o dado grava NULL
         r["now"] = NOW.isoformat()
         conn.execute(UPSERT_SQL, r)
         n += 1
     return n
+
+
+def load_elig_cache(conn) -> dict[str, dict]:
+    """Elegibilidade lida há menos de DEVPOST_ELIG_TTL_DAYS: não relê."""
+    from datetime import timedelta
+    since = (NOW - timedelta(days=DEVPOST_ELIG_TTL_DAYS)).isoformat()
+    cache = {}
+    for (rid, ok, note, url, checked, scope, country, sub) in conn.execute(
+            "SELECT id, brazilOk, eligibilityNote, eligibilityUrl,"
+            " eligibilityCheckedAt, scope, country, submissionDeadline"
+            " FROM hackathons WHERE eligibilityCheckedAt IS NOT NULL"
+            " AND to_ts(eligibilityCheckedAt) >= to_ts(?)", (since,)):
+        if sub and not re.search(r"T.*[+-]\d{2}:?\d{2}$|Z$", sub):
+            continue  # prazo sem fuso (linha antiga): relê a página
+        cache[rid] = {"brazilOk": ok, "eligibilityNote": note,
+                      "eligibilityUrl": url, "eligibilityCheckedAt": checked,
+                      "scope": scope, "country": country,
+                      "submissionDeadline": sub}
+    return cache
 
 
 # linhas que o scraper nunca mexe por dedupe: edições da casa
@@ -520,28 +841,39 @@ def exclude_rejected(conn, rejected: list[tuple[dict, str]]) -> int:
 def reclassify_existing(conn) -> tuple[int, int]:
     """Passa o critério atual nas linhas ativas que esta rodada não viu
     (Meetup muda a busca todo dia; o que entrou ontem fica). Só olha o que
-    o banco guarda: nome, organizador, prêmio. Também preenche região vazia.
-    Retorna (desativadas, regiões preenchidas)."""
+    o banco guarda: nome, organizador, prêmio. Também preenche região,
+    alcance, prêmio em US$ e marca de quem ainda não tem (curadoria e
+    indicação inclusive). Retorna (desativadas, linhas completadas)."""
     off = filled = 0
     rows = conn.execute(
-        "SELECT id, name, organizer, format, location, prize, source, region"
+        "SELECT id, name, organizer, format, location, prize, source, region,"
+        " scope, brazilOk, eligibilityNote, last_seen"
         f" FROM hackathons WHERE active=1 AND NOT {EDITION_WHERE}"
     ).fetchall()
-    for rid, name, org, fmt, loc, prize, src, region in rows:
+    for (rid, name, org, fmt, loc, prize, src, region, scope, ok, note,
+         seen) in rows:
         row = {"id": rid, "name": name, "organizer": org, "format": fmt,
-               "location": loc, "prize": prize, "source": src}
+               "location": loc, "prize": prize, "source": src,
+               "region": region, "brazilOk": ok, "eligibilityNote": note}
         first = (src or "").split("+")[0]
+        fresh = seen and str(seen) >= NOW.isoformat()[:19]
         reason = (classify(row) if first in STRICT_SOURCES | NATIVE_SOURCES
-                  else None)
+                  and not fresh else None)
         if reason:
             conn.execute(
                 "UPDATE hackathons SET active=0, excludedReason=? WHERE id=?",
                 (reason, rid),
             )
             off += 1
-        elif not region:
-            conn.execute("UPDATE hackathons SET region=? WHERE id=?",
-                         (region_of(row), rid))
+        elif not region or not scope:
+            r = fill_reach(row)
+            conn.execute(
+                "UPDATE hackathons SET region=?, scope=?, country=?,"
+                " brazilOk=?, eligibilityNote=?, prizeUsd=?, brand=?"
+                " WHERE id=?",
+                (r["region"], r["scope"], r.get("country"), r.get("brazilOk"),
+                 r.get("eligibilityNote"), r.get("prizeUsd"), r.get("brand"),
+                 rid))
             filled += 1
     return off, filled
 
@@ -602,260 +934,588 @@ def devpost_tags(themes) -> list[str]:
     return out[:3]
 
 
-def src_devpost() -> list[dict]:
-    """API pública paginada — meta.total_count governa (has_next não existe)."""
+UA = ("Mozilla/5.0 (compatible; HackaHubRadar/1.0; "
+      "+https://hackahub.jazzautomations.com.br)")
+
+
+def http_get(url: str, **kw):
+    """GET educado: UA identificado, timeout. Quem chama dorme entre chamadas."""
+    headers = {"User-Agent": UA, **kw.pop("headers", {})}
+    return requests.get(url, headers=headers, timeout=kw.pop("timeout", 25),
+                        **kw)
+
+
+def parse_devpost_api(d: dict) -> list[dict]:
+    """Uma página da API pública do Devpost → linhas do radar (sem a
+    elegibilidade, que vem da página de cada hackathon)."""
     out = []
-    for page in range(1, DEVPOST_MAX_PAGES + 1):
-        d = requests.get(
-            "https://devpost.com/api/hackathons",
-            params={"status": "open", "page": page,
-                    "per_page": DEVPOST_PER_PAGE},
-            headers={"Accept": "application/json"},
-            timeout=20,
-        ).json()
-        hs = d.get("hackathons", [])
-        if not hs:
-            break
-        for h in hs:
-            if h.get("open_state") != "open" or h.get("invite_only"):
-                continue
-            m = re.match(
-                r"(.+?)\s*-\s*(.+),\s*(\d{4})",
-                h.get("submission_period_dates") or "",
-            )
-            start = end = None
-            if m:
-                start = parse_date(f"{m.group(1)}, {m.group(3)}")
-                d2 = m.group(2).strip()
-                if re.fullmatch(r"\d{1,2}", d2):  # "Nov 3 - 5, 2026"
-                    mon = re.match(r"[A-Za-z]+", m.group(1))
-                    if mon:
-                        d2 = f"{mon.group(0)} {d2}"
-                end = parse_date(f"{d2}, {m.group(3)}")
-            loc = (h.get("displayed_location") or {}).get("location") or "Online"
-            fmt = "online" if loc == "Online" else "presencial"
-            prize = prize_display(h.get("prize_amount"))
-            tags = devpost_tags(t.get("name") for t in h.get("themes", []))
-            out.append({
-                "id": f"devpost-{h['id']}",
-                "name": h["title"],
-                "organizer": h.get("organization_name") or "Devpost",
-                "startsAt": iso(start),
-                "endsAt": iso(end),
-                "format": fmt,
-                "location": None if loc == "Online" else loc,
-                "registrationUrl": h["url"],
-                "registrationDeadline": iso(end),
-                "tags": tags,
-                "prize": prize,
-                "registrations": h.get("registrations_count"),
-                "source": "devpost",
-            })
-        total = (d.get("meta") or {}).get("total_count") or 0
-        if page * DEVPOST_PER_PAGE >= total:
-            break
-        time.sleep(DEVPOST_PAGE_SLEEP)  # educado com a API
+    for h in d.get("hackathons", []):
+        if h.get("invite_only") or h.get("open_state") == "ended":
+            continue
+        m = re.match(
+            r"(.+?)\s*-\s*(.+),\s*(\d{4})",
+            h.get("submission_period_dates") or "",
+        )
+        start = end = None
+        if m:
+            start = parse_date(f"{m.group(1)}, {m.group(3)}")
+            d2 = m.group(2).strip()
+            if re.fullmatch(r"\d{1,2}", d2):  # "Nov 3 - 5, 2026"
+                mon = re.match(r"[A-Za-z]+", m.group(1))
+                if mon:
+                    d2 = f"{mon.group(0)} {d2}"
+            end = parse_date(f"{d2}, {m.group(3)}")
+            # "Dec 1, 2026 - Jan 5, 2027": o 1º pedaço já traz o ano
+            if start and end and start > end:
+                start = start.replace(year=end.year - 1)
+            if end:  # a API só manda o dia: vale até o fim dele
+                end = end.replace(hour=23, minute=59)
+        dl = h.get("displayed_location") or {}
+        loc = dl.get("location") or "Online"
+        online = loc.lower().startswith("online") or dl.get("icon") == "globe"
+        out.append({
+            "id": f"devpost-{h['id']}",
+            "name": h["title"],
+            "organizer": h.get("organization_name") or "Devpost",
+            "startsAt": iso(start),
+            "endsAt": iso(end),
+            "format": "online" if online else "presencial",
+            "location": None if online else loc,
+            "registrationUrl": h["url"],
+            "registrationDeadline": iso(end),
+            "submissionDeadline": iso(end),
+            "tags": devpost_tags(t.get("name") for t in h.get("themes", [])),
+            "prize": prize_display(h.get("prize_amount")),
+            "registrations": h.get("registrations_count"),
+            "featured": bool(h.get("featured")),
+            "eligibilityUrl": h["url"].rstrip("/") + "/rules",
+            "source": "devpost",
+        })
     return out
 
 
-def src_taikai() -> list[dict]:
-    q = """query { challenges(where: { publishInfo: { state: { equals: ACTIVE } } },
-      perPage: 30) { name slug prize prizeCurrency { name }
-      organization { name slug }
-      participantsCount currentStep { name startDate } } }"""
-    d = requests.post(
-        "https://api.taikai.network/api/graphql",
-        json={"query": q}, timeout=20,
-    ).json()
+def devpost_enrich(rows: list[dict], fetch=None,
+                   max_fetch: int = DEVPOST_ELIG_MAX_FETCH) -> int:
+    """Lê "Who can participate" de cada hackathon (página pública, robots
+    libera). Cache do banco evita reler antes de DEVPOST_ELIG_TTL_DAYS.
+    Maior prêmio primeiro, pra rodada com teto pegar o que importa."""
+    fetch = fetch or (lambda u: http_get(u))
+    n = 0
+    order = sorted(rows, key=lambda r: -(prize_usd(r.get("prize")) or 0))
+    for r in order:
+        cached = ELIG_CACHE.get(r["id"])
+        if cached:
+            for k, v in cached.items():
+                if v is not None and (not r.get(k) or k == "submissionDeadline"):
+                    r[k] = v
+            if cached.get("submissionDeadline"):
+                r["registrationDeadline"] = cached["submissionDeadline"]
+            continue
+        if n >= max_fetch or classify(r):
+            continue  # teto da rodada, ou já cai no filtro de lixo
+        try:
+            resp = fetch(r["registrationUrl"])
+        except Exception:
+            continue
+        n += 1
+        if getattr(resp, "ok", False):
+            el = devpost_eligibility(resp.text)
+            for k, v in el.items():
+                if v is not None:
+                    r[k] = v
+            # no Devpost a inscrição vai até o prazo de entrega, com hora
+            if el.get("submissionDeadline"):
+                r["registrationDeadline"] = el["submissionDeadline"]
+            r["eligibilityCheckedAt"] = NOW.isoformat()
+        time.sleep(DEVPOST_ELIG_SLEEP)
+    return n
+
+
+def src_devpost() -> list[dict]:
+    """API pública: abertos e em breve, todas as páginas (total_count manda).
+    Em breve = inscrição aberta antes da janela de entrega."""
+    out, seen = [], set()
+    for status in ("open", "upcoming"):
+        for page in range(1, DEVPOST_MAX_PAGES + 1):
+            d = http_get("https://devpost.com/api/hackathons",
+                         params={"status[]": status, "page": page,
+                                 "per_page": DEVPOST_PER_PAGE}).json()
+            for r in parse_devpost_api(d):
+                if r["id"] not in seen:
+                    seen.add(r["id"])
+                    out.append(r)
+            total = (d.get("meta") or {}).get("total_count") or 0
+            per = (d.get("meta") or {}).get("per_page") or DEVPOST_PER_PAGE
+            time.sleep(DEVPOST_PAGE_SLEEP)
+            if not d.get("hackathons") or page * per >= total:
+                break
+    fetched = devpost_enrich(out)
+    print(f"      devpost    {len(out)} na API, {fetched} páginas de regra lidas")
+    return out
+
+
+TAIKAI_REG_RE = re.compile(
+    r"(?i)registration (?:deadline|closes)|last call|inscri\w+ (?:encerr|fech)")
+TAIKAI_SUB_RE = re.compile(r"(?i)submission deadline|submiss\w+ (?:final|de projeto)")
+
+
+def parse_taikai(d: dict) -> list[dict]:
+    """Desafios ativos do TAIKAI. Datas vêm das etapas (steps): início = a
+    primeira, fim = a última; prazo de inscrição/entrega pelo nome da etapa.
+    Desafio fechado (isClosed) fica de fora."""
     out = []
     for c in d["data"]["challenges"]:
-        step = c.get("currentStep") or {}
+        if c.get("isClosed"):
+            continue
+        steps = [s for s in c.get("steps") or [] if s.get("startDate")]
+        dates = sorted(s["startDate"] for s in steps)
+        if not dates:
+            continue
+        reg = next((s["startDate"] for s in steps
+                    if TAIKAI_REG_RE.search(s.get("name") or "")), None)
+        sub = next((s["startDate"] for s in steps
+                    if TAIKAI_SUB_RE.search(s.get("name") or "")), None)
         org = c.get("organization") or {}
-        prize = taikai_prize(c.get("prize"),
-                             (c.get("prizeCurrency") or {}).get("name"))
-        # o prêmio tem campo próprio; virar tag "premio-$1,000" só polui o filtro
-        tags: list[str] = []
         out.append({
             "id": f"taikai-{c['slug']}",
             "name": c["name"],
             "organizer": org.get("name") or "TAIKAI",
-            "startsAt": step.get("startDate") or iso(NOW),
-            "endsAt": None,
+            "startsAt": dates[0],
+            "endsAt": dates[-1],
             "format": "online",
             "location": None,
             "registrationUrl": f"https://taikai.network/{org.get('slug','')}/hackathons/{c['slug']}",
-            "registrationDeadline": None,
-            "tags": tags,
-            "prize": prize,
+            "registrationDeadline": reg,
+            "submissionDeadline": sub,
+            "tags": [],
+            "prize": taikai_prize(c.get("prize"),
+                                  (c.get("prizeCurrency") or {}).get("name")),
             "source": "taikai",
         })
     return out
 
 
-ETHG_CARD = re.compile(
-    r"###\s*(?P<body>.+?)\s*(?P<etype>Hackathon|Meetup|Conference|"
-    r"Co-?working|Summit|Workshop)\s*\]\((?P<url>https?://[^)\s]+)\)"
-)
-ETHG_DATE = re.compile(
-    r"(?P<mon>[A-Z][a-z]{2})\s+(?P<d1>\d{1,2})(?:st|nd|rd|th)?"
-    r"(?:\s*[–—-]\s*(?:(?P<mon2>[A-Z][a-z]{2})\s+)?(?P<d2>\d{1,2})"
-    r"(?:st|nd|rd|th)?)?\s*,\s*(?P<year>\d{4})"
-)
+def src_taikai() -> list[dict]:
+    q = """query { challenges(where: { publishInfo: { state: { equals: ACTIVE } } },
+      perPage: 50) { name slug isClosed prize prizeCurrency { name }
+      organization { name slug } steps { name startDate } } }"""
+    d = requests.post(
+        "https://api.taikai.network/api/graphql",
+        json={"query": q}, headers={"User-Agent": UA}, timeout=20,
+    ).json()
+    return parse_taikai(d)
 
 
-def parse_ethglobal_md(md: str) -> list[dict]:
-    """Cards Jina: `[![Image…](…) ### NOME RANGE1 RANGE2 TIPO](url)`.
-    TIPO já classifica (só 'Hackathon' entra); data = 1º range do body.
-    A regex âncora em `](url)` — não cruza a fronteira do card como a v1."""
+def next_flight(html_text: str) -> str:
+    """Junta o payload RSC do Next (self.__next_f.push([1,"…"]))."""
+    return "".join(
+        json.loads('"' + m.group(1) + '"')
+        for m in re.finditer(
+            r'self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)', html_text))
+
+
+def flight_array(flight: str, key: str) -> list:
+    i = flight.find(f'"{key}":[')
+    if i < 0:
+        return []
+    arr, _ = json.JSONDecoder().raw_decode(flight[i + len(key) + 3:])
+    return arr
+
+
+def parse_ethglobal(html_text: str, now: datetime | None = None) -> list[dict]:
+    """ETHGlobal /events: a lista vem no payload do Next ("events":[…]) com
+    tipo, formato (physical/virtual), datas, prazo de inscrição e cidade."""
+    now = now or NOW
     out = []
-    seen = set()
-    for m in ETHG_CARD.finditer(md):
-        body, etype, url = m.group("body"), m.group("etype"), m.group("url")
-        if etype != "Hackathon":
+    for e in flight_array(next_flight(html_text), "events"):
+        if e.get("type") != "hackathon" or e.get("status") == "cancelled":
             continue
-        dm = ETHG_DATE.search(body)
-        name = (body[: dm.start()] if dm else body).strip(" –-,")
-        if not dm or not name:
+        end = parse_date(e.get("endTime") or e.get("startTime") or "")
+        if not end or _aware(end) < now:
             continue
-        mon2 = dm.group("mon2") or dm.group("mon")
-        year = dm.group("year")
-        start = parse_date(f"{dm.group('mon')} {dm.group('d1')} {year}")
-        end = (parse_date(f"{mon2} {dm.group('d2')} {year}")
-               if dm.group("d2") else start)
-        if not start or (end and _aware(end) < NOW):
-            continue  # passado não entra no radar
-        slug = slugify(re.sub(r"(?i)\bETHGlobal\b|\d{4}", "", name).strip()
-                       or name)
-        if slug in seen:
-            continue
-        seen.add(slug)
+        city = e.get("city") or {}
+        country = (city.get("country") or {}).get("name")
+        virtual = e.get("medium") == "virtual"
         out.append({
-            "id": f"ethglobal-{slug}",
-            "name": name,
+            "id": f"ethglobal-{e['slug']}",
+            "name": e["name"],
             "organizer": "ETHGlobal",
-            "startsAt": iso(start),
-            "endsAt": iso(end),
-            "format": "online" if "online" in name.lower() else "presencial",
-            "location": None,
-            "registrationUrl": url,
-            "registrationDeadline": None,
+            "startsAt": e.get("startTime"),
+            "endsAt": e.get("endTime"),
+            "format": "online" if virtual else "presencial",
+            "location": None if virtual else ", ".join(
+                p for p in (city.get("name"), country_pt(country)) if p),
+            "country": None if virtual else country,
+            "registrationUrl": f"https://ethglobal.com/events/{e['slug']}",
+            "registrationDeadline": e.get("signupDeadline"),
             "tags": ["web3", "ethereum"],
             "source": "ethglobal",
         })
     return out
 
 
-def _ethglobal_api_fallback() -> list[dict]:
-    """Endpoints conhecidos/tentáveis — hoje 404/403; mantido pra quando
-    houver. Retorna [] sem inventar dado."""
-    for u in (
-        "https://ethglobal.com/api/events",
-        "https://ethglobal.com/api/v2/events",
-        "https://api.ethglobal.com/events",
-    ):
-        try:
-            r = requests.get(u, timeout=10,
-                             headers={"Accept": "application/json"})
-            if not r.ok:
-                continue
-            d = r.json()
-            items = (d if isinstance(d, list)
-                     else d.get("events") or d.get("data") or [])
-            out = []
-            for e in items:
-                name = e.get("name") or e.get("title")
-                start = parse_date(str(e.get("startDate")
-                                       or e.get("starts_at") or ""))
-                if not name or not start:
-                    continue
-                slug = slugify(e.get("slug") or name)
-                out.append({
-                    "id": f"ethglobal-{slug}",
-                    "name": name,
-                    "organizer": "ETHGlobal",
-                    "startsAt": iso(_aware(start)),
-                    "endsAt": None,
-                    "format": "online" if "online" in name.lower()
-                              else "presencial",
-                    "location": None,
-                    "registrationUrl": e.get("url")
-                        or f"https://ethglobal.com/events/{e.get('slug','')}",
-                    "registrationDeadline": None,
-                    "tags": ["web3", "ethereum"],
-                    "source": "ethglobal",
-                })
-            if out:
-                return out
-        except Exception:
-            continue
-    return []
-
-
 def src_ethglobal() -> list[dict]:
-    # página é client-rendered — Jina entrega o texto resolvido
-    md = jina("https://ethglobal.com/events")
-    out = parse_ethglobal_md(md) if md else []
-    if not out:
-        out = _ethglobal_api_fallback()
+    r = http_get("https://ethglobal.com/events")
+    return parse_ethglobal(r.text) if r.ok else []
+
+
+def parse_mlh(html_text: str) -> list[dict]:
+    """Temporada da MLH (www.mlh.com): JSON da página (data-page) com
+    upcomingEvents — nome, datas, formato e endereço."""
+    m = re.search(r'<script data-page="app" type="application/json">(.*?)'
+                  r'</script>', html_text, re.S)
+    if not m:
+        return []
+    out = []
+    for e in json.loads(m.group(1)).get("props", {}).get("upcomingEvents", []):
+        ft = e.get("formatType") or ""
+        fmt = ("online" if ft in ("digital", "online", "virtual")
+               else "hibrido" if "hybrid" in ft else "presencial")
+        addr = e.get("venueAddress") or {}
+        country = addr.get("country")
+        loc = ", ".join(p for p in (addr.get("city"), addr.get("state"),
+                                    country_pt(country)) if p) or e.get("location")
+        out.append({
+            "id": f"mlh-{e['slug']}",
+            "name": e["name"],
+            "organizer": "MLH",
+            "startsAt": e.get("startsAt"),
+            "endsAt": e.get("endsAt"),
+            "format": fmt,
+            "location": None if fmt == "online" else loc,
+            "country": None if fmt == "online" else country,
+            "registrationUrl": e.get("websiteUrl")
+            or f"https://www.mlh.com/events/{e['slug']}",
+            "registrationDeadline": None,
+            "tags": ["estudante"],
+            "source": "mlh",
+        })
     return out
 
 
 def src_mlh() -> list[dict]:
-    from scrapling.fetchers import Fetcher
-
-    out = []
+    out, seen = [], set()
     for season in ("2027", "2026"):
-        try:
-            page = Fetcher.get(
-                f"https://mlh.io/seasons/{season}/events",
-                impersonate="chrome", timeout=30,
-            )
-        except Exception:
-            continue
-        html = page.body.decode("utf-8", "replace")
-        up = html.split("Upcoming Events", 1)
-        if len(up) < 2:
-            continue
-        section = up[1].split("Past Events", 1)[0]
-        for m in re.finditer(
-            r'<a href="(https://events\.mlh\.io/events/(\d+)-[a-z0-9-]+)[^"]*"'
-            r'[^>]*itemType="https://schema\.org/Event">(.*?)</a>',
-            section, re.S,
-        ):
-            url, eid, block = m.groups()
-
-            def prop(name):
-                mm = re.search(rf'itemProp="{name}"[^>]*content="([^"]*)"',
-                               block)
-                return mm.group(1) if mm else ""
-
-            tm = re.search(r"<h4[^>]*>([^<]+)</h4>", block)
-            title = tm.group(1).strip() if tm else ""
-            if not title:
-                continue
-            start = prop("startDate")
-            end = prop("endDate")
-            parts = [
-                prop("addressLocality"),
-                prop("addressRegion"),
-                prop("addressCountry"),
-            ]
-            loc = ", ".join(p for p in parts if p)
-            online = "Online" in prop("eventAttendanceMode")
-            out.append({
-                "id": f"mlh-{eid}",
-                "name": title,
-                "organizer": "MLH",
-                "startsAt": start or iso(NOW),
-                "endsAt": end or None,
-                "format": "online" if online else "presencial",
-                "location": None if online else loc,
-                "registrationUrl": url,
-                "registrationDeadline": None,
-                "tags": ["mlh", "estudante"],
-                "source": "mlh",
-            })
+        r = http_get(f"https://www.mlh.com/seasons/{season}/events")
+        if r.ok:
+            for row in parse_mlh(r.text):
+                if row["id"] not in seen:
+                    seen.add(row["id"])
+                    out.append(row)
+        time.sleep(SLEEP)
     return out
+
+
+# Luma: a API pública do discover (a mesma do luma.com/discover) responde
+# fora dos EUA. Busca por termo no mundo, por termo em SP e RJ (os dois
+# "places" brasileiros do Luma) e os calendários públicos de comunidades que
+# fazem hackathon no Brasil. Só entra nome de hackathon (STRICT_SOURCES).
+LUMA_API = "https://api.lu.ma"
+LUMA_TERMS = ("hackathon", "hackaton", "buildathon", "game jam", "datathon")
+LUMA_PLACES = {
+    "discplace-AQZnCu9wl4LmOIp": "São Paulo",
+    "discplace-EWglyhh4fsHKo2F": "Rio de Janeiro",
+}
+LUMA_CALENDARS = {
+    "cal-2WIWx400iGONnaP": "Shiva Hacks",
+    "cal-s9CExmUfS7kMu50": "Vibe Space Academy",
+    "cal-6VjUUsGp1WXCdgW": "Canastra Ventures",
+    "cal-TOpA5LAFfuDeFpu": "Claude Community Events",
+    "cal-E74MDlDKBaeAwXK": "The AI Collective",
+    "cal-cGhQOoteH3hOCwU": "Mulheres de Produto",
+    "cal-RZbHpa33PT0peAT": "Stranger Builds",
+}
+LUMA_MAX_PAGES = 3
+
+
+def parse_luma_entries(entries: list, calendar_name: str | None = None
+                       ) -> list[dict]:
+    out = []
+    for x in entries:
+        ev = x.get("event") or {}
+        if not ev.get("url") or not ev.get("start_at"):
+            continue
+        geo = ev.get("geo_address_info") or {}
+        offline = ev.get("location_type") == "offline"
+        cc = geo.get("country_code")
+        loc = None
+        if offline:
+            if cc == "BR":
+                loc = (geo.get("localized", {}).get("pt-BR", {}).get("city_state")
+                       or geo.get("city_state"))
+            else:
+                loc = ", ".join(p for p in (
+                    geo.get("city"),
+                    country_pt(geo.get("country")) or country_pt(cc))
+                                if p) or None
+        cal = x.get("calendar") or {}
+        org = calendar_name or cal.get("name")
+        if not org or org == "Personal":
+            hosts = x.get("hosts") or []
+            org = hosts[0].get("name") if hosts else None
+        out.append({
+            "id": f"luma-{ev['url'].lower()}",
+            "name": " ".join(ev["name"].split()),
+            "organizer": org or "via Luma",
+            "startsAt": ev["start_at"],
+            "endsAt": ev.get("end_at"),
+            "format": "presencial" if offline else "online",
+            "location": loc,
+            "country": cc if offline else None,
+            "registrationUrl": f"https://luma.com/{ev['url']}",
+            "registrationDeadline": None,
+            "tags": [],
+            "source": "luma",
+        })
+    return out
+
+
+def _luma_pages(path: str, params: dict) -> list:
+    entries, cursor = [], None
+    for _ in range(LUMA_MAX_PAGES):
+        p = dict(params, pagination_limit=50)
+        if cursor:
+            p["pagination_cursor"] = cursor
+        r = http_get(f"{LUMA_API}{path}", params=p)
+        time.sleep(SLEEP)
+        if not r.ok:
+            break
+        d = r.json()
+        entries += d.get("entries", [])
+        cursor = d.get("next_cursor")
+        if not d.get("has_more") or not cursor:
+            break
+    return entries
+
+
+def src_luma() -> list[dict]:
+    out, seen = [], set()
+
+    def add(rows):
+        for row in rows:
+            if row["id"] not in seen:
+                seen.add(row["id"])
+                out.append(row)
+
+    for term in LUMA_TERMS:
+        add(parse_luma_entries(_luma_pages(
+            "/discover/get-paginated-events", {"query": term})))
+    for place in LUMA_PLACES:
+        add(parse_luma_entries(_luma_pages(
+            "/discover/get-paginated-events",
+            {"query": "hackathon", "discover_place_api_id": place})))
+    for cal, name in LUMA_CALENDARS.items():
+        add(parse_luma_entries(_luma_pages(
+            "/calendar/get-items",
+            {"calendar_api_id": cal, "period": "future"}), name))
+    return out
+
+
+def parse_devfolio(d: dict) -> list[dict]:
+    """Busca pública do Devfolio (POST /api/search/hackathons)."""
+    out = []
+    for h in (d.get("hits") or {}).get("hits", []):
+        s = h.get("_source") or {}
+        if s.get("private") or not s.get("slug"):
+            continue
+        st = s.get("hackathon_setting") or {}
+        online = bool(s.get("is_online"))
+        country = s.get("country")
+        out.append({
+            "id": f"devfolio-{s['slug']}",
+            "name": " ".join((s.get("name") or "").split()),
+            "organizer": s.get("hosted_by") or "via Devfolio",
+            "startsAt": s.get("starts_at"),
+            "endsAt": s.get("ends_at"),
+            "format": "online" if online else "presencial",
+            "location": None if online else ", ".join(
+                p for p in (s.get("city"), country_pt(country)) if p) or None,
+            "country": None if online else country,
+            "registrationUrl": f"https://{s['slug']}.devfolio.co/",
+            "registrationDeadline": st.get("reg_ends_at"),
+            "tags": [],
+            "source": "devfolio",
+            **{k: v for k, v in text_eligibility(s.get("desc")).items() if v},
+        })
+    return out
+
+
+def src_devfolio() -> list[dict]:
+    out = []
+    for typ in ("application_open", "upcoming"):
+        r = requests.post("https://api.devfolio.co/api/search/hackathons",
+                          json={"type": typ, "from": 0, "size": 50},
+                          headers={"User-Agent": UA}, timeout=25)
+        if r.ok:
+            out += parse_devfolio(r.json())
+        time.sleep(SLEEP)
+    return list({r["id"]: r for r in out}.values())
+
+
+def parse_lablab(html_text: str, now: datetime | None = None) -> list[dict]:
+    """lablab.ai/ai-hackathons: "sortedEvents" no payload do Next. Só
+    HACKATHON com inscrição aberta e fim no futuro."""
+    now = now or NOW
+    out = []
+    for e in flight_array(next_flight(html_text), "sortedEvents"):
+        if e.get("type") != "HACKATHON" or not e.get("signupActive"):
+            continue
+        end = parse_date(e.get("endAt") or "")
+        if not end or _aware(end) < now or e.get("toBeAnnounced"):
+            continue
+        et = (e.get("eventType") or "").upper()
+        el = text_eligibility(e.get("description"))
+        out.append({
+            "id": f"lablab-{e['slug']}",
+            "name": e["name"],
+            "organizer": "lablab.ai",
+            "startsAt": e.get("startAt"),
+            "endsAt": e.get("endAt"),
+            "format": "hibrido" if et == "HYBRID" else
+                      "presencial" if et in ("ONSITE", "IN_PERSON") else "online",
+            "location": None,
+            "registrationUrl": f"https://lablab.ai/ai-hackathons/{e['slug']}",
+            "registrationDeadline": None,
+            "tags": ["ia"],
+            "source": "lablab",
+            **{k: v for k, v in el.items() if v},
+        })
+    return out
+
+
+LABLAB_PRIZE_RE = re.compile(r"(?i)total prize pool:?\s*(\$\s?[\d,.]+\s?[kK]?)")
+
+
+def lablab_page_details(page_text: str) -> dict:
+    """Página do evento no lablab: prêmio total e frase de elegibilidade."""
+    txt = _txt(re.sub(r"(?s)<script.*?</script>|<style.*?</style>", " ",
+                      page_text))
+    out = {k: v for k, v in text_eligibility(txt).items() if v}
+    m = LABLAB_PRIZE_RE.search(txt)
+    if m:
+        out["prize"] = m.group(1).replace(" ", "")
+    return out
+
+
+def src_lablab() -> list[dict]:
+    r = http_get("https://lablab.ai/ai-hackathons")
+    out = parse_lablab(r.text) if r.ok else []
+    for row in out:  # poucos (2–5): abre a página de cada um
+        time.sleep(SLEEP)
+        p = http_get(row["registrationUrl"])
+        if p.ok:
+            row.update(lablab_page_details(p.text))
+    return out
+
+
+def parse_hackclub(items: list) -> list[dict]:
+    """hackathons.hackclub.com/api/events/upcoming/ — hackathons de
+    estudante do ensino médio (a maioria nos EUA/Canadá)."""
+    out = []
+    for e in items:
+        online = bool(e.get("virtual"))
+        country = e.get("countryCode") or e.get("country")
+        out.append({
+            "id": f"hackclub-{e['id'].lower()}",
+            "name": e["name"],
+            "organizer": "via Hack Club",
+            "startsAt": e.get("start"),
+            "endsAt": e.get("end"),
+            "format": "online" if online else
+                      "hibrido" if e.get("hybrid") else "presencial",
+            "location": None if online else ", ".join(
+                p for p in (e.get("city"), e.get("state"),
+                            country_pt(e.get("country"))) if p) or None,
+            "country": None if online else country,
+            "registrationUrl": e.get("website"),
+            "registrationDeadline": None,
+            "tags": ["estudante"],
+            "source": "hackclub",
+        })
+    return [r for r in out if r["registrationUrl"]]
+
+
+# Páginas oficiais de marca grande, uma por evento, com "Key Dates" em texto.
+# Entram aqui só quando a página é pública e estável. Hoje: Meta.
+BRAND_PAGES = {
+    "meta-global-ai-hackathon": ("https://dev.meta.ai/events/global-hackathon",
+                                 "Meta"),
+}
+KEY_DATE = r"([A-Z][a-z]{2}) (\d{1,2})"
+
+
+def parse_brand_page(page: str, rid: str, url: str, organizer: str
+                     ) -> dict | None:
+    """Página oficial → linha do radar: nome do <h1>/título, prêmio
+    ("$1M in prizes"), datas do bloco Key Dates e a frase de elegibilidade."""
+    txt = _txt(re.sub(r"(?s)<script.*?</script>|<style.*?</style>", " ", page))
+    title = re.search(r"(?s)<title>(.*?)</title>", page)
+    name = _txt(title.group(1)) if title else ""
+    name = re.sub(r"^Win [^:]+:\s*", "", name).strip()
+    year = re.search(r"\b(20\d\d)\b", txt)
+    year = year.group(1) if year else str(NOW.year)
+
+    from zoneinfo import ZoneInfo
+    tzs = {"ET": "America/New_York", "PT": "America/Los_Angeles", "UTC": "UTC"}
+
+    def when(rx, default_time="23:59"):
+        """Data do Key Dates com hora e fuso da página (ET/PT); sem hora,
+        o fim do dia (prazo) ou o padrão passado (início)."""
+        m = re.search(KEY_DATE + r"(?:,? ([\d:]+ ?[AP]M) (ET|PT|UTC))?" + rx, txt)
+        if not m:
+            return None
+        dt = parse_date(f"{m.group(1)} {m.group(2)} {year} {m.group(3) or default_time}")
+        if not dt:
+            return None
+        return dt.replace(tzinfo=ZoneInfo(tzs.get(m.group(4) or "ET"))).isoformat()
+
+    deadline = when(r" Applications? Deadline")
+    start = when(r" Hackathon begins", "09:00")
+    sub = when(r" Project submissions due") or when(
+        r" Project submissions due by ([\d:]+ ?[AP]M)")
+    m = re.search(KEY_DATE + r" Project submissions due by ([\d:]+ ?[AP]M) (ET|PT)", txt)
+    if m:
+        dt = parse_date(f"{m.group(1)} {m.group(2)} {year} {m.group(3)}")
+        sub = dt.replace(tzinfo=ZoneInfo(tzs[m.group(4)])).isoformat()
+    end = when(r" Closing ceremony") or sub
+    if not name or not start:
+        return None
+    pm = re.search(r"\$([\d,]{5,})(?: cash)? (?:cash )?(?:prize pool|in total prizes)", txt)
+    online = re.search(r"(?i)\bvirtual\b|\bonline\b", txt)
+    return {
+        "id": rid,
+        "name": name,
+        "organizer": organizer,
+        "startsAt": start,
+        "endsAt": end,
+        "format": "online" if online else "presencial",
+        "location": None,
+        "registrationUrl": url,
+        "registrationDeadline": deadline,
+        "submissionDeadline": sub,
+        "tags": ["ia"],
+        "prize": f"${pm.group(1)}" if pm else None,
+        "eligibilityUrl": url,
+        "source": "marcas",
+        **{k: v for k, v in text_eligibility(txt).items() if v},
+    }
+
+
+def src_brands() -> list[dict]:
+    out = []
+    for rid, (url, org) in BRAND_PAGES.items():
+        r = http_get(url)
+        if r.ok:
+            row = parse_brand_page(r.text, rid, url, org)
+            if row:
+                out.append(row)
+        time.sleep(SLEEP)
+    return out
+
+
+def src_hackclub() -> list[dict]:
+    r = http_get("https://hackathons.hackclub.com/api/events/upcoming/")
+    return parse_hackclub(r.json()) if r.ok else []
 
 
 def jina(url: str) -> str:
@@ -919,43 +1579,8 @@ def src_meetup() -> list[dict]:
     return out
 
 
-def src_luma() -> list[dict]:
-    """Geogated hoje (API interna exige place_id real) — mantido pra quando
-    resolver; 0 aqui é esperado e logado como degraded."""
-    out = []
-    seen = set()
-    for path in ("hackathon", "tech"):
-        md = jina(f"https://lu.ma/{path}")
-        for m in re.finditer(
-            r"\[([^\]]{6,140})\]\(https://lu\.ma/([a-zA-Z0-9_-]{6,})\)", md,
-        ):
-            title, slug = m.groups()
-            if slug in seen or slug in ("tech", "hackathon", "discover"):
-                continue
-            if not re.search(r"(?i)hack|sprint|buildathon", title):
-                continue
-            seen.add(slug)
-            out.append({
-                "id": f"luma-{slug.lower()}",
-                "name": title.strip(),
-                "organizer": "Luma",
-                "startsAt": iso(NOW),
-                "endsAt": None,
-                "format": "online",
-                "location": None,
-                "registrationUrl": f"https://lu.ma/{slug}",
-                "registrationDeadline": None,
-                "tags": ["luma"],
-                "source": "luma",
-            })
-        time.sleep(2)
-    return out
-
-
 # ---------- fontes brasileiras ----------
 
-UA = ("Mozilla/5.0 (compatible; HackaHubRadar/1.0; "
-      "+https://hackahub.jazzautomations.com.br)")
 PT_MONTHS = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
              "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
 BRT = "-03:00"
@@ -999,7 +1624,8 @@ def parse_pt_dates(text: str, now: datetime | None = None):
     return None, None
 
 
-SYMPLA_TERMS = ("hackathon", "hackaton", "game jam", "datathon", "space apps")
+SYMPLA_TERMS = ("hackathon", "hackaton", "game jam", "datathon", "ideathon",
+                "space apps")
 SYMPLA_CARD = re.compile(
     r"\[!\[Image \d+: Imagem do evento (?P<alt>[^\]]*)\]\([^)]*\)\s*###\s*"
     r"(?P<body>.+?)\]\((?P<url>https://www\.sympla\.com\.br/"
@@ -1223,6 +1849,12 @@ def src_shawee() -> list[dict]:
 BLOCKED_SOURCES = {
     "even3": "busca pede reCAPTCHA (POST /auxiliar/retornarlistaevento)",
     "eventbrite": "responde 405 pra robô, inclusive via Jina",
+    "dorahacks": "página e API atrás de captcha AWS WAF",
+    "hackerearth": "403 pra robô em todas as páginas",
+    "openai-events": "events.openai.com responde 403 (desafio Cloudflare)",
+    "kaggle": "lista de competições só por API com login",
+    "cerebralvalley": "API pública só devolve evento antigo (2024/25)",
+    "gupy": "sem busca pública de vaga; hackathon de banco fica na curadoria",
 }
 
 
@@ -1315,12 +1947,16 @@ SOURCES = [
     ("sympla", src_sympla),
     ("doity", src_doity),
     ("shawee", src_shawee),
+    ("meetup", src_meetup),
+    ("luma", src_luma),
     ("devpost", src_devpost),
     ("taikai", src_taikai),
     ("ethglobal", src_ethglobal),
     ("mlh", src_mlh),
-    ("meetup", src_meetup),
-    ("luma", src_luma),
+    ("devfolio", src_devfolio),
+    ("lablab", src_lablab),
+    ("hackclub", src_hackclub),
+    ("marcas", src_brands),
     ("curadoria", src_curated),
 ]
 
@@ -1346,8 +1982,7 @@ def collect(sources=None) -> tuple[list[dict], list[tuple[dict, str]]]:
                 rejected.append((r, reason))
                 why[reason] = why.get(reason, 0) + 1
             else:
-                r["region"] = region_of(r)
-                kept.append(r)
+                kept.append(fill_reach(r))
         if why:
             print(f"      {name:10s} recusados: "
                   + ", ".join(f"{k} {v}" for k, v in sorted(why.items())))
@@ -1359,11 +1994,16 @@ def collect(sources=None) -> tuple[list[dict], list[tuple[dict, str]]]:
                   f" (fonte instável/geogated — curadoria cobre)")
         else:
             by_region: dict[str, int] = {}
+            by_ok: dict[str, int] = {}
             for r in kept:
                 by_region[r["region"]] = by_region.get(r["region"], 0) + 1
+                ok = r.get("brazilOk") or "?"
+                by_ok[ok] = by_ok.get(ok, 0) + 1
             regs = ", ".join(f"{k} {v}" for k, v in sorted(by_region.items()))
+            oks = ", ".join(f"{k} {v}" for k, v in sorted(by_ok.items()))
             print(f"[ok] {name:10s} {len(kept):3d} eventos"
-                  + (f" ({regs})" if regs else ""))
+                  + (f" ({regs})" if regs else "")
+                  + (f" · brasileiro pode: {oks}" if oks else ""))
     return collected, rejected
 
 
@@ -1373,6 +2013,7 @@ def main() -> None:
     import psycopg
     conn = PgConn(psycopg.connect(DATABASE_URL))
     ensure_schema(conn)
+    ELIG_CACHE.update(load_elig_cache(conn))
 
     collected, rejected = collect()
     winners, merges = dedupe(collected)
@@ -1406,6 +2047,13 @@ def main() -> None:
         " GROUP BY 1 ORDER BY 1"
     ):
         print(f"  aberto · {region:12s} {n}")
+    for ok, n in conn.execute(
+        "SELECT COALESCE(brazilOk, 'nao informado'), COUNT(*) FROM hackathons"
+        f" WHERE active=1 AND NOT {EDITION_WHERE}"
+        "   AND to_ts(COALESCE(endsAt, registrationDeadline, startsAt)) >= now()"
+        " GROUP BY 1 ORDER BY 1"
+    ):
+        print(f"  aberto · brasileiro pode: {ok:14s} {n}")
 
 
 if __name__ == "__main__":
