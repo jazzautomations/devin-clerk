@@ -3,12 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-// Nova edição: só o essencial (endereço, nome, datas e local). Ela nasce como
-// rascunho e o resto (prazo, vagas, curadoria, equipe) fica no checklist do
-// painel da edição, pra onde a pessoa vai logo depois de criar.
-// Evento de outro organizador (bloco recolhido) vai direto pro radar, com o
-// link oficial e o prêmio, e a busca do /admin abre nele.
-export function CreateEventForm() {
+// Nova edição pelo admin global: hackathon de uma comunidade (nasce rascunho
+// e o resto fica no checklist do painel) ou, no bloco recolhido, evento de
+// outro organizador, que vai direto pro radar com o link oficial e o prêmio.
+// Quem organiza uma comunidade cria pelo painel dela
+// (/comunidade/[slug]/hackathon/novo).
+export function CreateEventForm({ communities }: { communities: { slug: string; name: string }[] }) {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState("");
@@ -31,6 +31,7 @@ export function CreateEventForm() {
         endsAt: f.get("endsAt") || undefined,
         location: f.get("location") || undefined,
         organizer: f.get("organizer") || undefined,
+        community: f.get("community") || undefined,
         format: f.get("format") || undefined,
         registrationUrl: f.get("registrationUrl") || undefined,
         prize: f.get("prize") || undefined,
@@ -57,7 +58,7 @@ export function CreateEventForm() {
           name="id"
           required
           className={input}
-          placeholder="hack-inova-sorocaba-2027"
+          placeholder="hackathon-sorocaba-2027"
           pattern="[a-z0-9\-]{3,80}"
           title="de 3 a 80 letras minúsculas, números ou hífen"
         />
@@ -68,7 +69,7 @@ export function CreateEventForm() {
           name="name"
           required
           className={input}
-          placeholder="Hack Inova Sorocaba"
+          placeholder="Hackathon de Sorocaba"
         />
       </label>
       <label className="flex flex-col gap-1.5">
@@ -84,7 +85,18 @@ export function CreateEventForm() {
         <span className="font-mono text-xs text-muted">fim (opcional, horário de Brasília)</span>
         <input name="endsAt" type="datetime-local" className={input} />
       </label>
-      <label className="flex flex-col gap-1.5 sm:col-span-2">
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-xs text-muted">comunidade</span>
+        <select name="community" defaultValue="" className={input}>
+          <option value="">escolha (vazio = evento de fora, abaixo)</option>
+          {communities.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted">local</span>
         <input
           name="location"
@@ -98,7 +110,7 @@ export function CreateEventForm() {
         </summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <p className="font-mono text-xs text-muted sm:col-span-2">
-            Com outro organizador, o evento entra no ar direto no radar. Vazio, é uma edição da Hack Inova.
+            Sem comunidade e com organizador, o evento entra no ar direto no radar, com inscrição no site oficial.
           </p>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-xs text-muted">organizador</span>
@@ -138,7 +150,7 @@ export function CreateEventForm() {
         <span role="status" className={status === "error" ? "font-mono text-xs text-orange" : "sr-only"}>
           {status === "error" ? error : ""}
         </span>
-        <span className="font-mono text-xs text-muted">edição da Hack Inova nasce como rascunho; você publica pelo painel</span>
+        <span className="font-mono text-xs text-muted">hackathon de comunidade nasce como rascunho; publica pelo painel</span>
       </div>
     </form>
   );

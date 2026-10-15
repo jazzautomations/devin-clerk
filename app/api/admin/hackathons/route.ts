@@ -3,16 +3,18 @@ import { EDITION_ID_RE, isSafeLink } from "@/lib/admin";
 import db from "@/lib/db";
 import { EventTimeError, normalizeEventTime } from "@/lib/eventTime";
 import { getMemberByClerkId } from "@/lib/members";
+import { getCommunityBySlug } from "@/lib/communities";
 
 const FORMATS = ["online", "presencial", "hibrido"];
 const bad = (error: string) => Response.json({ error }, { status: 400 });
 
 // Cria uma edição (admin global). Nunca sobrescreve: endereço já usado é 409
-// e a edição existente fica intacta. Dois casos, pelo organizador:
-//   - edição da casa (sem organizador ou Hack Inova): source='painel', nasce
-//     como rascunho (active = 0) e o organizador publica pela visão geral;
-//   - evento de terceiro posto à mão no radar: source='admin' e já entra no
-//     ar, como era no feat-r-radar (lib/radar.ts e o scraper tratam assim).
+// e a edição existente fica intacta. Dois casos:
+//   - hackathon de uma comunidade (community = slug): source='painel', nasce
+//     como rascunho (active = 0) e quem organiza publica pela visão geral;
+//   - evento de terceiro posto à mão no radar (organizer): source='admin' e
+//     já entra no ar (lib/radar.ts e o scraper tratam assim).
+// Comunidade e organizador vazios é 400: não existe mais "edição da casa".
 // O seed só mexe nas linhas dele (source='seed').
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -52,24 +54,30 @@ export async function POST(req: Request) {
     throw e;
   }
 
-  const organizer = str("organizer") || "Hack Inova";
-  const house = organizer.toLowerCase().includes("hack inova");
+  const slug = str("community");
+  const community = slug ? await getCommunityBySlug(slug) : null;
+  if (slug && !community) return bad("Comunidade não encontrada.");
+  const house = !!community;
+  const organizer = community?.name ?? str("organizer");
+  if (!organizer) {
+    return bad("Escolha a comunidade do hackathon ou, se for evento de fora, informe o organizador.");
+  }
 
   const created = await db
     .prepare(
       `INSERT INTO hackathons
          (id, name, organizer, startsAt, endsAt, format, location, registrationUrl, registrationDeadline,
-          tags, active, source, prize)
+          tags, active, source, prize, communityId)
        VALUES (@id, @name, @organizer, @startsAt, @endsAt, @format, @location, @registrationUrl,
-               @registrationDeadline, @tags, @active, @source, @prize)
+               @registrationDeadline, @tags, @active, @source, @prize, @communityId)
        ON CONFLICT (id) DO NOTHING
        RETURNING id`,
     )
     .get<{ id: string }>({
       id,
       name,
-      // o HackaHub é a casa da Hack Inova: sem organizador informado, é ela
       organizer,
+      communityId: community?.id ?? null,
       active: house ? 0 : 1,
       source: house ? "painel" : "admin",
       startsAt,

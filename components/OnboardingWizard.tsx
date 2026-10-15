@@ -5,6 +5,7 @@ import { useState } from "react";
 import { MAX_PERSONAS, PERSONAS } from "@/lib/personas";
 import { OPEN_TO, openToLabel } from "@/lib/openTo";
 import { INTENTS, LIMITS, onboardingNext, type IntentKey } from "@/lib/onboarding";
+import { CommunitySuggestions } from "@/components/CommunitySuggestions";
 
 // spec 039 — /bem-vindo: 3 passos curtos (quem é você, perfil básico,
 // links), barra de progresso, voltar e pular. Cada "próximo" grava o passo;
@@ -103,6 +104,7 @@ export function OnboardingWizard({
             {n.label} →
           </Link>
         </div>
+        <CommunitySuggestions city={v.city} />
         <p className="font-mono text-[13px] text-muted">
           dá pra mudar tudo depois em{" "}
           <Link href="/perfil" className="text-accent underline underline-offset-4">

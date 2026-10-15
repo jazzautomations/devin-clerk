@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useState, type ReactNode } from "react";
 
-// spec 039 — nav enxuta do header: 4 portas + estado ativo. No < lg vira
+// spec 039 — nav enxuta do header: as portas + estado ativo. No < lg vira
 // botão "menu" com painel (fecha no Esc, no clique e quando a rota muda).
 
 type NavLink = { href: string; label: string; match: readonly string[] };
@@ -12,8 +12,9 @@ type NavLink = { href: string; label: string; match: readonly string[] };
 // logado: as portas da plataforma
 const NAV_IN: NavLink[] = [
   { href: "/radar", label: "hackathons", match: ["/radar", "/h/"] },
+  { href: "/comunidades", label: "comunidades", match: ["/comunidades", "/comunidade/"] },
   { href: "/projetos", label: "projetos", match: ["/projetos", "/p/"] },
-  { href: "/membros", label: "comunidade", match: ["/membros", "/u/", "/feed"] },
+  { href: "/membros", label: "pessoas", match: ["/membros", "/u/", "/feed"] },
   { href: "/organizar", label: "organizar", match: ["/organizar"] },
 ];
 // sem conta (spec 039): a plataforma é logada, então o header leva pro que

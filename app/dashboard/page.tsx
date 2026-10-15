@@ -18,6 +18,7 @@ import { dashboardList } from "@/lib/radar";
 import { getNextStep, listMyActiveEditions } from "@/lib/nextStepFacts";
 import { listMyEditionRoles } from "@/lib/roles";
 import { ProfileReminder } from "@/components/ProfileReminder";
+import { communityNextStep, listMyCommunities } from "@/lib/communities";
 
 // spec 039 — o painel é "meu próximo passo": primeiro o que a pessoa tem
 // que fazer em cada edição ativa, depois a equipe, os certificados, o
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 
-  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts] = await Promise.all([
+  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities] = await Promise.all([
     listMyActiveEditions(member.id, now),
     listMyEditionRoles(member.id),
     getOpenHackathons(now),
@@ -53,6 +54,7 @@ export default async function DashboardPage() {
     listMemberCertificates(member.id),
     getAttendanceHistory(member.id, now),
     listPosts(20, member.id),
+    listMyCommunities(member.id),
   ]);
   const steps = await Promise.all(active.map(async (h) => ({ h, step: await getNextStep(h, member, now) })));
   // abertos: edições do HackaHub primeiro, depois Brasil com a cidade/UF do perfil na
@@ -126,6 +128,54 @@ export default async function DashboardPage() {
             <Link href={proxima ? `/h/${proxima.id}` : "/radar"} className="btn shrink-0">
               {proxima ? "ver a próxima edição →" : "ver hackathons abertos →"}
             </Link>
+          </div>
+        )}
+      </section>
+
+      {/* suas comunidades — um próximo passo por comunidade */}
+      <section aria-labelledby="comunidades-title" className="flex flex-col gap-4" data-testid="dashboard-communities">
+        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+          <h2 id="comunidades-title" className="text-[clamp(1.5rem,3vw,2rem)] leading-none font-extrabold tracking-[-0.035em]">
+            Suas comunidades
+          </h2>
+          <Link href="/comunidades" className="font-mono text-[13px] text-accent underline-offset-4 hover:underline">
+            ver todas →
+          </Link>
+        </div>
+        {communities.length > 0 ? (
+          <ul className="border-b border-line">
+            {communities.map((c) => {
+              const next = communityNextStep(c);
+              return (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-line py-3.5">
+                  <div className="min-w-0">
+                    <Link href={`/comunidade/${c.slug}`} className="text-[17px] font-extrabold tracking-[-0.02em] hover:underline">
+                      {c.name}
+                    </Link>
+                    {c.role !== "membro" && <span className="chip bare ml-2">{c.role === "dono" ? "dono" : "organiza"}</span>}
+                    <p className="mt-0.5 text-[14.5px] text-muted">{next.text}</p>
+                  </div>
+                  <Link href={next.href} className="btn-ghost min-h-[40px]! text-[14px]!">
+                    {next.label} →
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="flex flex-col gap-4 border-[1.5px] border-line p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div>
+              <p className="text-[20px] font-extrabold tracking-[-0.02em]">Você ainda não está em nenhuma comunidade.</p>
+              <p className="mt-1 text-[15px] text-muted">É pela comunidade que chegam os avisos dos próximos hackathons.</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Link href="/comunidades" className="btn">
+                achar a minha →
+              </Link>
+              <Link href="/comunidades/nova" className="btn-ghost">
+                criar uma
+              </Link>
+            </div>
           </div>
         )}
       </section>

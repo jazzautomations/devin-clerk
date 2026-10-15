@@ -186,9 +186,9 @@ describe("PATCH /api/admin/hackathons/[id]", () => {
 });
 
 describe("POST /api/admin/hackathons (nova edição)", () => {
-  const novo = { id: "pacote-b-nova-2027", name: "Hack Nova", startsAt: "2027-03-10T09:00", location: "Sorocaba" };
+  const novo = { id: "pacote-b-nova-2027", name: "Hack Nova", startsAt: "2027-03-10T09:00", location: "Sorocaba", community: "hack-inova" };
 
-  it("edição da casa nasce rascunho, com origem 'painel' e data no horário de Brasília", async () => {
+  it("hackathon de comunidade nasce rascunho, com origem 'painel', ligado a ela e data no horário de Brasília", async () => {
     const { POST } = await import("@/app/api/admin/hackathons/route");
     as(await member("admin"));
     await db.prepare("DELETE FROM hackathons WHERE id = ?").run(novo.id);
@@ -196,7 +196,10 @@ describe("POST /api/admin/hackathons (nova edição)", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ ok: true, id: novo.id, radar: false });
     const row = await db
-      .prepare("SELECT active, source, startsAt, organizer, registrationUrl FROM hackathons WHERE id = ?")
+      .prepare(
+        `SELECT h.active, h.source, h.startsAt, h.organizer, h.registrationUrl, c.slug
+         FROM hackathons h JOIN communities c ON c.id = h.communityId WHERE h.id = ?`,
+      )
       .get(novo.id);
     expect(row).toEqual({
       active: 0,
@@ -204,7 +207,20 @@ describe("POST /api/admin/hackathons (nova edição)", () => {
       startsAt: "2027-03-10T09:00:00-03:00",
       organizer: "Hack Inova",
       registrationUrl: `/h/${novo.id}`,
+      slug: "hack-inova",
     });
+  });
+
+  it("sem comunidade nem organizador é 400; comunidade que não existe é 400", async () => {
+    const { POST } = await import("@/app/api/admin/hackathons/route");
+    as(await member("admin"));
+    const { community: _c, ...semComunidade } = novo;
+    void _c;
+    const a = await POST(req("POST", { ...semComunidade, id: "pb-sem-dono" }));
+    expect(a.status).toBe(400);
+    expect((await a.json()).error).toMatch(/comunidade/);
+    expect((await POST(req("POST", { ...novo, id: "pb-com-fantasma", community: "nao-existe" }))).status).toBe(400);
+    expect(await db.prepare("SELECT id FROM hackathons WHERE id IN ('pb-sem-dono', 'pb-com-fantasma')").all()).toEqual([]);
   });
 
   it("evento de terceiro vai direto pro radar com origem 'admin', link e prêmio", async () => {
@@ -215,6 +231,7 @@ describe("POST /api/admin/hackathons (nova edição)", () => {
     const res = await POST(
       req("POST", {
         ...novo,
+        community: undefined,
         id,
         organizer: "Prefeitura de Sorocaba",
         registrationUrl: "https://www.sympla.com.br/evento/x",
@@ -238,7 +255,7 @@ describe("POST /api/admin/hackathons (nova edição)", () => {
     const { POST } = await import("@/app/api/admin/hackathons/route");
     as(await member("admin"));
     const before = await db.prepare("SELECT * FROM hackathons WHERE id = ?").get(H);
-    const res = await POST(req("POST", { id: H, name: "Nome sobrescrito", startsAt: "2026-01-01T09:00" }));
+    const res = await POST(req("POST", { id: H, name: "Nome sobrescrito", startsAt: "2026-01-01T09:00", community: "hack-inova" }));
     expect(res.status).toBe(409);
     expect((await res.json()).error).toMatch(/Já existe/);
     expect(await db.prepare("SELECT * FROM hackathons WHERE id = ?").get(H)).toEqual(before);

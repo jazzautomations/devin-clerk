@@ -26,6 +26,7 @@ const PUBLICAS = [
   "/u/marina.builds",
   "/p/12",
   "/p/12/opengraph-image",
+  "/comunidade/hack-inova",
   "/rsvp/token.assinado",
   "/demo/time-x/",
   "/demo/time-x/assets/app.js",
@@ -60,6 +61,10 @@ const PRIVADAS = [
   "/h/x/candidatura/mentor",
   "/h/x/patrocinador/oracle",
   "/p/12/feedback",
+  "/comunidades",
+  "/comunidades/nova",
+  "/comunidade/hack-inova/editar",
+  "/comunidade/hack-inova/hackathon/novo",
   "/legalidade",
   "/organizar/outra-coisa",
 ];
@@ -115,7 +120,7 @@ describe("API", () => {
     expect(isPublicApi(p)).toBe(true);
     expect(decideAccess(p, anon)).toBe("next");
   });
-  it.each(["/api/posts", "/api/hackathons", "/api/members/me", "/api/me/calendar", "/api/hackathons/x/stage/vote", "/api/onboarding", "/api/roadmap"])(
+  it.each(["/api/posts", "/api/hackathons", "/api/members/me", "/api/me/calendar", "/api/hackathons/x/stage/vote", "/api/onboarding", "/api/roadmap", "/api/communities", "/api/communities/hack-inova/members", "/api/admin/communities/hack-inova"])(
     "%s sem sessão é 401",
     (p) => {
       expect(decideAccess(p, anon)).toBe("unauthorized");

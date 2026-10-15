@@ -89,10 +89,10 @@ export function onboardingNext(opts: {
   }
   if (has("organizar")) {
     return {
-      title: "Conta da tua edição",
-      detail: "Mostra quando, onde e pra quantas pessoas; a Hack Inova responde.",
-      label: "falar com a Hack Inova",
-      href: "/organizar#contato",
+      title: "Crie sua comunidade",
+      detail: "Dá um nome, diz a cidade e abre o primeiro hackathon pelo painel dela.",
+      label: "criar minha comunidade",
+      href: "/comunidades/nova",
     };
   }
   if (has("mentorar")) {

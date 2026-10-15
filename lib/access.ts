@@ -20,6 +20,7 @@ export const PUBLIC_PAGES: RegExp[] = [
   new RegExp(`^/h/${SEG}/programacao\\.ics$`), // assinatura webcal: app de calendário não loga
   new RegExp(`^/u/${SEG}$`), // cartão público mínimo do perfil
   new RegExp(`^/p/${SEG}$`), // cartão público mínimo do projeto
+  new RegExp(`^/comunidade/${SEG}$`), // cartão público mínimo da comunidade (divulgação)
   new RegExp(`^/rsvp/${SEG}$`), // link assinado do e-mail de confirmação
   /^\/demo\/.+$/, // demo publicada do time (o app do time roda no proxy, sem login)
   /^\/sitemap\.xml$/,

@@ -80,7 +80,14 @@ export function EditionTeaser({
           </div>
           <h1 className="mt-5 text-[clamp(2.4rem,7vw,5.25rem)] leading-[0.92] font-extrabold tracking-[-0.045em] break-words">{h.name}</h1>
           <p className="mt-4 text-[17px] text-muted">
-            Realização <strong className="font-bold text-foreground">{h.organizer}</strong>
+            Realização{" "}
+            {h.communitySlug ? (
+              <Link href={`/comunidade/${h.communitySlug}`} className="font-bold text-foreground underline underline-offset-4 hover:text-accent">
+                {h.communityName}
+              </Link>
+            ) : (
+              <strong className="font-bold text-foreground">{h.organizer}</strong>
+            )}
           </p>
           {h.tags.length > 0 && (
             <div className="mt-5 flex flex-wrap gap-1.5">

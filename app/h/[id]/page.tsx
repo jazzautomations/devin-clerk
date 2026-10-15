@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { canManageEdition } from "@/lib/roles";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
@@ -133,6 +134,9 @@ export default async function HackathonPage({
     new Date(h.registrationDeadline) < now;
 
   const { userId } = await auth();
+  // comunidade escondida pela moderação: a edição sai do ar pra quem não é
+  // da equipe dela (nem admin)
+  if (h.communityHidden && !userId) notFound();
   // spec 039 — sem conta: teaser público (divulgação). O resto é de quem entra.
   if (!userId) {
     const [capT, sponsorsT, challengesT] = await Promise.all([
@@ -157,6 +161,7 @@ export default async function HackathonPage({
     );
   }
   const member = await getMemberByClerkId(userId);
+  if (h.communityHidden && !(await canManageEdition(member, h.id))) notFound();
   // spec 032 — "inscrito" = approved; pending/rejected têm estado próprio
   // no CTA e não abrem os gates (time/board/mural) da página
   const myStatus = member ? await getRegistrationStatus(member.id, h.id) : null;
@@ -276,7 +281,14 @@ export default async function HackathonPage({
             {h.name}
           </h1>
           <p className="mt-4 text-[17px] text-muted">
-            Realização <strong className="font-bold text-foreground">{h.organizer}</strong>
+            Realização{" "}
+            {h.communitySlug ? (
+              <Link href={`/comunidade/${h.communitySlug}`} className="font-bold text-foreground underline underline-offset-4 hover:text-accent" data-testid="edition-community-link">
+                {h.communityName}
+              </Link>
+            ) : (
+              <strong className="font-bold text-foreground">{h.organizer}</strong>
+            )}
           </p>
           {h.tags.length > 0 && (
             <div className="mt-5 flex flex-wrap gap-1.5">

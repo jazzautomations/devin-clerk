@@ -13,6 +13,9 @@ export type FeedPost = {
   createdAt: string;
   hackathonId: string | null;
   hackathonName: string | null;
+  communityId?: number | null;
+  communityName?: string | null;
+  communitySlug?: string | null;
   username: string;
   name: string | null;
   avatarUrl: string | null;
@@ -53,6 +56,7 @@ export function FeedSection({
   isAdmin = false,
   hackathonId = null,
   editionLabel = null,
+  communitySlug = null,
 }: {
   initialPosts: FeedPost[];
   canPost?: boolean;
@@ -60,6 +64,8 @@ export function FeedSection({
   isAdmin?: boolean;
   hackathonId?: string | null;
   editionLabel?: string | null;
+  /** mural da comunidade (migration 027): posta e recarrega com o escopo */
+  communitySlug?: string | null;
 }) {
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [body, setBody] = useState("");
@@ -80,6 +86,7 @@ export function FeedSection({
         body,
         link: link || undefined,
         hackathonId: hackathonId ?? undefined,
+        communitySlug: communitySlug ?? undefined,
       }),
     });
     if (res.ok) {
@@ -149,7 +156,9 @@ export function FeedSection({
     const res = await fetch(
       hackathonId
         ? `/api/posts?h=${encodeURIComponent(hackathonId)}`
-        : "/api/posts",
+        : communitySlug
+          ? `/api/posts?c=${encodeURIComponent(communitySlug)}`
+          : "/api/posts",
     );
     if (res.ok) {
       const { posts: fresh } = await res.json();
@@ -238,11 +247,16 @@ export function FeedSection({
           {"só inscritos postam no mural"}
         </p>
       )}
+      {communitySlug && !canPost && (
+        <p className="font-mono text-[12px] text-muted">quem está na comunidade posta no mural</p>
+      )}
 
       {posts.length === 0 ? (
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {hackathonId
             ? "mural vazio — seja o primeiro a postar da edição"
+            : communitySlug
+              ? "mural vazio. Conte o que a comunidade está construindo."
             : "feed vazio — seja o primeiro a postar o que tá construindo"}
         </p>
       ) : (
@@ -288,6 +302,14 @@ export function FeedSection({
                       className="border border-line px-1.5 font-mono text-[12px] text-muted transition hover:border-line hover:text-accent"
                     >
                       → {p.hackathonName ?? p.hackathonId}
+                    </Link>
+                  )}
+                  {p.communitySlug && p.communitySlug !== communitySlug && (
+                    <Link
+                      href={`/comunidade/${p.communitySlug}`}
+                      className="border border-line px-1.5 font-mono text-[12px] text-muted transition hover:text-accent"
+                    >
+                      → {p.communityName}
                     </Link>
                   )}
                 </div>

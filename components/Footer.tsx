@@ -8,8 +8,9 @@ const cols = [
     title: "Participar",
     links: [
       { href: "/radar", label: "Hackathons abertos" },
+      { href: "/comunidades", label: "Comunidades" },
       { href: "/projetos", label: "Projetos" },
-      { href: "/membros", label: "Comunidade" },
+      { href: "/membros", label: "Pessoas" },
       { href: "/feed", label: "Feed" },
       { href: "/talento", label: "Talento" },
     ],
@@ -17,7 +18,8 @@ const cols = [
   {
     title: "Organizar",
     links: [
-      { href: "/organizar", label: "Organizar uma edição" },
+      { href: "/comunidades/nova", label: "Criar comunidade" },
+      { href: "/organizar", label: "Como organizar" },
       { href: "/empresas", label: "Patrocinar" },
       { href: "/blog", label: "Blog" },
     ],

@@ -19,6 +19,8 @@ import { TeamBoardToggle } from "@/components/TeamBoardPanel";
 import { AssetForm, TeamForm } from "@/components/ArchiveForms";
 import { SubmissionActions } from "@/components/SubmissionActions";
 import { EditionList, RADAR_PAGE, type AdminEdition } from "@/components/AdminEditionList";
+import { ModerationToggles } from "@/components/CommunityActions";
+import { listCommunities, listOpenReports, listRecentCommunityHackathons } from "@/lib/communities";
 
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const { userId } = await auth();
@@ -69,6 +71,14 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
 
   const subscribers = await listSubscribers();
 
+  // moderação de comunidades (migration 027): todas (inclusive escondidas),
+  // denúncias abertas e hackathons novos de comunidade
+  const [communities, reports, recentHackathons] = await Promise.all([
+    listCommunities({ includeHidden: true }),
+    listOpenReports(),
+    listRecentCommunityHackathons(),
+  ]);
+
   // CRM de marcas (spec 019) — cadastro único, vínculo nos desafios via API
   const sponsors = await listSponsors();
 
@@ -105,7 +115,63 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>
           nova edição
         </h2>
-        <CreateEventForm />
+        <CreateEventForm communities={communities.filter((c) => !c.hidden).map((c) => ({ slug: c.slug, name: c.name }))} />
+      </div>
+
+      <div id="comunidades" className="flex scroll-mt-24 flex-col gap-4" data-testid="admin-communities">
+        <h2 className={`${mono} tracking-widest text-muted uppercase`}>comunidades ({communities.length})</h2>
+        {reports.length > 0 && (
+          <div className="flex flex-col gap-2 border-[1.5px] border-orange p-4" data-testid="admin-community-reports">
+            <p className={`${mono} text-orange uppercase`}>denúncias abertas ({reports.length})</p>
+            <ul className="divide-y divide-line">
+              {reports.map((r) => (
+                <li key={r.id} className={`${mono} py-2 [overflow-wrap:anywhere]`}>
+                  <Link href={`/comunidade/${r.slug}`} className="text-accent hover:underline">
+                    {r.name}
+                  </Link>{" "}
+                  · {r.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <ul className="divide-y divide-line border-y border-line">
+          {communities.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+              <span className={`${mono} min-w-0`}>
+                <Link href={`/comunidade/${c.slug}`} className="text-accent hover:underline">
+                  {c.name}
+                </Link>
+                <span className="ml-2 text-muted">
+                  {c.city ?? "online"} · {c.members} membros · {c.hackathons} no ar
+                </span>
+                {c.owners === 0 && <span className="ml-2 border border-line px-1.5 text-muted">sem dono</span>}
+                {c.verified && <span className="ml-2 border border-accent px-1.5 text-accent">selo</span>}
+                {c.hidden && <span className="ml-2 border border-orange px-1.5 text-orange">escondida</span>}
+                {c.reports > 0 && <span className="ml-2 text-orange">{c.reports} denúncia(s)</span>}
+              </span>
+              <ModerationToggles slug={c.slug} hidden={c.hidden} verified={c.verified} />
+            </li>
+          ))}
+        </ul>
+        {recentHackathons.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className={`${mono} text-muted uppercase`}>hackathons novos de comunidade (30 dias)</p>
+            <ul className="divide-y divide-line border-y border-line">
+              {recentHackathons.map((h) => (
+                <li key={h.id} className={`${mono} flex flex-wrap justify-between gap-2 py-2`}>
+                  <span>
+                    <Link href={`/admin/h/${h.id}`} className="text-accent hover:underline">
+                      {h.name}
+                    </Link>{" "}
+                    <span className="text-muted">· {h.communityName}</span>
+                  </span>
+                  <span className="text-muted">{h.active === 1 ? "no ar" : "rascunho"}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-4">

@@ -16,7 +16,7 @@ describe("onboardingNext — próximo passo por intenção", () => {
     expect(onboardingNext(base).href).toBe(`/h/${next.id}`);
   });
   it("organizar → contato do /organizar", () => {
-    expect(onboardingNext({ ...base, intents: ["organizar"] }).href).toBe("/organizar#contato");
+    expect(onboardingNext({ ...base, intents: ["organizar"] }).href).toBe("/comunidades/nova");
   });
   it("mentorar → candidatura aberta", () => {
     expect(onboardingNext({ ...base, intents: ["mentorar"] }).href).toBe(`/h/${next.id}/candidatura/mentor`);
@@ -36,7 +36,7 @@ describe("onboardingNext — próximo passo por intenção", () => {
     expect(n.label).toBe("continuar a inscrição");
   });
   it("redirect_url externo é ignorado (open redirect)", () => {
-    expect(onboardingNext({ ...base, intents: ["organizar"], redirectUrl: "https://mal.com" }).href).toBe("/organizar#contato");
+    expect(onboardingNext({ ...base, intents: ["organizar"], redirectUrl: "https://mal.com" }).href).toBe("/comunidades/nova");
   });
 });
 

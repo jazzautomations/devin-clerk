@@ -9,6 +9,7 @@ export type RateLimitOpts = { limit: number; windowMs: number };
 export type RateLimitResult = { ok: boolean; retryAfterSec: number };
 
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
 
 // Tabela única de limites (requisições por janela de 1h). Rotas públicas
 // são chaveadas por IP; autenticadas por member.id (a rota passa a key).
@@ -34,6 +35,14 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // No evento todo mundo sai pelo mesmo wifi; 3/h por IP barrava a 4ª vítima
   "incidents-anon": { limit: 20, windowMs: HOUR }, // POST …/[id]/incidents
   "image-consent": { limit: 20, windowMs: HOUR }, // POST …/[id]/image-consent
+  // comunidades (migration 027): criar é forte (3 por dia por membro), abrir
+  // hackathon também (5 por dia); entrar/sair, aviso, convite e denúncia por hora
+  communities: { limit: 3, windowMs: DAY }, // POST /api/communities — membro
+  "community-hackathons": { limit: 5, windowMs: DAY }, // POST …/communities/[slug]/hackathons
+  "community-join": { limit: 30, windowMs: HOUR }, // POST/DELETE …/[slug]/members
+  "community-notices": { limit: 10, windowMs: HOUR }, // POST …/[slug]/notices
+  "community-invites": { limit: 20, windowMs: HOUR }, // POST …/[slug]/organizers
+  "community-report": { limit: 5, windowMs: HOUR }, // POST …/[slug]/report
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

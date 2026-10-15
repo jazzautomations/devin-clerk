@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { E2E_MEMBER_EMAIL, test } from "./auth";
 import { openE2eDb } from "./db";
 
-// Auditoria 041, pacote B: "nova edição" no /admin. Edição da Hack Inova nasce
+// Auditoria 041, pacote B: "nova edição" no /admin. Hackathon de comunidade nasce
 // rascunho (source 'painel') e leva pro painel dela; evento de outro
 // organizador vai direto pro radar (source 'admin', semântica do radar) e abre
 // na busca do /admin. O membro de teste vira admin só durante este arquivo.
@@ -33,25 +33,29 @@ test.describe("nova edição pelo /admin", () => {
     await setRole("member");
   });
 
-  test("edição da Hack Inova nasce rascunho e abre o painel dela", async ({ memberPage: page }) => {
+  test("hackathon de comunidade nasce rascunho, ligado a ela, e abre o painel", async ({ memberPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/admin");
-    await page.getByPlaceholder("hack-inova-sorocaba-2027").fill(CASA);
-    await page.getByPlaceholder("Hack Inova Sorocaba").fill("E2E Edição da Casa");
+    await page.locator('select[name="community"]').selectOption("hack-inova");
+    await page.getByPlaceholder("hackathon-sorocaba-2027").fill(CASA);
+    await page.getByPlaceholder("Hackathon de Sorocaba").fill("E2E Edição da Casa");
     await page.locator('input[name="startsAt"]').fill("2027-03-10T09:00");
     await page.getByRole("button", { name: /criar edição/ }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/h/${CASA}$`));
     const row = await openE2eDb()
-      .prepare("SELECT active, source, startsAt FROM hackathons WHERE id = ?")
+      .prepare(
+        `SELECT h.active, h.source, h.startsAt, h.organizer, c.slug FROM hackathons h
+         JOIN communities c ON c.id = h."communityId" WHERE h.id = ?`,
+      )
       .get(CASA);
-    expect(row).toEqual({ active: 0, source: "painel", startsAt: "2027-03-10T09:00:00-03:00" });
+    expect(row).toEqual({ active: 0, source: "painel", startsAt: "2027-03-10T09:00:00-03:00", organizer: "Hack Inova", slug: "hack-inova" });
   });
 
   test("evento de outro organizador vai pro radar com link e prêmio", async ({ memberPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/admin");
-    await page.getByPlaceholder("hack-inova-sorocaba-2027").fill(TERCEIRO);
-    await page.getByPlaceholder("Hack Inova Sorocaba").fill("E2E Hackathon de Terceiro");
+    await page.getByPlaceholder("hackathon-sorocaba-2027").fill(TERCEIRO);
+    await page.getByPlaceholder("Hackathon de Sorocaba").fill("E2E Hackathon de Terceiro");
     await page.locator('input[name="startsAt"]').fill("2027-04-10T09:00");
     await page.getByText("evento de outro organizador? ponha no radar").click();
     await page.getByPlaceholder("Prefeitura de Sorocaba").fill("Prefeitura E2E");

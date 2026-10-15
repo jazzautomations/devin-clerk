@@ -46,6 +46,14 @@ export async function seedDatabase(db: Db) {
     await db
       .prepare("UPDATE hackathons SET source = 'seed' WHERE source IS NULL AND id = ANY(?)")
       .run(seedIds);
+    // as edições do seed são da comunidade Hack Inova (migration 027 cria a
+    // comunidade e liga o que já existia; aqui cobre banco novo)
+    await db
+      .prepare(
+        `UPDATE hackathons SET communityId = (SELECT id FROM communities WHERE slug = 'hack-inova')
+         WHERE source = 'seed' AND communityId IS NULL AND id = ANY(?)`,
+      )
+      .run(seedIds);
     // aposenta só o que JÁ FOI seed e saiu da lista. Edição criada pelo
     // painel (source='painel'), raspada pelo radar ou de teste nunca é tocada.
     await db

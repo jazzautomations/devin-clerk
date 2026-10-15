@@ -45,13 +45,24 @@ export type Hackathon = {
   // primeira vez que a edição ficou no ar (migration 019). Fora do ar com
   // publishedAt = arquivada; sem publishedAt = rascunho.
   publishedAt?: string | null;
+  // comunidade dona (migration 027). Nulo = evento externo do radar.
+  communityId?: number | null;
+  communitySlug?: string | null;
+  communityName?: string | null;
+  // comunidade escondida pela moderação: a edição some das listas
+  communityHidden?: boolean;
 };
 
-type Row = Omit<Hackathon, "tags" | "active" | "hosted" | "requiresApproval"> & {
+type Row = Omit<Hackathon, "tags" | "active" | "hosted" | "requiresApproval" | "communityHidden"> & {
   tags: string;
   active: number;
   requiresApproval?: number;
+  communityHidden?: number | null;
 };
+
+// toda leitura de edição traz a comunidade junto (nome e endereço pro link)
+const SELECT = `SELECT h.*, c.slug AS "communitySlug", c.name AS "communityName", c.hidden AS "communityHidden"
+  FROM hackathons h LEFT JOIN communities c ON c.id = h.communityId`;
 
 function toHackathon(row: Row): Hackathon {
   return {
@@ -60,24 +71,26 @@ function toHackathon(row: Row): Hackathon {
     active: row.active === 1,
     hosted: isHostedRow(row),
     requiresApproval: row.requiresApproval === 1,
+    communityHidden: row.communityHidden === 1,
   };
 }
 
 /**
- * "Roda no HackaHub": criada pela plataforma (seed ou painel). O nome do
- * organizador não decide nada — antes era "contém hack inova", o que fazia
- * da Hack Inova a dona da plataforma.
+ * "Roda no HackaHub": criada pela plataforma (seed ou painel) ou de uma
+ * comunidade. O nome do organizador não decide nada — antes era "contém hack
+ * inova", o que fazia da Hack Inova a dona da plataforma.
  */
-export function isHostedRow(row: { source?: string | null }): boolean {
-  return row.source === "seed" || row.source === "painel";
+export function isHostedRow(row: { source?: string | null; communityId?: number | null }): boolean {
+  return row.source === "seed" || row.source === "painel" || (row.communityId ?? null) !== null;
 }
 
 /** a mesma regra em SQL, pra quem filtra no banco (alias da tabela hackathons) */
-export const hostedSql = (alias = "h") => `${alias}.source IN ('seed', 'painel')`;
+export const hostedSql = (alias = "h") =>
+  `(${alias}.source IN ('seed', 'painel') OR ${alias}.communityId IS NOT NULL)`;
 
 async function allActive(): Promise<Hackathon[]> {
   const rows = await db
-    .prepare("SELECT * FROM hackathons WHERE active = 1")
+    .prepare(`${SELECT} WHERE h.active = 1 AND COALESCE(c.hidden, 0) = 0`)
     .all() as Row[];
   return rows.map(toHackathon);
 }
@@ -137,7 +150,7 @@ export async function searchHackathons(q: string, now = new Date()): Promise<Hac
 
 export async function getHackathon(id: string): Promise<Hackathon | null> {
   const row = await db
-    .prepare("SELECT * FROM hackathons WHERE id = ?")
+    .prepare(`${SELECT} WHERE h.id = ?`)
     .get(id) as Row | undefined;
   return row ? toHackathon(row) : null;
 }
@@ -148,4 +161,24 @@ export function isRegistrationClosed(
 ): boolean {
   const t = ts(h.registrationDeadline);
   return !Number.isNaN(t) && t < now.getTime();
+}
+
+/**
+ * Hackathons de uma comunidade: no ar (próximos e encerrados) e, pra quem
+ * organiza, os rascunhos. Arquivada (saiu do ar depois de publicada) não entra.
+ */
+export async function getCommunityHackathons(
+  communityId: number,
+  now = new Date(),
+): Promise<{ upcoming: Hackathon[]; past: Hackathon[]; drafts: Hackathon[] }> {
+  const rows = (await db
+    .prepare(`${SELECT} WHERE h.communityId = ? AND (h.active = 1 OR h.publishedAt IS NULL)`)
+    .all(communityId)) as Row[];
+  const all = rows.map(toHackathon);
+  const live = all.filter((h) => h.active);
+  return {
+    upcoming: live.filter((h) => !isOver(h, now)).sort((a, b) => ts(a.startsAt) - ts(b.startsAt)),
+    past: live.filter((h) => isOver(h, now)).sort((a, b) => ts(b.startsAt) - ts(a.startsAt)),
+    drafts: all.filter((h) => !h.active).sort((a, b) => ts(a.startsAt) - ts(b.startsAt)),
+  };
 }

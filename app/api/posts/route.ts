@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
+import { getCommunityBySlug, getMembership } from "@/lib/communities";
 import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
@@ -14,6 +15,14 @@ export async function GET(req?: Request) {
   const { userId } = await auth();
   const me = userId ? await getMemberByClerkId(userId) : null;
   const h = req ? new URL(req.url).searchParams.get("h") : null;
+  const c = req ? new URL(req.url).searchParams.get("c") : null;
+  if (c) {
+    const community = await getCommunityBySlug(c);
+    if (!community || (community.hidden && me?.role !== "admin")) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    return Response.json({ posts: await listPosts(50, me?.id ?? null, { communityId: community.id }) });
+  }
   if (h) {
     const edition = await getHackathon(h);
     if (!edition || !edition.active) {
@@ -71,9 +80,25 @@ export async function POST(req: Request) {
     }
     hackathonId = edition.id;
   }
+  // mural da comunidade: só quem está nela posta (escondida = 404)
+  let communityId: number | null = null;
+  const rawC: unknown = body.communitySlug;
+  if (rawC !== undefined && rawC !== null && rawC !== "") {
+    if (typeof rawC !== "string" || hackathonId) {
+      return Response.json({ error: "comunidade inválida" }, { status: 400 });
+    }
+    const community = await getCommunityBySlug(rawC);
+    if (!community || (community.hidden && member.role !== "admin")) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    if (!(await getMembership(community.id, member.id))) {
+      return Response.json({ error: "Entre na comunidade pra postar no mural dela." }, { status: 403 });
+    }
+    communityId = community.id;
+  }
   let post;
   try {
-    post = await createPost(member.id, body.body, body.link, hackathonId);
+    post = await createPost(member.id, body.body, body.link, hackathonId, communityId);
   } catch {
     return Response.json({ error: "Link inválido" }, { status: 400 });
   }
