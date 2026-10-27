@@ -132,6 +132,22 @@ export function landingSample<T extends RadarEvent>(
   return { sample, count: relevant.length };
 }
 
+/**
+ * Números da landing, todos da mesma lista aberta: quantos estão abertos,
+ * quantos aceitam brasileiro (regra lida pelo scraper, 'sim') e quantos do
+ * Devpost excluem o Brasil na regra ('nao'). Nada estimado.
+ */
+export function radarCounts(open: RadarEvent[]): { open: number; brazilOk: number; devpostExcluded: number } {
+  let brazilOk = 0;
+  let devpostExcluded = 0;
+  for (const h of open) {
+    const can = brazilCanJoin(h);
+    if (can === "sim") brazilOk++;
+    if (can === "nao" && (h.source ?? "").split("+").includes("devpost")) devpostExcluded++;
+  }
+  return { open: open.length, brazilOk, devpostExcluded };
+}
+
 // Painel: hackathons do Brasil (edições da casa primeiro), com a UF (e a
 // cidade) do perfil na frente. Gringo e o que fecha em 48h ficam de fora.
 export function dashboardList<T extends RadarEvent>(

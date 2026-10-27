@@ -198,3 +198,20 @@ describe("brazilCanJoin — avaliado e vazio é não informado", () => {
     expect(radarSectionOf(pt)).toBe("nao-informado");
   });
 });
+
+describe("radarCounts (números da landing)", () => {
+  it("conta abertos, quem aceita brasileiro e o Devpost que exclui o Brasil, da mesma lista", async () => {
+    const { radarCounts } = await import("@/lib/radar");
+    const base = { name: "x", format: "online", location: null, startsAt: "2099-01-01", endsAt: null, registrationDeadline: null, prize: null, hosted: false };
+    const list = [
+      { ...base, id: "a", source: "devpost", scope: "global", brazilOk: "nao" },
+      { ...base, id: "b", source: "devpost+taikai", scope: "global", brazilOk: "nao" },
+      { ...base, id: "c", source: "devpost", scope: "global", brazilOk: "sim" },
+      { ...base, id: "d", source: "mlh", scope: "global", brazilOk: "nao" },
+      { ...base, id: "e", source: "sympla", format: "presencial", location: "Recife, PE" },
+      { ...base, id: "f", source: "devpost", scope: "global", brazilOk: null },
+    ];
+    expect(radarCounts(list)).toEqual({ open: 6, brazilOk: 2, devpostExcluded: 2 });
+    expect(radarCounts([])).toEqual({ open: 0, brazilOk: 0, devpostExcluded: 0 });
+  });
+});

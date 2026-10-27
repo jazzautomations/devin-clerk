@@ -165,6 +165,13 @@ test.describe("comunidades — logado", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await shot(page, "painel-desktop");
   });
+
+  test("landing mostra as comunidades reais e o convite pra criar a sua", async ({ page }) => {
+    await page.goto("/");
+    const box = page.getByTestId("landing-comunidades");
+    await expect(box.getByTestId("community-row").filter({ hasText: "E2E Comunidade Recife" })).toBeVisible();
+    await expect(page.getByTestId("landing-crie-a-sua").getByRole("link")).toHaveAttribute("href", "/comunidades/nova");
+  });
 });
 
 test.describe("telas novas sem conta mandam pro cadastro", () => {

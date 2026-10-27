@@ -1,19 +1,27 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Show, SignUpButton } from "@clerk/nextjs";
+import { CommunityRows } from "@/components/CommunityRows";
 import { EditionRows } from "@/components/EditionRows";
+import { listCommunities } from "@/lib/communities";
 import { getOpenHackathons } from "@/lib/hackathons";
-import { landingSample } from "@/lib/radar";
+import { landingSample, radarCounts } from "@/lib/radar";
+import imgComunidade from "@/assets/organizar/comunidade.webp";
+import imgHackathon from "@/assets/organizar/abrir-hackathon.webp";
+import imgInscritos from "@/assets/organizar/inscritos.webp";
+import imgCertificados from "@/assets/organizar/certificados.webp";
 
-// Landing curta (escolha do dono, 14/10/2026), posicionada como comunidade:
-// rede de quem constrói, cada cidade/comunidade com sua edição e todo mundo
-// no mesmo mapa. O que está aberto logo na primeira dobra, três linhas do que
-// a rede faz, as portas de quem organiza e de quem patrocina, as dúvidas.
-// Só promete o que existe (perfis, procuro-equipe, mural, feed, radar).
+// Landing curta (formato aprovado pelo dono) contando a ideia inteira: o
+// radar com a regra de quem pode entrar, as comunidades de verdade, organizar
+// o seu hackathon daqui e o que fica no seu perfil. Todo número sai do banco
+// e some quando é zero; nada de depoimento, logo de parceiro ou métrica
+// inventada. Organizar hoje é grátis, e é só isso que a página promete.
 
-const passos = [
-  { k: "01", title: "Encontre sua turma", desc: "Perfis de quem constrói, o quadro de quem procura equipe e o mural de cada edição." },
-  { k: "02", title: "Construa junto", desc: "Hackathons abertos no Brasil inteiro. Inscrição, equipe e entrega pelo HackaHub." },
-  { k: "03", title: "Mostre o que fez", desc: "Projetos, prêmios e certificado com carga horária no seu perfil, num link que é seu." },
+const organizar = [
+  { k: "01", title: "Crie a comunidade", desc: "Nome, cidade e a página pra divulgar.", img: imgComunidade, alt: "Página de uma comunidade com membros, próximos hackathons e mural" },
+  { k: "02", title: "Abra o hackathon", desc: "Nasce rascunho. Publica quando o checklist fecha.", img: imgHackathon, alt: "Painel de uma edição em rascunho com o checklist do que falta" },
+  { k: "03", title: "Inscrição e avisos", desc: "Formulário, vagas com fila e aviso pra quem está dentro.", img: imgInscritos, alt: "Lista de inscritos de uma edição com status de cada inscrição" },
+  { k: "04", title: "Check-in, júri e certificado", desc: "QR na porta, nota com comentário e certificado com horas.", img: imgCertificados, alt: "Aba de certificados com carga horária por papel" },
 ] as const;
 
 const faq = [
@@ -22,40 +30,44 @@ const faq = [
     a: "Uma maratona de um ou dois dias. Você forma uma equipe, escolhe um desafio, constrói um protótipo e apresenta pra um júri no fim.",
   },
   {
-    q: "Preciso saber programar ou ter equipe?",
+    q: "Preciso saber programar?",
     a: "Não. Equipe boa mistura código, design, negócio e dados, e muita equipe se forma no próprio dia.",
   },
   {
-    q: "Quanto custa?",
-    a: "Nada. Quem participa não paga. A edição é bancada pela organização e pelos patrocinadores.",
+    q: "Quanto custa participar?",
+    a: "Nada. Quem participa não paga, nem a conta nem a inscrição nos hackathons que rodam aqui.",
   },
   {
-    q: "O que eu levo do evento?",
-    a: "Certificado com carga horária, que dá pra usar como hora complementar, os comentários do júri e o projeto no seu perfil.",
+    q: "Como crio minha comunidade?",
+    a: "Com a conta feita, clique em criar comunidade, dê um nome e diga a cidade. Você vira dono, chama quem organiza junto e abre o primeiro hackathon pelo painel dela.",
+  },
+  {
+    q: "Quanto custa organizar?",
+    a: "Hoje é grátis. Criar a comunidade, abrir o hackathon e usar o painel da edição não custam nada.",
   },
   {
     q: "Por que preciso de conta?",
-    a: "Porque lá dentro tem gente de verdade: perfis, equipes, o mural de cada edição. A conta é de graça e vale pra todas as edições.",
+    a: "Porque lá dentro tem gente de verdade: perfis, equipes, o mural de cada comunidade. A conta é de graça e vale pra tudo.",
   },
 ] as const;
 
+const fmtN = new Intl.NumberFormat("pt-BR");
+
 export default async function Home() {
   const now = new Date();
-  const upcoming = await getOpenHackathons(now);
-  const proxima = upcoming.find((h) => h.hosted) ?? null;
-  // amostra de 4: Brasil (edições da casa e hackathons daqui) + 1–2 globais
-  // grandes abertos pra brasileiros, sem o que fecha em menos de 48h
-  // (lib/radar.ts). Loop de curiosidade: o radar completo é de quem tem
-  // conta, e a contagem do resto é real (o radar inteiro que vale pra você)
+  const [upcoming, communities] = await Promise.all([getOpenHackathons(now), listCommunities({ limit: 4 })]);
+  // amostra de 4: Brasil (edições do HackaHub e hackathons daqui) + 1–2
+  // globais abertos pra brasileiros, sem o que fecha em menos de 48h. O
+  // "+N" é o radar inteiro que vale pra você, que fica dentro da conta
   const { sample: abertos, count } = landingSample(upcoming, now, 4);
   const restantes = count - abertos.length;
-  // sem edição anunciada, a próxima é surpresa: quem deixa o e-mail fica
-  // sabendo primeiro (decisão do dono, 14/10/2026)
-  const primaryHref = proxima ? `/h/${proxima.id}` : "#proxima";
-  const primaryLabel = proxima ? "Quero participar" : "Quero saber da próxima edição";
+  const nums = radarCounts(upcoming);
+  const showNums = nums.open > 0 && nums.brazilOk > 0 && nums.brazilOk <= nums.open;
+  const onlyHackInova = communities.length === 1 && communities[0].slug === "hack-inova";
 
   return (
     <div className="-mb-24 overflow-x-clip">
+      {/* 1. hero */}
       <div className="relative">
         <div className="grid-texture pointer-events-none absolute inset-0" aria-hidden />
         <section
@@ -69,63 +81,53 @@ export default async function Home() {
           >
             A comunidade de hackathon <span className="text-accent">do Brasil.</span>
           </h1>
-          <p className="mt-6 max-w-[46ch] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-relaxed text-[#1e1e1e]">
-            Quem constrói, quem organiza e quem apoia, num lugar só. Cada cidade com os seus hackathons,
-            todo mundo no mesmo mapa.
+          <p className="mt-6 max-w-[48ch] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-relaxed text-[#1e1e1e]">
+            Ache hackathon aqui e lá fora sabendo se brasileiro pode entrar. Junte-se à comunidade da sua cidade, ou
+            crie a sua e organize o próximo por aqui.
           </p>
           <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
-            <Link href={primaryHref} className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
-              {primaryLabel} →
-            </Link>
+            <Show when="signed-out">
+              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+                <button className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
+                  Entrar na comunidade →
+                </button>
+              </SignUpButton>
+            </Show>
+            <Show when="signed-in">
+              <Link href="/comunidades" className="btn min-h-[52px]! px-6! text-[16px]!" data-testid="hero-cta-primary">
+                Achar minha comunidade →
+              </Link>
+            </Show>
             <Link
-              href="/organizar"
+              href="/comunidades/nova"
               className="cta-link go self-start text-[clamp(1.1rem,2vw,1.3rem)] sm:self-auto"
-              data-testid="hero-cta-organizar"
+              data-testid="hero-cta-criar"
             >
-              Organizo hackathon
+              Criar minha comunidade
             </Link>
           </div>
         </section>
       </div>
 
-      {!proxima && (
-        <section id="proxima" aria-labelledby="proxima-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pb-16 sm:px-6" data-testid="landing-proxima-em-breve">
-          <div className="grid gap-6 bg-foreground p-7 text-background sm:p-9 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-12">
-            <div className="flex flex-col gap-3">
-              <p className="pix text-[20px] leading-none text-band">PRÓXIMA EDIÇÃO NO HACKAHUB</p>
-              <h2 id="proxima-title" className="text-[clamp(2rem,4.4vw,3.2rem)] leading-[0.95] font-extrabold tracking-[-0.04em]">
-                Em breve.
-              </h2>
-              <p className="max-w-[42ch] text-[15.5px] leading-relaxed text-[#b8cdc0]">
-                Data, cidade e desafios saem primeiro pra quem está na comunidade. Quando a edição abrir, você recebe
-                o aviso aqui dentro e no seu e-mail.
-              </p>
-            </div>
-            <div className="flex flex-col items-start gap-3 lg:items-end">
-              <Show when="signed-out">
-                <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-                  <button className="btn min-h-[52px]! bg-band! px-6! text-foreground!" data-testid="landing-proxima-signup">
-                    criar conta e ficar sabendo →
-                  </button>
-                </SignUpButton>
-              </Show>
-              <Show when="signed-in">
-                <p className="font-mono text-[14px] text-band">você já está dentro. O aviso chega no seu painel.</p>
-              </Show>
-            </div>
-          </div>
-        </section>
-      )}
-
+      {/* 2. radar */}
       {abertos.length > 0 && (
         <section id="abertos" aria-labelledby="abertos-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 sm:px-6">
-          <div className="flex items-end justify-between gap-4 border-b-2 border-line pb-3">
-            <h2 id="abertos-title" className="font-mono text-[13px] tracking-[0.08em] uppercase">
-              abertos agora
+          <div className="flex flex-col gap-3 border-b-2 border-line pb-4">
+            <h2 id="abertos-title" className="text-[clamp(1.7rem,3.4vw,2.4rem)] leading-[1] font-extrabold tracking-[-0.035em]">
+              Antes de se inscrever, você vê se brasileiro pode entrar.
             </h2>
-            <Link href="/radar" className="font-mono text-[13px] text-accent underline-offset-4 hover:underline">
-              ver todos →
-            </Link>
+            {showNums && (
+              <p className="font-mono text-[13.5px] text-muted" data-testid="landing-radar-numeros">
+                <b className="text-foreground">{fmtN.format(nums.open)}</b> {nums.open === 1 ? "hackathon aberto" : "hackathons abertos"} agora ·{" "}
+                <b className="text-accent">{fmtN.format(nums.brazilOk)}</b> {nums.brazilOk === 1 ? "aceita" : "aceitam"} brasileiro
+                {nums.devpostExcluded > 0 && (
+                  <>
+                    {" "}
+                    · {fmtN.format(nums.devpostExcluded)} do Devpost {nums.devpostExcluded === 1 ? "deixa" : "deixam"} o Brasil de fora na regra
+                  </>
+                )}
+              </p>
+            )}
           </div>
           <EditionRows hackathons={abertos} testId="landing-proximas" now={now} />
           {restantes > 0 && (
@@ -134,20 +136,19 @@ export default async function Home() {
               data-testid="landing-radar-trancado"
             >
               <p className="text-[clamp(1.1rem,2vw,1.35rem)] font-extrabold tracking-[-0.02em]">
-                +{restantes} {restantes === 1 ? "hackathon aberto" : "hackathons abertos"} no radar.
+                +{fmtN.format(restantes)} no radar completo.
                 <span className="block text-[15px] font-normal text-[#2b2b2b]">
-                  O Brasil por estado e o online do mundo todo, com a regra de quem pode entrar. Fica dentro da
-                  plataforma.
+                  Brasil por estado e o online do mundo, com a regra de cada um. Fica dentro da conta.
                 </span>
               </p>
               <Show when="signed-out">
                 <SignUpButton mode="modal" forceRedirectUrl="/radar">
-                  <button className="btn min-h-[48px]! shrink-0 px-5!">ver o radar completo →</button>
+                  <button className="btn min-h-[48px]! shrink-0 px-5!">ver o radar →</button>
                 </SignUpButton>
               </Show>
               <Show when="signed-in">
                 <Link href="/radar" className="btn min-h-[48px]! shrink-0 px-5!">
-                  ver o radar completo →
+                  ver o radar →
                 </Link>
               </Show>
             </div>
@@ -155,43 +156,78 @@ export default async function Home() {
         </section>
       )}
 
-      <section id="como-funciona" aria-labelledby="como-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-24">
-        <h2 id="como-title" className="sr-only">
-          Como funciona
-        </h2>
-        <ol className="ink-grid md:grid-cols-3">
-          {passos.map((p) => (
-            <li key={p.k} className="flex flex-col gap-2 p-6">
-              <span className="pix text-[26px] leading-none text-accent">{p.k}</span>
-              <h3 className="text-[1.6rem] leading-tight font-extrabold tracking-[-0.03em]">{p.title}</h3>
-              <p className="text-[15.5px] leading-relaxed text-[#2b2b2b]">{p.desc}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section aria-label="Pra quem organiza e pra quem patrocina" className="mx-auto mt-20 grid max-w-6xl gap-px px-4 sm:mt-24 sm:px-6 md:grid-cols-2">
-        <div className="flex flex-col gap-3 bg-foreground p-7 text-background sm:p-9" data-testid="landing-organizar">
-          <h2 className="text-[clamp(1.7rem,3vw,2.3rem)] leading-[1] font-extrabold tracking-[-0.035em]">Organiza na sua cidade?</h2>
-          <p className="max-w-[40ch] text-[15.5px] leading-relaxed text-[#b8cdc0]">
-            Faculdade, coletivo ou empresa: sua comunidade roda a edição dela aqui, e quem participa já chega
-            com perfil.
-          </p>
-          <Link href="/organizar" className="mt-2 self-start font-mono text-[14px] text-band underline-offset-4 hover:underline">
-            Como funciona pra organizar →
-          </Link>
+      {/* 3. comunidades */}
+      <section id="comunidades" aria-labelledby="comunidades-title" className="mx-auto max-w-6xl scroll-mt-24 px-4 pt-20 sm:px-6 sm:pt-24" data-testid="landing-comunidades">
+        <div className="flex flex-col justify-between gap-3 border-b-2 border-line pb-4 sm:flex-row sm:items-end">
+          <h2 id="comunidades-title" className="text-[clamp(1.7rem,3.4vw,2.4rem)] leading-[1] font-extrabold tracking-[-0.035em]">
+            Comunidades
+          </h2>
+          <p className="max-w-[44ch] text-[15px] text-[#2b2b2b]">Quem entra recebe o aviso quando a comunidade abre um hackathon.</p>
         </div>
-        <div className="flex flex-col gap-3 border-2 border-line p-7 sm:p-9" data-testid="landing-patrocinar">
-          <h2 className="text-[clamp(1.7rem,3vw,2.3rem)] leading-[1] font-extrabold tracking-[-0.035em]">Quer patrocinar?</h2>
-          <p className="max-w-[40ch] text-[15.5px] leading-relaxed text-[#2b2b2b]">
-            Sua empresa propõe um desafio, as equipes constroem em cima dele e você recebe o relatório do que aconteceu.
+        {communities.length > 0 && <CommunityRows communities={communities} />}
+        <div className="flex flex-col items-start justify-between gap-4 border-b-2 border-line px-2 py-5 sm:flex-row sm:items-center" data-testid="landing-crie-a-sua">
+          <p className="text-[clamp(1.05rem,2vw,1.3rem)] font-extrabold tracking-[-0.02em]">
+            {onlyHackInova || communities.length === 0
+              ? "A da sua cidade ainda não está aqui?"
+              : "Não achou a sua?"}{" "}
+            <span className="font-normal text-[#2b2b2b]">Crie em um minuto.</span>
           </p>
-          <Link href="/empresas" className="mt-2 self-start font-mono text-[14px] text-accent underline-offset-4 hover:underline">
-            Quero patrocinar um desafio →
+          <Link href="/comunidades/nova" className="btn-ghost min-h-[48px]! shrink-0">
+            criar minha comunidade →
           </Link>
         </div>
       </section>
 
+      {/* 4. organizar */}
+      <section id="organizar" aria-labelledby="organizar-title" className="mt-20 bg-foreground text-background sm:mt-24" data-testid="landing-organizar">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-3">
+              <p className="font-mono text-[13px] text-[#b8cdc0]">
+                <span className="text-band">[organizar]</span> do zero ao certificado
+              </p>
+              <h2 id="organizar-title" className="max-w-[18ch] text-[clamp(1.9rem,4vw,2.9rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
+                Organize o seu hackathon daqui.
+              </h2>
+            </div>
+            <Link href="/comunidades/nova" className="btn-go shrink-0 self-start sm:self-auto" data-testid="landing-organizar-cta">
+              Criar minha comunidade →
+            </Link>
+          </div>
+          <ol className="mt-10 grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-4">
+            {organizar.map((p) => (
+              <li key={p.k} className="flex min-w-0 flex-col gap-3">
+                <div className="overflow-hidden border-[1.5px] border-[#5e7869] bg-background">
+                  <Image src={p.img} alt={p.alt} sizes="(min-width: 1024px) 270px, 50vw" placeholder="blur" className="block aspect-[4/3] h-auto w-full object-cover object-left-top" />
+                </div>
+                <p className="pix text-[22px] leading-none text-band">{p.k}</p>
+                <h3 className="text-[1.05rem] leading-tight font-extrabold tracking-[-0.02em] sm:text-[1.3rem]">{p.title}</h3>
+                <p className="text-[13.5px] leading-snug text-[#b8cdc0] sm:text-[14.5px]">{p.desc}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-10 font-mono text-[13px] text-[#b8cdc0]">
+            Hoje é grátis.{" "}
+            <Link href="/organizar" className="text-band underline-offset-4 hover:underline">
+              ver o passo a passo →
+            </Link>
+          </p>
+        </div>
+      </section>
+
+      {/* 5. perfil */}
+      <section aria-labelledby="perfil-title" className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 sm:pt-24" data-testid="landing-perfil">
+        <div className="grid gap-4 border-y-2 border-line py-8 lg:grid-cols-[1.2fr_1fr] lg:items-center lg:gap-12">
+          <h2 id="perfil-title" className="text-[clamp(1.9rem,4vw,2.9rem)] leading-[0.98] font-extrabold tracking-[-0.04em]">
+            O que você construiu <span className="text-accent">fica com você.</span>
+          </h2>
+          <p className="max-w-[44ch] text-[16px] leading-relaxed text-[#2b2b2b]">
+            Projeto, equipe, prêmio e certificado com horas, num link que é seu.
+          </p>
+        </div>
+      </section>
+
+      {/* 6. dúvidas */}
       <section aria-labelledby="faq-title" className="mx-auto grid max-w-6xl gap-8 px-4 pt-20 sm:px-6 sm:pt-24 lg:grid-cols-[1fr_1.6fr]">
         <h2 id="faq-title" className="text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1] font-extrabold tracking-[-0.035em]">
           Dúvidas
@@ -212,12 +248,12 @@ export default async function Home() {
       <section aria-labelledby="conta-title" className="mx-auto max-w-6xl px-4 pt-20 pb-24 sm:px-6 sm:pt-24 sm:pb-28" data-testid="landing-conta">
         <div className="flex flex-col items-start justify-between gap-6 border-2 border-line bg-mint p-7 sm:flex-row sm:items-center sm:p-9">
           <h2 id="conta-title" className="text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] font-extrabold tracking-[-0.03em]">
-            Entre pra comunidade.
+            Sua conta vale pra todas as comunidades.
           </h2>
           <Show when="signed-out">
             <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
               <button className="btn min-h-[52px]! shrink-0 px-6!" data-testid="landing-signup">
-                criar conta, é de graça →
+                Entrar na comunidade →
               </button>
             </SignUpButton>
           </Show>

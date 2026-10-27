@@ -13,23 +13,27 @@ async function noHorizontalScroll(page: Page) {
 }
 
 test.describe("landing pública", () => {
-  test("CTA primário leva pra próxima edição e secundário pra /organizar", async ({ page }) => {
+  test("CTA primário cadastra e o secundário cria a comunidade", async ({ page }) => {
     await page.goto("/");
-    // a próxima edição Hack Inova aberta (outros specs semeiam edições futuras)
-    await expect(page.getByTestId("hero-cta-primary")).toHaveAttribute("href", /^\/h\/[^/]+$/);
-    await expect(page.getByTestId("hero-cta-organizar")).toHaveAttribute("href", "/organizar");
-    // o que está aberto aparece já na primeira dobra, Hack Inova primeiro
+    await expect(page.getByTestId("hero-cta-primary")).toHaveText(/entrar na comunidade/i);
+    await expect(page.getByTestId("hero-cta-criar")).toHaveAttribute("href", "/comunidades/nova");
+    // o que está aberto aparece já na primeira dobra, edição com inscrição aqui primeiro
     await expect(page.getByTestId("landing-proximas")).toContainText(/hack inova/i);
   });
 
-  test("seções por público: participar, por dentro, edições, organizar, patrocinar, conta e FAQ", async ({ page }) => {
+  test("narrativa: radar, comunidades, organizar, perfil, dúvidas e conta", async ({ page }) => {
     await page.goto("/");
-    for (const id of ["landing-proximas", "landing-organizar", "landing-patrocinar", "landing-conta", "landing-faq"]) {
+    for (const id of ["landing-proximas", "landing-comunidades", "landing-organizar", "landing-perfil", "landing-conta", "landing-faq"]) {
       await expect(page.getByTestId(id)).toBeVisible();
     }
-    await expect(page.locator("#como-funciona")).toBeVisible();
-    await expect(page.getByTestId("landing-organizar").getByRole("link", { name: /organizar/i })).toHaveAttribute("href", "/organizar");
-    await expect(page.getByTestId("landing-patrocinar").getByRole("link", { name: /patrocinar um desafio/i })).toHaveAttribute("href", "/empresas");
+    await expect(page.getByTestId("landing-organizar-cta")).toHaveAttribute("href", "/comunidades/nova");
+    await expect(page.getByTestId("landing-organizar").getByRole("link", { name: /passo a passo/i })).toHaveAttribute("href", "/organizar");
+    await expect(page.getByTestId("landing-organizar").locator("img")).toHaveCount(4);
+    // dúvidas de quem organiza, com a resposta que é verdade hoje
+    const faqBox = page.getByTestId("landing-faq");
+    await expect(faqBox.getByText("Como crio minha comunidade?")).toBeVisible();
+    await faqBox.getByText("Quanto custa organizar?").click();
+    await expect(faqBox.getByText(/Hoje é grátis/)).toBeVisible();
     // FAQ abre e fecha
     const q = page.getByTestId("landing-faq").locator("summary").first();
     await q.click();
@@ -39,7 +43,7 @@ test.describe("landing pública", () => {
   test("header de quem não tem conta: o que explica o produto, sem link pra área logada", async ({ page }) => {
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Navegação principal" });
-    await expect(nav.getByRole("link", { name: "como funciona" })).toHaveAttribute("href", "/#como-funciona");
+    await expect(nav.getByRole("link", { name: "comunidades" })).toHaveAttribute("href", "/#comunidades");
     await expect(nav.getByRole("link", { name: "organizar" })).toHaveAttribute("href", "/organizar");
     await expect(nav.getByRole("link", { name: "patrocinar" })).toHaveAttribute("href", "/empresas");
     await expect(nav.getByRole("link", { name: "hackathons" })).toHaveCount(0);
@@ -70,12 +74,15 @@ test.describe("landing pública", () => {
 });
 
 test.describe("/organizar", () => {
-  test("hero, 5 etapas com print real, patrocínio e contato", async ({ page }) => {
+  test("self-service: hero, 4 passos com print real, patrocínio e contato pra dúvida", async ({ page }) => {
     await page.goto("/organizar");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(/do formulário ao certificado/i);
-    await expect(page.getByTestId("organizar-etapa")).toHaveCount(5);
-    await expect(page.getByTestId("organizar-etapa").locator("img")).toHaveCount(5);
-    for (const img of await page.getByTestId("organizar-etapa").locator("img").all()) {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/crie sua comunidade/i);
+    await expect(page.getByTestId("organizar-cta-criar")).toHaveAttribute("href", "/comunidades/nova");
+    await expect(page.getByText(/Hoje é grátis/).first()).toBeVisible();
+    await expect(page.getByText(/fale com a Hack Inova/i)).toHaveCount(0);
+    await expect(page.getByTestId("organizar-passo")).toHaveCount(4);
+    await expect(page.getByTestId("organizar-passo").locator("img")).toHaveCount(4);
+    for (const img of await page.getByTestId("organizar-passo").locator("img").all()) {
       expect(await img.getAttribute("alt")).toBeTruthy();
     }
     await expect(page.locator("#patrocinio")).toBeVisible();
@@ -87,7 +94,7 @@ test.describe("/organizar", () => {
     const email = `org-${Date.now()}@faculdade.edu.br`;
     await page.getByLabel(/instituição ou comunidade/i).fill("Faculdade E2E");
     await page.getByLabel(/e-mail/i).fill(email);
-    await page.getByLabel(/conta da edição/i).fill("março, 120 pessoas, saúde");
+    await page.getByLabel(/sua dúvida/i).fill("dá pra ter duas sedes no mesmo hackathon?");
     await expect(async () => {
       await page.getByRole("button", { name: /quero conversar/i }).click();
       await expect(page.getByText(/recebido/i)).toBeVisible({ timeout: 3000 });
@@ -104,8 +111,8 @@ test.describe("/organizar", () => {
 });
 
 test.describe("acesso — allowlist (spec 039)", () => {
-  const PUBLICAS = ["/", "/organizar", "/empresas", "/legal/termos", "/legal/privacidade", `/h/${NEXT}`, `/h/${NEXT}/conduta`, `/h/${NEXT}/incidente`, "/sitemap.xml", "/robots.txt", "/api/health"];
-  const PRIVADAS = ["/radar", "/feed", "/membros", "/projetos", "/talento", "/blog", "/dashboard", "/perfil", "/bem-vindo", "/notificacoes", `/h/${NEXT}/inscricao`, `/h/${NEXT}/programacao`, `/h/${NEXT}/projetos`];
+  const PUBLICAS = ["/", "/organizar", "/empresas", "/legal/termos", "/legal/privacidade", `/h/${NEXT}`, `/h/${NEXT}/conduta`, `/h/${NEXT}/incidente`, "/sitemap.xml", "/robots.txt", "/api/health", "/comunidade/hack-inova"];
+  const PRIVADAS = ["/radar", "/feed", "/membros", "/projetos", "/talento", "/blog", "/dashboard", "/perfil", "/bem-vindo", "/notificacoes", `/h/${NEXT}/inscricao`, `/h/${NEXT}/programacao`, `/h/${NEXT}/projetos`, "/comunidades", "/comunidades/nova", "/comunidade/hack-inova/editar", "/comunidade/hack-inova/hackathon/novo"];
 
   for (const p of PUBLICAS) {
     test(`${p} abre sem login (200)`, async ({ request }) => {
@@ -120,7 +127,7 @@ test.describe("acesso — allowlist (spec 039)", () => {
     });
   }
   test("API privada sem sessão → 401 JSON, nunca redirect", async ({ request }) => {
-    for (const p of ["/api/posts", "/api/hackathons", "/api/roadmap", "/api/onboarding"]) {
+    for (const p of ["/api/posts", "/api/hackathons", "/api/roadmap", "/api/onboarding", "/api/communities", "/api/communities/hack-inova"]) {
       const res = await request.get(p, { maxRedirects: 0 });
       expect(res.status(), p).toBe(401);
       expect(await res.json()).toEqual({ error: "Unauthorized" });

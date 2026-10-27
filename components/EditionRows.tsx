@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { nextDate, type Hackathon } from "@/lib/hackathons";
-import { compactPrize, isBrasil, radarBadges, shortLocation } from "@/lib/radar";
+import { closingLabel, compactPrize, isBrasil, radarBadges, shortLocation } from "@/lib/radar";
 
 // spec 039 — lista de edições em linhas com fio (data pixel, nome, local,
 // selo). Landing ("abertos agora", Brasil + globais) e /dashboard
@@ -31,6 +31,7 @@ export function EditionRows({
         // amostra da landing ganha o selo de alcance e de quem pode entrar
         const prize = compactPrize(h.prize);
         const global = !isBrasil(h) ? radarBadges(h, now) : null;
+        const closing = closingLabel(h, now);
         return (
           <li key={h.id} className="border-t-2 border-line">
             <Link
@@ -44,7 +45,7 @@ export function EditionRows({
                 {fmtMes.format(d).replace(".", "").toUpperCase()}
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-[clamp(1.05rem,2.2vw,1.4rem)] leading-tight font-extrabold tracking-[-0.025em] group-hover:underline">
+                <span className="line-clamp-2 block text-[clamp(1.05rem,2.2vw,1.4rem)] leading-tight font-extrabold tracking-[-0.025em] [overflow-wrap:anywhere] group-hover:underline">
                   {h.name}
                 </span>
                 <span className="mt-1 block truncate font-mono text-[12.5px] text-muted">
@@ -61,6 +62,7 @@ export function EditionRows({
                 {global && <span className="chip bare">{global.where}</span>}
                 {global?.brazil === "sim" && <span className="chip bare border-accent! bg-mint! text-accent!">aberto pra brasileiros</span>}
                 {prize && <span className="chip bare max-w-[180px] truncate">{prize}</span>}
+                {closing && <span className="chip bare border-orange! text-orange!">{closing}</span>}
               </span>
             </Link>
           </li>
