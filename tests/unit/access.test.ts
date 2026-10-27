@@ -27,6 +27,7 @@ const PUBLICAS = [
   "/p/12",
   "/p/12/opengraph-image",
   "/comunidade/hack-inova",
+  "/radar",
   "/rsvp/token.assinado",
   "/demo/time-x/",
   "/demo/time-x/assets/app.js",
@@ -36,7 +37,6 @@ const PUBLICAS = [
 ];
 
 const PRIVADAS = [
-  "/radar",
   "/feed",
   "/membros",
   "/projetos",

@@ -25,6 +25,7 @@ export function absoluteUrl(path = "/"): string {
 // plataforma é logado e redirecionaria o crawler pro cadastro
 const STATIC_ROUTES: { path: string; priority: number; freq: "weekly" | "daily" }[] = [
   { path: "/", priority: 1, freq: "weekly" },
+  { path: "/radar", priority: 0.9, freq: "daily" },
   { path: "/organizar", priority: 0.8, freq: "weekly" },
   { path: "/empresas", priority: 0.7, freq: "weekly" },
   { path: "/legal/termos", priority: 0.2, freq: "weekly" },
@@ -71,7 +72,6 @@ export function buildRobots(siteUrl: string = SITE_URL): MetadataRoute.Robots {
         "/perfil",
         "/bem-vindo",
         "/notificacoes",
-        "/radar",
         "/feed",
         "/membros",
         "/projetos",

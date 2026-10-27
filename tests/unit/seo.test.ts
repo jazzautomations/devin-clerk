@@ -27,7 +27,8 @@ describe("buildSitemap", () => {
     expect(urls).toContain(absoluteUrl("/h/hack-inova-unifacens-2026"));
     expect(urls).toContain(absoluteUrl("/h/hack-inova-alphaville-2026"));
     // a plataforma logada fica de fora
-    for (const priv of ["/radar", "/feed", "/membros", "/talento", "/projetos", "/blog", "/u/", "/admin", "/api", "/dashboard"]) {
+    expect(urls).toContain(absoluteUrl("/radar"));
+    for (const priv of ["/feed", "/membros", "/talento", "/projetos", "/blog", "/u/", "/admin", "/api", "/dashboard"]) {
       expect(urls.some((u) => u.startsWith(absoluteUrl(priv)))).toBe(false);
     }
   });
@@ -40,7 +41,8 @@ describe("buildRobots", () => {
     const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules];
     expect(rules[0].userAgent).toBe("*");
     expect(rules[0].allow).toBe("/");
-    expect(rules[0].disallow).toEqual(expect.arrayContaining(["/api/", "/dashboard", "/radar", "/bem-vindo"]));
+    expect(rules[0].disallow).toEqual(expect.arrayContaining(["/api/", "/dashboard", "/bem-vindo"]));
+    expect(rules[0].disallow).not.toContain("/radar");
   });
 });
 

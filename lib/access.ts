@@ -9,6 +9,7 @@ export const PUBLIC_PAGES: RegExp[] = [
   /^\/$/, // landing: explica o produto inteiro
   /^\/organizar$/,
   /^\/empresas$/, // a porta do patrocinador (lead sem conta, spec 022)
+  /^\/radar$/, // radar aberto: ver hackathon não pede conta (decisão do dono, 15/10/2026)
   /^\/legal(\/.*)?$/,
   /^\/sign-in(\/.*)?$/,
   /^\/sign-up(\/.*)?$/,

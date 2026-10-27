@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { RadarFeed } from "@/components/RadarFeed";
 import { SubmitEventForm } from "@/components/SubmitEventForm";
@@ -102,7 +103,13 @@ export default async function RadarPage({
             Viu um hackathon que não está no radar? Mande o link. A
             curadoria revisa antes de publicar.
           </p>
-          <SubmitEventForm />
+          {userId ? (
+            <SubmitEventForm />
+          ) : (
+            <Link href="/sign-up?redirect_url=%2Fradar" className="cta-link go self-start text-sm">
+              Entre pra indicar
+            </Link>
+          )}
         </div>
       </details>
     </section>

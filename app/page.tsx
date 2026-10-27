@@ -58,7 +58,7 @@ export default async function Home() {
   const [upcoming, communities] = await Promise.all([getOpenHackathons(now), listCommunities({ limit: 4 })]);
   // amostra de 4: Brasil (edições do HackaHub e hackathons daqui) + 1–2
   // globais abertos pra brasileiros, sem o que fecha em menos de 48h. O
-  // "+N" é o radar inteiro que vale pra você, que fica dentro da conta
+  // "+N" é o radar inteiro que vale pra você, aberto em /radar
   const { sample: abertos, count } = landingSample(upcoming, now, 4);
   const restantes = count - abertos.length;
   const nums = radarCounts(upcoming);
@@ -133,24 +133,17 @@ export default async function Home() {
           {restantes > 0 && (
             <div
               className="flex flex-col items-start justify-between gap-4 border-b-2 border-line bg-mint px-2 py-5 sm:flex-row sm:items-center"
-              data-testid="landing-radar-trancado"
+              data-testid="landing-radar-completo"
             >
               <p className="text-[clamp(1.1rem,2vw,1.35rem)] font-extrabold tracking-[-0.02em]">
                 +{fmtN.format(restantes)} no radar completo.
                 <span className="block text-[15px] font-normal text-[#2b2b2b]">
-                  Brasil por estado e o online do mundo, com a regra de cada um. Fica dentro da conta.
+                  Brasil por estado e o online do mundo, com a regra de cada um.
                 </span>
               </p>
-              <Show when="signed-out">
-                <SignUpButton mode="modal" forceRedirectUrl="/radar">
-                  <button className="btn min-h-[48px]! shrink-0 px-5!">ver o radar →</button>
-                </SignUpButton>
-              </Show>
-              <Show when="signed-in">
-                <Link href="/radar" className="btn min-h-[48px]! shrink-0 px-5!">
-                  ver o radar →
-                </Link>
-              </Show>
+              <Link href="/radar" className="btn min-h-[48px]! shrink-0 px-5!">
+                ver o radar →
+              </Link>
             </div>
           )}
         </section>

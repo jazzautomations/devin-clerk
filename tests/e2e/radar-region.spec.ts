@@ -166,7 +166,7 @@ test.describe("landing — Brasil + global aberto pra brasileiro", () => {
     }
     // Hack Inova (edição com inscrição aqui) abre a lista
     await expect(lista.locator("li").first().getByText("inscrição no HackaHub")).toBeVisible();
-    await expect(page.getByTestId("landing-radar-trancado")).toContainText(/no radar completo/);
+    await expect(page.getByTestId("landing-radar-completo")).toContainText(/no radar completo/);
     await page.setViewportSize({ width: 390, height: 844 });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
