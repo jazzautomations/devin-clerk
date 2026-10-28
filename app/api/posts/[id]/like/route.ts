@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { getMemberByClerkId } from "@/lib/members";
 import { getPost, isReactionKind, reactionCounts, REACTION_KINDS, REACTION_LABEL, setReaction, type ReactionKind } from "@/lib/posts";
-import { alreadyNotified, notify } from "@/lib/notifications";
+import { notifyOnce } from "@/lib/notifications";
 import { parseId } from "@/lib/ids";
 import { limitOrNull } from "@/lib/ratelimit";
 
@@ -34,16 +34,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const res = await setReaction(post.id, member.id, kind);
 
   if (res.changed && kind) {
-    const href = `/post/${post.id}`;
-    if (!(await alreadyNotified(post.memberId, "reaction", member.id, href, null))) {
-      await notify(post.memberId, {
-        type: "reaction",
-        actorId: member.id,
-        actorUsername: member.username,
-        text: `@${member.username} reagiu ao seu post: ${REACTION_LABEL[kind]}`,
-        href,
-      });
-    }
+    // 1 por par pra sempre, mesmo com duas reações ao mesmo tempo
+    await notifyOnce(post.memberId, {
+      type: "reaction",
+      actorId: member.id,
+      actorUsername: member.username,
+      text: `@${member.username} reagiu ao seu post: ${REACTION_LABEL[kind]}`,
+      href: `/post/${post.id}`,
+    });
   }
   const reactions = await reactionCounts(post.id);
   const likeCount = REACTION_KINDS.reduce((s, k) => s + reactions[k], 0);

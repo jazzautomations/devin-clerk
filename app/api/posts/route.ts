@@ -5,6 +5,7 @@ import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
 import { limitOrNull } from "@/lib/ratelimit";
+import { canManageEdition } from "@/lib/roles";
 
 export async function GET(req?: Request) {
   // leitura pública — rede social é vitrine; postar exige conta.
@@ -19,15 +20,21 @@ export async function GET(req?: Request) {
     if (!community || (community.hidden && me?.role !== "admin")) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
-    return Response.json({ posts: await listPosts(50, me?.id ?? null, { communityId: community.id }) });
+    return Response.json({
+      posts: await listPosts(50, me?.id ?? null, { communityId: community.id }, { includeHidden: me?.role === "admin" }),
+    });
   }
   if (h) {
     const edition = await getHackathon(h);
     if (!edition || !edition.active) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
+    // edição de comunidade escondida: só a organização dela (igual /h/[id])
+    if (edition.communityHidden && !(await canManageEdition(me, edition.id))) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
     return Response.json({
-      posts: await listPosts(50, me?.id ?? null, { hackathonId: edition.id }),
+      posts: await listPosts(50, me?.id ?? null, { hackathonId: edition.id }, { includeHidden: !!edition.communityHidden }),
     });
   }
   return Response.json({ posts: await listPosts(50, me?.id ?? null) });

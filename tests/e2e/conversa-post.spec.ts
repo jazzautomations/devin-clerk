@@ -11,6 +11,8 @@ const AUTOR = "e2e_cp_autor";
 const OUTRO = "e2e_cp_outro"; // é denunciado no fim (denunciar bloqueia)
 const COM = "e2e-cp-com";
 const MARK = "e2e conversa: post do autor";
+const HCOM = "e2e-cp-com-escondida"; // comunidade escondida dona da edição HED
+const HED = "e2e-cp-ed-escondida";
 
 async function noHorizontalScroll(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -23,7 +25,7 @@ async function idOf(username: string) {
   return (await openE2eDb().prepare("SELECT id FROM members WHERE username = ?").get<{ id: number }>(username))?.id ?? null;
 }
 
-type Seed = { autorPost: number; topComment: number; myPost: number; myComment: number; comPost: number; outroPost: number; note: number };
+type Seed = { hiddenEdPost: number; autorPost: number; topComment: number; myPost: number; myComment: number; comPost: number; outroPost: number; note: number };
 let seed: Seed;
 
 async function cleanup() {
@@ -31,6 +33,9 @@ async function cleanup() {
   const meId = await me();
   const ids = (await Promise.all([AUTOR, OUTRO].map(idOf))).filter((x): x is number => x !== null);
   const all = `{${[meId, ...ids].join(",")}}`;
+  await db.prepare(`DELETE FROM posts WHERE "hackathonId" = ?`).run(HED);
+  await db.prepare("DELETE FROM hackathons WHERE id = ?").run(HED);
+  await db.prepare("DELETE FROM communities WHERE slug = ?").run(HCOM);
   await db.prepare(`DELETE FROM reports WHERE "reporterId" = ANY(?::int[]) AND "targetType" = 'post'`).run(all);
   await db.prepare(`DELETE FROM member_blocks WHERE "memberId" = ANY(?::int[]) OR "blockedId" = ANY(?::int[])`).run(all, all);
   await db.prepare(`DELETE FROM notifications WHERE "memberId" = ? AND text LIKE '%e2e_cp_%'`).run(meId);
@@ -87,7 +92,20 @@ async function seedAll(): Promise<Seed> {
     .run(c, meId, c, autor, c, outro);
   const comPost = await post(autor, "e2e conversa: post no mural pra moderar", null, c);
   const outroPost = await post(outro, "e2e conversa: post pra denunciar", null, c);
-  return { autorPost, topComment, myPost, myComment, comPost, outroPost, note };
+  // edição de comunidade escondida: o post do mural dela some pra quem não é da equipe
+  const hc = (await db
+    .prepare(`INSERT INTO communities (slug, name, city, hidden) VALUES (?, 'E2E Escondida', 'Recife, PE', 1) RETURNING id`)
+    .get<{ id: number }>(HCOM))!.id;
+  await db
+    .prepare(
+      `INSERT INTO hackathons (id, name, organizer, startsAt, format, "registrationUrl", tags, active, source, location, "communityId")
+       VALUES (?, 'E2E Edição Escondida', 'Org', '2026-03-05T09:00:00-03:00', 'presencial', '', '[]', 1, 'painel', 'Recife, PE', ?)`,
+    )
+    .run(HED, hc);
+  const hiddenEdPost = (await db
+    .prepare(`INSERT INTO posts ("memberId", body, "hackathonId") VALUES (?, 'e2e conversa: mural da edição escondida', ?) RETURNING id`)
+    .get<{ id: number }>(autor, HED))!.id;
+  return { hiddenEdPost, autorPost, topComment, myPost, myComment, comPost, outroPost, note };
 }
 
 test.describe.configure({ mode: "serial" });
@@ -215,6 +233,22 @@ test.describe("conversa no post", () => {
     await expect(page).toHaveURL(new RegExp(`/comunidade/${COM}$`));
     await expect.poll(async () => await openE2eDb().prepare("SELECT 1 AS y FROM posts WHERE id = ?").get(seed.comPost)).toBeUndefined();
     expect((await page.goto(`/post/${seed.comPost}`))?.status()).toBe(404);
+  });
+
+  test("post do mural de edição de comunidade escondida dá 404 no /post e nas APIs", async ({ memberPage: page }) => {
+    const res = await page.goto(`/post/${seed.hiddenEdPost}`);
+    expect(res?.status()).toBe(404);
+    await expect(page.getByText("e2e conversa: mural da edição escondida")).toHaveCount(0);
+    for (const r of [
+      await page.request.post(`/api/posts/${seed.hiddenEdPost}/like`, { data: { kind: "curti" } }),
+      await page.request.post(`/api/posts/${seed.hiddenEdPost}/comments`, { data: { body: "oi" } }),
+      await page.request.get(`/api/posts/${seed.hiddenEdPost}/comments`),
+    ]) {
+      expect(r.status()).toBe(404);
+    }
+    const feed = await page.request.get("/api/posts");
+    const ids = ((await feed.json()) as { posts: { id: number }[] }).posts.map((p) => p.id);
+    expect(ids).not.toContain(seed.hiddenEdPost);
   });
 
   test("390px: /post sem scroll horizontal", async ({ memberPage: page }) => {

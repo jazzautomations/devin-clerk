@@ -9,6 +9,7 @@ import { canModeratePost, createPost, getPost, hydratePosts, listPostIds, listPo
 import { deleteMemberData } from "@/lib/privacy";
 import { resetRateLimits } from "@/lib/ratelimit";
 import { grantEditionRole } from "@/lib/roles";
+import { notifyOnce } from "@/lib/notifications";
 
 // Conversa no post (spec 046, migration 034): reações, respostas em 1 nível,
 // edição, denúncia pela fila única, card de link interno, moderação no lugar
@@ -463,5 +464,100 @@ describe("listPostIds e hydratePosts (contrato)", () => {
     const p = await createPost(a.id, "escondido", null, null, esc);
     expect(await getPost(p.id, a.id)).toBeNull();
     expect((await getPost(p.id, admin.id))?.id).toBe(p.id);
+  });
+});
+
+describe("revisão: espaço fora do ar, corrida e id gigante", () => {
+  async function editionOf(id: string, communityId: number, active = 1) {
+    await edition(id, active);
+    await db.prepare('UPDATE hackathons SET "communityId" = ? WHERE id = ?').run(communityId, id);
+  }
+
+  it("post do mural de edição de comunidade escondida: 404 no post, na conversa e na reação; some do feed", async () => {
+    const { one, like, comments, posts } = await routes();
+    const [autor, leitor, org, admin] = [await member(), await member(), await member(), await member("admin")];
+    const esc = await community("cp-rev-esc", 1);
+    await editionOf("cp-rev-ed", esc);
+    await grantEditionRole("cp-rev-ed", org.id, "organizador", null);
+    const p = await createPost(autor.id, "no mural da edição", null, "cp-rev-ed");
+    as(leitor);
+    expect(await getPost(p.id, leitor.id)).toBeNull();
+    expect((await one.GET(json("GET"), ctx(p.id))).status).toBe(404);
+    expect((await comments.GET(json("GET"), ctx(p.id))).status).toBe(404);
+    expect((await comments.POST(json("POST", { body: "oi" }), ctx(p.id))).status).toBe(404);
+    expect((await like.POST(json("POST", { kind: "curti" }), ctx(p.id))).status).toBe(404);
+    expect((await posts.GET(new Request("http://t/api/posts?h=cp-rev-ed"))).status).toBe(404);
+    const feed = (await (await posts.GET(new Request("http://t/api/posts"))).json()) as { posts: { id: number }[] };
+    expect(feed.posts.map((x) => x.id)).not.toContain(p.id);
+    expect(await listPostIds({ kind: "global" }, leitor.id, { limit: 200 })).not.toContain(p.id);
+    expect(await listPostIds({ kind: "hackathon", id: "cp-rev-ed" }, leitor.id)).toEqual([]);
+    // sem conta também
+    as(null);
+    expect((await comments.GET(json("GET"), ctx(p.id))).status).toBe(404);
+    // organização da edição e admin continuam vendo (igual /h/[id])
+    expect((await getPost(p.id, org.id))?.id).toBe(p.id);
+    expect((await getPost(p.id, admin.id))?.id).toBe(p.id);
+    as(org);
+    const mural = (await (await posts.GET(new Request("http://t/api/posts?h=cp-rev-ed"))).json()) as { posts: { id: number }[] };
+    expect(mural.posts.map((x) => x.id)).toEqual([p.id]);
+    expect(await notes(autor.id)).toEqual([]);
+  });
+
+  it("post de edição fora do ar: só o admin vê", async () => {
+    const [autor, leitor, admin] = [await member(), await member(), await member("admin")];
+    await edition("cp-rev-off");
+    const p = await createPost(autor.id, "antes de sair do ar", null, "cp-rev-off");
+    await db.prepare("UPDATE hackathons SET active = 0 WHERE id = ?").run("cp-rev-off");
+    expect(await getPost(p.id, leitor.id)).toBeNull();
+    expect(await getPost(p.id, null)).toBeNull();
+    expect((await getPost(p.id, admin.id))?.id).toBe(p.id);
+    expect(await listPostIds({ kind: "global" }, leitor.id, { limit: 200 })).not.toContain(p.id);
+  });
+
+  it("listPostIds no escopo community também tira a escondida, salvo includeHidden", async () => {
+    const a = await member();
+    const esc = await community("cp-rev-cesc", 1);
+    const p = await createPost(a.id, "na escondida", null, null, esc);
+    expect(await listPostIds({ kind: "community", id: esc }, null)).toEqual([]);
+    expect(await listPostIds({ kind: "community", id: esc }, null, { includeHidden: true })).toEqual([p.id]);
+    expect(await listPosts(50, null, { communityId: esc })).toEqual([]);
+  });
+
+  it("duas reações ao mesmo tempo geram 1 notificação só", async () => {
+    const { like } = await routes();
+    const [autor, leitor] = [await member(), await member()];
+    const p = await createPost(autor.id, "corrida");
+    as(leitor);
+    const rs = await Promise.all([
+      like.POST(json("POST", { kind: "curti" }), ctx(p.id)),
+      like.POST(json("POST", { kind: "ajudou" }), ctx(p.id)),
+    ]);
+    expect(rs.map((r) => r.status)).toEqual([200, 200]);
+    expect((await notes(autor.id)).filter((n) => n.type === "reaction")).toHaveLength(1);
+  });
+
+  it("notifyOnce em paralelo grava uma vez; pra si mesmo não grava", async () => {
+    const [alvo, ator] = [await member(), await member()];
+    const opts = { type: "reaction", actorId: ator.id, actorUsername: ator.username, text: "x", href: "/post/999" };
+    const res = await Promise.all(Array.from({ length: 5 }, () => notifyOnce(alvo.id, opts)));
+    expect(res.filter(Boolean)).toHaveLength(1);
+    expect(await notes(alvo.id)).toHaveLength(1);
+    expect(await notifyOnce(ator.id, opts)).toBe(false);
+  });
+
+  it("parentId acima do INT4 dá 400 'Resposta inválida' sem mensagem do banco", async () => {
+    const { comments } = await routes();
+    const [autor, leitor] = [await member(), await member()];
+    const p = await createPost(autor.id, "ids");
+    as(leitor);
+    for (const parentId of [3000000000, "3000000000", 1.5, -1, true]) {
+      const res = await comments.POST(json("POST", { body: "oi", parentId }), ctx(p.id));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe("Resposta inválida");
+    }
+    // id no limite do INT4 que não existe: a mensagem é a nossa
+    const edge = await comments.POST(json("POST", { body: "oi", parentId: 2147483647 }), ctx(p.id));
+    expect(edge.status).toBe(400);
+    expect((await edge.json()).error).toBe("Resposta inválida");
   });
 });

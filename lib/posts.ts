@@ -2,7 +2,7 @@ import db from "@/lib/db";
 import type { Member } from "@/lib/members";
 import { hiddenAuthorSql, isBlockedEither } from "@/lib/blocks";
 import { canManageCommunity } from "@/lib/communities";
-import { hasEditionRole } from "@/lib/roles";
+import { canManageEdition, hasEditionRole } from "@/lib/roles";
 import { resolveInternalLink, type LinkCard } from "@/lib/linkCard";
 import { REACTION_KINDS, REACTION_LABEL, isReactionKind, type ReactionKind } from "@/lib/reactions";
 
@@ -11,9 +11,13 @@ import { REACTION_KINDS, REACTION_LABEL, isReactionKind, type ReactionKind } fro
 // CONTRATO pras próximas ondas (timeline, menções, perfil, projeto vivo,
 // repost, espaços):
 //
-// - listPostIds(scope, meId, {antes?, limit}) devolve ids em ordem id DESC,
-//   com cursor `antes` (id exclusivo), já sem comunidade escondida e sem
-//   autores de hiddenIdsFor(meId) (bloqueio nos dois sentidos e silêncio).
+// - listPostIds(scope, meId, {antes?, limit, includeHidden?}) devolve ids em
+//   ordem id DESC, com cursor `antes` (id exclusivo), sem autores de
+//   hiddenIdsFor(meId) (bloqueio nos dois sentidos e silêncio) e, em todo
+//   escopo, sem post de espaço fora do ar: comunidade escondida, edição de
+//   comunidade escondida e edição inativa. includeHidden: true desliga esse
+//   filtro e é só pra rota que já conferiu que quem lê pode ver o espaço
+//   (admin na comunidade escondida, equipe da edição).
 // - hydratePosts(ids, meId) devolve Post[] na ordem dos ids, com reações,
 //   minha reação, contagem de comentários, editedAt, linkCard e canModerate.
 //   Feature que precisa de outro filtro (tag, time, espaço) escreve a própria
@@ -80,11 +84,15 @@ type ScopeArg = PostScope | { kind: "solto" };
 
 const emptyReactions = (): Record<ReactionKind, number> => ({ curti: 0, ajudou: 0, quero_testar: 0, aprendi: 0 });
 
-export async function listPostIds(
-  scope: ScopeArg,
-  meId: number | null,
-  opts: { antes?: number | null; limit?: number } = {},
-): Promise<number[]> {
+// post visível = o espaço dele está no ar. Post de mural de edição tem
+// communityId NULL: a comunidade dele é a da edição (hackathons.communityId).
+const SPACE_UP_SQL = `NOT EXISTS (SELECT 1 FROM communities co WHERE co.id = p.communityId AND co.hidden = 1)
+  AND NOT EXISTS (SELECT 1 FROM hackathons hh LEFT JOIN communities hc ON hc.id = hh.communityId
+    WHERE hh.id = p.hackathonId AND (hh.active = 0 OR hc.hidden = 1))`;
+
+export type ListOpts = { antes?: number | null; limit?: number; includeHidden?: boolean };
+
+export async function listPostIds(scope: ScopeArg, meId: number | null, opts: ListOpts = {}): Promise<number[]> {
   const limit = Math.max(1, Math.min(opts.limit ?? 50, 200));
   const params: Record<string, unknown> = { me: meId ?? -1, limit };
   const where: string[] = [];
@@ -107,11 +115,7 @@ export async function listPostIds(
       where.push("p.hackathonId IS NULL AND p.communityId IS NULL");
       break;
   }
-  // a rota da comunidade já barrou quem não pode ver a escondida (só admin
-  // chega aqui com ela); nos outros escopos comunidade escondida some
-  if (scope.kind !== "community") {
-    where.push("NOT EXISTS (SELECT 1 FROM communities co WHERE co.id = p.communityId AND co.hidden = 1)");
-  }
+  if (!opts.includeHidden) where.push(SPACE_UP_SQL);
   if (meId) where.push(hiddenAuthorSql("p.memberId"));
   if (opts.antes) {
     where.push("p.id < @antes");
@@ -229,26 +233,37 @@ export async function listPosts(
   limit = 50,
   meId: number | null = null,
   scope?: LegacyPostScope | PostScope,
+  opts: { includeHidden?: boolean } = {},
 ): Promise<Post[]> {
-  return hydratePosts(await listPostIds(toListScope(scope), meId, { limit }), meId);
+  return hydratePosts(await listPostIds(toListScope(scope), meId, { limit, ...opts }), meId);
 }
 
 /**
- * O post pra quem lê, ou null: não existe, é de comunidade escondida (só o
- * admin vê) ou um dos dois bloqueou o outro.
+ * O post pra quem lê, ou null: não existe, um dos dois bloqueou o outro ou o
+ * espaço dele está fora do ar. Comunidade escondida e edição inativa: só o
+ * admin vê. Edição de comunidade escondida: admin e organização da edição
+ * (a mesma regra de /h/[id]).
  */
 export async function getPost(id: number, meId: number | null): Promise<Post | null> {
   if (!Number.isSafeInteger(id) || id <= 0) return null;
   const row = await db
     .prepare(
-      `SELECT p.memberId, COALESCE(co.hidden, 0) AS hidden FROM posts p
-       LEFT JOIN communities co ON co.id = p.communityId WHERE p.id = ?`,
+      `SELECT p.memberId, p.hackathonId, COALESCE(co.hidden, 0) AS hidden,
+              COALESCE(hh.active, 1) AS "editionActive", COALESCE(hc.hidden, 0) AS "editionHidden"
+       FROM posts p
+       LEFT JOIN communities co ON co.id = p.communityId
+       LEFT JOIN hackathons hh ON hh.id = p.hackathonId
+       LEFT JOIN communities hc ON hc.id = hh.communityId
+       WHERE p.id = ?`,
     )
-    .get<{ memberId: number; hidden: number }>(id);
+    .get<{ memberId: number; hackathonId: string | null; hidden: number; editionActive: number; editionHidden: number }>(id);
   if (!row) return null;
-  if (Number(row.hidden)) {
+  const adminOnly = Number(row.hidden) === 1 || Number(row.editionActive) === 0;
+  if (adminOnly || Number(row.editionHidden) === 1) {
     const viewer = await viewerOf(meId);
-    if (viewer?.role !== "admin") return null;
+    if (!viewer) return null;
+    if (adminOnly && viewer.role !== "admin") return null;
+    if (!adminOnly && !(await canManageEdition(viewer, row.hackathonId!))) return null;
   }
   if (meId && (await isBlockedEither(meId, Number(row.memberId)))) return null;
   return (await hydratePosts([id], meId))[0] ?? null;

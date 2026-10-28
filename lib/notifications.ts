@@ -83,6 +83,28 @@ export async function alreadyNotified(
     .get<{ y: number }>(memberId, type, actorId, href, sinceDays, sinceDays);
   return !!row;
 }
+/**
+ * "1 por par" sem corrida: a checagem e o INSERT rodam numa transação sob
+ * uma trava por (membro, tipo, ator, destino). Duas requisições ao mesmo
+ * tempo (curti e ajudou em paralelo) não geram duas notificações.
+ * true = notificou agora.
+ */
+export async function notifyOnce(
+  memberId: number,
+  opts: { type: string; actorId: number; actorUsername?: string; text: string; href: string | null },
+  sinceDays: number | null = null,
+): Promise<boolean> {
+  if (opts.actorId === memberId) return false;
+  return db.transaction(async () => {
+    await db
+      .prepare("SELECT pg_advisory_xact_lock(hashtext(?::text)) AS ok")
+      .get(`notify:${memberId}:${opts.type}:${opts.actorId}:${opts.href ?? ""}`);
+    if (await alreadyNotified(memberId, opts.type, opts.actorId, opts.href, sinceDays)) return false;
+    await notify(memberId, { ...opts, href: opts.href ?? undefined });
+    return true;
+  })();
+}
+
 // migration 032: notificação de quem eu silenciei ou de quem está bloqueado
 // (dois sentidos) some da lista e da contagem. O ator é casado pelo actorId,
 // que não muda quando a pessoa troca o @.
