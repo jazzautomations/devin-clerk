@@ -4,7 +4,7 @@ import { useState } from "react";
 import { userMessage } from "@/lib/apiError";
 import {
   LEAD_INTEREST_LABELS,
-  LEAD_INTERESTS,
+  MARCA_INTERESTS,
   type LeadInterest,
 } from "@/lib/leadInterests";
 
@@ -70,6 +70,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           </span>
           <input
             id="lead-company"
+            maxLength={120}
             type="text"
             required
             value={company}
@@ -84,6 +85,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           </span>
           <input
             id="lead-email"
+            maxLength={200}
             type="email"
             required
             value={email}
@@ -104,7 +106,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           onChange={(e) => setInterest(e.target.value as LeadInterest)}
           className={inputCls}
         >
-          {LEAD_INTERESTS.filter((i) => i !== "organizar").map((i) => (
+          {MARCA_INTERESTS.map((i) => (
             <option key={i} value={i}>
               {LEAD_INTEREST_LABELS[i]}
             </option>
@@ -118,6 +120,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
         </span>
         <textarea
           id="lead-message"
+          maxLength={1000}
           rows={3}
           value={message}
           onChange={(e) => setMessage(e.target.value)}

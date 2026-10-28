@@ -77,6 +77,16 @@ horizontal nas rotas novas.
   é o seguir leve de quem não quer ser membro: vê mural, avisos e hackathons
   no /feed (aba "minhas comunidades") e no painel e recebe o anúncio de
   hackathon; não posta no mural nem recebe aviso. Entrar apaga o seguir.
+- Apoio da comunidade (migration 028, `lib/communitySupporters.ts`): dono/
+  organizador cadastra, ordena e remove apoiadores (tipos em
+  `lib/supportKinds.ts`, inclusive não-financeiros) em
+  `/comunidade/[slug]/apoio`; a página mostra "Quem apoia" só com alguém
+  cadastrado. "Quero apoiar" é lead do `/api/leads` com `community` (slug):
+  fica ligado à comunidade, avisa dono/organizadores e sai da fila do /admin.
+  Tipo de apoio nunca vem pré-escolhido (lead sem tipo = `null`). Limites de
+  lead (empresa 120, e-mail 200 sem `?&%/#`, mensagem 1000) moram em
+  `createLead` e valem pra todo lead.
+  Patrocínio por edição continua em `lib/editionSponsors.ts`.
 
 ## UI
 

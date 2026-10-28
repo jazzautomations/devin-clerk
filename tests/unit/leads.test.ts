@@ -4,6 +4,7 @@ import {
   createLead,
   LEAD_DEDUPE_MS,
   LEAD_INTERESTS,
+  leadMailto,
   listLeads,
 } from "@/lib/leads";
 
@@ -31,7 +32,12 @@ describe("createLead — validação", () => {
   });
 
   it("cria com message e cada interest da whitelist", async () => {
-    for (const interest of LEAD_INTERESTS) {
+    // 'comunidade' só existe ligado a uma comunidade (migration 028; coberto
+    // em tests/api/community-support.test.ts)
+    await expect(
+      createLead({ company: "Co comunidade", email: "c@co.dev", interest: "comunidade" }),
+    ).rejects.toThrow(/comunidade/);
+    for (const interest of LEAD_INTERESTS.filter((i) => i !== "comunidade")) {
       const { lead } = await createLead({
         company: `Co ${interest}`,
         email: `${interest}@co.dev`,
@@ -61,6 +67,36 @@ describe("createLead — validação", () => {
       await expect(createLead({ company: "Co", email, interest: "outro" }),
       ).rejects.toThrow();
     }
+  });
+
+  it("e-mail com caractere de parâmetro de mailto (? & % / #) lança erro", async () => {
+    for (const email of [
+      "contato@empresa.com?bcc=espiao%40evil.com",
+      "a&b@c.dev",
+      "a%40b@c.dev",
+      "a@c.dev/x",
+      "a@c.dev#x",
+      "a\"b@c.dev",
+    ]) {
+      await expect(createLead({ company: "Co", email, interest: "outro" })).rejects.toThrow(/e-mail/);
+    }
+    // e-mail comum com + e ponto segue valendo
+    const { lead } = await createLead({ company: "Co", email: "nome.sobrenome+hh@empresa.com.br", interest: "outro" });
+    expect(lead.email).toBe("nome.sobrenome+hh@empresa.com.br");
+  });
+
+  it("limites: empresa 120, e-mail 200, mensagem 1000 (todo lead)", async () => {
+    await expect(createLead({ company: "x".repeat(121), email: "a@b.dev", interest: "outro" })).rejects.toThrow(/120/);
+    await expect(createLead({ company: "Co", email: `${"a".repeat(195)}@b.dev`, interest: "outro" })).rejects.toThrow(/e-mail/);
+    await expect(createLead({ company: "Co", email: "a@b.dev", interest: "desafio", message: "x".repeat(1001) })).rejects.toThrow(/1000/);
+    const { created } = await createLead({ company: "x".repeat(120), email: "a@b.dev", interest: "outro", message: "x".repeat(1000) });
+    expect(created).toBe(true);
+  });
+
+  it("leadMailto: link só pra e-mail seguro", () => {
+    expect(leadMailto("a@b.dev")).toBe("mailto:a@b.dev");
+    expect(leadMailto("a@b.dev?bcc=x@y.dev")).toBeNull();
+    expect(leadMailto("a@b.dev&subject=oi")).toBeNull();
   });
 
   it("interest fora da whitelist lança erro", async () => {

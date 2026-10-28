@@ -8,6 +8,8 @@ export const LEAD_INTERESTS = [
   "talento",
   "outro",
   "organizar",
+  // migration 028: "quero apoiar esta comunidade" (lead ligado à comunidade)
+  "comunidade",
 ] as const;
 
 export type LeadInterest = (typeof LEAD_INTERESTS)[number];
@@ -18,7 +20,11 @@ export const LEAD_INTEREST_LABELS: Record<LeadInterest, string> = {
   talento: "talento",
   outro: "outro",
   organizar: "organizar uma edição",
+  comunidade: "apoiar uma comunidade",
 };
+
+/** o que o form do /empresas oferece (organizar e comunidade têm porta própria) */
+export const MARCA_INTERESTS = LEAD_INTERESTS.filter((i) => i !== "organizar" && i !== "comunidade");
 
 export function isLeadInterest(v: unknown): v is LeadInterest {
   return (
