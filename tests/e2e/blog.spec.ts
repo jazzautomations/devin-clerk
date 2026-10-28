@@ -86,7 +86,7 @@ test.describe("seo — metadata e dados estruturados", () => {
     expect(json.location?.name).toMatch(/unifacens/i);
   });
 
-  test("/sitemap.xml retorna 200, lista o teaser /h/* e não lista área logada", async ({
+  test("/sitemap.xml retorna 200, lista o teaser /h/*, o radar e não lista área logada", async ({
     request,
   }) => {
     const res = await request.get("/sitemap.xml");
@@ -95,7 +95,7 @@ test.describe("seo — metadata e dados estruturados", () => {
     expect(xml).toContain("/h/hack-inova-unifacens-2026");
     expect(xml).toContain("/organizar");
     expect(xml).not.toContain("/blog");
-    expect(xml).not.toContain("/radar");
+    expect(xml).toContain("/radar");
   });
 
   // o e2e roda fora do domínio de produção: robots fecha tudo e toda

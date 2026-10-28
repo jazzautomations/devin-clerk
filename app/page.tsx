@@ -205,6 +205,12 @@ export default async function Home() {
               ver o passo a passo →
             </Link>
           </p>
+          <p className="mt-3 font-mono text-[13px] text-[#b8cdc0]">
+            Sua empresa quer apoiar?{" "}
+            <Link href="/empresas" className="text-band underline-offset-4 hover:underline">
+              quero patrocinar um desafio →
+            </Link>
+          </p>
         </div>
       </section>
 

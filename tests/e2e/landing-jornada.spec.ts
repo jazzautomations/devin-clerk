@@ -111,8 +111,8 @@ test.describe("/organizar", () => {
 });
 
 test.describe("acesso — allowlist (spec 039)", () => {
-  const PUBLICAS = ["/", "/organizar", "/empresas", "/legal/termos", "/legal/privacidade", `/h/${NEXT}`, `/h/${NEXT}/conduta`, `/h/${NEXT}/incidente`, "/sitemap.xml", "/robots.txt", "/api/health", "/comunidade/hack-inova"];
-  const PRIVADAS = ["/radar", "/feed", "/membros", "/projetos", "/talento", "/blog", "/dashboard", "/perfil", "/bem-vindo", "/notificacoes", `/h/${NEXT}/inscricao`, `/h/${NEXT}/programacao`, `/h/${NEXT}/projetos`, "/comunidades", "/comunidades/nova", "/comunidade/hack-inova/editar", "/comunidade/hack-inova/hackathon/novo"];
+  const PUBLICAS = ["/", "/organizar", "/empresas", "/legal/termos", "/legal/privacidade", `/h/${NEXT}`, `/h/${NEXT}/conduta`, `/h/${NEXT}/incidente`, "/sitemap.xml", "/robots.txt", "/api/health", "/comunidade/hack-inova", "/radar"];
+  const PRIVADAS = ["/feed", "/membros", "/projetos", "/talento", "/blog", "/dashboard", "/perfil", "/bem-vindo", "/notificacoes", `/h/${NEXT}/inscricao`, `/h/${NEXT}/programacao`, `/h/${NEXT}/projetos`, "/comunidades", "/comunidades/nova", "/comunidade/hack-inova/editar", "/comunidade/hack-inova/hackathon/novo"];
 
   for (const p of PUBLICAS) {
     test(`${p} abre sem login (200)`, async ({ request }) => {
