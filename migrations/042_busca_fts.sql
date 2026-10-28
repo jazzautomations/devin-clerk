@@ -10,10 +10,15 @@ CREATE INDEX IF NOT EXISTS idx_posts_fts ON posts USING GIN (
   (to_tsvector('portuguese', coalesce("body", '')))
 );
 
+-- "como construímos" (howBuilt) entra no texto longo do projeto. A coluna é
+-- da vitrine de projeto (036); o ADD idempotente aqui deixa a 042 rodar em
+-- qualquer ordem de merge, e a 036 depois disso só passa reto.
+ALTER TABLE team_projects ADD COLUMN IF NOT EXISTS "howBuilt" TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_team_projects_fts ON team_projects USING GIN (
   (setweight(to_tsvector('portuguese', coalesce("title", '')), 'A')
    || setweight(to_tsvector('portuguese', coalesce("tagline", '') || ' ' || coalesce("technologies", '')), 'B')
-   || setweight(to_tsvector('portuguese', coalesce("description", '')), 'C'))
+   || setweight(to_tsvector('portuguese', coalesce("description", '') || ' ' || coalesce("howBuilt", '')), 'C'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_members_fts ON members USING GIN (

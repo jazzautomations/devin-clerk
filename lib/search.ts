@@ -58,9 +58,11 @@ const c = (a: string, col: string) => `coalesce(${a}.${col}, '')`;
 export const SEARCH_DOC = {
   posts: (a = "p") => v(c(a, "body")),
   projetos: (a = "tp") =>
-    [v(c(a, "title"), "A"), v(`${c(a, "tagline")} || ' ' || ${c(a, "technologies")}`, "B"), v(c(a, "description"), "C")].join(
-      " || ",
-    ),
+    [
+      v(c(a, "title"), "A"),
+      v(`${c(a, "tagline")} || ' ' || ${c(a, "technologies")}`, "B"),
+      v(`${c(a, "description")} || ' ' || ${c(a, "howBuilt")}`, "C"),
+    ].join(" || "),
   pessoas: (a = "m") =>
     [v(`${c(a, "name")} || ' ' || ${c(a, "username")}`, "A"), v(c(a, "headline"), "B"), v(c(a, "bio"), "C")].join(" || "),
   comunidades: (a = "co") => [v(c(a, "name"), "A"), v(c(a, "description"), "B")].join(" || "),

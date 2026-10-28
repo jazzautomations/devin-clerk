@@ -158,6 +158,15 @@ describe("searchAll por tipo", () => {
     expect(hit).toMatchObject({ title: "Calma", hackathonId: h, hackathonName: "Hack Busca Saúde Um" });
   });
 
+  it("acha projeto por texto que só está em 'como construímos' (howBuilt)", async () => {
+    const me = await member();
+    const h = await hackathon("Hack Busca Como Construímos");
+    const teamId = await project(h, "Calma", "Um app de respiração guiada.");
+    await db.prepare("UPDATE team_projects SET howBuilt = ? WHERE teamId = ?").run("usamos whisper e supabase", teamId);
+    const r = await searchAll("whisper", me.id, { tipo: "projetos" });
+    expect(r.sections.projetos?.items.map((p) => p.teamId)).toEqual([teamId]);
+  });
+
   it("todas as palavras vêm antes; plural e acento resolvem pelo dicionário", async () => {
     const me = await member();
     const h = await hackathon("Hack Busca Dois");
