@@ -240,8 +240,8 @@ describe("o que nunca aparece", () => {
   it("edição publicada e depois tirada do ar some dos posts", async () => {
     const me = await member();
     const h = await hackathon("Edição Derrubada");
-    await post(me.id, "kubernetes no mural da edição derrubada", { hackathonId: h });
-    const antes = await searchAll("kubernetes", me.id);
+    await post(me.id, "maracatu no mural da edição derrubada", { hackathonId: h });
+    const antes = await searchAll("maracatu", me.id);
     expect(antes.sections.posts?.items).toHaveLength(1);
     await db.prepare("UPDATE hackathons SET active = 0 WHERE id = ?").run(h);
     // o gatilho da 019 deixa publishedAt preenchido: é o caso "tirada do ar", não rascunho
@@ -249,7 +249,7 @@ describe("o que nunca aparece", () => {
       .prepare('SELECT publishedAt AS "publishedAt" FROM hackathons WHERE id = ?')
       .get<{ publishedAt: unknown }>(h);
     expect(pub?.publishedAt).toBeTruthy();
-    const depois = await searchAll("kubernetes", me.id);
+    const depois = await searchAll("maracatu", me.id);
     expect(depois.sections.posts?.items).toEqual([]);
   });
 
