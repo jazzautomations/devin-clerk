@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTimeline, eventWindow, phaseOf } from "@/lib/dossier";
+import { buildTimeline, eventWindow, phaseOf, splitUnread } from "@/lib/dossier";
 import { missingRequired, parseSnapshot, validateDraftPatch, type EntryFields } from "@/lib/entries";
 import {
   fetchRepoCommits,
@@ -123,6 +123,98 @@ describe("janela do evento e linha do tempo", () => {
   it("sem commits: tudo zero, sem sinal", () => {
     const t = buildTimeline([], w);
     expect(t).toMatchObject({ before: 0, during: 0, after: 0, counted: 0, firstCommitAt: null, signals: [] });
+  });
+});
+
+describe("repositório grande: o meio não lido entra na conta", () => {
+  const w = eventWindow({ startsAt: "2026-10-20T09:00", endsAt: null, submissionDeadline: "2026-10-21 18:00:00" });
+  const minute = 60_000;
+  /** n commits, mais novo primeiro, um por minuto pra trás a partir de `from` (UTC) */
+  const run = (from: string, n: number, seed: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const iso = new Date(Date.parse(`${from}Z`) - i * minute).toISOString();
+      return {
+        sha: (seed + i).toString(16).padStart(40, "0"),
+        commit: { author: { name: "x", date: iso }, message: `c ${seed + i}` },
+        author: { login: "dev" },
+      };
+    });
+  /** GitHub falso paginado de verdade (100 por página, Link rel=last) */
+  const paged = (all: unknown[]) => async (url: string) => {
+    if (!url.includes("/commits")) return Response.json({ full_name: "dono/grande", private: false, default_branch: "main" });
+    const p = Number(new URL(url).searchParams.get("page"));
+    const last = Math.ceil(all.length / 100);
+    return Response.json(all.slice((p - 1) * 100, p * 100), {
+      headers: { link: `<https://gh.test/x?per_page=100&page=${last}>; rel="last"` },
+    });
+  };
+  async function timelineOf(all: unknown[]) {
+    const r = await fetchRepoCommits({ owner: "dono", repo: "grande" }, { fetchImpl: paged(all), base: "https://gh.test", token: null });
+    if (!r.ok) throw new Error(r.message);
+    return { r, t: buildTimeline(r.commits, w, { totalCommits: r.total, truncated: r.truncated }) };
+  }
+
+  it("400 commits, 250 antes do início: a maioria aparece (era 150 de 300 na amostra)", async () => {
+    const all = [...run("2026-10-21 12:00:00", 150, 0), ...run("2026-10-19 12:00:00", 250, 1000)];
+    const { r, t } = await timelineOf(all);
+    expect([r.commits.length, r.total, r.truncated]).toEqual([300, 400, true]);
+    expect([t.before, t.during, t.after, t.counted, t.inferred, t.estimated]).toEqual([250, 150, 0, 300, 100, false]);
+    expect(t.signals.find((s) => s.key === "maioria_antes")?.text).toBe("maioria dos commits antes do início (250 de 400)");
+  });
+
+  it("1000 commits, 850 antes: a página 2 já cruza o início, conta exata", async () => {
+    const all = [...run("2026-10-21 12:00:00", 150, 0), ...run("2026-10-19 12:00:00", 850, 5000)];
+    const { t } = await timelineOf(all);
+    expect([t.before, t.during, t.after, t.inferred, t.estimated]).toEqual([850, 150, 0, 700, false]);
+    expect(t.signals.map((s) => s.key)).toContain("maioria_antes");
+  });
+
+  it("1000 commits, 600 antes e 400 durante: início no meio não lido, maioria ainda aparece (estimada)", async () => {
+    const all = [...run("2026-10-21 12:00:00", 400, 0), ...run("2026-10-19 12:00:00", 600, 5000)];
+    const { t } = await timelineOf(all);
+    expect([t.inferred, t.estimated]).toEqual([700, true]);
+    expect(t.before + t.during + t.after).toBe(1000);
+    expect(t.before).toBeGreaterThan(500);
+    expect(t.signals.find((s) => s.key === "maioria_antes")?.text).toMatch(/cerca de \d+ de 1000/);
+  });
+
+  it("tudo durante: o meio também é durante, sem sinal de maioria", async () => {
+    const { t } = await timelineOf(run("2026-10-21 17:00:00", 500, 0));
+    expect([t.before, t.during, t.after, t.estimated]).toEqual([0, 500, 0, false]);
+    expect(t.signals).toEqual([]);
+  });
+
+  it("início caindo no meio não lido: divide pelo tempo e avisa que é estimativa", () => {
+    // meio de 100 commits entre 10:00 e 14:00 UTC do dia 20; início 12:00 UTC = metade
+    const s = splitUnread(100, "2026-10-20 10:00:00", "2026-10-20 14:00:00", w);
+    expect(s).toEqual({ antes: 50, durante: 50, depois: 0, estimated: true });
+    // prazo (18:00 UTC do dia 21) no meio também
+    const s2 = splitUnread(10, "2026-10-21 17:00:00", "2026-10-21 19:10:00", w);
+    expect(s2.antes + s2.durante + s2.depois).toBe(10);
+    expect(s2).toMatchObject({ antes: 0, estimated: true });
+    expect(s2.depois).toBeGreaterThan(0);
+    expect(splitUnread(0, "2026-10-20 10:00:00", "2026-10-20 14:00:00", w)).toEqual({
+      antes: 0,
+      durante: 0,
+      depois: 0,
+      estimated: false,
+    });
+    const t = buildTimeline(
+      [...Array.from({ length: 200 }, (_, i) => c("2026-10-20 14:00:00", i)), ...Array.from({ length: 100 }, (_, i) => c("2026-10-20 10:00:00", 300 + i))],
+      w,
+      { totalCommits: 400, truncated: 1 },
+    );
+    expect([t.before, t.during, t.inferred, t.estimated]).toEqual([150, 250, 100, true]);
+  });
+
+  it("estimativa aparece no texto do sinal", () => {
+    const t = buildTimeline(
+      [...Array.from({ length: 200 }, (_, i) => c("2026-10-20 13:00:00", i)), ...Array.from({ length: 100 }, (_, i) => c("2026-01-01 10:00:00", 300 + i))],
+      w,
+      { totalCommits: 2000, truncated: true },
+    );
+    expect(t.estimated).toBe(true);
+    expect(t.signals.find((s) => s.key === "maioria_antes")?.text).toMatch(/^maioria dos commits antes do início \(cerca de \d+ de 2000\)$/);
   });
 });
 

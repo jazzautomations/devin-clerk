@@ -43,9 +43,12 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "community-notices": { limit: 10, windowMs: HOUR }, // POST …/[slug]/notices
   "community-invites": { limit: 20, windowMs: HOUR }, // POST …/[slug]/organizers
   "community-report": { limit: 5, windowMs: HOUR }, // POST …/[slug]/report
-  // entrega do projeto (spec 034): autosave dispara a cada ~1,2 s de digitação,
-  // então o rascunho tem folga; enviar versão é raro e puxa o GitHub (dossiê)
-  "entry-draft": { limit: 600, windowMs: HOUR }, // PATCH …/[id]/entry — membro
+  // entrega do projeto (spec 034): autosave dispara 1,2 s depois de cada pausa
+  // na digitação. 3600/h = um save por segundo a hora inteira, acima do que
+  // uma pessoa digitando gera; só segura script. Enviar versão é raro, puxa o
+  // GitHub (dossiê) e grava o rascunho pendente no próprio bucket, então
+  // estourar o autosave não impede o envio
+  "entry-draft": { limit: 3600, windowMs: HOUR }, // PATCH …/[id]/entry — membro
   "entry-submit": { limit: 20, windowMs: HOUR }, // POST …/[id]/entry — membro
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]

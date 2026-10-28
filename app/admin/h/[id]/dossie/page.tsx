@@ -48,6 +48,7 @@ function TimelineBlock({ c }: { c: NonNullable<TeamDossier["collection"]> }) {
     ["durante", t.during],
     ["depois", t.after],
   ];
+  const sum = t.before + t.during + t.after;
   return (
     <div className="flex flex-col gap-3" data-testid="dossie-linha">
       <div
@@ -58,7 +59,7 @@ function TimelineBlock({ c }: { c: NonNullable<TeamDossier["collection"]> }) {
         {parts
           .filter(([, n]) => n > 0)
           .map(([p, n]) => (
-            <span key={p} className={PHASE[p].bar} style={{ width: `${(n / t.counted) * 100}%` }} />
+            <span key={p} className={PHASE[p].bar} style={{ width: `${(n / sum) * 100}%` }} />
           ))}
       </div>
       <dl className="grid grid-cols-3 gap-2 font-mono text-[12px]">
@@ -78,9 +79,10 @@ function TimelineBlock({ c }: { c: NonNullable<TeamDossier["collection"]> }) {
         {c.defaultBranch && ` no ${c.defaultBranch}`}
       </p>
       {c.truncated && (
-        <p className="font-mono text-[12px] text-muted">
-          Repositório grande: a conta usa os {t.counted} commits lidos (os mais novos e os mais antigos), de{" "}
-          {c.totalCommits}.
+        <p className="font-mono text-[12px] text-muted" data-testid="dossie-grande">
+          Repositório grande: {t.counted} commits lidos (os mais novos e os mais antigos) de {c.totalCommits}. Os{" "}
+          {t.inferred} do meio entram na conta pela data dos vizinhos
+          {t.estimated ? "; o início ou o prazo cai entre eles, então a divisão é estimativa." : "."}
         </p>
       )}
     </div>

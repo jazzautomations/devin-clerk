@@ -5,6 +5,8 @@
 //
 //   e2e-dossie/reciclado → criado há 400 dias, 6 commits antigos + 1 hoje
 //   e2e-dossie/limpo     → criado há 20 h, 5 commits dentro da janela
+//   e2e-dossie/grande    → 400 commits (150 hoje, 250 de meses atrás), 4 páginas:
+//                          o app lê 1, 2 e 4 e conta a 3 pelos vizinhos
 //   e2e-dossie/limite    → 403 de rate limit
 //   qualquer outro       → 404 (inexistente ou privado)
 import http from "node:http";
@@ -35,7 +37,15 @@ const REPOS = {
     createdAgo: 20 * H,
     commits: [1, 2, 4, 8, 16].map((h, k) => commit(100 + k, h * H, `passo ${5 - k}`)),
   },
+  "e2e-dossie/grande": {
+    createdAgo: 500 * D,
+    commits: [
+      ...Array.from({ length: 150 }, (_, k) => commit(1000 + k, H + k * 60_000, `evento ${150 - k}`)),
+      ...Array.from({ length: 250 }, (_, k) => commit(2000 + k, 100 * D + k * H, `antigo ${250 - k}`)),
+    ],
+  },
 };
+const PER_PAGE = 100;
 
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, { "Content-Type": "application/json", ...headers });
@@ -71,6 +81,9 @@ http
       });
     }
     const page = Number(url.searchParams.get("page") ?? 1);
-    return send(res, 200, page === 1 ? repo.commits : []);
+    const last = Math.ceil(repo.commits.length / PER_PAGE);
+    const link =
+      last > 1 ? { link: `<http://127.0.0.1:${port}${url.pathname}?per_page=${PER_PAGE}&page=${last}>; rel="last"` } : {};
+    return send(res, 200, repo.commits.slice((page - 1) * PER_PAGE, page * PER_PAGE), link);
   })
   .listen(port, "127.0.0.1", () => console.log(`github-mock em ${port}`));

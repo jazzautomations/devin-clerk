@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { after } from "next/server";
 import { collectDossierQuietly } from "@/lib/dossier";
 import { EntryError, myEntry, saveDraft, submitEntry } from "@/lib/entries";
 import { getHackathon } from "@/lib/hackathons";
@@ -11,6 +12,8 @@ import { limitOrNull } from "@/lib/ratelimit";
 //         afterNotes "depois do hackathon" passa sempre)
 // POST → enviar: valida obrigatórios e grava versão imutável; com repositório
 //        do GitHub, lê os commits pro dossiê do organizador (migration 029)
+//        depois da resposta. Corpo opcional = os campos ainda não salvos: o
+//        rascunho é gravado junto, no limite do envio (não no do autosave).
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -61,11 +64,28 @@ export async function POST(req: Request, { params }: Ctx): Promise<Response> {
   if (!g.ok) return g.res;
   const limited = limitOrNull(req, "entry-submit", g.member.id);
   if (limited) return limited;
+  const text = await req.text().catch(() => "");
+  let draft: unknown = null;
+  if (text.trim()) {
+    try {
+      draft = JSON.parse(text);
+    } catch {
+      return json({ error: "JSON inválido" }, 400);
+    }
+    if (!draft || typeof draft !== "object" || Array.isArray(draft)) return json({ error: "JSON inválido" }, 400);
+  }
   try {
+    if (draft) await saveDraft(g.entry.teamId, g.member, draft as Record<string, unknown>);
     const { entry, version } = await submitEntry(g.entry.teamId, g.member);
-    // dossiê: lê o GitHub depois que a versão já está gravada; falha do
-    // GitHub fica registrada no dossiê e nunca derruba o envio
-    await collectDossierQuietly(g.entry.teamId);
+    // dossiê: lê o GitHub depois da resposta (GitHub lento não segura a
+    // confirmação no prazo); falha fica registrada no dossiê
+    const teamId = g.entry.teamId;
+    try {
+      after(() => collectDossierQuietly(teamId));
+    } catch {
+      // fora de escopo de request (script): roda solto, sem segurar a resposta
+      void collectDossierQuietly(teamId);
+    }
     return json({ entry, version }, 201);
   } catch (e) {
     return fail(e);

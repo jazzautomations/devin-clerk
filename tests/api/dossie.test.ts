@@ -14,6 +14,16 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: vi.fn(async () => ({ userId: who })),
   currentUser: vi.fn(async () => null),
 }));
+// a coleta do envio roda em after() (depois da resposta): aqui vira fila
+const afterQueue = vi.hoisted(() => ({ jobs: [] as Promise<unknown>[] }));
+vi.mock("next/server", async (orig) => ({
+  ...(await orig<typeof import("next/server")>()),
+  after: (fn: () => unknown) => {
+    afterQueue.jobs.push(Promise.resolve().then(fn));
+  },
+}));
+/** espera o que o envio deixou pra depois da resposta */
+const flush = () => Promise.all(afterQueue.jobs.splice(0));
 
 const H = "hack-inova-alphaville-2026";
 const OTHER = "hack-inova-unifacens-2026";
@@ -37,15 +47,19 @@ const commit = (i: number, ago: number) => ({
   author: { login: `dev${i}` },
 });
 let githubDown = false;
+/** GitHub pendurado: as chamadas esperam até `release()` */
+let hang: Promise<void> | null = null;
 const REPOS: Record<string, { createdAgo: number; commits: unknown[] }> = {
   "time/reciclado": {
     createdAgo: 400 * DAY,
     commits: [commit(1, 2 * HOUR), commit(2, 300 * DAY), commit(3, 301 * DAY), commit(4, 302 * DAY)],
   },
   "time/limpo": { createdAgo: 20 * HOUR, commits: [commit(10, 1 * HOUR), commit(11, 3 * HOUR), commit(12, 5 * HOUR)] },
+  "time/outro": { createdAgo: 10 * HOUR, commits: [commit(20, 1 * HOUR)] },
 };
 const github = vi.fn(async (input: string | URL | Request) => {
   if (githubDown) throw new TypeError("fetch failed");
+  if (hang) await hang;
   const url = new URL(String(input));
   const m = /^\/repos\/([^/]+\/[^/]+)(\/commits)?$/.exec(url.pathname);
   const repo = m && REPOS[m[1]];
@@ -163,6 +177,7 @@ describe("coleta no envio da entrega", () => {
     expect(github).not.toHaveBeenCalled();
     const sent = await r.POST(req("POST"), ctx());
     expect(sent.status).toBe(201);
+    await flush();
     expect(github).toHaveBeenCalled();
     for (const call of github.mock.calls) expect(String(call[0])).toMatch(/^http:\/\/127\.0\.0\.1:9\/repos\/time\/reciclado/);
 
@@ -182,6 +197,7 @@ describe("coleta no envio da entrega", () => {
     const r = await asTeam("d_dev2");
     await r.PATCH(req("PATCH", { ...project("https://github.com/time/limpo"), priorExisted: false, priorWork: null }), ctx());
     expect((await r.POST(req("POST"), ctx())).status).toBe(201);
+    await flush();
     who = "clerk_d_org";
     const t = (await (await getDossie()).json()).teams.find((x: { teamId: number }) => x.teamId === teams.limpo);
     expect(t.collection.timeline).toMatchObject({ before: 0, during: 3, after: 0 });
@@ -194,6 +210,7 @@ describe("coleta no envio da entrega", () => {
     const r = await asTeam("d_dev4");
     await r.PATCH(req("PATCH", project("https://github.com/time/inexistente")), ctx());
     expect((await r.POST(req("POST"), ctx())).status).toBe(201);
+    await flush();
     who = "clerk_d_org";
     const t = (await (await getDossie()).json()).teams.find((x: { teamId: number }) => x.teamId === teams.gitlab);
     expect(t.collection).toMatchObject({ collectedAt: null, error: { kind: "network" } });
@@ -204,7 +221,76 @@ describe("coleta no envio da entrega", () => {
     await r.PATCH(req("PATCH", { tagline: "versão 2" }), ctx());
     github.mockClear();
     expect((await r.POST(req("POST"), ctx())).status).toBe(201);
+    await flush();
     expect(github).not.toHaveBeenCalled();
+  });
+
+  it("trocar o repositório e reenviar logo depois também não consulta (cooldown por time)", async () => {
+    const r = await asTeam("d_dev");
+    github.mockClear();
+    expect((await r.POST(req("POST", { repoUrl: "https://github.com/time/outro" }), ctx())).status).toBe(201);
+    await flush();
+    expect((await r.POST(req("POST", { repoUrl: "https://github.com/time/reciclado" }), ctx())).status).toBe(201);
+    await flush();
+    expect(github).not.toHaveBeenCalled();
+    // passados 5 min, o envio seguinte lê o repositório novo
+    await age(teams.reciclado);
+    expect((await r.POST(req("POST", { repoUrl: "https://github.com/time/outro" }), ctx())).status).toBe(201);
+    await flush();
+    expect(github.mock.calls.map((c) => String(c[0]))).toContain("http://127.0.0.1:9/repos/time/outro");
+    // volta pro repositório original pros testes seguintes
+    await age(teams.reciclado);
+    await r.POST(req("POST", { repoUrl: "https://github.com/time/reciclado" }), ctx());
+    await flush();
+  });
+
+  it("GitHub lento não segura a confirmação: a resposta sai antes da leitura", async () => {
+    let release!: () => void;
+    hang = new Promise((res) => (release = res));
+    try {
+      await age(teams.limpo);
+      const r = await asTeam("d_dev2");
+      github.mockClear();
+      const res = await r.POST(req("POST"), ctx());
+      expect(res.status).toBe(201);
+      expect((await res.json()).version).toBeGreaterThan(1);
+      await new Promise((ok) => setTimeout(ok, 0));
+      expect(github).toHaveBeenCalledTimes(1); // pendurado no 1º request
+      release();
+      await flush();
+      expect(github.mock.calls.length).toBeGreaterThan(1);
+    } finally {
+      hang = null;
+      release();
+    }
+  });
+
+  it("enviar grava junto o rascunho pendente, mesmo com o autosave no limite", async () => {
+    const r = await asTeam("d_dev2");
+    for (let i = 0; i < RATE_LIMITS["entry-draft"].limit; i++) {
+      rateLimit(`entry-draft:${ids.d_dev2}`, RATE_LIMITS["entry-draft"]);
+    }
+    expect((await r.PATCH(req("PATCH", { tagline: "não salva" }), ctx())).status).toBe(429);
+    const res = await r.POST(req("POST", { tagline: "texto da última hora" }), ctx());
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.entry.fields.tagline).toBe("texto da última hora");
+    await flush();
+    const snap = await db
+      .prepare("SELECT snapshot FROM project_submissions WHERE teamId = ? ORDER BY version DESC LIMIT 1")
+      .get<{ snapshot: string }>(teams.limpo);
+    expect(JSON.parse(snap!.snapshot).tagline).toBe("texto da última hora");
+  });
+
+  it("corpo inválido no envio → 400 e nada é enviado", async () => {
+    const r = await asTeam("d_dev2");
+    const bad = new Request("http://t", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{oops" });
+    expect((await r.POST(bad, ctx())).status).toBe(400);
+    expect((await r.POST(req("POST", [1, 2]), ctx())).status).toBe(400);
+  });
+
+  it("limite do autosave fica bem acima do ritmo de digitação (1 save/1,2 s por 1 h)", () => {
+    expect(RATE_LIMITS["entry-draft"].limit).toBeGreaterThanOrEqual(3000);
   });
 
   it("declaração inválida → 400", async () => {

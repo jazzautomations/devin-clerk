@@ -78,6 +78,7 @@ async function seed(request: APIRequestContext) {
   ids.limpo = await team("Time Limpo", "dossie_limpo", "https://github.com/e2e-dossie/limpo", "Fila Nova");
   ids.privado = await team("Time Privado", "dossie_privado", "https://github.com/e2e-dossie/privado", "Fila Fechada");
   ids.limite = await team("Time Limite", "dossie_limite", "https://github.com/e2e-dossie/limite", "Fila Lenta");
+  ids.grande = await team("Time Grande", "dossie_grande", "https://github.com/e2e-dossie/grande", "Fila Antiga");
   ids.semRepo = await team("Time Sem Repo", "dossie_sem", null, "Fila Sem Código");
 }
 
@@ -120,7 +121,11 @@ test.describe("dossiê de evidência", () => {
     await expect(aviso).toContainText("a decisão é da organização");
 
     const rec = page.getByTestId(`dossie-time-${ids.reciclado}`);
-    await expect(rec.getByTestId("dossie-antes")).toHaveText("6");
+    // a coleta roda depois da resposta do envio: recarrega até a foto chegar
+    await expect(async () => {
+      await page.reload();
+      await expect(rec.getByTestId("dossie-antes")).toHaveText("6", { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await expect(rec.getByTestId("dossie-durante")).toHaveText("1");
     await expect(rec.getByTestId("dossie-depois")).toHaveText("0");
     const sinais = rec.getByTestId("dossie-sinais");
@@ -161,5 +166,30 @@ test.describe("dossiê de evidência", () => {
     await expect(lim.getByTestId("dossie-erro")).toContainText("O GitHub limitou as consultas");
     await noHorizontalScroll(page);
     await shot(page, "dossie-atualizar-390");
+  });
+
+  test("repositório grande: o meio não lido entra na conta e a maioria aparece", async ({ memberPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/admin/h/${ED}/dossie`);
+    const big = page.getByTestId(`dossie-time-${ids.grande}`);
+    await big.getByRole("button", { name: "atualizar" }).click();
+    await expect(big.getByRole("status").filter({ hasText: "300 commits lidos" })).toBeVisible();
+    await expect(big.getByTestId("dossie-antes")).toHaveText("250");
+    await expect(big.getByTestId("dossie-durante")).toHaveText("150");
+    await expect(big.getByTestId("dossie-sinais")).toContainText("maioria dos commits antes do início (250 de 400)");
+    await expect(big.getByTestId("dossie-grande")).toContainText("Os 100 do meio entram na conta pela data dos vizinhos.");
+    await noHorizontalScroll(page);
+  });
+
+  test("atualizar sem conexão avisa e libera o botão", async ({ memberPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/admin/h/${ED}/dossie`);
+    await page.route(`**/api/admin/hackathons/${ED}/dossie/${ids.limpo}`, (r) => r.abort("internetdisconnected"));
+    const sem = page.getByTestId(`dossie-time-${ids.limpo}`);
+    const btn = sem.getByRole("button", { name: "atualizar" });
+    await btn.click();
+    await expect(sem.getByRole("alert")).toContainText("sem conexão");
+    await expect(btn).toBeEnabled();
+    await expect(btn).toHaveText("atualizar");
   });
 });

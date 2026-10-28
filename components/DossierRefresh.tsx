@@ -14,19 +14,24 @@ export function DossierRefresh({ hackathonId, teamId }: { hackathonId: string; t
   async function refresh() {
     setBusy(true);
     setMsg(null);
-    const res = await fetch(`/api/admin/hackathons/${hackathonId}/dossie/${teamId}`, { method: "POST" });
-    const data = await res.json().catch(() => null);
-    setBusy(false);
-    if (!res.ok) {
-      setMsg({ ok: false, text: data?.error ?? "não deu pra atualizar" });
-      return;
+    try {
+      const res = await fetch(`/api/admin/hackathons/${hackathonId}/dossie/${teamId}`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMsg({ ok: false, text: data?.error ?? "não deu pra atualizar" });
+        return;
+      }
+      setMsg(
+        data?.status === "ok"
+          ? { ok: true, text: `${data.commits} ${data.commits === 1 ? "commit lido" : "commits lidos"}` }
+          : { ok: false, text: data?.message ?? "o GitHub não respondeu" },
+      );
+      router.refresh();
+    } catch {
+      setMsg({ ok: false, text: "sem conexão. Tente de novo." });
+    } finally {
+      setBusy(false);
     }
-    setMsg(
-      data?.status === "ok"
-        ? { ok: true, text: `${data.commits} ${data.commits === 1 ? "commit lido" : "commits lidos"}` }
-        : { ok: false, text: data?.message ?? "o GitHub não respondeu" },
-    );
-    router.refresh();
   }
 
   return (

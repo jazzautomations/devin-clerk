@@ -36,6 +36,8 @@ export type RepoCommits =
 
 export const MAX_COMMITS = 300;
 const PER_PAGE = 100;
+/** repositório truncado: os commits[0..NEWEST_KEPT) são os mais novos; o resto, a página mais antiga */
+export const NEWEST_KEPT = 2 * PER_PAGE;
 const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
 
 /** "https://github.com/dono/repo(.git)(/tree/…)" → {owner, repo}; o resto é null */

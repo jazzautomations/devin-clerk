@@ -7,6 +7,7 @@ import {
   type FetchOpts,
   type GithubCommit,
   type GithubErrorKind,
+  NEWEST_KEPT,
 } from "@/lib/githubCommits";
 
 // Dossiê de evidência do projeto (roadmap 037 #10, migration 029).
@@ -58,6 +59,13 @@ export type Timeline = {
   after: number;
   /** commits lidos (até 300); o total do repositório está em totalCommits */
   counted: number;
+  /**
+   * commits do meio de repositório grande que não foram lidos, mas entram em
+   * antes/durante/depois pela data dos vizinhos (0 = nenhum)
+   */
+  inferred: number;
+  /** a janela corta o meio não lido: a divisão dele é estimativa por data */
+  estimated: boolean;
   firstCommitAt: string | null;
   lastCommitAt: string | null;
   signals: Signal[];
@@ -81,13 +89,46 @@ const dayFmt = new Intl.DateTimeFormat("pt-BR", {
 export const formatDay = (v: string | null) => (v ? dayFmt.format(utc(v)) : "");
 
 /**
+ * Repositório grande (mais de 300 commits): a coleta lê as 2 páginas mais
+ * novas e a mais antiga, e o meio fica de fora. Os commits do meio são todos
+ * mais velhos que o mais antigo das páginas novas (`hi`) e mais novos que o
+ * mais novo da página antiga (`lo`). Se `lo` e `hi` caem na mesma fase, o meio
+ * inteiro é dessa fase (conta exata). Se a janela corta o meio, divide pelo
+ * tempo, supondo ritmo constante de commits entre `lo` e `hi` (estimativa).
+ */
+export function splitUnread(
+  n: number,
+  lo: string,
+  hi: string,
+  w: EventWindow,
+): { antes: number; durante: number; depois: number; estimated: boolean } {
+  const zero = { antes: 0, durante: 0, depois: 0 };
+  if (n <= 0) return { ...zero, estimated: false };
+  const pLo = phaseOf(lo, w);
+  const pHi = phaseOf(hi, w);
+  if (pLo === pHi) return { ...zero, [pLo]: n, estimated: false };
+  const tLo = utc(lo).getTime();
+  const tHi = utc(hi).getTime();
+  const span = tHi - tLo;
+  const frac = (t: number) => (span > 0 ? Math.min(1, Math.max(0, (t - tLo) / span)) : 0.5);
+  const antes = w.start ? Math.round(n * frac(w.start.getTime())) : 0;
+  const depois = w.end ? Math.min(n - antes, Math.round(n * (1 - frac(w.end.getTime())))) : 0;
+  return { antes, durante: n - antes - depois, depois, estimated: true };
+}
+
+/**
  * Conta antes/durante/depois e levanta os sinais. Puro e testável.
- * `repoCreatedAt`/`forkOf`/`totalCommits` vêm da coleta.
+ * `repoCreatedAt`/`forkOf`/`totalCommits`/`truncated` vêm da coleta.
  */
 export function buildTimeline(
   commits: GithubCommit[],
   w: EventWindow,
-  repo: { repoCreatedAt?: string | null; forkOf?: string | null; totalCommits?: number } = {},
+  repo: {
+    repoCreatedAt?: string | null;
+    forkOf?: string | null;
+    totalCommits?: number;
+    truncated?: boolean | number;
+  } = {},
 ): Timeline {
   let before = 0;
   let during = 0;
@@ -104,6 +145,19 @@ export function buildTimeline(
   }
   const counted = commits.length;
   const total = Math.max(repo.totalCommits ?? counted, counted);
+  let inferred = 0;
+  let estimated = false;
+  if (repo.truncated && total > counted && counted > NEWEST_KEPT) {
+    const hi = commits.slice(0, NEWEST_KEPT).reduce((m, c) => (c.date < m ? c.date : m), commits[0].date);
+    const lo = commits.slice(NEWEST_KEPT).reduce((m, c) => (c.date > m ? c.date : m), commits[NEWEST_KEPT].date);
+    const gap = splitUnread(total - counted, lo, hi, w);
+    before += gap.antes;
+    during += gap.durante;
+    after += gap.depois;
+    inferred = total - counted;
+    estimated = gap.estimated;
+  }
+  const all = before + during + after;
   const signals: Signal[] = [];
   if (repo.repoCreatedAt && w.start && utc(repo.repoCreatedAt).getTime() < w.start.getTime()) {
     signals.push({ key: "repo_antes", text: `repositório criado antes do evento (${formatDay(repo.repoCreatedAt)})` });
@@ -114,8 +168,11 @@ export function buildTimeline(
       text: repo.forkOf === "?" ? "repositório é fork de outro" : `repositório é fork de ${repo.forkOf}`,
     });
   }
-  if (counted > 0 && before * 2 > counted) {
-    signals.push({ key: "maioria_antes", text: `maioria dos commits antes do início (${before} de ${counted})` });
+  if (all > 0 && before * 2 > all) {
+    signals.push({
+      key: "maioria_antes",
+      text: `maioria dos commits antes do início (${estimated ? "cerca de " : ""}${before} de ${all})`,
+    });
   } else if (before > 0 && first) {
     signals.push({ key: "primeiro_antes", text: `primeiro commit antes do início (${formatDay(first)})` });
   }
@@ -131,7 +188,7 @@ export function buildTimeline(
       text: `${after} ${after === 1 ? "commit" : "commits"} depois do prazo (o júri avalia a versão enviada até o prazo)`,
     });
   }
-  return { before, during, after, counted, firstCommitAt: first, lastCommitAt: last, signals };
+  return { before, during, after, counted, inferred, estimated, firstCommitAt: first, lastCommitAt: last, signals };
 }
 
 // ---------- banco ----------
@@ -163,7 +220,11 @@ const parseCommits = (v: string): GithubCommit[] => {
   }
 };
 
-/** coleta automática não repete o mesmo repositório antes disso */
+/**
+ * coleta automática: no máximo uma por time nesse intervalo, mesmo trocando o
+ * repositório (trocar o link entre A e B a cada envio não gasta a cota do
+ * GitHub, que sem GITHUB_TOKEN é 60/h pro servidor inteiro)
+ */
 export const AUTO_COOLDOWN_MS = 5 * 60_000;
 /** botão "atualizar" do painel: no mínimo isso entre duas coletas do mesmo time */
 export const MANUAL_COOLDOWN_MS = 60_000;
@@ -187,7 +248,8 @@ export type CollectResult =
  * Lê o GitHub e grava a foto do time. Falha não apaga a última foto boa do
  * mesmo repositório: só registra o motivo. Repositório trocado zera a foto.
  * `manual` = botão do painel (cooldown curto, grava quem pediu);
- * automático = no envio da entrega (pula se coletou há menos de 5 min).
+ * automático = no envio da entrega (pula se o time tentou há menos de 5 min,
+ * qualquer que seja o repositório).
  */
 export async function collectDossier(
   teamId: number,
@@ -200,7 +262,9 @@ export async function collectDossier(
     .prepare("SELECT repoUrl, attemptedAt FROM project_dossiers WHERE teamId = ?")
     .get<{ repoUrl: string; attemptedAt: string }>(teamId);
   const sameRepo = prev?.repoUrl === repoUrl;
-  if (prev && sameRepo) {
+  // manual: cooldown só no mesmo repositório (o organizador vê o link novo na
+  // hora; o limite por pessoa segura o resto). Automático: por time.
+  if (prev && (sameRepo || !opts.manual)) {
     const age = now.getTime() - utc(prev.attemptedAt).getTime();
     const cooldown = opts.manual ? MANUAL_COOLDOWN_MS : AUTO_COOLDOWN_MS;
     if (age < cooldown) {

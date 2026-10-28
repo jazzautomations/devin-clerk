@@ -188,21 +188,30 @@ export function EntryEditor({
     if (!window.confirm(`Enviar a versão ${entry.versions.length + 1}? O júri avalia a última versão enviada até o prazo.`)) return;
     setBusy(true);
     setSubmitMsg("");
-    if (dirtyRef.current && form.title.trim()) {
-      const ok = await patch(toPayload(form));
-      if (!ok) {
-        setBusy(false);
-        return;
-      }
-      dirtyRef.current = false;
+    // campos ainda não salvos vão junto no envio: o envio não depende do autosave
+    const pending = dirtyRef.current && form.title.trim() ? toPayload(form) : null;
+    let res: Response;
+    try {
+      res = await fetch(`/api/hackathons/${hackathonId}/entry`, {
+        method: "POST",
+        ...(pending ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(pending) } : {}),
+      });
+    } catch {
+      setBusy(false);
+      setErr("sem conexão: a versão não foi enviada. Tente de novo.");
+      return;
     }
-    const res = await fetch(`/api/hackathons/${hackathonId}/entry`, { method: "POST" });
+    if (res.status === 401) {
+      router.push("/sign-in");
+      return;
+    }
     const data = await res.json().catch(() => null);
     setBusy(false);
     if (!res.ok) {
       setErr(data?.error ?? "erro ao enviar");
       return;
     }
+    if (pending) dirtyRef.current = false;
     setEntry(data.entry);
     setErr("");
     setSubmitMsg(`versão ${data.version} enviada — o time recebeu a confirmação`);
