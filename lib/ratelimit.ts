@@ -68,6 +68,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "notification-prefs": { limit: 60, windowMs: HOUR }, // PATCH /api/notifications/preferencias
   // agenda da comunidade (migration 051): criar e editar evento, por membro
   meetups: { limit: 10, windowMs: DAY }, // POST /api/meetups, PATCH /api/meetups/[id]
+  // desafio aberto (migration 053): criar é forte como criar comunidade
+  "open-challenges": { limit: 3, windowMs: DAY }, // POST /api/open-challenges — membro
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
