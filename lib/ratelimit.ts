@@ -57,6 +57,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // dividem o balde; denúncia segue o padrão de community-report
   blocks: { limit: 30, windowMs: HOUR }, // POST/DELETE /api/members/[username]/block e /mute
   reports: { limit: 5, windowMs: HOUR }, // POST /api/reports — membro
+  // busca global (migration 042): /api/search e a página /busca dividem o balde
+  search: { limit: 120, windowMs: HOUR }, // GET /api/search — membro
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
 };

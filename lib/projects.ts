@@ -54,6 +54,19 @@ type Row = {
   logoUrl: string | null;
 };
 
+/**
+ * Quem aparece no índice público de projetos (/projetos) e na busca
+ * (lib/search.ts): edição com prazo só expõe projeto ENVIADO e depois da
+ * trava (spec 034), e time abandonado fica de fora. `t` = alias de teams,
+ * `h` = alias de hackathons.
+ */
+export function projectVisibleSql(t = "t", h = "h"): string {
+  return `(${h}.submissionDeadline IS NULL
+              OR (to_ts(${h}.submissionDeadline) + make_interval(mins => ${h}.submissionGraceMinutes) < now()
+                  AND EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = ${t}.id)))
+         AND NOT ${ABANDONED_SQL(t)}`;
+}
+
 export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectCard[]> {
   // default = pódio do júri (placement→edição recente); "votes" põe a escolha
   // do povo na frente, com o júri só desempatando — sinais separados
@@ -89,11 +102,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
        ) d ON TRUE
        WHERE (@h::text IS NULL OR t.hackathonId = @h)
          AND (@live::int = 0 OR d.status = 'running')
-         -- spec 034: edição com prazo só expõe projeto ENVIADO e depois da trava
-         AND (h.submissionDeadline IS NULL
-              OR (to_ts(h.submissionDeadline) + make_interval(mins => h.submissionGraceMinutes) < now()
-                  AND EXISTS (SELECT 1 FROM project_submissions ps WHERE ps.teamId = t.id)))
-         AND NOT ${ABANDONED_SQL("t")}
+         AND ${projectVisibleSql("t", "h")}
          AND (@q::text IS NULL
               OR tp.title LIKE @q ESCAPE '\\'
               OR tp.description LIKE @q ESCAPE '\\'
