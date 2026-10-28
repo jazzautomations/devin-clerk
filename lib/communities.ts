@@ -1,5 +1,5 @@
 import db from "@/lib/db";
-import { notify } from "@/lib/notifications";
+import { inAppAllowedSql, notify } from "@/lib/notifications";
 import { emailDriver } from "@/lib/notify/email";
 import { eventRegion } from "@/lib/regions";
 import { absoluteUrl } from "@/lib/seo";
@@ -638,7 +638,8 @@ export async function createNotice(
       .prepare(
         `INSERT INTO notifications (memberId, type, text, href)
          SELECT cm.memberId, 'community_notice', ?, ? FROM community_members cm JOIN members m ON m.id = cm.memberId
-         WHERE cm.communityId = ? AND cm.memberId <> ? AND m.clerkId NOT LIKE 'deleted:%'`,
+         WHERE cm.communityId = ? AND cm.memberId <> ? AND m.clerkId NOT LIKE 'deleted:%'
+           AND ${inAppAllowedSql("comunidade", "cm.memberId")}`,
       )
       .run(`${c.name}: ${title}`, `/comunidade/${c.slug}#avisos`, c.id, by);
     return { id: row!.id, notified: res.changes };

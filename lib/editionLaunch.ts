@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { publishToMembers } from "@/lib/announcements";
 import { communityAudience } from "@/lib/follows";
+import { inAppAllowedSql } from "@/lib/notifications";
 
 /**
  * Hackathon de uma comunidade que entra no ar pela primeira vez é anunciado
@@ -37,7 +38,8 @@ export async function announceEditionLaunch(
     await db
       .prepare(
         `INSERT INTO notifications (memberId, type, text, href)
-         SELECT id, 'edicao_nova', ?, ? FROM members WHERE id = ANY(?::int[])`,
+         SELECT id, 'edicao_nova', ?, ? FROM members
+         WHERE id = ANY(?::int[]) AND ${inAppAllowedSql("comunidade", "members.id")}`,
       )
       .run(text, href, `{${ids.join(",")}}`);
 

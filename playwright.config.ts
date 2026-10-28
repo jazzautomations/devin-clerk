@@ -7,6 +7,9 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
 // segredo do link do RSVP compartilhado entre o server (herda process.env)
 // e os specs que geram token — o server roda em modo produção
 process.env.HACKAHUB_RSVP_SECRET ||= "e2e-rsvp-secret-nao-usar-em-producao";
+// idem pro link "parar de receber" do resumo semanal (lib/digest.ts usa o
+// segredo do ingresso, obrigatório em modo produção)
+process.env.HACKAHUB_TICKET_SECRET ||= "e2e-ticket-secret-nao-usar-em-producao";
 // dossiê (migration 029): o server lê o "GitHub" de um servidor falso local
 // (tests/e2e/github-mock.mjs) — e2e nunca vai pra api.github.com
 // fetch (undici) recusa as "bad ports" do padrão Fetch: com E2E_PORT=3190 o

@@ -35,6 +35,10 @@ H=/home/ubuntu/hackahub
 # RSVP (convite D-7, prazo D-3, lembretes): a cada 15 min
 */15 * * * *  bash $H/ops/rsvp.sh prod >> $H/logs/cron-stderr.log 2>&1
 7-59/15 * * * * bash $H/ops/rsvp.sh stage >> $H/logs/cron-stderr.log 2>&1
+# resumo semanal por e-mail (migration 040): segunda 12:00 UTC (09:00 BRT);
+# stage meia hora depois pra não disputar CPU. Idempotente por semana.
+0 12 * * 1    bash $H/ops/digest.sh prod >> $H/logs/cron-stderr.log 2>&1
+30 12 * * 1   bash $H/ops/digest.sh stage >> $H/logs/cron-stderr.log 2>&1
 
 # guarda de disco: alerta em 85%, limpa sobras do HackaHub em 90%
 */10 * * * *  bash $H/ops/disk-guard.sh >> $H/logs/disk.log 2>&1

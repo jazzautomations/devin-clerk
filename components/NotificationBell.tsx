@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// linha agrupada (lib/notifications NotificationGroup, migration 040):
+// "@a, @b e mais 3 reagiram ao seu post" é uma linha com total 5
 type Notification = {
   id: number;
-  actorUsername: string | null;
   type: string;
   text: string;
   href: string | null;
   read: boolean;
   createdAt: string;
+  total: number;
 };
 
 // createdAt é UTC "YYYY-MM-DD HH:MM:SS"
@@ -27,7 +29,11 @@ function timeAgo(iso: string): string {
   return new Date(then).toLocaleDateString("pt-BR");
 }
 
-type Payload = { notifications?: Notification[]; unread?: number };
+type Payload = { groups?: Notification[]; unread?: number };
+
+// só caminho interno, igual ao safeHref do servidor
+const internal = (href: string | null) =>
+  href && href.startsWith("/") && !href.startsWith("//") && !href.startsWith("/\\") ? href : "/notificacoes";
 
 async function fetchNotifications(): Promise<Payload | null> {
   try {
@@ -54,7 +60,7 @@ export function NotificationBell() {
     const refresh = () =>
       fetchNotifications().then((body) => {
         if (stale || !body) return;
-        setNotifications(body.notifications ?? []);
+        setNotifications((body.groups ?? []).slice(0, 8));
         setUnread(body.unread ?? 0);
       });
     refresh();
@@ -76,7 +82,7 @@ export function NotificationBell() {
   const load = useCallback(async () => {
     const body = await fetchNotifications();
     if (!body) return;
-    setNotifications(body.notifications ?? []);
+    setNotifications((body.groups ?? []).slice(0, 8));
     setUnread(body.unread ?? 0);
   }, []);
 
@@ -118,13 +124,14 @@ export function NotificationBell() {
     fetch("/api/notifications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: n.id }),
+      body: JSON.stringify({ id: n.id, group: true }),
       keepalive: true, // o clique navega na sequência — o POST não pode morrer junto
     }).catch(() => null);
     setNotifications((ns) =>
       ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
     );
-    setUnread((u) => Math.max(0, u - 1));
+    // o POST marca o grupo inteiro
+    setUnread((u) => Math.max(0, u - Math.max(1, n.total)));
     setOpen(false);
   };
 
@@ -171,7 +178,7 @@ export function NotificationBell() {
               {notifications.map((n) => (
                 <li key={n.id} className="border-b border-line last:border-0">
                   <Link
-                    href={n.href ?? "/feed"}
+                    href={internal(n.href)}
                     onClick={() => readOne(n)}
                     className="flex gap-2 px-3 py-2 transition hover:bg-line/20"
                   >
@@ -183,7 +190,7 @@ export function NotificationBell() {
                     />
                     <span className="min-w-0">
                       <span
-                        className={`block truncate ${
+                        className={`block line-clamp-2 break-words ${
                           n.read ? "text-muted" : "text-foreground"
                         }`}
                       >
@@ -191,6 +198,7 @@ export function NotificationBell() {
                       </span>
                       <span className="block text-[12px] text-muted">
                         {timeAgo(n.createdAt)}
+                        {n.total > 1 && ` · ${n.total}`}
                       </span>
                     </span>
                   </Link>
@@ -198,13 +206,22 @@ export function NotificationBell() {
               ))}
             </ul>
           )}
-          <Link
-            href="/notificacoes"
-            onClick={() => setOpen(false)}
-            className="block border-t border-line px-3 py-2 text-center text-[12px] text-accent hover:underline"
-          >
-            ver todas
-          </Link>
+          <div className="flex border-t border-line text-[12px]">
+            <Link
+              href="/notificacoes"
+              onClick={() => setOpen(false)}
+              className="flex-1 px-3 py-2 text-center text-accent hover:underline"
+            >
+              ver todas
+            </Link>
+            <Link
+              href="/notificacoes/preferencias"
+              onClick={() => setOpen(false)}
+              className="flex-1 border-l border-line px-3 py-2 text-center text-muted hover:text-accent hover:underline"
+            >
+              preferências
+            </Link>
+          </div>
         </div>
       )}
     </div>

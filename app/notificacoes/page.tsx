@@ -1,27 +1,36 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentMember } from "@/lib/session";
-import { listNotifications, unreadCount } from "@/lib/notifications";
+import { listNotificationsGrouped, unreadCount } from "@/lib/notifications";
 import { MarkAllReadButton } from "@/components/MarkAllReadButton";
+import { NotificationList } from "./NotificationList";
 
 export const metadata: Metadata = { title: "notificações", robots: { index: false } };
 
-const fmt = new Intl.DateTimeFormat("pt-BR", {
-  timeZone: "America/Sao_Paulo",
-  day: "2-digit",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+const TABS = [
+  { key: "tudo", label: "tudo", href: "/notificacoes" },
+  { key: "mencoes", label: "menções", href: "/notificacoes?aba=mencoes" },
+] as const;
 
-// todas as notificações do membro: abrir uma (link do /open) marca como lida
-// e leva ao destino; "marcar todas" zera o contador do sino
-export default async function NotificacoesPage() {
+// Notificações do membro, agrupadas (migration 040): reações, comentários e
+// seguidores parecidos das últimas 24h viram uma linha. Abrir uma (link do
+// /open) marca como lida, com o grupo junto, e leva ao destino. "mais" pede
+// a próxima página pelo cursor.
+export default async function NotificacoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ aba?: string }>;
+}) {
   const member = await currentMember();
   if (!member) redirect("/sign-in");
-  const [items, unread] = await Promise.all([listNotifications(member.id, 200), unreadCount(member.id)]);
+  const aba = (await searchParams).aba === "mencoes" ? "mencoes" : "tudo";
+  const [page, unread] = await Promise.all([
+    listNotificationsGrouped(member.id, null, 30, { only: aba === "mencoes" ? "mencoes" : undefined }),
+    unreadCount(member.id),
+  ]);
   return (
-    <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-12 sm:px-6">
+    <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 overflow-x-clip px-4 py-12 sm:px-6">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b-2 border-line pb-5">
         <div className="flex flex-col gap-2">
           <p className="tag self-start uppercase">notificações</p>
@@ -29,38 +38,44 @@ export default async function NotificacoesPage() {
             {unread > 0 ? `${unread} não lida${unread === 1 ? "" : "s"}` : "tudo lido"}
           </h1>
         </div>
-        {unread > 0 && <MarkAllReadButton />}
+        <div className="flex flex-wrap items-center gap-3">
+          {unread > 0 && <MarkAllReadButton />}
+          <Link
+            href="/notificacoes/preferencias"
+            className="font-mono text-[13px] text-accent underline-offset-4 hover:underline"
+            data-testid="prefs-link"
+          >
+            preferências
+          </Link>
+        </div>
       </header>
-      {items.length === 0 ? (
-        <p className="text-muted">
-          Nada por aqui ainda. Respostas às suas dúvidas, convites de time e avisos das suas edições aparecem aqui.
+
+      <nav aria-label="filtrar notificações" className="flex border-[1.5px] border-line self-start">
+        {TABS.map((t) => {
+          const active = t.key === aba;
+          return (
+            <Link
+              key={t.key}
+              href={t.href}
+              aria-current={active ? "page" : undefined}
+              className={`px-4 py-2 font-mono text-[13px] transition ${
+                active ? "bg-foreground text-background" : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {page.items.length === 0 ? (
+        <p className="border-[1.5px] border-dashed border-line px-4 py-5 text-muted" data-testid="notifications-empty">
+          {aba === "mencoes"
+            ? "Ninguém mencionou você ainda. Quando alguém escrever seu @ num post, aparece aqui."
+            : "Nada por aqui ainda. Respostas às suas dúvidas, convites de time e avisos das suas edições aparecem aqui."}
         </p>
       ) : (
-        <ul className="border-b border-line" data-testid="notification-list">
-          {items.map((n) => (
-            <li key={n.id} className="border-t border-line">
-              <a
-                href={`/api/notifications/${n.id}/open`}
-                data-read={n.read ? "1" : "0"}
-                className="flex gap-3 py-3 transition hover:bg-line/10"
-              >
-                <span
-                  aria-hidden
-                  className={`mt-2 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-transparent" : "bg-accent"}`}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className={`block break-words ${n.read ? "text-muted" : "font-semibold text-foreground"}`}>
-                    {n.text}
-                  </span>
-                  <span className="block font-mono text-[12px] text-muted">
-                    {fmt.format(new Date(`${n.createdAt.replace(" ", "T")}Z`))}
-                    {!n.read && " · não lida"}
-                  </span>
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
+        <NotificationList key={aba} initial={page.items} next={page.next} aba={aba} />
       )}
     </section>
   );

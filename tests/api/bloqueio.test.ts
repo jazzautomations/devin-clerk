@@ -259,7 +259,9 @@ describe("o que some da vista", () => {
     await notify(me.id, { type: "like", actorUsername: `novo_${chato.username}`, text: "curtiu de novo", href: "/feed" });
     expect(await unreadCount(me.id)).toBe(0);
     await unmute(me.id, chato.id);
-    expect((await listNotifications(me.id)).map((n) => n.text).sort()).toEqual(["curtiu", "curtiu de novo"]);
+    // a antiga volta a aparecer; a que chegou durante o silêncio nem nasceu
+    // (migration 040: notificação social de silenciado não é gravada)
+    expect((await listNotifications(me.id)).map((n) => n.text).sort()).toEqual(["curtiu"]);
   });
 });
 

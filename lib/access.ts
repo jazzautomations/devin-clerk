@@ -38,6 +38,7 @@ export const PUBLIC_APIS: RegExp[] = [
   /^\/api\/cron\/.+$/, // segredo próprio (lib/cronAuth)
   new RegExp(`^/api/rsvp/${SEG}$`), // token assinado
   new RegExp(`^/api/me/calendar/${SEG}$`), // feed .ics pessoal por token
+  new RegExp(`^/api/notifications/digest/sair/${SEG}$`), // "parar de receber" do resumo semanal, token assinado
   new RegExp(`^/api/hackathons/${SEG}/incidents$`), // relato anônimo
   new RegExp(`^/api/hackathons/${SEG}/stage(/stream)?$`), // estado do telão
 ];
