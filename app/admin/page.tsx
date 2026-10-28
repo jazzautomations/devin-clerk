@@ -115,6 +115,9 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
           Painel do organizador
         </h1>
+        <Link href="/admin/metricas" className={`${mono} self-start text-accent underline underline-offset-4`} data-testid="admin-metrics-link">
+          métricas da rede →
+        </Link>
       </div>
 
       <div className="flex flex-col gap-4">
