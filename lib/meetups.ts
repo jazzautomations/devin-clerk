@@ -4,6 +4,7 @@ import { EventTimeError, parseEventTime } from "@/lib/eventTime";
 import { communityAudience } from "@/lib/follows";
 import { buildIcs, type IcsEvent } from "@/lib/ics";
 import type { Member } from "@/lib/members";
+import { isBlockedEither } from "@/lib/blocks";
 import { canNetwork } from "@/lib/network";
 import { notify } from "@/lib/notifications";
 import type { RateLimitOpts } from "@/lib/ratelimit";
@@ -241,6 +242,9 @@ export type MeetupInput = {
   hosts: string[];
 };
 
+/** caracteres como o Postgres conta (char_length): code points, não UTF-16 */
+const chars = (s: string) => [...s].length;
+
 function wallToUtc(v: string, field: string): string {
   const d = parseEventTime(v);
   if (!d) throw new EventTimeError(`${field}: use o seletor de data (horário de Brasília)`);
@@ -261,11 +265,11 @@ export function parseMeetupInput(
   const kind = str("kind") as MeetupKind;
   if (!MEETUP_KINDS.includes(kind)) return { error: "Escolha o tipo: meetup, live, workshop ou demo day." };
   const title = str("title").replace(/\s+/g, " ");
-  if (title.length < 3 || title.length > MEETUP_LIMITS.title) {
+  if (chars(title) < 3 || chars(title) > MEETUP_LIMITS.title) {
     return { error: `Dê um título de 3 a ${MEETUP_LIMITS.title} caracteres.` };
   }
   const description = str("description").replace(/\r\n/g, "\n") || null;
-  if (description && description.length > MEETUP_LIMITS.description) {
+  if (description && chars(description) > MEETUP_LIMITS.description) {
     return { error: `Descrição: até ${MEETUP_LIMITS.description} caracteres.` };
   }
 
@@ -289,7 +293,7 @@ export function parseMeetupInput(
   }
 
   const location = str("location").replace(/\s+/g, " ") || null;
-  if (location && location.length > MEETUP_LIMITS.location) return { error: `Local: até ${MEETUP_LIMITS.location} caracteres.` };
+  if (location && chars(location) > MEETUP_LIMITS.location) return { error: `Local: até ${MEETUP_LIMITS.location} caracteres.` };
   const online = cleanUrl(b.onlineUrl, { httpsOnly: true });
   if ("error" in online) return { error: "Link da sala inválido: use um link https://." };
 
@@ -428,26 +432,42 @@ export async function isHost(meetupId: number, memberId: number): Promise<boolea
 
 // ---------- escrita: criar, editar, publicar, cancelar ----------
 
-async function resolveHosts(usernames: string[]): Promise<number[]> {
+/**
+ * @ de quem conduz viram ids. Conta inexistente, fora da rede (canNetwork)
+ * ou com bloqueio em qualquer sentido com quem marca recebem a mesma
+ * resposta: não dá pra sondar idade nem bloqueio pelo erro.
+ */
+async function resolveHosts(usernames: string[], by: number): Promise<number[]> {
   if (usernames.length === 0) return [];
   const rows = await db
     .prepare(`SELECT id, username FROM members WHERE lower(username) = ANY(?::text[]) AND clerkId NOT LIKE 'deleted:%'`)
     .all<{ id: number; username: string }>(`{${usernames.join(",")}}`);
   const found = new Map(rows.map((r) => [r.username.toLowerCase(), r.id]));
-  const missing = usernames.find((u) => !found.has(u));
-  if (missing) throw new MeetupError(400, `Não achamos @${missing} no HackaHub.`);
-  const ids = usernames.map((u) => found.get(u)!);
-  const ok = await Promise.all(ids.map((id) => canNetwork(id)));
-  const blocked = usernames.find((_, i) => !ok[i]);
-  if (blocked) throw new MeetupError(400, `@${blocked} não pode conduzir agora.`);
+  const ids: number[] = [];
+  for (const u of usernames) {
+    const id = found.get(u);
+    const ok = id !== undefined && (await canNetwork(id)) && !(await isBlockedEither(by, id));
+    if (!ok) throw new MeetupError(400, `Não achamos @${u} no HackaHub.`);
+    ids.push(id);
+  }
   return ids;
 }
 
-async function writeHosts(meetupId: number, ids: number[]) {
-  await db.prepare("DELETE FROM meetup_hosts WHERE meetupId = ?").run(meetupId);
+/** troca quem conduz; devolve quem entrou agora */
+async function writeHosts(meetupId: number, ids: number[]): Promise<number[]> {
+  const before = await db
+    .prepare("DELETE FROM meetup_hosts WHERE meetupId = ? RETURNING memberId AS \"memberId\"")
+    .all<{ memberId: number }>(meetupId);
   for (const id of ids) {
     await db.prepare("INSERT INTO meetup_hosts (meetupId, memberId) VALUES (?, ?) ON CONFLICT DO NOTHING").run(meetupId, id);
   }
+  const had = new Set(before.map((r) => r.memberId));
+  return ids.filter((id) => !had.has(id));
+}
+
+/** aviso pra quem foi posto em "quem conduz" de um evento publicado */
+function hostText(m: { communityName: string; title: string; startsAt: string }): string {
+  return `${m.communityName} pôs você em quem conduz ${m.title}, ${fmtMeetupWhen(m.startsAt)}.`;
 }
 
 const rowFields = (i: MeetupInput) => ({
@@ -469,7 +489,7 @@ export async function createMeetup(
   input: MeetupInput,
   opts: { publish?: boolean } = {},
 ): Promise<{ id: number; notified: number }> {
-  const hostIds = await resolveHosts(input.hosts);
+  const hostIds = await resolveHosts(input.hosts, by);
   const id = await db.transaction(async () => {
     const row = await db
       .prepare(
@@ -481,7 +501,7 @@ export async function createMeetup(
     await writeHosts(row!.id, hostIds.length ? hostIds : [by]);
     return row!.id;
   })();
-  const notified = opts.publish ? ((await publishMeetup(id))?.notified ?? 0) : 0;
+  const notified = opts.publish ? ((await publishMeetup(id, by))?.notified ?? 0) : 0;
   return { id, notified };
 }
 
@@ -491,9 +511,9 @@ export async function createMeetup(
  */
 export async function updateMeetup(m: Meetup, by: number, input: MeetupInput): Promise<{ timeChanged: boolean; notified: number }> {
   if (m.cancelledAt) throw new MeetupError(409, "Este evento foi cancelado.");
-  const hostIds = await resolveHosts(input.hosts);
+  const hostIds = await resolveHosts(input.hosts, by);
   const timeChanged = m.startsAt !== input.startsAt || (m.endsAt ?? null) !== input.endsAt;
-  await db.transaction(async () => {
+  const newHosts = await db.transaction(async () => {
     await db
       .prepare(
         `UPDATE meetups SET kind = @kind, title = @title, description = @description, startsAt = @startsAt, endsAt = @endsAt,
@@ -502,12 +522,18 @@ export async function updateMeetup(m: Meetup, by: number, input: MeetupInput): P
          WHERE id = @id`,
       )
       .run({ id: m.id, bump: timeChanged ? 1 : 0, ...rowFields(input) });
-    await writeHosts(m.id, hostIds.length ? hostIds : [m.createdBy ?? by]);
+    const added = await writeHosts(m.id, hostIds.length ? hostIds : [m.createdBy ?? by]);
     // palco só existe no demo day: mudou o tipo, os pedidos saem
     if (input.kind !== "demo_day" && m.kind === "demo_day") {
       await db.prepare("DELETE FROM meetup_stage_requests WHERE meetupId = ?").run(m.id);
     }
+    return added;
   })();
+  // rascunho não avisa: quem conduz fica sabendo quando publicar
+  if (m.publishedAt) {
+    const text = hostText({ communityName: m.communityName, title: input.title, startsAt: input.startsAt });
+    for (const id of newHosts) await notify(id, { type: "meetup", actorId: by, text, href: `/agenda/${m.id}` });
+  }
   let notified = 0;
   if (timeChanged && m.publishedAt) {
     const ids = await rsvpMemberIds(m.id);
@@ -530,30 +556,39 @@ async function rsvpMemberIds(meetupId: number): Promise<number[]> {
 
 /**
  * Publica e avisa membros e quem segue (communityAudience), menos quem
- * publicou. Idempotente: publicar de novo não avisa outra vez (null).
- * Comunidade escondida não publica.
+ * publicou (`by`, que também é o ator do aviso). Quem conduz recebe o aviso
+ * de que está conduzindo, no lugar do aviso geral. Idempotente: publicar de
+ * novo não avisa outra vez (null). Comunidade escondida não publica.
  */
-export async function publishMeetup(id: number): Promise<{ notified: number } | null> {
+export async function publishMeetup(id: number, by: number): Promise<{ notified: number } | null> {
   return db.transaction(async () => {
     const m = await db
       .prepare(
         `UPDATE meetups mt SET publishedAt = sqlite_now()
          FROM communities c
          WHERE mt.id = ? AND mt.publishedAt IS NULL AND mt.cancelledAt IS NULL AND c.id = mt.communityId AND c.hidden = 0
-         RETURNING mt.id, mt.kind, mt.title, mt.startsAt AS "startsAt", mt.createdBy AS "createdBy", c.id AS "communityId", c.name AS "communityName"`,
+         RETURNING mt.id, mt.kind, mt.title, mt.startsAt AS "startsAt", c.id AS "communityId", c.name AS "communityName"`,
       )
-      .get<{ id: number; kind: MeetupKind; title: string; startsAt: string; createdBy: number | null; communityId: number; communityName: string }>(id);
+      .get<{ id: number; kind: MeetupKind; title: string; startsAt: string; communityId: number; communityName: string }>(id);
     if (!m) return null;
-    const ids = (await communityAudience(m.communityId)).filter((x) => x !== m.createdBy);
-    if (ids.length === 0) return { notified: 0 };
-    const text = `${m.communityName} marcou ${m.kind === "live" ? "uma" : "um"} ${MEETUP_KIND_LABEL[m.kind]}: ${m.title}, ${fmtMeetupWhen(m.startsAt)}.`;
-    const res = await db
+    const hostRows = await db
       .prepare(
-        `INSERT INTO notifications (memberId, actorId, type, text, href)
-         SELECT id, ?::int, 'meetup', ?, ? FROM members WHERE id = ANY(?::int[])`,
+        `SELECT h.memberId AS id FROM meetup_hosts h JOIN members mb ON mb.id = h.memberId
+         WHERE h.meetupId = ? AND h.memberId <> ? AND mb.clerkId NOT LIKE 'deleted:%' ORDER BY h.memberId`,
       )
-      .run(m.createdBy, text, `/agenda/${m.id}`, `{${ids.join(",")}}`);
-    return { notified: res.changes };
+      .all<{ id: number }>(m.id, by);
+    const hosts = hostRows.map((r) => r.id);
+    const ids = (await communityAudience(m.communityId)).filter((x) => x !== by && !hosts.includes(x));
+    const insert = db.prepare(
+      `INSERT INTO notifications (memberId, actorId, type, text, href)
+       SELECT id, ?::int, 'meetup', ?, ? FROM members WHERE id = ANY(?::int[])`,
+    );
+    const href = `/agenda/${m.id}`;
+    const text = `${m.communityName} marcou ${m.kind === "live" ? "uma" : "um"} ${MEETUP_KIND_LABEL[m.kind]}: ${m.title}, ${fmtMeetupWhen(m.startsAt)}.`;
+    let notified = 0;
+    if (ids.length) notified += (await insert.run(by, text, href, `{${ids.join(",")}}`)).changes;
+    if (hosts.length) notified += (await insert.run(by, hostText(m), href, `{${hosts.join(",")}}`)).changes;
+    return { notified };
   })();
 }
 
@@ -669,7 +704,7 @@ export async function requestStage(
   if (!Number.isInteger(tid) || tid <= 0) throw new MeetupError(400, "Escolha um projeto.");
   const text = typeof pitch === "string" ? pitch.trim().replace(/\s+/g, " ") : "";
   if (!text) throw new MeetupError(400, "Conte em uma frase o que vocês vão mostrar.");
-  if (text.length > MEETUP_LIMITS.pitch) throw new MeetupError(400, `Pitch: até ${MEETUP_LIMITS.pitch} caracteres.`);
+  if (chars(text) > MEETUP_LIMITS.pitch) throw new MeetupError(400, `Pitch: até ${MEETUP_LIMITS.pitch} caracteres.`);
   const mine = (await myProjects(member.username)).some((p) => p.teamId === tid);
   if (!mine) throw new MeetupError(403, "Só dá pra pedir palco com um projeto do seu time.");
   const r = await db
@@ -699,16 +734,33 @@ export async function myStageRequests(meetupId: number, memberId: number): Promi
   return (await listStageRequests(meetupId)).filter((s) => s.memberId === memberId);
 }
 
-/** organizador aceita ou recusa; quem pediu recebe o aviso */
-export async function decideStage(m: Meetup, requestId: number, status: unknown, by: number): Promise<{ status: StageStatus }> {
+/**
+ * Organizador aceita ou recusa; quem pediu recebe o aviso só quando o status
+ * muda (repetir a mesma decisão é 200 sem aviso). Evento cancelado ou que já
+ * passou não muda a programação (409).
+ */
+export async function decideStage(
+  m: Meetup,
+  requestId: number,
+  status: unknown,
+  by: number,
+  now = new Date(),
+): Promise<{ status: StageStatus }> {
   if (status !== "aceito" && status !== "recusado") throw new MeetupError(400, "Decida: aceito ou recusado.");
+  assertOpen(m, now);
   const r = await db
     .prepare(
       `UPDATE meetup_stage_requests SET status = ?, decidedAt = sqlite_now()
-       WHERE id = ? AND meetupId = ? RETURNING memberId AS "memberId", teamId AS "teamId"`,
+       WHERE id = ? AND meetupId = ? AND status IS DISTINCT FROM ? RETURNING memberId AS "memberId", teamId AS "teamId"`,
     )
-    .get<{ memberId: number; teamId: number }>(status, requestId, m.id);
-  if (!r) throw new MeetupError(404, "Pedido não encontrado");
+    .get<{ memberId: number; teamId: number }>(status, requestId, m.id, status);
+  if (!r) {
+    const exists = await db
+      .prepare("SELECT 1 AS y FROM meetup_stage_requests WHERE id = ? AND meetupId = ?")
+      .get(requestId, m.id);
+    if (!exists) throw new MeetupError(404, "Pedido não encontrado");
+    return { status };
+  }
   const text =
     status === "aceito"
       ? `Seu projeto entrou na programação de ${m.title}.`

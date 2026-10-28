@@ -170,6 +170,11 @@ describe("parseMeetupInput", () => {
     expect(err({ ...base, kind: "festa" })).toMatch(/tipo/);
     expect(err({ ...base, title: "oi" })).toMatch(/título/);
     expect(err({ ...base, title: "x".repeat(101) })).toMatch(/título/);
+    // conta como o Postgres (code points): "🚀🚀" tem length 4 no JS e 2 no banco
+    expect(err({ ...base, title: "🚀🚀" })).toMatch(/título/);
+    expect(ok({ ...base, title: "🚀".repeat(100) }).title).toBe("🚀".repeat(100));
+    expect(err({ ...base, title: "🚀".repeat(101) })).toMatch(/título/);
+    expect(ok({ ...base, description: "🚀".repeat(3000) }).description).toHaveLength(6000);
     expect(err({ ...base, description: "x".repeat(3001) })).toMatch(/3000/);
     expect(err({ ...base, startsAt: "" })).toMatch(/quando começa/);
     expect(err({ ...base, startsAt: "amanhã" })).toMatch(/seletor/);

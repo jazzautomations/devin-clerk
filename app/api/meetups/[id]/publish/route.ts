@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json({ error: "Comunidade escondida pela moderação não publica." }, { status: 409 });
   }
   if (isMeetupOver(g.meetup)) return Response.json({ error: "A data já passou. Edite antes de publicar." }, { status: 409 });
-  const r = await publishMeetup(g.meetup.id);
+  const r = await publishMeetup(g.meetup.id, g.member.id);
   if (!r) return Response.json({ error: "Este evento já está publicado." }, { status: 409 });
   return Response.json({ published: true, notified: r.notified });
 }

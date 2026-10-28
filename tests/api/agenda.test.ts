@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
+import { block } from "@/lib/blocks";
 import { decideAccess } from "@/lib/access";
 import { listCommunityUpdates, updateHref } from "@/lib/follows";
 import { listCommunityMeetups, listStageRequests, upcomingMeetups } from "@/lib/meetups";
@@ -11,6 +12,13 @@ import { RATE_LIMITS, resetRateLimits } from "@/lib/ratelimit";
 // (400), lotação ("vou" vira "talvez" com "lotado"), cancelar avisa quem
 // respondeu, palco do demo day (projeto alheio 403), .ics com o horário
 // certo, teaser público e LGPD.
+
+// canNetwork false (menor com HACKAHUB_ALLOW_MINORS=on) sem montar inscrição
+const minors = vi.hoisted(() => new Set<number>());
+vi.mock("@/lib/network", async (orig) => {
+  const real = await orig<typeof import("@/lib/network")>();
+  return { ...real, canNetwork: async (id: number, h?: string) => (minors.has(id) ? false : real.canNetwork(id, h)) };
+});
 
 const clerk = vi.hoisted(() => ({ uid: null as string | null }));
 vi.mock("@clerk/nextjs/server", () => ({
@@ -133,19 +141,24 @@ describe("criar e publicar", () => {
     expect((await (await rsvp()).POST(jreq("POST", { status: "vou" }), ctx(id))).status).toBe(404);
     expect((await (await publish()).POST(jreq("POST"), ctx(id))).status).toBe(404);
 
+    // org criou, dono publica: o ator é quem publicou, e ele não se avisa
     as(c.dono);
     const p = await (await publish()).POST(jreq("POST"), ctx(id));
     expect(p.status).toBe(200);
-    // dono, membro e seguidor; quem criou (org) não se avisa
+    // membro e seguidor recebem o aviso geral; org (quem conduz) recebe o de condução
     expect((await p.json()).notified).toBe(3);
-    for (const m of [c.dono, c.membro, c.fan]) {
+    for (const m of [c.membro, c.fan]) {
       const n = await notes(m);
       expect(n).toHaveLength(1);
       expect(n[0].href).toBe(`/agenda/${id}`);
-      expect(n[0].actorId).toBe(c.org.id);
+      expect(n[0].actorId).toBe(c.dono.id);
       expect(n[0].text).toMatch(/marcou um meetup: Rust na prática/);
     }
-    expect(await notes(c.org)).toHaveLength(0);
+    expect(await notes(c.dono)).toHaveLength(0);
+    const host = await notes(c.org);
+    expect(host).toHaveLength(1);
+    expect(host[0]).toMatchObject({ actorId: c.dono.id, href: `/agenda/${id}` });
+    expect(host[0].text).toMatch(/pôs você em quem conduz Rust na prática/);
     expect(await notes(outsider)).toHaveLength(0);
     // de novo: 409 e ninguém recebe outra
     expect((await (await publish()).POST(jreq("POST"), ctx(id))).status).toBe(409);
@@ -259,6 +272,80 @@ describe("editar e cancelar", () => {
     expect(await db.prepare("SELECT 1 FROM meetups WHERE id = ?").get(draft)).toBeUndefined();
   });
 
+  it("título com emoji conta como o banco: curto é 400, não 500", async () => {
+    const c = await community();
+    as(c.org);
+    const r = await (await create()).POST(jreq("POST", { community: c.slug, ...BASE, title: "🚀🚀" }));
+    expect(r.status).toBe(400);
+    const id = await make(c, { title: "🚀".repeat(100) });
+    const row = await db.prepare("SELECT title FROM meetups WHERE id = ?").get<{ title: string }>(id);
+    expect(row!.title).toBe("🚀".repeat(100));
+  });
+
+  it("quem conduz: bloqueio em qualquer sentido dá 400 com a mesma resposta de @ inexistente", async () => {
+    const c = await community();
+    const [ana, bia] = [await member(), await member()];
+    await block(ana.id, c.org.id); // Ana bloqueou o org
+    await block(c.org.id, bia.id); // o org bloqueou a Bia
+    const id = await make(c, { publish: true });
+    for (const who of [ana, bia]) {
+      as(c.org);
+      const r = await (await create()).POST(jreq("POST", { community: c.slug, ...BASE, hosts: `@${who.username}` }));
+      expect(r.status).toBe(400);
+      expect((await r.json()).error).toBe(`Não achamos @${who.username} no HackaHub.`);
+      const e = await (await item()).PATCH(jreq("PATCH", { ...BASE, hosts: `@${who.username}` }), ctx(id));
+      expect(e.status).toBe(400);
+      expect(await notes(who)).toHaveLength(0);
+    }
+    const n = await db
+      .prepare("SELECT COUNT(*)::int AS n FROM meetup_hosts WHERE memberId = ANY(?::int[])")
+      .get<{ n: number }>(`{${ana.id},${bia.id}}`);
+    expect(n!.n).toBe(0);
+    // o dono, que ninguém bloqueou, põe a Ana normalmente
+    await make(c, { hosts: `@${ana.username}` }, c.dono);
+  });
+
+  it("quem conduz: conta fora da rede (canNetwork) recebe a mesma resposta de @ inexistente", async () => {
+    const c = await community();
+    const menor = await member();
+    minors.add(menor.id);
+    try {
+      as(c.org);
+      const r = await (await create()).POST(jreq("POST", { community: c.slug, ...BASE, hosts: `@${menor.username}` }));
+      expect(r.status).toBe(400);
+      expect((await r.json()).error).toBe(`Não achamos @${menor.username} no HackaHub.`);
+    } finally {
+      minors.delete(menor.id);
+    }
+  });
+
+  it("quem conduz fica sabendo: na publicação e quando entra num evento publicado, uma vez", async () => {
+    const c = await community();
+    const outsider = await member();
+    // rascunho com host de fora: ninguém é avisado até publicar
+    const draft = await make(c, { hosts: `@${outsider.username}` });
+    expect(await notes(outsider)).toHaveLength(0);
+    as(c.org);
+    expect((await (await publish()).POST(jreq("POST"), ctx(draft))).status).toBe(200);
+    expect((await notes(outsider)).map((n) => n.text)).toEqual([expect.stringMatching(/pôs você em quem conduz Rust na prática/)]);
+
+    // publicado: só quem entrou agora é avisado; quem já conduzia não recebe de novo
+    const id = await make(c, { publish: true, hosts: `@${c.membro.username}` });
+    const membroAntes = (await notes(c.membro)).length;
+    expect((await notes(c.membro)).at(-1)!.text).toMatch(/pôs você em quem conduz/);
+    as(c.org);
+    const r = await (await item()).PATCH(jreq("PATCH", { ...BASE, hosts: `@${c.membro.username} @${c.fan.username}` }), ctx(id));
+    expect(r.status).toBe(200);
+    expect(await notes(c.membro)).toHaveLength(membroAntes);
+    // o seguidor já tinha o aviso geral da publicação; agora vem o de condução
+    const fan = (await notes(c.fan)).filter((n) => n.href === `/agenda/${id}`);
+    expect(fan.map((n) => n.text)).toEqual([
+      expect.stringMatching(/marcou um meetup/),
+      expect.stringMatching(/pôs você em quem conduz/),
+    ]);
+    expect(fan[1].actorId).toBe(c.org.id);
+  });
+
   it("quem conduz: @ desconhecido dá 400; sem ninguém, quem criou conduz", async () => {
     const c = await community();
     as(c.org);
@@ -355,10 +442,32 @@ describe("palco do demo day", () => {
     const program = await listStageRequests(id, { status: "aceito" });
     expect(program.map((s) => s.title)).toEqual(["Vaga Fácil"]);
     expect((await notes(c.membro, "meetup_palco"))[0].text).toMatch(/entrou na programação de Demo day de março/);
+    // repetir a mesma decisão: 200 e nenhum aviso a mais; mudar avisa de novo
+    expect((await PATCH(jreq("PATCH", { status: "aceito" }), rctx)).status).toBe(200);
+    expect((await PATCH(jreq("PATCH", { status: "aceito" }), rctx)).status).toBe(200);
+    expect(await notes(c.membro, "meetup_palco")).toHaveLength(1);
+    expect((await PATCH(jreq("PATCH", { status: "recusado" }), rctx)).status).toBe(200);
+    expect(await notes(c.membro, "meetup_palco")).toHaveLength(2);
     // pedido de outro evento não se decide por aqui
     const outro = await make(c, { kind: "demo_day", publish: true });
     const octx = { params: Promise.resolve({ id: String(outro), requestId: String(reqId) }) };
     expect((await PATCH(jreq("PATCH", { status: "recusado" }), octx)).status).toBe(404);
+  });
+
+  it("demo day cancelado não muda a programação (409) nem avisa", async () => {
+    const c = await community();
+    const id = await make(c, { kind: "demo_day", title: "Demo day de abril", publish: true });
+    const meu = await project(c.membro);
+    as(c.membro);
+    const ok = await (await stage()).POST(jreq("POST", { teamId: meu, pitch: "Mostra rápida." }), ctx(id));
+    const { id: reqId } = await ok.json();
+    as(c.org);
+    expect((await (await cancel()).POST(jreq("POST"), ctx(id))).status).toBe(200);
+    const rctx = { params: Promise.resolve({ id: String(id), requestId: String(reqId) }) };
+    const r = await (await decide()).PATCH(jreq("PATCH", { status: "aceito" }), rctx);
+    expect(r.status).toBe(409);
+    expect(await notes(c.membro, "meetup_palco")).toHaveLength(0);
+    expect((await listStageRequests(id))[0].status).toBe("pedido");
   });
 
   it("palco só no demo day", async () => {
