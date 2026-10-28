@@ -196,9 +196,8 @@ export default async function HackathonPage({
       archive.teams.map(async (t) => [t.id, await getLatestDeployForTeam(t.id)] as const),
     ),
   );
-  const editionPosts = await listPosts(50, member?.id ?? null, {
-    hackathonId: h.id,
-  });
+  // comunidade escondida: só a equipe da edição chega aqui (gate acima)
+  const editionPosts = await listPosts(50, member?.id ?? null, { hackathonId: h.id }, { includeHidden: !!h.communityHidden });
 
   const fmt = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",

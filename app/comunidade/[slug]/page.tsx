@@ -122,7 +122,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const [members, notices, posts, podium, invites, registeredIds, following, supportLeads, reportCounts] = await Promise.all([
     listCommunityMembers(c.id),
     listNotices(c.id, 5),
-    listPosts(30, member.id, { communityId: c.id }),
+    listPosts(30, member.id, { communityId: c.id }, { includeHidden: isAdmin }),
     podiumFor(past.map((h) => h.id)),
     isOwner ? listCommunityInvites(c.id) : Promise.resolve([]),
     getRegistrationIds(member.id),

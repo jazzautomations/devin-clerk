@@ -75,7 +75,7 @@ describe("GET /api/posts/[id]/comments — público", () => {
 });
 
 describe("POST /api/posts/[id]/comments", () => {
-  it("201 — cria comentário com autor e paga +5xp pro comentarista", async () => {
+  it("201 — cria comentário com autor e não paga XP (plano 046)", async () => {
     const { POST } = await import("@/app/api/posts/[id]/comments/route");
     const mid = await memberId("clerk_commenter");
     const before = (
@@ -98,7 +98,7 @@ describe("POST /api/posts/[id]/comments", () => {
         xp: number;
       }
     ).xp;
-    expect(after - before).toBe(5);
+    expect(after - before).toBe(0);
   });
 
   it("400 — vazio, só espaços, >1000 e não-string", async () => {

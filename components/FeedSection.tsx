@@ -1,55 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { userMessage } from "@/lib/apiError";
 import { useState } from "react";
-import { levelFor } from "@/lib/game";
-import { Avatar } from "@/components/Avatar";
-import { ReportDialog } from "@/components/ReportDialog";
+import type { Post } from "@/lib/posts";
+import { PostCard } from "@/components/PostCard";
+import { PostComposer } from "@/components/PostComposer";
 
-export type FeedPost = {
-  id: number;
-  body: string;
-  link: string | null;
-  createdAt: string;
-  hackathonId: string | null;
-  hackathonName: string | null;
-  communityId?: number | null;
-  communityName?: string | null;
-  communitySlug?: string | null;
-  username: string;
-  name: string | null;
-  avatarUrl: string | null;
-  headline: string | null;
-  persona: string | null;
-  xp: number;
-  likeCount: number;
-  likedByMe: boolean;
-  commentCount: number;
-};
+// Lista de posts com a caixa de postar em cima: /feed, /dashboard, mural da
+// edição (spec 028) e mural da comunidade (migration 027). Cada post é um
+// PostCard (migration 034); a conversa mora em /post/[id].
 
-export type FeedComment = {
-  id: number;
-  postId: number;
-  body: string;
-  createdAt: string;
-  username: string;
-  name: string | null;
-  avatarUrl: string | null;
-  persona: string | null;
-  xp: number;
-};
+export type FeedPost = Post;
 
-const fmt = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-// spec 028 — hackathonId/editionLabel transformam a seção no mural da
-// edição: POST vai marcado, refresh refaz o GET escopado. Sem as props o
-// componente é idêntico ao de sempre (/feed, /dashboard)
 export function FeedSection({
   initialPosts,
   canPost = true,
@@ -59,8 +20,9 @@ export function FeedSection({
   editionLabel = null,
   communitySlug = null,
 }: {
-  initialPosts: FeedPost[];
+  initialPosts: Post[];
   canPost?: boolean;
+  /** @ de quem lê (null = sem conta) */
   me?: string | null;
   isAdmin?: boolean;
   hackathonId?: string | null;
@@ -68,194 +30,25 @@ export function FeedSection({
   /** mural da comunidade (migration 027): posta e recarrega com o escopo */
   communitySlug?: string | null;
 }) {
-  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
-  const [body, setBody] = useState("");
-  const [link, setLink] = useState("");
-  const [status, setStatus] = useState<"idle" | "posting" | "error">("idle");
-  const [postError, setPostError] = useState<string | null>(null);
-  const [open, setOpen] = useState<Record<number, boolean>>({});
-  const [threads, setThreads] = useState<Record<number, FeedComment[]>>({});
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [sending, setSending] = useState<Record<number, boolean>>({});
-
-  async function post() {
-    setStatus("posting");
-    const res = await fetch("/api/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        body,
-        link: link || undefined,
-        hackathonId: hackathonId ?? undefined,
-        communitySlug: communitySlug ?? undefined,
-      }),
-    });
-    if (res.ok) {
-      const { post } = await res.json();
-      setPosts((p) => [post, ...p]);
-      setBody("");
-      setLink("");
-      setStatus("idle");
-      setPostError(null);
-    } else {
-      const data = await res.json().catch(() => null);
-      setPostError(userMessage(res, data, "não deu pra postar. Tente de novo."));
-      setStatus("error");
-    }
-  }
-
-  async function like(id: number) {
-    if (!canPost) return;
-    const res = await fetch(`/api/posts/${id}/like`, { method: "POST" });
-    if (res.ok) {
-      const { liked, likeCount } = await res.json();
-      setPosts((ps) =>
-        ps.map((p) =>
-          p.id === id ? { ...p, likedByMe: liked, likeCount } : p,
-        ),
-      );
-    }
-  }
-
-  // thread é lazy: só busca na primeira expansão — depois vive em cache
-  async function toggleComments(id: number) {
-    const next = !open[id];
-    setOpen((o) => ({ ...o, [id]: next }));
-    if (next && !threads[id]) {
-      const res = await fetch(`/api/posts/${id}/comments`);
-      if (res.ok) {
-        const { comments } = await res.json();
-        setThreads((t) => ({ ...t, [id]: comments }));
-      }
-    }
-  }
-
-  async function comment(id: number) {
-    const text = (drafts[id] ?? "").trim();
-    if (!text || sending[id]) return;
-    setSending((s) => ({ ...s, [id]: true }));
-    const res = await fetch(`/api/posts/${id}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: text }),
-    });
-    if (res.ok) {
-      const { comment: c } = await res.json();
-      setThreads((t) => ({ ...t, [id]: [...(t[id] ?? []), c] }));
-      setDrafts((d) => ({ ...d, [id]: "" }));
-      setPosts((ps) =>
-        ps.map((p) =>
-          p.id === id ? { ...p, commentCount: p.commentCount + 1 } : p,
-        ),
-      );
-    }
-    setSending((s) => ({ ...s, [id]: false }));
-  }
-
-  // moderação: autor ou admin; otimista — se o DELETE falhar, refaz o fetch
-  async function refreshPosts() {
-    const res = await fetch(
-      hackathonId
-        ? `/api/posts?h=${encodeURIComponent(hackathonId)}`
-        : communitySlug
-          ? `/api/posts?c=${encodeURIComponent(communitySlug)}`
-          : "/api/posts",
-    );
-    if (res.ok) {
-      const { posts: fresh } = await res.json();
-      setPosts(fresh);
-    }
-  }
-
-  async function removePost(id: number) {
-    if (!confirm("Apagar esse post? some junto com likes e comentários.")) {
-      return;
-    }
-    setPosts((ps) => ps.filter((p) => p.id !== id));
-    const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
-    if (!res.ok) await refreshPosts();
-  }
-
-  async function removeComment(postId: number, cid: number) {
-    if (!confirm("Apagar esse comentário?")) return;
-    setThreads((t) => ({
-      ...t,
-      [postId]: (t[postId] ?? []).filter((c) => c.id !== cid),
-    }));
-    setPosts((ps) =>
-      ps.map((p) =>
-        p.id === postId ? { ...p, commentCount: p.commentCount - 1 } : p,
-      ),
-    );
-    const res = await fetch(`/api/posts/${postId}/comments/${cid}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const r = await fetch(`/api/posts/${postId}/comments`);
-      if (r.ok) {
-        const { comments } = await r.json();
-        setThreads((t) => ({ ...t, [postId]: comments }));
-        await refreshPosts();
-      }
-    }
-  }
-
-  const canDelete = (username: string) => isAdmin || username === me;
-  // migration 032: denunciar o que é dos outros; denunciar bloqueia o autor,
-  // então o que é dele sai da vista na hora
-  const canReport = (username: string) => !!me && username !== me;
-  function hideAuthor(username: string | null) {
-    if (!username) return;
-    setPosts((ps) => ps.filter((x) => x.username !== username));
-    setThreads((t) => Object.fromEntries(Object.entries(t).map(([k, cs]) => [k, cs.filter((c) => c.username !== username)])));
-  }
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  // o PostCard decide "é meu" pelo id ou pelo @; o id sai do próprio feed
+  const viewer = me
+    ? { id: posts.find((p) => p.username === me)?.memberId ?? 0, username: me, role: isAdmin ? "admin" : "member" }
+    : null;
+  const context = { hackathonId, communitySlug };
 
   return (
     <div className="flex flex-col gap-4">
       {canPost && (
-        <div className="card flex flex-col gap-3 p-4">
-          {hackathonId && (
-            <p className="font-mono text-[12px] text-accent">
-              {"postando no mural: "}
-              {editionLabel ?? hackathonId}
-            </p>
-          )}
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={3}
-            maxLength={500}
-            placeholder="O que você está construindo? Poste a demo, o que quebrou, o que aprendeu…"
-            className="w-full resize-none border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
-          />
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={link}
-              onChange={(e) => setLink(e.target.value)}
-              placeholder="link do projeto/demo (opcional)"
-              className="w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-xs text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
-            />
-            <button
-              onClick={post}
-              disabled={status === "posting" || !body.trim()}
-              className="shrink-0 border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
-            >
-              {status === "posting" ? "postando…" : "postar →"}
-            </button>
-          </div>
-          {status === "error" && (
-            <p role="alert" className="font-mono text-xs text-orange">
-              {postError ?? "não deu pra postar. Tente de novo."}
-            </p>
-          )}
-        </div>
+        <PostComposer
+          hackathonId={hackathonId}
+          communitySlug={communitySlug}
+          editionLabel={editionLabel}
+          onPosted={(p) => setPosts((ps) => [p, ...ps])}
+        />
       )}
 
-      {hackathonId && !canPost && (
-        <p className="font-mono text-[12px] text-muted">
-          {"só inscritos postam no mural"}
-        </p>
-      )}
+      {hackathonId && !canPost && <p className="font-mono text-[12px] text-muted">{"só inscritos postam no mural"}</p>}
       {communitySlug && !canPost && (
         <p className="font-mono text-[12px] text-muted">quem está na comunidade posta no mural</p>
       )}
@@ -266,198 +59,20 @@ export function FeedSection({
             ? "mural vazio — seja o primeiro a postar da edição"
             : communitySlug
               ? "mural vazio. Conte o que a comunidade está construindo."
-            : "feed vazio — seja o primeiro a postar o que tá construindo"}
+              : "feed vazio — seja o primeiro a postar o que tá construindo"}
         </p>
       ) : (
         <ul className="divide-y divide-line border-y border-line">
           {posts.map((p) => (
-            <li key={p.id} className="flex flex-col gap-2 py-4">
-              <div className="flex items-baseline justify-between gap-4">
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <Avatar
-                    username={p.username}
-                    name={p.name}
-                    avatarUrl={p.avatarUrl}
-                    size="sm"
-                    className="self-center"
-                  />
-                  <Link
-                    href={`/u/${p.username}`}
-                    className="font-mono text-sm text-accent hover:underline"
-                  >
-                    {p.name ?? `@${p.username}`}
-                  </Link>
-                  <span className="font-mono text-xs text-muted">
-                    @{p.username}
-                  </span>
-                  <span className="border border-line px-1.5 font-mono text-[12px] text-muted">
-                    LV{levelFor(p.xp).level.n}
-                  </span>
-                  {p.persona && (
-                    <span className="border border-line bg-mint px-1.5 font-mono text-[12px] text-accent">
-                      {p.persona}
-                    </span>
-                  )}
-                  {p.headline && (
-                    <span className="font-mono text-xs text-muted">
-                      {p.headline}
-                    </span>
-                  )}
-                  {/* chip da edição (spec 028) — no próprio mural é
-                      redundante, então só aparece no feed agregado */}
-                  {p.hackathonId && p.hackathonId !== hackathonId && (
-                    <Link
-                      href={`/h/${p.hackathonId}`}
-                      className="border border-line px-1.5 font-mono text-[12px] text-muted transition hover:border-line hover:text-accent"
-                    >
-                      → {p.hackathonName ?? p.hackathonId}
-                    </Link>
-                  )}
-                  {p.communitySlug && p.communitySlug !== communitySlug && (
-                    <Link
-                      href={`/comunidade/${p.communitySlug}`}
-                      className="border border-line px-1.5 font-mono text-[12px] text-muted transition hover:text-accent"
-                    >
-                      → {p.communityName}
-                    </Link>
-                  )}
-                </div>
-                <span className="flex shrink-0 items-baseline gap-2 font-mono text-[12px] text-muted">
-                  {fmt.format(new Date(p.createdAt + "Z"))}
-                  {canReport(p.username) && (
-                    <ReportDialog
-                      targetType="post"
-                      targetId={p.id}
-                      targetLabel="este post"
-                      authorUsername={p.username}
-                      onReported={(r) => hideAuthor(r.blocked)}
-                    />
-                  )}
-                  {canDelete(p.username) && (
-                    <button
-                      onClick={() => removePost(p.id)}
-                      title="apagar post"
-                      aria-label="apagar post"
-                      className="text-muted transition hover:text-orange"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </span>
-              </div>
-              <p className="text-sm leading-relaxed">{p.body}</p>
-              <div className="flex items-center gap-4">
-                {p.link && (
-                  <a
-                    href={p.link}
-                    target="_blank"
-                    rel="noopener"
-                    className="border-[1.5px] border-line px-2.5 py-1 font-mono text-xs text-muted transition hover:border-line hover:text-accent"
-                  >
-                    {p.link.replace(/^https?:\/\//, "").slice(0, 60)} ↗
-                  </a>
-                )}
-                <button
-                  onClick={() => toggleComments(p.id)}
-                  className="font-mono text-xs text-muted transition hover:text-accent"
-                >
-                  {open[p.id] ? "▾" : "▸"} {p.commentCount}{" "}
-                  {p.commentCount === 1 ? "comentário" : "comentários"}
-                </button>
-                <button
-                  onClick={() => like(p.id)}
-                  disabled={!canPost}
-                  className={`ml-auto font-mono text-xs transition disabled:opacity-60 ${
-                    p.likedByMe ? "text-accent" : "text-muted hover:text-accent"
-                  }`}
-                >
-                  {p.likedByMe ? "▲" : "△"} {p.likeCount}
-                </button>
-              </div>
-
-              {open[p.id] && (
-                <div className="flex flex-col gap-3 border-l border-line pl-4">
-                  {(threads[p.id] ?? []).map((c) => (
-                    <div key={c.id} className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-baseline gap-x-2">
-                        <Avatar
-                          username={c.username}
-                          name={c.name}
-                          avatarUrl={c.avatarUrl}
-                          size="sm"
-                          className="self-center"
-                        />
-                        <Link
-                          href={`/u/${c.username}`}
-                          className="font-mono text-xs text-accent hover:underline"
-                        >
-                          @{c.username}
-                        </Link>
-                        <span className="border border-line px-1 font-mono text-[12px] text-muted">
-                          LV{levelFor(c.xp).level.n}
-                        </span>
-                        {c.persona && (
-                          <span className="border border-line bg-mint px-1 font-mono text-[12px] text-accent">
-                            {c.persona}
-                          </span>
-                        )}
-                        <span className="font-mono text-[12px] text-muted">
-                          {fmt.format(new Date(c.createdAt + "Z"))}
-                        </span>
-                        {canReport(c.username) && (
-                          <ReportDialog
-                            targetType="comment"
-                            targetId={c.id}
-                            targetLabel="este comentário"
-                            authorUsername={c.username}
-                            onReported={(r) => hideAuthor(r.blocked)}
-                          />
-                        )}
-                        {canDelete(c.username) && (
-                          <button
-                            onClick={() => removeComment(p.id, c.id)}
-                            title="apagar comentário"
-                            aria-label="apagar comentário"
-                            className="font-mono text-[12px] text-muted transition hover:text-orange"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-sm leading-relaxed text-muted">
-                        {c.body}
-                      </p>
-                    </div>
-                  ))}
-                  {canPost ? (
-                    <div className="flex gap-2">
-                      <input
-                        value={drafts[p.id] ?? ""}
-                        onChange={(e) =>
-                          setDrafts((d) => ({ ...d, [p.id]: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") comment(p.id);
-                        }}
-                        maxLength={1000}
-                        placeholder="comenta aí — feedback vale ouro"
-                        className="w-full border-[1.5px] border-line bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
-                      />
-                      <button
-                        onClick={() => comment(p.id)}
-                        disabled={sending[p.id] || !(drafts[p.id] ?? "").trim()}
-                        className="shrink-0 border-[1.5px] border-line bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
-                      >
-                        {sending[p.id] ? "…" : "comentar →"}
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="font-mono text-[12px] text-muted">
-                      {"cria conta pra comentar"}
-                    </p>
-                  )}
-                </div>
-              )}
+            <li key={p.id} className="py-4">
+              <PostCard
+                post={p}
+                me={viewer}
+                context={context}
+                onChange={(next) => setPosts((ps) => ps.map((x) => (x.id === next.id ? next : x)))}
+                onRemoved={(id) => setPosts((ps) => ps.filter((x) => x.id !== id))}
+                onAuthorHidden={(username) => setPosts((ps) => ps.filter((x) => x.username !== username))}
+              />
             </li>
           ))}
         </ul>

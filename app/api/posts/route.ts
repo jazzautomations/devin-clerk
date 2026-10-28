@@ -4,9 +4,8 @@ import { getCommunityBySlug, getMembership } from "@/lib/communities";
 import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
-import { XP } from "@/lib/game";
-import { awardXp, checkBadges } from "@/lib/xp";
 import { limitOrNull } from "@/lib/ratelimit";
+import { canManageEdition } from "@/lib/roles";
 
 export async function GET(req?: Request) {
   // leitura pública — rede social é vitrine; postar exige conta.
@@ -21,15 +20,21 @@ export async function GET(req?: Request) {
     if (!community || (community.hidden && me?.role !== "admin")) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
-    return Response.json({ posts: await listPosts(50, me?.id ?? null, { communityId: community.id }) });
+    return Response.json({
+      posts: await listPosts(50, me?.id ?? null, { communityId: community.id }, { includeHidden: me?.role === "admin" }),
+    });
   }
   if (h) {
     const edition = await getHackathon(h);
     if (!edition || !edition.active) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
+    // edição de comunidade escondida: só a organização dela (igual /h/[id])
+    if (edition.communityHidden && !(await canManageEdition(me, edition.id))) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
     return Response.json({
-      posts: await listPosts(50, me?.id ?? null, { hackathonId: edition.id }),
+      posts: await listPosts(50, me?.id ?? null, { hackathonId: edition.id }, { includeHidden: !!edition.communityHidden }),
     });
   }
   return Response.json({ posts: await listPosts(50, me?.id ?? null) });
@@ -98,11 +103,10 @@ export async function POST(req: Request) {
   }
   let post;
   try {
-    post = await createPost(member.id, body.body, body.link, hackathonId, communityId);
-  } catch {
-    return Response.json({ error: "Link inválido" }, { status: 400 });
+    post = await createPost(member.id, body.body, typeof body.link === "string" ? body.link : null, hackathonId, communityId);
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : "Link inválido" }, { status: 400 });
   }
-  await awardXp(member.id, XP.post);
-  await checkBadges(member.id);
+  // post não dá XP (plano 046): o que conta é presença e entrega
   return Response.json({ post }, { status: 201 });
 }

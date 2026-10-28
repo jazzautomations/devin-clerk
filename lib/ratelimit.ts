@@ -21,6 +21,7 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   comments: { limit: 30, windowMs: HOUR }, // POST /api/posts/[id]/comments
   votes: { limit: 60, windowMs: HOUR }, // POST /api/projects/[teamId]/vote
   likes: { limit: 60, windowMs: HOUR }, // POST /api/posts/[id]/like
+  "post-edit": { limit: 30, windowMs: HOUR }, // PATCH post e comentário (migration 034)
   register: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/register
   team: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/team
   "team-board": { limit: 10, windowMs: HOUR }, // POST …/[id]/team-board
