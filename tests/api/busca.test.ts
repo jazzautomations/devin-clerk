@@ -237,6 +237,22 @@ describe("o que nunca aparece", () => {
     expect(r.sections.posts?.items).toEqual([]);
   });
 
+  it("edição publicada e depois tirada do ar some dos posts", async () => {
+    const me = await member();
+    const h = await hackathon("Edição Derrubada");
+    await post(me.id, "kubernetes no mural da edição derrubada", { hackathonId: h });
+    const antes = await searchAll("kubernetes", me.id);
+    expect(antes.sections.posts?.items).toHaveLength(1);
+    await db.prepare("UPDATE hackathons SET active = 0 WHERE id = ?").run(h);
+    // o gatilho da 019 deixa publishedAt preenchido: é o caso "tirada do ar", não rascunho
+    const pub = await db
+      .prepare('SELECT publishedAt AS "publishedAt" FROM hackathons WHERE id = ?')
+      .get<{ publishedAt: unknown }>(h);
+    expect(pub?.publishedAt).toBeTruthy();
+    const depois = await searchAll("kubernetes", me.id);
+    expect(depois.sections.posts?.items).toEqual([]);
+  });
+
   it("pessoa bloqueada (nos dois sentidos) some; silenciada some só dos posts", async () => {
     const me = await member();
     const bloqueei = await member({ username: "ocarina_um", name: "Ocarina Um" });

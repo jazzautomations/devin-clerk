@@ -265,8 +265,8 @@ const QUERIES: { [K in SearchType]: (tq: string, ctx: Ctx) => { sql: string; par
             WHERE ${doc} @@ ${tq}
               AND COALESCE(co.hidden, 0) = 0
               AND COALESCE(hc.hidden, 0) = 0
-              -- mural de edição que nunca foi publicada (rascunho) não vaza
-              AND (h.id IS NULL OR h.active = 1 OR h.publishedAt IS NOT NULL)
+              -- mural de edição fora do ar (rascunho ou tirada do ar) não vaza
+              AND (h.id IS NULL OR h.active = 1)
               AND m.clerkId NOT LIKE 'deleted:%'
               AND NOT (p.memberId = ANY(@hiddenAuthors::int[]))
             ORDER BY score DESC, p.id DESC`,
