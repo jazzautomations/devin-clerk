@@ -43,6 +43,12 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "community-notices": { limit: 10, windowMs: HOUR }, // POST …/[slug]/notices
   "community-invites": { limit: 20, windowMs: HOUR }, // POST …/[slug]/organizers
   "community-report": { limit: 5, windowMs: HOUR }, // POST …/[slug]/report
+  // entrega do projeto (spec 034): autosave dispara a cada ~1,2 s de digitação,
+  // então o rascunho tem folga; enviar versão é raro e puxa o GitHub (dossiê)
+  "entry-draft": { limit: 600, windowMs: HOUR }, // PATCH …/[id]/entry — membro
+  "entry-submit": { limit: 20, windowMs: HOUR }, // POST …/[id]/entry — membro
+  // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
+  "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

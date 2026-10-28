@@ -229,6 +229,10 @@ export type EntryFields = {
   socialPosts: string[];
   aiUsage: string | null;
   challengeIds: string[];
+  /** declaração (migration 029): já existia algo antes do evento? null = não respondeu */
+  priorExisted: boolean | null;
+  /** declaração (migration 029): usou IA? null = não respondeu */
+  usedAi: boolean | null;
 };
 
 export type Snapshot = EntryFields & { members: string[] };
@@ -248,8 +252,14 @@ const httpUrl = (u: string) => /^https?:\/\/\S+$/i.test(u);
 
 const EVALUATED = [
   "title", "tagline", "description", "repoUrl", "demoUrl", "videoUrl", "slidesUrl", "logoUrl",
-  "priorWork", "technologies", "links", "socialPosts", "aiUsage", "challengeIds",
+  "priorWork", "technologies", "links", "socialPosts", "aiUsage", "challengeIds", "priorExisted", "usedAi",
 ] as const;
+
+function optBool(v: unknown, key: string): boolean | null {
+  if (v === null) return null;
+  if (typeof v !== "boolean") throw new EntryError(`${key} precisa ser true, false ou null`);
+  return v;
+}
 
 function optText(v: unknown, key: string, max: number): string | null {
   if (v === null) return null;
@@ -291,6 +301,8 @@ export function validateDraftPatch(raw: Record<string, unknown>): Partial<EntryF
   if (raw.description !== undefined) out.description = optText(raw.description, "description", 10_000);
   if (raw.priorWork !== undefined) out.priorWork = optText(raw.priorWork, "priorWork", 2_000);
   if (raw.aiUsage !== undefined) out.aiUsage = optText(raw.aiUsage, "aiUsage", 2_000);
+  if (raw.priorExisted !== undefined) out.priorExisted = optBool(raw.priorExisted, "priorExisted");
+  if (raw.usedAi !== undefined) out.usedAi = optBool(raw.usedAi, "usedAi");
   for (const k of ["repoUrl", "demoUrl", "videoUrl", "slidesUrl", "logoUrl"] as const) {
     if (raw[k] !== undefined) out[k] = optUrl(raw[k], k);
   }
@@ -323,7 +335,8 @@ export function missingRequired(f: EntryFields, s: SubmissionSettings | null): s
   if (!f.title?.trim()) miss.push("título");
   if (!f.tagline?.trim()) miss.push("tagline");
   if (!f.description?.trim()) miss.push("descrição");
-  if (!f.priorWork?.trim()) miss.push("trabalho anterior");
+  // "não existia nada antes" já responde a pergunta do trabalho anterior
+  if (!f.priorWork?.trim() && f.priorExisted !== false) miss.push("trabalho anterior");
   if (f.technologies.length === 0) miss.push("tecnologias");
   if (s?.requireRepo && !f.repoUrl) miss.push("repositório");
   if (s?.requireVideo && !f.videoUrl) miss.push("vídeo");
@@ -363,6 +376,8 @@ type ProjectRow = {
   links: string;
   socialPosts: string;
   aiUsage: string | null;
+  priorExisted: number | null;
+  usedAi: number | null;
   stageVideoUrl: string | null;
   afterNotes: string | null;
   lastSavedAt: string | null;
@@ -393,6 +408,8 @@ function fieldsFrom(p: ProjectRow, challengeIds: string[]): EntryFields {
     socialPosts: jsonList<string>(p.socialPosts),
     aiUsage: p.aiUsage,
     challengeIds,
+    priorExisted: p.priorExisted === null || p.priorExisted === undefined ? null : p.priorExisted === 1,
+    usedAi: p.usedAi === null || p.usedAi === undefined ? null : p.usedAi === 1,
   };
 }
 
@@ -413,6 +430,8 @@ export function parseSnapshot(text: string): Snapshot {
     socialPosts: s.socialPosts ?? [],
     aiUsage: s.aiUsage ?? null,
     challengeIds: s.challengeIds ?? [],
+    priorExisted: typeof s.priorExisted === "boolean" ? s.priorExisted : null,
+    usedAi: typeof s.usedAi === "boolean" ? s.usedAi : null,
     members: s.members ?? [],
   };
 }
@@ -568,7 +587,7 @@ export async function saveDraft(
   const cols: { col: string; value: unknown }[] = [];
   for (const [k, v] of Object.entries(patch)) {
     if (k === "challengeIds") continue;
-    cols.push({ col: k, value: Array.isArray(v) ? JSON.stringify(v) : v });
+    cols.push({ col: k, value: Array.isArray(v) ? JSON.stringify(v) : typeof v === "boolean" ? (v ? 1 : 0) : v });
   }
 
   await db.transaction(async () => {

@@ -1,13 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
+import { collectDossierQuietly } from "@/lib/dossier";
 import { EntryError, myEntry, saveDraft, submitEntry } from "@/lib/entries";
 import { getHackathon } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
+import { limitOrNull } from "@/lib/ratelimit";
 
 // spec 034 — entrega do projeto do MEU time na edição.
 // GET  → rascunho + status + versões + o que falta
 // PATCH → autosave do rascunho (campo avaliado depois do prazo = 403;
 //         afterNotes "depois do hackathon" passa sempre)
-// POST → enviar: valida obrigatórios e grava versão imutável
+// POST → enviar: valida obrigatórios e grava versão imutável; com repositório
+//        do GitHub, lê os commits pro dossiê do organizador (migration 029)
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -42,6 +45,8 @@ export async function GET(_req: Request, { params }: Ctx): Promise<Response> {
 export async function PATCH(req: Request, { params }: Ctx): Promise<Response> {
   const g = await gate(params);
   if (!g.ok) return g.res;
+  const limited = limitOrNull(req, "entry-draft", g.member.id);
+  if (limited) return limited;
   const b = await req.json().catch(() => null);
   if (!b || typeof b !== "object" || Array.isArray(b)) return json({ error: "JSON inválido" }, 400);
   try {
@@ -51,11 +56,16 @@ export async function PATCH(req: Request, { params }: Ctx): Promise<Response> {
   }
 }
 
-export async function POST(_req: Request, { params }: Ctx): Promise<Response> {
+export async function POST(req: Request, { params }: Ctx): Promise<Response> {
   const g = await gate(params);
   if (!g.ok) return g.res;
+  const limited = limitOrNull(req, "entry-submit", g.member.id);
+  if (limited) return limited;
   try {
     const { entry, version } = await submitEntry(g.entry.teamId, g.member);
+    // dossiê: lê o GitHub depois que a versão já está gravada; falha do
+    // GitHub fica registrada no dossiê e nunca derruba o envio
+    await collectDossierQuietly(g.entry.teamId);
     return json({ entry, version }, 201);
   } catch (e) {
     return fail(e);

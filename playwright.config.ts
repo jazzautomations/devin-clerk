@@ -7,6 +7,11 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
 // segredo do link do RSVP compartilhado entre o server (herda process.env)
 // e os specs que geram token — o server roda em modo produção
 process.env.HACKAHUB_RSVP_SECRET ||= "e2e-rsvp-secret-nao-usar-em-producao";
+// dossiê (migration 029): o server lê o "GitHub" de um servidor falso local
+// (tests/e2e/github-mock.mjs) — e2e nunca vai pra api.github.com
+const GITHUB_MOCK_PORT = PORT + 1000;
+process.env.HACKAHUB_GITHUB_API = `http://127.0.0.1:${GITHUB_MOCK_PORT}`;
+process.env.GITHUB_TOKEN = "";
 
 // E2e roda em produção buildada: `pretest:e2e` zera o banco do e2e
 // (E2E_DATABASE_URL) e faz `next build` em .next-e2e; o webServer aqui sobe
@@ -21,11 +26,19 @@ export default defineConfig({
   retries: 0,
   timeout: 30_000,
   use: { baseURL: `http://localhost:${PORT}` },
-  webServer: {
-    command:
-      `HACKAHUB_DEPLOY_TOOL=on HACKAHUB_ALLOW_MINORS=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p ${PORT}`,
-    port: PORT,
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: `node tests/e2e/github-mock.mjs ${GITHUB_MOCK_PORT}`,
+      url: `http://127.0.0.1:${GITHUB_MOCK_PORT}/health`,
+      reuseExistingServer: false,
+      timeout: 20_000,
+    },
+    {
+      command:
+        `HACKAHUB_DEPLOY_TOOL=on HACKAHUB_ALLOW_MINORS=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p ${PORT}`,
+      port: PORT,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  ],
 });
