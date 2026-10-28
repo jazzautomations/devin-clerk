@@ -133,6 +133,27 @@ async function resolveTarget(type: ReportTarget, id: string, viewerRole: string 
       // contra a comunidade inteira: só o admin (o dono não modera a si mesmo)
       return { authorId: null, authorUsername: null, authorRole: null, snapshot: [r.name, r.description].filter(Boolean).join("\n"), communityId: null, hackathonId: null };
     }
+    case "depoimento": {
+      // depoimento de time (migration 037): só o aceito é público. Vai pra
+      // quem trata incidentes da edição em que o time existiu.
+      if (num === null) return null;
+      const r = await db
+        .prepare(
+          `SELECT t.authorId, a.username, a.role, m.username AS "memberUsername", t.body, t.hackathonId
+           FROM team_testimonials t JOIN members a ON a.id = t.authorId JOIN members m ON m.id = t.memberId
+           WHERE t.id = ? AND t.status = 'aceito'`,
+        )
+        .get<{ authorId: number; username: string; role: string; memberUsername: string; body: string; hackathonId: string }>(num);
+      if (!r) return null;
+      return {
+        authorId: r.authorId,
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: `@${r.username} sobre @${r.memberUsername}: ${r.body}`,
+        communityId: null,
+        hackathonId: r.hackathonId,
+      };
+    }
     default:
       return null;
   }
@@ -244,7 +265,7 @@ export async function createReport(input: CreateReportInput): Promise<CreateRepo
         target.hackathonId,
         {
           kind: "outro",
-          description: `Denúncia de ${label} no mural da edição.\nMotivo: ${reason}\n\nTexto denunciado:\n${clip(target.snapshot, 1500)}\n\nFila: /admin/h/${target.hackathonId}/denuncias`,
+          description: `Denúncia de ${label}${type === "depoimento" ? " de time" : " no mural da edição"}.\nMotivo: ${reason}\n\nTexto denunciado:\n${clip(target.snapshot, 1500)}\n\nFila: /admin/h/${target.hackathonId}/denuncias`,
           location: null,
           occurredAt: null,
           contact: null,

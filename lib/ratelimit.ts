@@ -60,6 +60,10 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   reports: { limit: 5, windowMs: HOUR }, // POST /api/reports — membro
   // seguir pessoa (migration 033): seguir e deixar de seguir no mesmo balde
   "member-follows": { limit: 60, windowMs: HOUR }, // POST/DELETE /api/members/[username]/follow
+  // depoimento de time (migration 037): escrever é forte (5 por dia por
+  // membro); editar, apagar, aceitar, recusar e esconder dividem um balde por hora
+  testimonials: { limit: 5, windowMs: DAY }, // POST /api/testimonials — membro
+  "testimonial-actions": { limit: 60, windowMs: HOUR }, // PATCH/DELETE …/[id] e accept/decline/hide
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
 };
