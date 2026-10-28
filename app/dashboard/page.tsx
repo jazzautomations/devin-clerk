@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getOpenHackathons } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
+import { touchLastSeen } from "@/lib/session";
 import { listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getMemberBadges, getMemberCards } from "@/lib/xp";
@@ -43,6 +44,8 @@ export default async function DashboardPage() {
     email,
     imageUrl: user?.imageUrl ?? null,
   });
+  // o painel é a porta de entrada depois do login e não passa por currentMember
+  await touchLastSeen(member.id);
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 

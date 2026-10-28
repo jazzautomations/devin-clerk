@@ -4,6 +4,9 @@ export type Notification = {
   id: number;
   memberId: number;
   actorUsername: string | null;
+  // quem causou, por id (migration 031). Dedupe e "não notificar a si mesmo"
+  // usam o id; o @ acima é só pra exibir.
+  actorId: number | null;
   type: string;
   text: string;
   href: string | null;
@@ -20,34 +23,65 @@ const toNotification = (row: NotificationRow): Notification => ({
 
 /**
  * Cria uma notificação pro membro. actorUsername é texto congelado (recado
- * histórico, não FK). Nunca notifica a si mesmo: se o ator é o destinatário,
- * é skip silencioso — curtir o próprio post não é novidade.
+ * histórico, não FK); actorId é quem causou, por id. Sem actorId, o id é
+ * resolvido pelo @ no momento do envio. Nunca notifica a si mesmo: se o ator
+ * é o destinatário, é skip silencioso — curtir o próprio post não é novidade.
  */
 export async function notify(
   memberId: number,
   opts: {
     type: string;
     actorUsername?: string;
+    actorId?: number;
     text: string;
     href?: string;
   },
 ): Promise<void> {
-  if (opts.actorUsername) {
+  if (opts.actorId !== undefined) {
+    if (opts.actorId === memberId) return;
+  } else if (opts.actorUsername) {
     const target = await db
       .prepare("SELECT username FROM members WHERE id = ?")
-      .get(memberId) as { username: string } | undefined;
+      .get<{ username: string }>(memberId);
     if (target?.username === opts.actorUsername) return;
   }
   await db.prepare(
-    `INSERT INTO notifications (memberId, actorUsername, type, text, href)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO notifications (memberId, actorUsername, actorId, type, text, href)
+     VALUES (?, ?, COALESCE(?::int, (SELECT id FROM members WHERE username = ?::text)), ?, ?, ?)`,
   ).run(
     memberId,
+    opts.actorUsername ?? null,
+    opts.actorId ?? null,
     opts.actorUsername ?? null,
     opts.type,
     opts.text,
     opts.href ?? null,
   );
+}
+
+/**
+ * Já existe notificação desse ator pra esse membro, desse tipo, com esse
+ * destino? Regra "1 por par" das ondas seguintes (seguir, depoimento, recado).
+ * Por id: trocar de @ não fura. sinceDays = null olha a história inteira;
+ * href null casa com notificação sem destino.
+ */
+export async function alreadyNotified(
+  memberId: number,
+  type: string,
+  actorId: number,
+  href: string | null,
+  sinceDays: number | null,
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS y FROM notifications
+       WHERE memberId = ? AND type = ? AND actorId = ?
+         AND href IS NOT DISTINCT FROM ?::text
+         AND (?::int IS NULL OR to_ts(createdAt) >= now() - make_interval(days => ?::int))
+       LIMIT 1`,
+    )
+    .get<{ y: number }>(memberId, type, actorId, href, sinceDays, sinceDays);
+  return !!row;
 }
 
 export async function listNotifications(
