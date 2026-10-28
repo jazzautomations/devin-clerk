@@ -20,7 +20,7 @@ const REASONS = [
 const DETAIL_MAX = 400;
 
 export type ReportDialogProps = {
-  targetType: "post" | "comment" | "member" | "community" | "depoimento" | "dm" | "encontro";
+  targetType: "post" | "comment" | "member" | "community" | "depoimento" | "dm" | "encontro" | "topic" | "topic_reply";
   targetId: string | number;
   /** "este post", "o perfil de @ana"… aparece no título */
   targetLabel: string;

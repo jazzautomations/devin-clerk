@@ -24,7 +24,7 @@ import { notify } from "@/lib/notifications";
 // direto pro admin (sem aviso pro autor nem incidente). E quem é o autor
 // (targetMemberId) nunca lê nem resolve a denúncia, nem se virar moderador depois.
 
-export const REPORT_TARGETS = ["post", "comment", "member", "community", "depoimento", "dm", "encontro"] as const;
+export const REPORT_TARGETS = ["post", "comment", "member", "community", "depoimento", "dm", "encontro", "topic", "topic_reply"] as const;
 export type ReportTarget = (typeof REPORT_TARGETS)[number];
 
 export const REPORT_TARGET_LABEL: Record<ReportTarget, string> = {
@@ -35,6 +35,8 @@ export const REPORT_TARGET_LABEL: Record<ReportTarget, string> = {
   depoimento: "depoimento",
   dm: "mensagem",
   encontro: "encontro",
+  topic: "tópico",
+  topic_reply: "resposta de tópico",
 };
 
 export const REPORT_LIMITS = { reasonMin: 5, reason: 500, snapshot: 2000, resolution: 300 } as const;
@@ -132,6 +134,32 @@ async function resolveTarget(type: ReportTarget, id: string, viewerRole: string 
       if (!r) return null;
       // contra a comunidade inteira: só o admin (o dono não modera a si mesmo)
       return { authorId: null, authorUsername: null, authorRole: null, snapshot: [r.name, r.description].filter(Boolean).join("\n"), communityId: null, hackathonId: null };
+    }
+    // tópicos da comunidade (migration 058): vão pra quem modera a comunidade
+    case "topic":
+    case "topic_reply": {
+      if (num === null) return null;
+      const sql =
+        type === "topic"
+          ? `SELECT t.memberId, m.username, m.role, t.title || E'\\n' || t.body AS text, t.communityId, co.hidden
+             FROM community_topics t JOIN communities co ON co.id = t.communityId LEFT JOIN members m ON m.id = t.memberId
+             WHERE t.id = ? AND t.deletedAt IS NULL`
+          : `SELECT r.memberId, m.username, m.role, r.body AS text, t.communityId, co.hidden
+             FROM topic_replies r JOIN community_topics t ON t.id = r.topicId JOIN communities co ON co.id = t.communityId
+             LEFT JOIN members m ON m.id = r.memberId
+             WHERE r.id = ? AND r.deletedAt IS NULL`;
+      const r = await db
+        .prepare(sql)
+        .get<{ memberId: number | null; username: string | null; role: string | null; text: string; communityId: number; hidden: number }>(num);
+      if (!r || (Number(r.hidden) && !seesHidden)) return null;
+      return {
+        authorId: r.memberId === null ? null : Number(r.memberId),
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: `${r.username ? `@${r.username}: ` : ""}${r.text}`,
+        communityId: Number(r.communityId),
+        hackathonId: null,
+      };
     }
     default:
       return null;
@@ -305,19 +333,26 @@ type ReportRow = Omit<Report, "href" | "routedTo"> & {
   resolvedBy: number | null;
   targetUsername: string | null;
   targetCommunitySlug: string | null;
+  targetTopicId: number | null;
+  targetReplyId: number | null;
+  targetTopicSlug: string | null;
 };
 
 const SELECT = `SELECT r.id, r.targetType, r.targetId, r.reporterId, r.targetMemberId, r.reason, r.snapshot,
     r.communityId, co.name AS communityName, co.slug AS communitySlug,
     r.hackathonId, h.name AS hackathonName,
     r.createdAt, r.resolvedAt, r.resolvedBy, rb.username AS resolvedByUsername, r.resolution,
-    tm.username AS targetUsername, tc.slug AS targetCommunitySlug
+    tm.username AS targetUsername, tc.slug AS targetCommunitySlug,
+    tt.id AS targetTopicId, ttr.id AS targetReplyId, ttc.slug AS targetTopicSlug
   FROM reports r
   LEFT JOIN communities co ON co.id = r.communityId
   LEFT JOIN hackathons h ON h.id = r.hackathonId
   LEFT JOIN members rb ON rb.id = r.resolvedBy
   LEFT JOIN members tm ON r.targetType = 'member' AND tm.id::text = r.targetId
-  LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId`;
+  LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId
+  LEFT JOIN topic_replies ttr ON r.targetType = 'topic_reply' AND ttr.id::text = r.targetId
+  LEFT JOIN community_topics tt ON (r.targetType = 'topic' AND tt.id::text = r.targetId) OR tt.id = ttr.topicId
+  LEFT JOIN communities ttc ON ttc.id = tt.communityId`;
 
 function toReport(r: ReportRow): Report {
   let href: string | null = null;
@@ -327,6 +362,8 @@ function toReport(r: ReportRow): Report {
     href = `/u/${r.targetUsername}`;
   } else if (r.targetType === "community" && r.targetCommunitySlug) {
     href = `/comunidade/${r.targetCommunitySlug}`;
+  } else if ((r.targetType === "topic" || r.targetType === "topic_reply") && r.targetTopicSlug && r.targetTopicId) {
+    href = `/comunidade/${r.targetTopicSlug}/t/${r.targetTopicId}${r.targetReplyId ? `#r-${r.targetReplyId}` : ""}`;
   }
   const routedTo = r.communityName
     ? `comunidade ${r.communityName}`

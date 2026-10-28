@@ -62,6 +62,13 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "member-follows": { limit: 60, windowMs: HOUR }, // POST/DELETE /api/members/[username]/follow
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
+  // tópicos da comunidade (migration 058): abrir, responder e votar (voto em
+  // tópico, em resposta e em enquete dividem o balde); editar e apagar o
+  // próprio ou moderar caem em topic-edit
+  "topic-create": { limit: 10, windowMs: HOUR }, // POST …/communities/[slug]/topics
+  "topic-reply": { limit: 60, windowMs: HOUR }, // POST /api/topics/[id]/replies
+  "topic-vote": { limit: 300, windowMs: HOUR }, // POST /api/topics/[id]/vote, …/replies/[replyId]/vote, …/poll
+  "topic-edit": { limit: 60, windowMs: HOUR }, // PATCH/DELETE tópico e resposta, aceitar resposta
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

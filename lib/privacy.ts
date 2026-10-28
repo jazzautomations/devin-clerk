@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { parseEventTime } from "@/lib/eventTime";
 import { cancelRegistration, dropFromEdition, RegistrationError } from "@/lib/registrations";
+import { forgetTopicAuthor } from "@/lib/topics";
 
 // Direitos do titular (LGPD art. 18): exportar e excluir. Genérico de
 // propósito — descobre pelo catálogo do Postgres toda coluna que referencia
@@ -254,6 +255,10 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
       .run(anon, anon, memberId, memberId, member.username, memberId);
     // denúncia da fila única (032): mesma regra, fica sem autor
     await db.prepare("UPDATE reports SET reporterId = NULL WHERE reporterId = ?").run(memberId);
+    // tópicos da comunidade (058): memberId é o dono (OWNER_COLUMNS), mas
+    // tópico ou resposta com resposta de outra pessoa vira "[apagado]" em vez
+    // de levar a conversa dos outros junto; votos saem e o score é refeito
+    await forgetTopicAuthor(memberId);
     for (const { table, column } of refs) {
       const action = deleteAction(table, column);
       if (action === "nullify") {
