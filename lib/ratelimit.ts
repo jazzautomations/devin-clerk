@@ -53,6 +53,10 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // estourar o autosave não impede o envio
   "entry-draft": { limit: 3600, windowMs: HOUR }, // PATCH …/[id]/entry — membro
   "entry-submit": { limit: 20, windowMs: HOUR }, // POST …/[id]/entry — membro
+  // bloqueio e denúncia (migration 032): bloquear e silenciar (e desfazer)
+  // dividem o balde; denúncia segue o padrão de community-report
+  blocks: { limit: 30, windowMs: HOUR }, // POST/DELETE /api/members/[username]/block e /mute
+  reports: { limit: 5, windowMs: HOUR }, // POST /api/reports — membro
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
 };

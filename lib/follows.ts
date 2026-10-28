@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { hiddenAuthorSql } from "@/lib/blocks";
 import { getMembership } from "@/lib/communities";
 
 // Seguir comunidade (migration 030). Decisão de produto: membro = segue.
@@ -123,7 +124,7 @@ export async function listCommunityUpdates(
          SELECT 'post' AS kind, p.id::text AS id, p.createdAt AS at, NULL::text AS title, p.body, p.link,
                 NULL::text AS startsAt, NULL::text AS location, m.username, m.name, m.avatarUrl, p.communityId AS cid
          FROM posts p JOIN members m ON m.id = p.memberId
-         WHERE p.communityId IN (SELECT communityId FROM seg)
+         WHERE p.communityId IN (SELECT communityId FROM seg) AND ${hiddenAuthorSql("p.memberId")}
          UNION ALL
          SELECT 'aviso', n.id::text, n.createdAt, n.title, n.body, NULL,
                 NULL, NULL, m.username, m.name, m.avatarUrl, n.communityId

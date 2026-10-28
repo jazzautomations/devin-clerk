@@ -260,7 +260,10 @@ describe("avisos e denúncia", () => {
     expect((await POST(req("POST", { reason: "x" }), ctx("denuncia-a"))).status).toBe(400);
     for (let i = 0; i < 4; i++) expect((await POST(req("POST", { reason: `spam número ${i}` }), ctx("denuncia-a"))).status).toBe(201);
     expect((await POST(req("POST", { reason: "spam de novo" }), ctx("denuncia-a"))).status).toBe(429);
-    expect(Number((await db.prepare("SELECT COUNT(*) n FROM community_reports WHERE communityId = ?").get<{ n: number }>(c.id))?.n)).toBe(4);
+    // fila única (032): a mesma pessoa com denúncia aberta não abre outra
+    expect(
+      Number((await db.prepare("SELECT COUNT(*) n FROM reports WHERE targetType = 'community' AND targetId = ?").get<{ n: number }>(String(c.id)))?.n),
+    ).toBe(1);
   });
 });
 

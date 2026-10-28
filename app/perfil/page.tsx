@@ -56,6 +56,9 @@ export default async function PerfilPage() {
           </Link>
         </p>
         <UsernameChange username={member.username} changedAt={member.usernameChangedAt ?? null} />
+        <Link href="/perfil/bloqueados" className="self-start font-mono text-xs text-muted underline-offset-4 hover:text-accent hover:underline" data-testid="perfil-bloqueados-link">
+          bloqueados e silenciados →
+        </Link>
       </div>
       <ProfileReminder member={member} href="/bem-vindo?refazer=1" />
       <ProfileForm member={member} openTo={openTo} contact={contact} channels={channels} />

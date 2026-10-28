@@ -36,8 +36,14 @@ const FREE_TEXT: Record<string, { column: string; fields: string[] }> = {
 // export: referências que NÃO entram (ator sobre dado de terceiros — quem
 // tratou uma denúncia não recebe a denúncia no próprio export) e colunas
 // internas omitidas (nota interna da organização sobre a denúncia).
-const EXPORT_SKIP = new Set(["incidents.updatedBy"]);
-const EXPORT_OMIT: Record<string, string[]> = { incidents: ["internalNote", "updatedBy"] };
+// Bloqueio e silêncio (032): o lado de quem foi bloqueado/silenciado não
+// entra (a pessoa nunca fica sabendo); a denúncia entra só com o que a pessoa
+// escreveu, sem a nota de quem resolveu.
+const EXPORT_SKIP = new Set(["incidents.updatedBy", "member_blocks.blockedId", "member_mutes.mutedId", "reports.resolvedBy"]);
+const EXPORT_OMIT: Record<string, string[]> = {
+  incidents: ["internalNote", "updatedBy"],
+  reports: ["snapshot", "resolvedBy", "resolution"],
+};
 
 async function memberRefs(): Promise<MemberRef[]> {
   return db
@@ -140,6 +146,8 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
     await db
       .prepare("UPDATE incidents SET reporterId = NULL, contact = NULL WHERE reporterId = ?")
       .run(memberId);
+    // denúncia da fila única (032): mesma regra, fica sem autor
+    await db.prepare("UPDATE reports SET reporterId = NULL WHERE reporterId = ?").run(memberId);
     for (const { table, column } of refs) {
       if (!OWNER_COLUMNS.has(column) || KEEP_TABLES.has(table)) continue;
       await db.prepare(`DELETE FROM ${ident(table)} WHERE ${ident(column)} = ?`).run(memberId);

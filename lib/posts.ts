@@ -1,5 +1,6 @@
 import db from "@/lib/db";
 import type { Member } from "@/lib/members";
+import { hiddenAuthorSql } from "@/lib/blocks";
 
 // avatarUrl é coluna de lib/members — garante o ALTER aqui pra quem importa
 // este módulo sem passar por members.ts (ex.: testes unitários)
@@ -55,11 +56,13 @@ export async function listPosts(
       : "communityId" in scope
         ? "WHERE p.communityId = @c"
         : "WHERE p.hackathonId IS NULL AND p.communityId IS NULL";
+  // migration 032: autor bloqueado (dois sentidos) ou silenciado some pra mim
+  const hidden = meId ? ` AND ${hiddenAuthorSql("p.memberId")}` : "";
   const params: Record<string, unknown> = { me: meId ?? -1, limit };
   if (scope && "hackathonId" in scope) params.h = scope.hackathonId;
   if (scope && "communityId" in scope) params.c = scope.communityId;
   return (await db
-    .prepare(`${select} ${where} ORDER BY p.id DESC LIMIT @limit`)
+    .prepare(`${select} ${where}${hidden} ORDER BY p.id DESC LIMIT @limit`)
     .all(params))
     .map((p) => ({ ...(p as Post), likedByMe: Boolean((p as Post).likedByMe) }));
 }
