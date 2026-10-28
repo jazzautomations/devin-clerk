@@ -14,7 +14,8 @@ const CSP_REPORT_ONLY = [
   "img-src 'self' https: data: blob:",
   "font-src 'self' data:",
   `connect-src 'self' ${CLERK} https://clerk-telemetry.com`,
-  `frame-src ${CLERK} https://challenges.cloudflare.com`,
+  // live embutida da agenda (051): só YouTube e Twitch
+  `frame-src ${CLERK} https://challenges.cloudflare.com https://www.youtube.com https://player.twitch.tv`,
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "object-src 'none'",

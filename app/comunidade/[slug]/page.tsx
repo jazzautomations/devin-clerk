@@ -7,6 +7,7 @@ import { CommunityLogo } from "@/components/CommunityLogo";
 import { communityPlace } from "@/components/CommunityRows";
 import { EditionRows } from "@/components/EditionRows";
 import { FeedSection } from "@/components/FeedSection";
+import { MeetupRows } from "@/components/MeetupRows";
 import { PublicCard } from "@/components/PublicCard";
 import { FollowButton, JoinButton, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
 import { SupportCommunityForm } from "@/components/CommunitySupportActions";
@@ -24,6 +25,7 @@ import { parseEventTime } from "@/lib/eventTime";
 import { isFollowing } from "@/lib/follows";
 import { getCommunityHackathons } from "@/lib/hackathons";
 import { countCommunityLeads } from "@/lib/leads";
+import { upcomingMeetups } from "@/lib/meetups";
 import { listPosts } from "@/lib/posts";
 import { countOpenByType } from "@/lib/reports";
 import { getRegistrationIds } from "@/lib/registrations";
@@ -119,7 +121,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const isAdmin = member.role === "admin";
   const canManage = isAdmin || role === "dono" || role === "organizador";
   const isOwner = isAdmin || role === "dono";
-  const [members, notices, posts, podium, invites, registeredIds, following, supportLeads, reportCounts] = await Promise.all([
+  const [members, notices, posts, podium, invites, registeredIds, following, supportLeads, reportCounts, agenda] = await Promise.all([
     listCommunityMembers(c.id),
     listNotices(c.id, 5),
     listPosts(30, member.id, { communityId: c.id }),
@@ -129,6 +131,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
     role ? Promise.resolve(false) : isFollowing(c.id, member.id),
     canManage ? countCommunityLeads(c.id) : Promise.resolve(0),
     canManage ? countOpenByType({ communityId: c.id, viewerId: member.id }) : Promise.resolve<Awaited<ReturnType<typeof countOpenByType>>>({}),
+    upcomingMeetups(c.id, 3, now),
   ]);
   const openReports = Object.values(reportCounts).reduce((a, b) => a + (b ?? 0), 0);
   const organizers = members.filter((m) => m.role === "organizador");
@@ -295,6 +298,33 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
                   })}
                 </ul>
               </div>
+            )}
+          </section>
+
+          {/* agenda (migration 051): até 3 próximos */}
+          <section id="agenda" aria-labelledby="agenda-title" className="flex scroll-mt-24 flex-col gap-4" data-testid="community-agenda">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h2 id="agenda-title" className="text-[clamp(1.5rem,3vw,2rem)] leading-none font-extrabold tracking-[-0.035em]">
+                Próximos na agenda
+              </h2>
+              <span className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[13px]">
+                {canManage && (
+                  <Link href={`/comunidade/${c.slug}/agenda/novo`} className="text-accent underline-offset-4 hover:underline" data-testid="community-agenda-new">
+                    marcar evento
+                  </Link>
+                )}
+                <Link href={`/comunidade/${c.slug}/agenda`} className="text-accent underline-offset-4 hover:underline" data-testid="community-agenda-all">
+                  ver agenda →
+                </Link>
+              </span>
+            </div>
+            {agenda.length > 0 ? (
+              <MeetupRows items={agenda} now={now} testId="community-agenda-list" />
+            ) : (
+              <p className="border-[1.5px] border-line px-4 py-4 text-[15px] text-muted">
+                Nada marcado entre um hackathon e outro.
+                {canManage ? " Marque um meetup, uma live ou um demo day." : " Quem segue a comunidade recebe o aviso quando sair."}
+              </p>
             )}
           </section>
 

@@ -4,10 +4,10 @@ import { updateHref, type CommunityUpdate } from "@/lib/follows";
 import { parseEventTime } from "@/lib/eventTime";
 
 // Novidades das comunidades que a pessoa segue (/feed "minhas comunidades" e
-// painel): post do mural, aviso e hackathon publicado, cada um com a
+// painel): post do mural, aviso, hackathon publicado e evento da agenda, cada um com a
 // comunidade e a data. Clicar abre onde a coisa mora.
 
-const KIND_LABEL = { post: "mural", aviso: "aviso", hackathon: "hackathon" } as const;
+const KIND_LABEL = { post: "mural", aviso: "aviso", hackathon: "hackathon", agenda: "agenda" } as const;
 
 const fmtQuando = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
@@ -28,11 +28,12 @@ export function CommunityUpdates({ items, testId, compact = false }: { items: Co
   return (
     <ul className="border-b border-line" data-testid={testId}>
       {items.map((u) => {
-        const starts = u.kind === "hackathon" ? parseEventTime(u.startsAt) : null;
+        const dated = u.kind === "hackathon" || u.kind === "agenda";
+        const starts = dated ? parseEventTime(u.startsAt) : null;
         return (
           <li key={`${u.kind}-${u.id}`} className="flex min-w-0 flex-col gap-1.5 border-t border-line py-3.5" data-testid="community-update" data-kind={u.kind}>
             <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[12px] text-muted">
-              <span className={`chip bare ${u.kind === "hackathon" ? "border-accent! bg-mint! text-accent!" : ""}`}>{KIND_LABEL[u.kind]}</span>
+              <span className={`chip bare ${dated ? "border-accent! bg-mint! text-accent!" : ""}`}>{KIND_LABEL[u.kind]}</span>
               <Link href={`/comunidade/${u.communitySlug}`} className="max-w-full truncate font-bold text-foreground underline-offset-4 hover:underline">
                 {u.communityName}
               </Link>
@@ -40,9 +41,9 @@ export function CommunityUpdates({ items, testId, compact = false }: { items: Co
             </p>
             <Link href={updateHref(u)} className="group flex min-w-0 flex-col gap-1">
               {u.title && <span className="text-[17px] leading-snug font-extrabold tracking-[-0.02em] break-words group-hover:underline">{u.title}</span>}
-              {u.kind === "hackathon" && (
+              {dated && (
                 <span className="font-mono text-[12.5px] text-muted">
-                  {starts ? fmtDia.format(starts) : ""} · {u.location ?? "online"}
+                  {starts ? (u.kind === "agenda" ? fmtQuando.format(starts) : fmtDia.format(starts)) : ""} · {u.location ?? "online"}
                 </span>
               )}
               {u.body && (

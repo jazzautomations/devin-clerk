@@ -22,6 +22,7 @@ export const PUBLIC_PAGES: RegExp[] = [
   new RegExp(`^/u/${SEG}$`), // cartão público mínimo do perfil
   new RegExp(`^/p/${SEG}$`), // cartão público mínimo do projeto
   new RegExp(`^/comunidade/${SEG}$`), // cartão público mínimo da comunidade (divulgação)
+  new RegExp(`^/agenda/${SEG}$`), // teaser do evento da agenda (sem o link da sala)
   new RegExp(`^/rsvp/${SEG}$`), // link assinado do e-mail de confirmação
   /^\/demo\/.+$/, // demo publicada do time (o app do time roda no proxy, sem login)
   /^\/sitemap\.xml$/,

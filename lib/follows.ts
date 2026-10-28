@@ -80,14 +80,14 @@ export async function communityAudience(communityId: number): Promise<number[]> 
 
 // ---------- feed "minhas comunidades" ----------
 
-export type CommunityUpdateKind = "post" | "aviso" | "hackathon";
+export type CommunityUpdateKind = "post" | "aviso" | "hackathon" | "agenda";
 
 export type CommunityUpdate = {
   kind: CommunityUpdateKind;
-  /** id do post/aviso (texto) ou da edição */
+  /** id do post/aviso/evento da agenda (texto) ou da edição */
   id: string;
   at: string;
-  /** título do aviso ou nome do hackathon; post não tem */
+  /** título do aviso ou do evento, nome do hackathon; post não tem */
   title: string | null;
   body: string | null;
   link: string | null;
@@ -104,7 +104,8 @@ export type CommunityUpdate = {
 export const FEED_PAGE_SIZE = 20;
 
 /**
- * Mural, avisos e hackathons publicados das comunidades que a pessoa segue
+ * Mural, avisos, hackathons publicados e eventos da agenda (051, publicados e
+ * não cancelados) das comunidades que a pessoa segue
  * ou de que é membro, do mais novo pro mais velho. Comunidade escondida pela
  * moderação some. Paginação por página (offset), como o resto das listas.
  */
@@ -135,6 +136,11 @@ export async function listCommunityUpdates(
                 h.startsAt, h.location, NULL, NULL, NULL, h.communityId
          FROM hackathons h
          WHERE h.communityId IN (SELECT communityId FROM seg) AND h.active = 1 AND h.publishedAt IS NOT NULL
+         UNION ALL
+         SELECT 'agenda', mt.id::text, mt.publishedAt, mt.title, mt.description, NULL,
+                mt.startsAt, mt.location, m.username, m.name, m.avatarUrl, mt.communityId
+         FROM meetups mt LEFT JOIN members m ON m.id = mt.createdBy
+         WHERE mt.communityId IN (SELECT communityId FROM seg) AND mt.publishedAt IS NOT NULL AND mt.cancelledAt IS NULL
        ) x JOIN communities c ON c.id = x.cid AND c.hidden = 0
        ORDER BY to_ts(x.at) DESC, x.kind, x.id DESC
        LIMIT @limit OFFSET @offset`,
@@ -152,8 +158,9 @@ export async function communityUpdatesPage(
   return { items: rows.slice(0, FEED_PAGE_SIZE), page: p, hasMore: rows.length > FEED_PAGE_SIZE };
 }
 
-/** onde o item abre: post e aviso na página da comunidade, hackathon na dele */
+/** onde o item abre: post e aviso na página da comunidade, hackathon e evento da agenda na página deles */
 export function updateHref(u: Pick<CommunityUpdate, "kind" | "id" | "communitySlug">): string {
   if (u.kind === "hackathon") return `/h/${u.id}`;
+  if (u.kind === "agenda") return `/agenda/${u.id}`;
   return `/comunidade/${u.communitySlug}#${u.kind === "aviso" ? "avisos" : "mural"}`;
 }

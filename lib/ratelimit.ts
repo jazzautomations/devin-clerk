@@ -59,6 +59,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   reports: { limit: 5, windowMs: HOUR }, // POST /api/reports — membro
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
+  // agenda da comunidade (migration 051): criar e editar evento, por membro
+  meetups: { limit: 10, windowMs: DAY }, // POST /api/meetups, PATCH /api/meetups/[id]
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
