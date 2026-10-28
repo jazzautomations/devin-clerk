@@ -12,6 +12,7 @@ type NavLink = { href: string; label: string; match: readonly string[] };
 // logado: as portas da plataforma
 const NAV_IN: NavLink[] = [
   { href: "/radar", label: "hackathons", match: ["/radar", "/h/"] },
+  { href: "/desafios", label: "desafios", match: ["/desafios"] },
   { href: "/comunidades", label: "comunidades", match: ["/comunidades", "/comunidade/"] },
   { href: "/projetos", label: "projetos", match: ["/projetos", "/p/"] },
   { href: "/membros", label: "pessoas", match: ["/membros", "/u/", "/feed"] },
@@ -34,7 +35,7 @@ function isActive(pathname: string, match: readonly string[]) {
 export function DesktopNav({ variant }: { variant: "in" | "out" }) {
   const pathname = usePathname() ?? "/";
   return (
-    <nav aria-label="Navegação principal" className="hidden items-center gap-7 lg:flex">
+    <nav aria-label="Navegação principal" className="hidden items-center gap-6 lg:flex xl:gap-7">
       {linksFor(variant).map((l) => {
         const active = isActive(pathname, l.match);
         return (

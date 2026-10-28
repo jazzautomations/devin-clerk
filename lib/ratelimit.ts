@@ -62,6 +62,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "member-follows": { limit: 60, windowMs: HOUR }, // POST/DELETE /api/members/[username]/follow
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
+  // desafio aberto (migration 053): criar é forte como criar comunidade
+  "open-challenges": { limit: 3, windowMs: DAY }, // POST /api/open-challenges — membro
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
