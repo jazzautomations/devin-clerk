@@ -20,10 +20,22 @@ export type SafetyPerson = {
   createdAt: string;
 };
 
+/**
+ * Trava do par (a, b), na ordem que vier: bloquear e seguir pessoa
+ * (lib/memberFollows.ts) passam por ela. Só vale dentro de db.transaction.
+ * Sem ela, um seguir que começou antes do bloqueio commitar não vê o
+ * bloqueio, o DELETE do bloqueio não vê o seguir, e a linha fica.
+ */
+export async function lockPair(a: number, b: number): Promise<void> {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  await db.prepare("SELECT pg_advisory_xact_lock(hashtext(?::text)) AS ok").get(`pair:${x}:${y}`);
+}
+
 /** bloqueia (idempotente); devolve true se a linha é nova */
 export async function block(memberId: number, blockedId: number): Promise<boolean> {
   if (memberId === blockedId) throw new Error("não dá pra bloquear a si mesmo");
   return db.transaction(async () => {
+    await lockPair(memberId, blockedId);
     const res = await db
       .prepare("INSERT OR IGNORE INTO member_blocks (memberId, blockedId) VALUES (?, ?)")
       .run(memberId, blockedId);

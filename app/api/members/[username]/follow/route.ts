@@ -1,6 +1,7 @@
 import { isBlockedEither } from "@/lib/blocks";
-import { followMember, notifyNewFollower, unfollowMember } from "@/lib/memberFollows";
+import { followAndNotify, unfollowMember } from "@/lib/memberFollows";
 import { getMemberByUsername, resolveUsernameRedirect, type Member } from "@/lib/members";
+import { canNetwork } from "@/lib/network";
 import { limitOrNull } from "@/lib/ratelimit";
 import { currentMember } from "@/lib/session";
 
@@ -31,7 +32,9 @@ async function guard(req: Request, { params }: Ctx): Promise<Guard> {
   const me = await currentMember();
   if (!me) return { response: Response.json({ error: "Unauthorized" }, { status: 401 }) };
   const other = await resolve((await params).username);
-  if (!other || other.clerkId.startsWith("deleted:")) return { response: notFound() };
+  // canNetwork: conta excluída e regra de idade, dos dois lados
+  if (!(await canNetwork(me.id))) return { response: Response.json({ error: "Sua conta não pode seguir pessoas." }, { status: 403 }) };
+  if (!other || !(await canNetwork(other.id))) return { response: notFound() };
   if (other.id === me.id) return { response: Response.json({ error: "Você não pode seguir a si mesmo" }, { status: 400 }) };
   const limited = limitOrNull(req, "member-follows", me.id);
   if (limited) return { response: limited };
@@ -42,10 +45,9 @@ async function guard(req: Request, { params }: Ctx): Promise<Guard> {
 export async function POST(req: Request, ctx: Ctx) {
   const g = await guard(req, ctx);
   if ("response" in g) return g.response;
-  const r = await followMember(g.me.id, g.other.id);
+  const r = await followAndNotify({ id: g.me.id, username: g.me.username }, g.other.id);
   if (r === "blocked") return notFound();
   if (r === "self") return Response.json({ error: "Você não pode seguir a si mesmo" }, { status: 400 });
-  if (r === "ok") await notifyNewFollower({ id: g.me.id, username: g.me.username }, g.other.id);
   return Response.json({ following: true });
 }
 

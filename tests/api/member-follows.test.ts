@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
-import { block } from "@/lib/blocks";
+import { block, unblock } from "@/lib/blocks";
 import { changeUsername } from "@/lib/members";
 import {
   encodeFollowCursor,
+  followAndNotify,
   followMember,
   followingIds,
   followsMe,
@@ -62,9 +63,31 @@ const followNotifs = async (to: number) =>
 const rows = async (a: number) =>
   db.prepare("SELECT memberId, followedId FROM member_follows WHERE memberId = ? OR followedId = ? ORDER BY memberId, followedId").all(a, a);
 
+/** menor de idade hoje (só existe com HACKAHUB_ALLOW_MINORS=on, ligado no vitest) */
+async function minor(m: M) {
+  const r = await db
+    .prepare("INSERT INTO registrations (memberId, hackathonId, status) VALUES (?, ?, 'approved') RETURNING id")
+    .get<{ id: number }>(m.id, HACK);
+  await db
+    .prepare("INSERT INTO edition_conduct_versions (hackathonId, version, text) VALUES (?, 1, 'x') ON CONFLICT DO NOTHING")
+    .run(HACK);
+  const born = new Date();
+  born.setUTCFullYear(born.getUTCFullYear() - 16);
+  await db
+    .prepare(
+      `INSERT INTO registration_terms (registrationId, memberId, hackathonId, birthDate, ageAtEvent, conductVersion)
+       VALUES (?, ?, ?, ?, 16, 1)`,
+    )
+    .run(r!.id, m.id, HACK, born.toISOString().slice(0, 10));
+}
+
 beforeEach(() => {
   resetRateLimits();
   as(null);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("POST/DELETE /api/members/[username]/follow", () => {
@@ -187,6 +210,74 @@ describe("POST/DELETE /api/members/[username]/follow", () => {
     const c = await member();
     as(c);
     expect((await POST(req("POST"), ctx(b.username))).status).toBe(200);
+  });
+});
+
+describe("canNetwork e corrida", () => {
+  it("rota passa por canNetwork: seguir menor dá 404 sem aviso; menor seguindo dá 403", async () => {
+    const { POST, DELETE } = await route();
+    const adulto = await member();
+    const menor = await member();
+    await minor(menor);
+    as(adulto);
+    const r = await POST(req("POST"), ctx(menor.username));
+    expect(r.status).toBe(404);
+    expect(await r.json()).toEqual(await (await POST(req("POST"), ctx("nao_existe"))).json());
+    expect((await DELETE(req("DELETE"), ctx(menor.username))).status).toBe(404);
+    expect(await rows(menor.id)).toEqual([]);
+    expect(await followNotifs(menor.id)).toEqual([]);
+    as(menor);
+    const r2 = await POST(req("POST"), ctx(adulto.username));
+    expect(r2.status).toBe(403);
+    expect(await rows(adulto.id)).toEqual([]);
+    expect(await followNotifs(adulto.id)).toEqual([]);
+  });
+
+  it("teammatesToFollow não sugere menor nem conta excluída", async () => {
+    const me = await member();
+    const ok = await member();
+    const menor = await member();
+    const saiu = await member();
+    await team([me.username, ok.username, menor.username, saiu.username]);
+    await minor(menor);
+    await db.prepare("UPDATE members SET clerkId = 'deleted:' || id WHERE id = ?").run(saiu.id);
+    expect((await teammatesToFollow(me.id)).map((p) => p.id)).toEqual([ok.id]);
+  });
+
+  it("POST e DELETE em paralelo: B recebe um aviso só", async () => {
+    const { POST, DELETE } = await route();
+    const a = await member();
+    const b = await member();
+    as(a);
+    const calls: Promise<Response>[] = [];
+    for (let i = 0; i < 20; i++) {
+      calls.push(POST(req("POST"), ctx(b.username)), DELETE(req("DELETE"), ctx(b.username)));
+    }
+    for (const r of await Promise.all(calls)) expect(r.status).toBe(200);
+    expect(await followNotifs(b.id)).toHaveLength(1);
+  });
+
+  it("seguir e bloquear pegam a mesma trava do par, nas duas ordens", async () => {
+    const a = await member();
+    const b = await member();
+    const locks: unknown[] = [];
+    const prep = db.prepare.bind(db);
+    vi.spyOn(db, "prepare").mockImplementation(((sql: string) => {
+      const st = prep(sql);
+      if (!sql.includes("pg_advisory_xact_lock")) return st;
+      return { ...st, get: (...p: unknown[]) => (locks.push(p[0]), st.get(...(p as never[]))) };
+    }) as typeof db.prepare);
+    await followMember(a.id, b.id);
+    await followAndNotify(b, a.id);
+    await block(b.id, a.id);
+    const key = `pair:${Math.min(a.id, b.id)}:${Math.max(a.id, b.id)}`;
+    expect(locks).toEqual([key, key, key]);
+    vi.restoreAllMocks();
+    // o bloqueio levou os dois seguir; desbloquear não traz nenhum de volta
+    expect(await rows(a.id)).toEqual([]);
+    await unblock(b.id, a.id);
+    expect(await isFollowingMember(a.id, b.id)).toBe(false);
+    expect(await isFollowingMember(b.id, a.id)).toBe(false);
   });
 });
 

@@ -1,4 +1,6 @@
 import db from "@/lib/db";
+import { lockPair } from "@/lib/blocks";
+import { canNetwork } from "@/lib/network";
 import { alreadyNotified, notify } from "@/lib/notifications";
 
 // Seguir pessoa (migration 033): memberId segue followedId. Sem placar.
@@ -7,8 +9,9 @@ import { alreadyNotified, notify } from "@/lib/notifications";
 //   página do próprio dono (/u dele, /perfil/seguidores, /perfil/seguindo).
 //   Quem visita vê só "segue você" (followsMe).
 // - Bloqueio em qualquer sentido impede seguir, e bloquear apaga o seguir dos
-//   dois lados (lib/blocks.ts). A checagem vai no próprio INSERT, então um
-//   bloqueio que chega no meio não deixa linha pra trás.
+//   dois lados (lib/blocks.ts). Seguir e bloquear pegam a mesma trava do par
+//   (lockPair), então um bloqueio que chega no meio não deixa linha pra trás.
+// - Quem aparece pra outra pessoa passa por canNetwork (rota e sugestões).
 // - Conta excluída some das listas; a exclusão LGPD já apaga as linhas
 //   (followedId está em PEER_COLUMNS).
 // - Seguir nunca dá XP, badge nem item do bicho (spec 043).
@@ -32,9 +35,29 @@ export const FOLLOW_PAGE_SIZE = 30;
 const BLOCKED_PAIR = (a: string, b: string) => `EXISTS (SELECT 1 FROM member_blocks fb
   WHERE (fb.memberId = ${a} AND fb.blockedId = ${b}) OR (fb.memberId = ${b} AND fb.blockedId = ${a}))`;
 
-/** segue (idempotente). Notificação é com notifyNewFollower, quando dá 'ok'. */
+/** segue (idempotente), sem notificar. A rota usa followAndNotify. */
 export async function followMember(meId: number, targetId: number): Promise<FollowOutcome> {
   if (meId === targetId) return "self";
+  return db.transaction(() => insertFollow(meId, targetId))();
+}
+
+/**
+ * Segue e, se a linha é nova, avisa quem foi seguido. Tudo na trava do par:
+ * POST e DELETE em paralelo não geram dois avisos na mesma semana, porque o
+ * segundo POST só checa o dedupe depois que o primeiro gravou o aviso.
+ */
+export async function followAndNotify(actor: { id: number; username: string }, targetId: number): Promise<FollowOutcome> {
+  if (actor.id === targetId) return "self";
+  return db.transaction(async () => {
+    const r = await insertFollow(actor.id, targetId);
+    if (r === "ok") await notifyNewFollower(actor, targetId);
+    return r;
+  })();
+}
+
+// precisa estar dentro de db.transaction
+async function insertFollow(meId: number, targetId: number): Promise<FollowOutcome> {
+  await lockPair(meId, targetId);
   const res = await db
     .prepare(
       `INSERT INTO member_follows (memberId, followedId)
@@ -159,7 +182,8 @@ export async function followingIds(meId: number): Promise<number[]> {
 
 /**
  * Quem fez time com meId e ela ainda não segue (estado vazio de
- * /perfil/seguindo). Mais recente primeiro, sem conta excluída nem bloqueio.
+ * /perfil/seguindo). Mais recente primeiro, sem conta excluída nem bloqueio,
+ * e só quem passa em canNetwork.
  */
 export async function teammatesToFollow(meId: number, limit = 6): Promise<FollowPerson[]> {
   const rows = await db
@@ -177,8 +201,14 @@ export async function teammatesToFollow(meId: number, limit = 6): Promise<Follow
        ORDER BY MAX(t.id) DESC
        LIMIT @lim`,
     )
-    .all<Omit<FollowPerson, "followedByMe">>({ owner: meId, lim: Math.min(Math.max(limit, 1), 30) });
-  return rows.map((r) => ({
+    .all<Omit<FollowPerson, "followedByMe">>({ owner: meId, lim: 100 });
+  const lim = Math.min(Math.max(limit, 1), 30);
+  const ok: typeof rows = [];
+  for (const r of rows) {
+    if (ok.length >= lim) break;
+    if (await canNetwork(Number(r.id))) ok.push(r);
+  }
+  return ok.map((r) => ({
     id: Number(r.id),
     username: r.username,
     name: r.name,
