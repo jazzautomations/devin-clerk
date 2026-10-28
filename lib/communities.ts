@@ -3,6 +3,7 @@ import { notify } from "@/lib/notifications";
 import { emailDriver } from "@/lib/notify/email";
 import { eventRegion } from "@/lib/regions";
 import { absoluteUrl } from "@/lib/seo";
+import { createReport, ReportError, resolveCommunityTargetReports } from "@/lib/reports";
 
 // Comunidades (migration 027): faculdade, coletivo, cidade ou empresa que
 // junta gente e organiza hackathon no HackaHub. Qualquer membro cria e vira
@@ -227,7 +228,8 @@ const LIST_SQL = `
     (SELECT COUNT(*)::int FROM hackathons h WHERE h.communityId = c.id AND h.active = 1) AS hackathons,
     (SELECT COUNT(*)::int FROM hackathons h WHERE h.communityId = c.id AND h.active = 1
       AND to_ts(COALESCE(h.endsAt, h.startsAt)) >= now()) AS upcoming,
-    (SELECT COUNT(*)::int FROM community_reports r WHERE r.communityId = c.id AND r.resolvedAt IS NULL) AS reports,
+    (SELECT COUNT(*)::int FROM reports r
+      WHERE r.targetType = 'community' AND r.targetId = c.id::text AND r.resolvedAt IS NULL) AS reports,
     nx.id AS "nextId", nx.name AS "nextName", nx.startsAt AS "nextStartsAt",
     GREATEST(
       to_ts(c.createdAt),
@@ -645,10 +647,15 @@ export async function createNotice(
 
 // ---------- moderação ----------
 
+// denúncia contra a comunidade inteira: vai pra fila única (lib/reports, 032),
+// roteada pro admin. Repetir com uma ainda aberta não abre outra.
 export async function reportCommunity(communityId: number, memberId: number, reason: string) {
-  await db
-    .prepare("INSERT INTO community_reports (communityId, memberId, reason) VALUES (?, ?, ?)")
-    .run(communityId, memberId, reason);
+  try {
+    await createReport({ targetType: "community", targetId: String(communityId), reporterId: memberId, reason });
+  } catch (e) {
+    if (e instanceof ReportError && e.status === 409) return;
+    throw e;
+  }
 }
 
 export async function setModeration(communityId: number, patch: { hidden?: boolean; verified?: boolean }) {
@@ -665,19 +672,18 @@ export async function setModeration(communityId: number, patch: { hidden?: boole
   if (sets.length === 0) return getCommunityById(communityId);
   // esconder resolve as denúncias abertas (o admin decidiu)
   if (patch.hidden) {
-    await db
-      .prepare("UPDATE community_reports SET resolvedAt = sqlite_now() WHERE communityId = ? AND resolvedAt IS NULL")
-      .run(communityId);
+    await resolveCommunityTargetReports(communityId);
   }
   const row = await db.prepare(`UPDATE communities SET ${sets.join(", ")} WHERE id = @id RETURNING *`).get<Row>(bag);
   return row ? toCommunity(row) : null;
 }
 
+/** denúncias abertas contra comunidades (formato antigo; a fila nova é lib/reports) */
 export async function listOpenReports() {
   return db
     .prepare(
       `SELECT r.id, r.reason, r.createdAt, c.slug, c.name
-       FROM community_reports r JOIN communities c ON c.id = r.communityId
+       FROM reports r JOIN communities c ON r.targetType = 'community' AND c.id::text = r.targetId
        WHERE r.resolvedAt IS NULL ORDER BY r.id DESC LIMIT 50`,
     )
     .all<{ id: number; reason: string; createdAt: string; slug: string; name: string }>();

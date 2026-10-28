@@ -41,6 +41,8 @@ const GROUPS: { label: string; tabs: Tab[] }[] = [
       { href: "/refeicoes", label: "refeições", roles: ["organizador", "staff"] },
       { href: "/duvidas", label: "dúvidas", roles: ["organizador", "mentor"] },
       { href: "/incidentes", label: "incidentes", roles: ["organizador"], conductHandler: true },
+      // denúncias do mural da edição (migration 032): mesma gente dos incidentes
+      { href: "/denuncias", label: "denúncias", roles: ["organizador"], conductHandler: true },
       { href: "/palco", label: "palco", roles: ["organizador", "staff"] },
     ],
   },

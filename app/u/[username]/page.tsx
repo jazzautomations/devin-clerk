@@ -18,6 +18,9 @@ import { profileUrl } from "@/lib/social";
 import { personaLabel } from "@/lib/personas";
 import { auth } from "@clerk/nextjs/server";
 import { PublicCard } from "@/components/PublicCard";
+import { ProfileSafetyMenu } from "@/components/ProfileSafetyMenu";
+import { currentMember } from "@/lib/session";
+import { isBlockedBy, relationTo } from "@/lib/blocks";
 
 // spec 029 — desfecho de cada edição do arco → chip da trajetória:
 // pódio nas cores de raridade, entrega em accent, presença em muted
@@ -53,6 +56,9 @@ export async function generateMetadata({
   const { username } = await params;
   const member = await getMemberByUsername(username);
   if (!member) return { title: "perfil não encontrado" };
+  // bloqueado não vê nem o nome na aba (migration 032)
+  const viewer = (await auth()).userId ? await currentMember() : null;
+  if (viewer && (await isBlockedBy(viewer.id, member.id))) return { title: "perfil não encontrado" };
   const name = member.name ?? `@${member.username}`;
   const description =
     member.headline ??
@@ -107,6 +113,12 @@ export default async function PublicProfilePage({
       </PublicCard>
     );
   }
+
+  // migration 032: quem foi bloqueado recebe 404, igual a perfil que não existe
+  const viewer = await currentMember();
+  if (viewer && (await isBlockedBy(viewer.id, member.id))) notFound();
+  const own = viewer?.id === member.id;
+  const relation = viewer && !own ? await relationTo(viewer.id, member.id) : null;
 
   const history = (
     await Promise.all((await getRegistrationIds(member.id)).map((id) => getHackathon(id)))
@@ -177,6 +189,19 @@ export default async function PublicProfilePage({
             </a>
           ))}
         </div>
+        {relation?.blocked && (
+          <p className="border-[1.5px] border-orange px-3 py-2 font-mono text-[12.5px] text-orange" data-testid="profile-blocked-note">
+            Você bloqueou @{member.username}. Vocês não se veem no HackaHub.
+          </p>
+        )}
+        {relation && (
+          <ProfileSafetyMenu
+            username={member.username}
+            memberId={member.id}
+            blocked={relation.blocked}
+            muted={relation.muted}
+          />
+        )}
         <ShareBar
           url={absoluteUrl(`/u/${member.username}`)}
           text={`${member.name ?? `@${member.username}`} no HackaHub — hackathons, projetos e certificados`}

@@ -97,8 +97,23 @@ const FREE_TEXT: Record<string, { column: string; fields: string[] }> = {
 // export: referências que NÃO entram (ator sobre dado de terceiros — quem
 // tratou uma denúncia não recebe a denúncia no próprio export) e colunas
 // internas omitidas (nota interna da organização sobre a denúncia).
-const EXPORT_SKIP = new Set(["incidents.updatedBy", "notifications.actorId"]);
-const EXPORT_OMIT: Record<string, string[]> = { incidents: ["internalNote", "updatedBy"] };
+// Bloqueio e silêncio (032): o lado de quem foi bloqueado/silenciado não
+// entra (a pessoa nunca fica sabendo); a denúncia entra só com o que a pessoa
+// escreveu, sem a nota de quem resolveu. Quem foi denunciado também não fica
+// sabendo pelo export (reports.targetMemberId), e notificação que a pessoa
+// gerou pra outra é dado da outra (notifications.actorId).
+const EXPORT_SKIP = new Set([
+  "incidents.updatedBy",
+  "member_blocks.blockedId",
+  "member_mutes.mutedId",
+  "reports.resolvedBy",
+  "reports.targetMemberId",
+  "notifications.actorId",
+]);
+const EXPORT_OMIT: Record<string, string[]> = {
+  incidents: ["internalNote", "updatedBy"],
+  reports: ["snapshot", "resolvedBy", "resolution"],
+};
 
 /** o que a exclusão faz com as linhas em que o membro aparece em table.column */
 export function deleteAction(table: string, column: string): "delete" | "nullify" | "keep" {
@@ -241,6 +256,8 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
              (SELECT ?::text UNION SELECT "oldUsername" FROM username_redirects WHERE "memberId" = ?::int)))`,
       )
       .run(anon, anon, memberId, memberId, member.username, memberId);
+    // denúncia da fila única (032): mesma regra, fica sem autor
+    await db.prepare("UPDATE reports SET reporterId = NULL WHERE reporterId = ?").run(memberId);
     for (const { table, column } of refs) {
       const action = deleteAction(table, column);
       if (action === "nullify") {

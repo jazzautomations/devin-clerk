@@ -5,6 +5,7 @@ import { userMessage } from "@/lib/apiError";
 import { useState } from "react";
 import { levelFor } from "@/lib/game";
 import { Avatar } from "@/components/Avatar";
+import { ReportDialog } from "@/components/ReportDialog";
 
 export type FeedPost = {
   id: number;
@@ -200,6 +201,14 @@ export function FeedSection({
   }
 
   const canDelete = (username: string) => isAdmin || username === me;
+  // migration 032: denunciar o que é dos outros; denunciar bloqueia o autor,
+  // então o que é dele sai da vista na hora
+  const canReport = (username: string) => !!me && username !== me;
+  function hideAuthor(username: string | null) {
+    if (!username) return;
+    setPosts((ps) => ps.filter((x) => x.username !== username));
+    setThreads((t) => Object.fromEntries(Object.entries(t).map(([k, cs]) => [k, cs.filter((c) => c.username !== username)])));
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -315,6 +324,15 @@ export function FeedSection({
                 </div>
                 <span className="flex shrink-0 items-baseline gap-2 font-mono text-[12px] text-muted">
                   {fmt.format(new Date(p.createdAt + "Z"))}
+                  {canReport(p.username) && (
+                    <ReportDialog
+                      targetType="post"
+                      targetId={p.id}
+                      targetLabel="este post"
+                      authorUsername={p.username}
+                      onReported={(r) => hideAuthor(r.blocked)}
+                    />
+                  )}
                   {canDelete(p.username) && (
                     <button
                       onClick={() => removePost(p.id)}
@@ -386,6 +404,15 @@ export function FeedSection({
                         <span className="font-mono text-[12px] text-muted">
                           {fmt.format(new Date(c.createdAt + "Z"))}
                         </span>
+                        {canReport(c.username) && (
+                          <ReportDialog
+                            targetType="comment"
+                            targetId={c.id}
+                            targetLabel="este comentário"
+                            authorUsername={c.username}
+                            onReported={(r) => hideAuthor(r.blocked)}
+                          />
+                        )}
                         {canDelete(c.username) && (
                           <button
                             onClick={() => removeComment(p.id, c.id)}

@@ -20,7 +20,9 @@ import { AssetForm, TeamForm } from "@/components/ArchiveForms";
 import { SubmissionActions } from "@/components/SubmissionActions";
 import { EditionList, RADAR_PAGE, type AdminEdition } from "@/components/AdminEditionList";
 import { ModerationToggles } from "@/components/CommunityActions";
-import { listCommunities, listOpenReports, listRecentCommunityHackathons } from "@/lib/communities";
+import { listCommunities, listRecentCommunityHackathons } from "@/lib/communities";
+import { countOpenByType, listReports } from "@/lib/reports";
+import { ReportQueue, reportTypeParam } from "@/components/ReportQueue";
 
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const { userId } = await auth();
@@ -71,12 +73,16 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
 
   const subscribers = await listSubscribers();
 
-  // moderação de comunidades (migration 027): todas (inclusive escondidas),
-  // denúncias abertas e hackathons novos de comunidade
-  const [communities, reports, recentHackathons] = await Promise.all([
+  // moderação de comunidades (migration 027): todas (inclusive escondidas)
+  // e hackathons novos de comunidade. Denúncias (032): a fila única, com
+  // todas as abertas de qualquer espaço e o filtro por tipo (?tipo=)
+  const reportType = reportTypeParam(sp.tipo);
+  const [communities, recentHackathons, openReports, resolvedReports, reportCounts] = await Promise.all([
     listCommunities({ includeHidden: true }),
-    listOpenReports(),
     listRecentCommunityHackathons(),
+    listReports({ global: true }, { type: reportType }),
+    listReports({ global: true }, { status: "resolved", limit: 10 }),
+    countOpenByType({ global: true }),
   ]);
 
   // CRM de marcas (spec 019) — cadastro único, vínculo nos desafios via API
@@ -118,23 +124,28 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         <CreateEventForm communities={communities.filter((c) => !c.hidden).map((c) => ({ slug: c.slug, name: c.name }))} />
       </div>
 
+      <div id="denuncias" className="flex scroll-mt-24 flex-col gap-4" data-testid="admin-reports">
+        <h2 className={`${mono} tracking-widest text-muted uppercase`}>
+          denúncias abertas ({Object.values(reportCounts).reduce((a, b) => a + (b ?? 0), 0)})
+        </h2>
+        <p className="max-w-2xl text-[14px] text-muted">
+          Todas as abertas, de qualquer espaço. A de mural de comunidade também chega pra organização dela; a de mural de
+          edição, pra quem trata incidentes da edição. Perfil e comunidade inteira só chegam aqui.
+        </p>
+        <ReportQueue
+          open={openReports}
+          resolved={resolvedReports}
+          counts={reportCounts}
+          type={reportType}
+          basePath="/admin"
+          anchor="#denuncias"
+          showRouting
+          empty="nenhuma denúncia aberta."
+        />
+      </div>
+
       <div id="comunidades" className="flex scroll-mt-24 flex-col gap-4" data-testid="admin-communities">
         <h2 className={`${mono} tracking-widest text-muted uppercase`}>comunidades ({communities.length})</h2>
-        {reports.length > 0 && (
-          <div className="flex flex-col gap-2 border-[1.5px] border-orange p-4" data-testid="admin-community-reports">
-            <p className={`${mono} text-orange uppercase`}>denúncias abertas ({reports.length})</p>
-            <ul className="divide-y divide-line">
-              {reports.map((r) => (
-                <li key={r.id} className={`${mono} py-2 [overflow-wrap:anywhere]`}>
-                  <Link href={`/comunidade/${r.slug}`} className="text-accent hover:underline">
-                    {r.name}
-                  </Link>{" "}
-                  · {r.reason}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         <ul className="divide-y divide-line border-y border-line">
           {communities.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">

@@ -25,6 +25,7 @@ import { isFollowing } from "@/lib/follows";
 import { getCommunityHackathons } from "@/lib/hackathons";
 import { countCommunityLeads } from "@/lib/leads";
 import { listPosts } from "@/lib/posts";
+import { countOpenByType } from "@/lib/reports";
 import { getRegistrationIds } from "@/lib/registrations";
 import { absoluteUrl } from "@/lib/seo";
 import { currentMember } from "@/lib/session";
@@ -118,7 +119,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const isAdmin = member.role === "admin";
   const canManage = isAdmin || role === "dono" || role === "organizador";
   const isOwner = isAdmin || role === "dono";
-  const [members, notices, posts, podium, invites, registeredIds, following, supportLeads] = await Promise.all([
+  const [members, notices, posts, podium, invites, registeredIds, following, supportLeads, reportCounts] = await Promise.all([
     listCommunityMembers(c.id),
     listNotices(c.id, 5),
     listPosts(30, member.id, { communityId: c.id }),
@@ -127,7 +128,9 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
     getRegistrationIds(member.id),
     role ? Promise.resolve(false) : isFollowing(c.id, member.id),
     canManage ? countCommunityLeads(c.id) : Promise.resolve(0),
+    canManage ? countOpenByType({ communityId: c.id, viewerId: member.id }) : Promise.resolve<Awaited<ReturnType<typeof countOpenByType>>>({}),
   ]);
+  const openReports = Object.values(reportCounts).reduce((a, b) => a + (b ?? 0), 0);
   const organizers = members.filter((m) => m.role === "organizador");
   const owners = members.filter((m) => m.role === "dono");
   const links = (
@@ -193,6 +196,9 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
                 </Link>
                 <Link href={`/comunidade/${c.slug}/apoio`} className="btn-ghost min-h-[44px]!" data-testid="community-support-panel">
                   apoio{supportLeads > 0 ? ` · ${supportLeads} ${supportLeads === 1 ? "pedido" : "pedidos"}` : ""}
+                </Link>
+                <Link href={`/comunidade/${c.slug}/denuncias`} className="btn-ghost min-h-[44px]!" data-testid="community-reports-link">
+                  denúncias{openReports > 0 ? ` · ${openReports}` : ""}
                 </Link>
               </div>
             )}

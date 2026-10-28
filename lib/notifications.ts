@@ -83,6 +83,12 @@ export async function alreadyNotified(
     .get<{ y: number }>(memberId, type, actorId, href, sinceDays, sinceDays);
   return !!row;
 }
+// migration 032: notificação de quem eu silenciei ou de quem está bloqueado
+// (dois sentidos) some da lista e da contagem. O ator é casado pelo actorId,
+// que não muda quando a pessoa troca o @.
+const NOT_HIDDEN = `(notifications.actorId IS NULL OR NOT (
+    EXISTS (SELECT 1 FROM member_mutes x WHERE x.memberId = @me AND x.mutedId = notifications.actorId)
+    OR EXISTS (SELECT 1 FROM member_blocks x WHERE (x.memberId = @me AND x.blockedId = notifications.actorId) OR (x.memberId = notifications.actorId AND x.blockedId = @me))))`;
 
 export async function listNotifications(
   memberId: number,
@@ -90,9 +96,9 @@ export async function listNotifications(
 ): Promise<Notification[]> {
   const rows = await db
     .prepare(
-      "SELECT * FROM notifications WHERE memberId = ? ORDER BY id DESC LIMIT ?",
+      `SELECT * FROM notifications WHERE memberId = @me AND ${NOT_HIDDEN} ORDER BY id DESC LIMIT @limit`,
     )
-    .all(memberId, limit) as NotificationRow[];
+    .all({ me: memberId, limit }) as NotificationRow[];
   return rows.map(toNotification);
 }
 
@@ -100,9 +106,9 @@ export async function unreadCount(memberId: number): Promise<number> {
   return (
     await db
       .prepare(
-        "SELECT COUNT(*) n FROM notifications WHERE memberId = ? AND read = 0",
+        `SELECT COUNT(*) n FROM notifications WHERE memberId = @me AND read = 0 AND ${NOT_HIDDEN}`,
       )
-      .get(memberId) as { n: number }
+      .get({ me: memberId }) as { n: number }
   ).n;
 }
 
