@@ -1,0 +1,859 @@
+{
+ "visao": "O HackaHub é a casa de quem constrói em hackathon no Brasil. Você entra pelo radar e fica pelo que entregou. O perfil prova o que a pessoa fez, e cada fato tem query por trás: presença, projeto travado, prêmio, mentoria, organização e depoimento de quem fez time com ela. Ninguém tem placar de seguidores. Cada pessoa tem um bicho em voxel que é dela e só cresce com esses fatos, nunca com like. A timeline é cronológica, com quem você segue, suas comunidades e as edições ao vivo, e tem reações, respostas, menções, tags de stack e notificação que leva direto ao post. O projeto ganha uma página estilo Devpost que continua viva depois do evento, com diário, selo \"continuou\" e quatro semanas de acompanhamento. No evento, os encontros viram time: você lê o código do bicho de alguém, os dois confirmam, o contato aparece e dá pra chamar pro time. Entre uma edição e outra, as comunidades moderam o próprio espaço, marcam agenda, fazem lives e abrem desafios sem depender do admin. Um copilot responde \"já fizeram isso?\" citando o arquivo real e nunca dá nota. Na última onda vêm DM com trava, espaços estilo Circle e RSS aberto. A federação com o Mastodon entra só se um spike provar que vale. Tudo fica em cima de uma base de confiança feita antes do resto: fonte única de evidência, bloqueio, denúncia com fila roteada e LGPD que cobre cada coluna nova.",
+ "ondas": [
+  {
+   "nome": "Onda 0: base de confiança (evidência, LGPD, bloqueio, denúncia)",
+   "features": [
+    {
+     "slug": "evidencia-e-lgpd",
+     "titulo": "Fonte única de evidência, canNetwork, LGPD extensível, lastSeenAt e actorId",
+     "porque": "As specs 043, 044 e 045 pedem que selo, nível, bicho, depoimento e liga leiam do mesmo lugar, pra que os números não descolem do registro. A exclusão LGPD hoje usa uma lista fixa de colunas que já esquece city, institution e course, e cada onda vai criar colunas novas em members. A notificação deduplica por actorUsername, que é texto congelado. O digest e as métricas precisam saber quem voltou. Tudo isso é base: se ficar pra depois, cada feature inventa o próprio jeito.",
+     "tamanho": "M",
+     "migration": "031",
+     "arquivos": [
+      "migrations/031_evidencia_lgpd.sql",
+      "lib/evidence.ts (novo)",
+      "lib/network.ts (novo)",
+      "lib/privacy.ts",
+      "lib/notifications.ts",
+      "lib/session.ts",
+      "tests/unit/evidence.test.ts",
+      "tests/api/privacy-anonymize.test.ts",
+      "tests/api/notifications-actor.test.ts"
+     ],
+     "spec": "OBJETIVO: cinco peças de base que as ondas seguintes só importam: (1) lib/evidence.ts como fonte única de fatos verificados, com regra antifarm; (2) canNetwork(); (3) LGPD extensível (ANONYMIZE e PEER_COLUMNS); (4) members.lastSeenAt; (5) notifications.actorId com deduplicação por id.\n\nREGRAS DO REPO: leia AGENTS.md e specs/043-gamificacao, 044-orkut e 045-conexao. SQL só por lib/db.ts (async, `?` ou `@nome`, camelCase, Postgres estrito). Schema só na 031, com identificadores entre aspas e datas TEXT DEFAULT sqlite_now(). Testes Vitest com PGlite no molde de tests/api/follows.test.ts. Não mexa em UI.\n\nDADOS (031):\n- ALTER members ADD \"lastSeenAt\" TEXT. Backfill: UPDATE members SET \"lastSeenAt\" = \"createdAt\".\n- ALTER notifications ADD \"actorId\" INTEGER REFERENCES members(\"id\") ON DELETE SET NULL. Backfill por join de actorUsername com members.username (o que não casar fica NULL).\n- Índice notifications(\"memberId\",\"type\",\"actorId\",\"href\").\n\n1. lib/evidence.ts (só leitura, sem tabela nova):\n- eligibleEdition(hackathonId) e o fragmento SQL eligibleEditionsSql: a edição é hosted (hostedSql de lib/hackathons.ts), tem pelo menos 15 check-ins distintos e é global (communityId NULL) ou de comunidade com verified=1 (migration 027). Fato fora de edição elegível não conta pra nada. Isso fecha o farm de quem cria comunidade, cria edição, se aprova, faz check-in em si e se dá prêmio.\n- Fatos, cada um com {kind, hackathonId, teamId?, at}: presenca (checkin da inscrição aprovada), entrega (time com project_submissions e travado ou edição encerrada; 1 por time), premio (prize_winners do time; 1 por categoria), mentoria (edition_roles mentor, jurado ou staff em edição encerrada), organizou (edition_roles organizador em edição publicada e encerrada), duvida (answers em dúvida resolvida, até 10 por edição), voltou (cada edição com presença além da primeira).\n- Regra de conflito: presenca, entrega e premio NÃO contam quando a pessoa tem edition_roles organizador na mesma edição.\n- factsFor(memberId, {since?, until?}) devolve a lista; countFacts(memberId, opts) devolve contagem por kind.\n- sameTeam(a, b) devolve as edições em que os dois foram do mesmo time (team_members é por username: junte com members). sharedTeamsLabel(a, b) devolve \"vocês fizeram time no X\".\n- Confirme os nomes reais das colunas nas migrations 001, 002, 003, 006, 010, 018 e 027 antes de escrever o SQL.\n\n2. lib/network.ts: canNetwork(memberId, hackathonId?) devolve boolean. É false se a conta foi excluída/anonimizada. Também é false quando HACKAHUB_ALLOW_MINORS === 'on' (lib/eventTerms.ts) e a pessoa é menor naquela edição (ou em qualquer edição ativa, sem hackathonId); use isMinorAtEdition de lib/teamboard.ts só aqui dentro. O HackaHub é 18+ por padrão: com a flag desligada, só a primeira regra vale. TODA superfície pública ou de contato das próximas ondas chama canNetwork e mais nada. Não espalhe isMinorAtEdition.\n\n3. LGPD (lib/privacy.ts):\n- Troque o UPDATE fixo de members (linhas 157-165) por uma constante exportada ANONYMIZE: Record<coluna, valor> (NULL, '[]', 0 etc.). Inclua as que hoje faltam: city, institution, course e lastSeenAt. Toda feature que criar coluna pessoal em members registra a coluna ali na mesma PR. Escreva isso no comentário do topo.\n- Crie PEER_COLUMNS = new Set(['followedId','peerId','recipientId','blockedId','mutedId','authorId']). Na exclusão, as linhas em que o membro aparece nessas colunas também são apagadas. authorId cobre texto escrito por um sobre o outro (depoimento): se qualquer lado sair, o texto some.\n- No export, as colunas de PEER_COLUMNS entram só como contagem, sem @ de terceiros.\n- Convenção documentada no topo: tabela de relação entre duas pessoas usa memberId pro dono e um nome de PEER_COLUMNS pro outro lado. Denúncia usa reporterId e é anonimizada (SET NULL), não apagada, igual a incidents.\n- Teste que percorre information_schema e falha se existir coluna em members que não está em ANONYMIZE nem numa lista explícita KEEP_ON_ANONYMIZE (id, createdAt, xp etc.). Esse teste é o que obriga as próximas ondas.\n\n4. lastSeenAt: em lib/session.ts, quando carregar o membro logado, grave lastSeenAt = agora se o valor salvo tiver mais de 1 hora (um UPDATE condicional, sem ler antes). Exporte touchLastSeen(memberId) pra teste.\n\n5. actorId: notify() aceita opts.actorId (opcional; actorUsername continua pra texto). Se vier actorId, a checagem de \"não notificar a si mesmo\" usa o id. Exporte alreadyNotified(memberId, type, actorId, href, sinceDays|null), que as ondas seguintes usam pra regra \"1 por par\". Assinatura de notify continua compatível.\n\nACEITE:\n1. Edição com 14 check-ins não gera fato. Com 15, gera.\n2. Organizador que faz check-in e ganha prêmio na própria edição não recebe presenca nem premio.\n3. Edição de comunidade não verificada não gera fato.\n4. Excluir a conta zera city, institution e course.\n5. O teste de colunas falha se alguém criar members.\"foo\" sem registrar.\n6. Login atualiza lastSeenAt no máximo 1 vez por hora.\n7. Trocar de @ não fura alreadyNotified.\n8. canNetwork com a flag desligada devolve true pra membro ativo e false pra excluído.\n\nTESTES: unit de cada fato com fixtures (incluindo os limites de 15 check-ins, organizador e comunidade não verificada), API de exclusão e export, unit de alreadyNotified com troca de username."
+    },
+    {
+     "slug": "bloqueio-e-denuncia",
+     "titulo": "Bloquear, silenciar e denunciar pessoa ou conteúdo, com uma fila roteada",
+     "porque": "Hoje só existe denúncia de comunidade (027) e incidente de evento. O plano criaria mais duas filas (post e DM). A 044 manda fazer denúncia genérica e bloqueio antes de qualquer conteúdo novo, porque comunidade sem moderação vira terra sem lei. O bloqueio precisa valer pra seguir, menção, vagas, encontros, sugestões e DM, então tem que existir antes deles.",
+     "tamanho": "M",
+     "migration": "032",
+     "arquivos": [
+      "migrations/032_bloqueio_denuncia.sql",
+      "lib/blocks.ts (novo)",
+      "lib/reports.ts (novo)",
+      "app/api/members/[username]/block/route.ts (novo)",
+      "app/api/members/[username]/mute/route.ts (novo)",
+      "app/api/reports/route.ts (novo)",
+      "app/api/reports/[id]/route.ts (novo)",
+      "components/ReportDialog.tsx (novo)",
+      "components/ProfileSafetyMenu.tsx (novo)",
+      "app/u/[username]/page.tsx",
+      "app/perfil/bloqueados/page.tsx (novo)",
+      "app/admin/page.tsx",
+      "lib/communities.ts",
+      "lib/ratelimit.ts (2 chaves)",
+      "tests/api/bloqueio.test.ts",
+      "tests/api/denuncias.test.ts",
+      "tests/e2e/bloqueio-denuncia.spec.ts"
+     ],
+     "spec": "OBJETIVO: qualquer membro bloqueia ou silencia outro e denuncia pessoa ou conteúdo numa fila única. A denúncia vai pra quem modera aquele espaço: dono da comunidade, organizador da edição ou admin global.\n\nREGRAS DO REPO: leia AGENTS.md e specs/044-orkut §0. SQL por lib/db.ts, schema só na 032, 401 JSON, rate limit com limitOrNull e chave nova em RATE_LIMITS, notify(), 390px sem scroll, PT-BR sem emoji, classes de app/globals.css. Siga a convenção de lib/privacy.ts da feature evidencia-e-lgpd (memberId dono, blockedId e mutedId do outro lado, reporterId anonimizado).\n\nDADOS (032):\n- CREATE TABLE member_blocks (\"memberId\" FK members, \"blockedId\" FK members, \"createdAt\", PK(memberId, blockedId), CHECK(memberId <> blockedId)).\n- CREATE TABLE member_mutes (\"memberId\", \"mutedId\", \"createdAt\", PK, CHECK).\n- CREATE TABLE reports (id identity, \"targetType\" TEXT NOT NULL CHECK IN ('post','comment','member','community','depoimento','dm','encontro'), \"targetId\" TEXT NOT NULL, \"reporterId\" INTEGER REFERENCES members(\"id\") ON DELETE SET NULL, \"reason\" TEXT NOT NULL (até 500), \"snapshot\" TEXT (cópia do texto denunciado, até 2000), \"communityId\" INTEGER REFERENCES communities(\"id\") ON DELETE CASCADE, \"hackathonId\" TEXT REFERENCES hackathons(\"id\") ON DELETE CASCADE, \"createdAt\", \"resolvedAt\" TEXT, \"resolvedBy\" INTEGER REFERENCES members(\"id\"), \"resolution\" TEXT). Confira o tipo de hackathons.id na 001.\n- Índice único parcial (reporterId, targetType, targetId) WHERE resolvedAt IS NULL. Índices (communityId, resolvedAt) e (hackathonId, resolvedAt).\n- Migração dos dados: INSERT INTO reports ... SELECT de community_reports (targetType 'community'). A tabela antiga fica, mas lib/communities.ts passa a gravar e ler em reports. Confira em lib/communities.ts as funções de denúncia de comunidade e troque por chamadas a lib/reports.ts sem mudar a API pública delas.\n\nlib/blocks.ts:\n- block, unblock, mute, unmute.\n- isBlockedEither(a, b): boolean.\n- hiddenIdsFor(meId): {blocked: number[] (os dois sentidos), muted: number[]}. As ondas seguintes usam isso pra filtrar timeline, menção, autocomplete, sugestões, vagas, encontros e DM.\n- Bloquear remove member_follows nos dois sentidos se a tabela existir (use to_regclass pra checar, porque seguir-pessoas chega na Onda 1; a Onda 1 também chama isso). O bloqueado nunca é avisado.\n- Quem foi bloqueado não vê o perfil de quem bloqueou: /u/x dá 404 pra ele.\n- Silenciar só esconde: posts e notificações da pessoa somem pra mim, sem ela saber.\n\nlib/reports.ts:\n- createReport({targetType, targetId, reporterId, reason}) resolve o roteamento lendo o alvo: post ou comentário de comunidade preenche communityId; de edição preenche hackathonId. Grava snapshot do texto.\n- Denunciar pessoa ou conteúdo de alguém também bloqueia esse alguém pra quem denunciou (045: \"denunciar já bloqueia\").\n- Quando hackathonId está preenchido e a edição está em andamento, cria também um incidente com createIncident de lib/incidents.ts (kind 'outro', texto com o link), porque o organizador da edição já trabalha nessa fila.\n- listReports({communityId?|hackathonId?|global}) e resolveReport(id, actor, resolution).\n- canHandleReport(actor, report): admin global sempre; dono e organizador da comunidade pro communityId (requireCommunityManager de lib/communityAuth.ts); canHandleIncidents de lib/incidents.ts pro hackathonId.\n- Alvo que não existe dá 404. Denúncia repetida em aberto dá 409.\n\nAPI:\n- POST/DELETE /api/members/[username]/block e /mute: 401, 404, 400 pra si mesmo, chave 'blocks' (30/h).\n- POST /api/reports {targetType, targetId, reason}: chave 'reports' (5/h, o mesmo padrão de community-report).\n- PATCH /api/reports/[id] {resolution}: 403 se canHandleReport falhar.\n\nUI:\n- components/ReportDialog.tsx (client): dialog acessível com motivo (lista curta mais texto) e confirmação \"Recebido. Você não vai mais ver conteúdo de @x.\". As ondas seguintes usam esse componente no PostCard, no depoimento, na DM e no encontro.\n- components/ProfileSafetyMenu.tsx em /u/[username] (só logado, some no próprio): \"silenciar\", \"bloquear\", \"denunciar\".\n- /perfil/bloqueados: lista de bloqueados e silenciados com \"desfazer\".\n- app/admin/page.tsx: a seção de denúncias passa a ler reports (todas as abertas, com filtro por tipo), com o snapshot, o link, \"resolver\" e o roteamento visível (\"vai pra comunidade X\").\n\nPRÉ-REQUISITO DE PRODUÇÃO: a fila global só tem leitor depois que o fundador definir o admin em prod (spec 041, F1). Escreva isso no PR.\n\nACEITE:\n1. A bloqueia B: B abre /u/a e recebe 404.\n2. Silenciar não avisa ninguém.\n3. Denúncia de post de comunidade aparece pra dono da comunidade e pro admin, mas não pra organizador de outra.\n4. Denúncia em edição ao vivo gera incidente.\n5. Denúncia duplicada em aberto dá 409.\n6. As denúncias antigas de comunidade aparecem na fila nova.\n7. Excluir a conta de quem denunciou mantém a denúncia sem autor.\n8. 390px sem scroll.\n\nTESTES: API (401, 404, 409, 429, roteamento, permissão de resolver, migração de community_reports, LGPD) e e2e (bloquear pelo perfil e ver o 404 do outro lado)."
+    }
+   ]
+  },
+  {
+   "nome": "Onda 1: laço social mínimo (seguir, conversa no post, nível por entrega, vitrine, depoimento)",
+   "features": [
+    {
+     "slug": "seguir-pessoas",
+     "titulo": "Seguir pessoas, sem placar de seguidores",
+     "porque": "Hoje o grafo liga membro a comunidade e só. Timeline, DM e sugestões dependem de seguir pessoa. A 044 proíbe contador público de popularidade e a 045 proíbe grafo público, então seguir existe sem placar: quem visita vê \"segue você\" e o que vocês fizeram juntos.",
+     "tamanho": "M",
+     "migration": "033",
+     "dependeDe": [
+      "evidencia-e-lgpd",
+      "bloqueio-e-denuncia"
+     ],
+     "arquivos": [
+      "migrations/033_seguir_pessoas.sql",
+      "lib/memberFollows.ts (novo)",
+      "app/api/members/[username]/follow/route.ts (novo)",
+      "components/FollowButton.tsx (novo)",
+      "app/u/[username]/page.tsx",
+      "app/perfil/seguidores/page.tsx (novo)",
+      "app/perfil/seguindo/page.tsx (novo)",
+      "app/membros/page.tsx",
+      "lib/blocks.ts (só a chamada que limpa follows)",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/member-follows.test.ts",
+      "tests/e2e/seguir-pessoas.spec.ts"
+     ],
+     "spec": "OBJETIVO: um membro segue outro, vê as próprias listas e recebe aviso quando alguém começa a segui-lo. Quem visita um perfil vê \"segue você\" e \"vocês fizeram time no X\", nunca o número de seguidores.\n\nREGRAS DO REPO: leia AGENTS.md e specs/044-orkut (item de visibilidade de seguidores). SQL por lib/db.ts, schema só na 033, 401 JSON, limitOrNull com chave nova, notify() com actorId, alreadyNotified de lib/notifications.ts, isBlockedEither e hiddenIdsFor de lib/blocks.ts, testes no molde de tests/api/follows.test.ts, 390px sem scroll, PT-BR sem emoji.\n\nDADOS (033): CREATE TABLE member_follows (\"memberId\" FK members (quem segue), \"followedId\" FK members, \"createdAt\" DEFAULT sqlite_now(), PK(memberId, followedId), CHECK(memberId <> followedId)), índice (followedId, createdAt DESC). followedId já está em PEER_COLUMNS (Onda 0), então a exclusão LGPD apaga os dois lados sem mudar lib/privacy.ts.\n\nlib/memberFollows.ts:\n- followMember(meId, targetId) retorna 'ok' | 'self' | 'already' | 'blocked'.\n- unfollowMember, isFollowingMember.\n- followsMe(meId, targetId).\n- ownCounts(memberId) retorna {seguidores, seguindo}. Só é chamada na página do próprio dono.\n- listFollowers e listFollowing (memberId, before?, limit 30), com username, name, avatarUrl, headline e followedByMe. Sem contas anonimizadas nem bloqueadas.\n- followingIds(meId): number[], usada pela timeline.\n- Em lib/blocks.ts, troque a checagem to_regclass por DELETE direto em member_follows nos dois sentidos.\n\nAPI: POST e DELETE /api/members/[username]/follow.\n- 401 deslogado; 404 se o username não existe (resolva o redirect de username antigo com resolveUsernameRedirect) ou se há bloqueio em qualquer sentido (mesma resposta, pra não confirmar o bloqueio); 400 {error:'Você não pode seguir a si mesmo'}; 429 com chave 'member-follows' (60/h).\n- Resposta {following:boolean}. Idempotente.\n- Notificação type 'follow', \"@x começou a seguir você\", href /u/x, com actorId. Só sai se alreadyNotified(alvo, 'follow', ator, href, 7) for falso.\n\nUI:\n- components/FollowButton.tsx (client): otimista, aria-pressed, \"seguir\" e \"seguindo\" (hover ou foco: \"deixar de seguir\"), volta o estado e mostra a mensagem no erro, alvo de 44px.\n- /u/[username] (visão logada; não mexa no PublicCard): FollowButton (some no próprio perfil), o selo \"segue você\" quando for o caso e a linha de sameTeam (lib/evidence.ts) quando houver: \"vocês fizeram time no X\".\n- No próprio perfil, o dono vê \"N seguidores · N seguindo\" com links pra /perfil/seguidores e /perfil/seguindo. Visitante nunca vê número nem as listas.\n- /perfil/seguidores e /perfil/seguindo (logadas, só do dono): lista com Avatar, nome, @, headline e FollowButton, paginada com \"mais\" via ?antes=. Estados vazios: \"Ninguém segue você ainda.\" e \"Você ainda não segue ninguém. Comece por quem fez time com você.\" (com até 6 pessoas de sameTeam).\n- /membros: FollowButton em cada linha (escondido na própria) e quem está em hiddenIdsFor some. REMOVA o pódio e qualquer posição (#1, #2) da lista; a ordem pode continuar por xp, sem destaque de ranking (spec 043).\n\nACEITE:\n1. A segue B e B recebe 1 notificação.\n2. Deixar de seguir e seguir de novo em menos de 7 dias não notifica de novo, mesmo se A trocar de @.\n3. Seguir a si mesmo dá 400.\n4. Com bloqueio em qualquer sentido, seguir dá 404 e o follow existente some.\n5. B exclui a conta e as linhas com B dos dois lados somem.\n6. Visitante não vê número de seguidores em lugar nenhum; o dono vê.\n7. /membros sem pódio.\n8. Deslogado: 401 na API e /perfil/seguidores redireciona pro sign-up.\n9. 390px sem scroll.\n\nTESTES: API (401, 404, 400, 429, bloqueio, idempotência, notificação única com troca de @, LGPD) e e2e (seguir pelo perfil e ver em /perfil/seguindo)."
+    },
+    {
+     "slug": "conversa-no-post",
+     "titulo": "Post com endereço, reações, respostas, edição, denúncia, card de link e moderação no lugar certo",
+     "porque": "Post sem permalink, só com like, e notificação que cai em /feed matam a conversa. O like também alimenta farm de XP. Esta feature entrega o contrato que timeline, menções, perfil, projeto vivo, repost e espaços usam: hydratePosts, listPostIds, canModeratePost e PostCard. Também corrige as FKs sem cascade, que fariam qualquer apagamento em cascata de post falhar nas ondas 3 e 4.",
+     "tamanho": "G",
+     "migration": "034",
+     "dependeDe": [
+      "bloqueio-e-denuncia"
+     ],
+     "arquivos": [
+      "migrations/034_conversa_post.sql",
+      "lib/posts.ts",
+      "lib/comments.ts",
+      "lib/linkCard.ts (novo)",
+      "app/api/posts/route.ts",
+      "app/api/posts/[id]/route.ts",
+      "app/api/posts/[id]/like/route.ts",
+      "app/api/posts/[id]/comments/route.ts",
+      "app/api/posts/[id]/comments/[commentId]/route.ts",
+      "components/FeedSection.tsx",
+      "components/PostCard.tsx (novo)",
+      "components/PostComposer.tsx (novo)",
+      "components/LinkCard.tsx (novo)",
+      "app/post/[id]/page.tsx (novo)",
+      "lib/privacy.ts (remover os DELETE manuais de likes e post_comments que viram cascade)",
+      "tests/api/conversa-post.test.ts",
+      "tests/unit/link-card.test.ts",
+      "tests/e2e/conversa-post.spec.ts"
+     ],
+     "spec": "OBJETIVO: todo post tem endereço (/post/[id]), 4 reações, respostas em 1 nível, edição, denúncia pela fila única, card pra link interno e botão de apagar pra quem modera aquele espaço. A notificação leva ao post.\n\nREGRAS DO REPO: leia AGENTS.md. SQL por lib/db.ts, schema só na 034, 401 JSON, notify() com actorId e alreadyNotified, ReportDialog e hiddenIdsFor da Onda 0, testes no molde de tests/api/follows.test.ts e tests/api/comments.test.ts, 390px sem scroll, PT-BR sem emoji. A pasta de comentário se chama [commentId]: NÃO crie outro segmento dinâmico no mesmo nível (quebra o build do Next).\n\nDADOS (034):\n- Recrie com ON DELETE CASCADE as FKs likes.postId e post_comments.postId (001). Descubra o nome da constraint num bloco DO lendo pg_constraint e faça DROP CONSTRAINT/ADD CONSTRAINT. Teste de migration prova que DELETE FROM posts leva likes e comentários.\n- ALTER posts ADD \"editedAt\" TEXT.\n- ALTER likes ADD \"kind\" TEXT NOT NULL DEFAULT 'curti' CHECK (\"kind\" IN ('curti','ajudou','quero_testar','aprendi')). A PK (postId, memberId) continua: uma reação por pessoa por post.\n- ALTER post_comments ADD \"parentId\" INTEGER REFERENCES post_comments(\"id\") ON DELETE CASCADE, ADD \"editedAt\" TEXT.\n- Não crie post_reports: denúncia vai pra reports (Onda 0).\n\nlib/posts.ts (contrato pras próximas ondas, documente no topo):\n- type PostScope = {kind:'global'} | {kind:'hackathon', id} | {kind:'community', id} | {kind:'member', id}.\n- listPostIds(scope, meId, {antes?, limit}) devolve ids em ordem id DESC por cursor, já sem comunidade escondida e sem autores de hiddenIdsFor(meId).\n- hydratePosts(ids, meId) devolve Post[] na ordem dos ids, com reactions: Record<Kind, number>, myReaction, likeCount (total, pra compatibilidade), commentCount, editedAt, linkCard e canModerate. Feature nova que precisa de outro filtro (tag, time, espaço) escreve a própria query de ids e chama hydratePosts.\n- canModeratePost(member, post): autor, admin global, dono ou organizador da comunidade do post (lib/communityAuth.ts) e organizador ou staff da edição do post (hasEditionRole de lib/roles.ts). É a regra única de quem apaga.\n- listPosts mantém a assinatura e passa a usar os dois por dentro.\n- getPost(id, meId), setReaction(postId, memberId, kind|null), updatePost(postId, member, body, link) só pro autor, com as validações de createPost e editedAt. toggleLike vira wrapper de setReaction('curti').\n- deletePost vira DELETE FROM posts WHERE id = ?, porque o resto é cascade.\n\nlib/comments.ts:\n- createComment(postId, memberId, body, parentId?): parentId tem que ser comentário de topo do mesmo post, senão Error 'Resposta inválida'.\n- listComments devolve os de topo com replies[], sem autores de hiddenIdsFor.\n- updateComment só pro autor, com editedAt.\n\nlib/linkCard.ts (puro mais leitura): resolveInternalLink(url, meId). Quando o link do post for do próprio HackaHub (relativo ou mesmo host) e apontar pra /p/[teamId], /h/[id], /u/[username] ou /comunidade/[slug], devolve {kind, title, subtitle, href}. Respeita visibilidade: projeto fora do arquivo, comunidade escondida e perfil bloqueado viram null. Link externo continua link simples, sem fetch.\n\nAPI:\n- POST /api/posts/[id]/like {kind?: Kind|null}; o padrão é 'curti' e null remove. Reagir no próprio post dá 400 'Você não pode reagir ao próprio post'. Notificação type 'reaction' (\"@x reagiu ao seu post: ajudou\"), href /post/[id], só se alreadyNotified(autor, 'reaction', ator, href, null) for falso (1 por par pra sempre).\n- REMOVA as chamadas awardXp e checkBadges de app/api/posts/route.ts, da rota de comentários e da de like. Não edite lib/game.ts nem lib/xp.ts.\n- PATCH /api/posts/[id] {body, link}: 403 se não for o autor.\n- DELETE /api/posts/[id]: permitido se canModeratePost; senão 403.\n- POST /api/posts/[id]/comments aceita parentId. Notifica o autor do post (type 'comment', href /post/[id]#c-<id>) e, em resposta, o autor do comentário pai (type 'reply').\n- PATCH e DELETE /api/posts/[id]/comments/[commentId]: PATCH só autor; DELETE autor ou canModeratePost do post.\n- Comentar ou reagir em post de quem te bloqueou dá 404.\n\nCOMPONENTES:\n- components/PostCard.tsx, props {post: Post, me: {id, username, role}|null, showThreadLink?: boolean}. É o ÚNICO lugar que renderiza post. Corpo num <div data-post-body> (a Onda 2 troca por RichText). LinkCard abaixo do corpo quando post.linkCard existir. Barra de reações com os 4 tipos (\"curti\", \"ajudou\", \"quero testar\", \"aprendi\", só texto e glifo ASCII). \"N comentários\" leva a /post/[id]. Menu: editar (autor), apagar (post.canModerate), denunciar (os outros, abre ReportDialog com targetType 'post'). \"editado\" quando editedAt existir.\n- components/PostComposer.tsx (textarea e link) com o comportamento atual.\n- FeedSection passa a usar os dois sem mudar o que a pessoa vê.\n\nPÁGINA /post/[id] (logada): PostCard, thread com respostas e \"responder\", composer de comentário. 404 se o post não existe, é de comunidade escondida (exceto admin) ou o autor bloqueou quem vê. Âncoras #c-<id>. title \"Post de @x\".\n\nLGPD: em lib/privacy.ts, tire os DELETE manuais de likes e post_comments por posts da pessoa, que viram cascade.\n\nACEITE:\n1. Notificação de reação e de comentário abre /post/[id] no comentário certo.\n2. Reagir, tirar e reagir de novo gera 1 notificação e 0 XP.\n3. Reagir no próprio post dá 400. Resposta a resposta dá 400.\n4. Editar mostra \"editado\".\n5. Organizador da comunidade apaga post do mural dela (200) e não apaga de outra (403).\n6. Apagar post com reação e comentário funciona (cascade).\n7. Link pra /p/[id] de projeto visível vira card; de projeto invisível, não.\n8. Denunciar pelo menu cria linha em reports com communityId.\n9. 390px sem scroll no /post.\n\nTESTES: API cobrindo cada item, migration (cascade), unit de listComments, hydratePosts e resolveInternalLink, e2e (reagir, responder, abrir pela notificação)."
+    },
+    {
+     "slug": "nivel-por-entrega",
+     "titulo": "Nível por entrega verificada (fim do XP por like) com XP legado guardado",
+     "porque": "O lib/game.ts dá XP por post, comentário, like e inscrição, que é o farm que as specs 036, 037, 040 e 043 mandam cortar. O nível passa a vir de lib/evidence.ts, com a regra antifarm da Onda 0. Esta feature substitui a F0 de rep ledger da 043: a branch feat-rep-ledger só tem a spec e não ganha migration.",
+     "tamanho": "M",
+     "migration": "035",
+     "dependeDe": [
+      "evidencia-e-lgpd"
+     ],
+     "arquivos": [
+      "migrations/035_xp_legado.sql",
+      "lib/game.ts",
+      "lib/xp.ts",
+      "components/XpBar.tsx",
+      "components/MyTeamPanel.tsx",
+      "components/HackathonCard.tsx",
+      "app/api/cron/xp/route.ts (novo)",
+      "deploy/xp.sh (novo)",
+      "deploy/crontab.txt",
+      "tests/unit/xp-fatos.test.ts",
+      "tests/api/xp-cron.test.ts"
+     ],
+     "spec": "OBJETIVO: members.xp passa a ser derivado dos fatos de lib/evidence.ts e recalculado por cron. Post, comentário, like, inscrição e envio de time deixam de dar XP. O valor antigo fica guardado.\n\nREGRAS DO REPO: leia AGENTS.md e specs/043-gamificacao. SQL por lib/db.ts, Postgres estrito, cron com cronAuthorized() (molde app/api/cron/rsvp/route.ts e deploy/rsvp.sh), Vitest com PGlite. NÃO edite as rotas de post, comentário e like (a conversa-no-post tira o awardXp de lá) nem lib/evidence.ts.\n\nDADOS (035):\n- ALTER members ADD \"xpLegado\" INTEGER. UPDATE members SET \"xpLegado\" = \"xp\". Não aparece na UI; serve pra auditoria e rollback. Registre xpLegado em ANONYMIZE (lib/privacy.ts) com valor 0? NÃO: lib/privacy.ts é da Onda 0; adicione xpLegado em KEEP_ON_ANONYMIZE na mesma PR (é número, não dado pessoal) editando só essa constante.\n\nlib/game.ts:\n- FACT_XP com rótulo PT-BR: presenca 30, entrega 60, premio 100, voltou 20, mentoria 40, organizou 80, duvida 5.\n- As chaves antigas de XP (post, comment, likeReceived, teamBoard, identidade, register, teamSubmit) ficam com valor 0 pra não quebrar import.\n- LEVELS não muda (50/150/400/1000). Documente a conta: 1 edição com presença e entrega dá 90 (hacker); a segunda com entrega dá 200 (veterano); prêmio ou organização puxam pra elite.\n- Os badges 'criador' (5 posts) e 'influente' (10 curtidas) ganham retired: true.\n\nlib/xp.ts:\n- computeXp(memberId, opts?: {since?, until?}) chama countFacts de lib/evidence.ts e devolve {total, facts: {kind, label, count, xp}[]}. O opts é o que a liga da Onda 5 usa.\n- recomputeXp(memberId) grava members.xp. recomputeAll(batch 200) devolve {updated}.\n- checkBadges deixa de dar os badges aposentados. getMemberBadges filtra retired na exibição; as linhas antigas ficam.\n- awardXp continua existindo e o valor some no próximo recompute. Documente.\n\nUI \"+0 xp\": components/MyTeamPanel.tsx (linha ~119) e components/HackathonCard.tsx (linha ~94) mostram \"+N xp\" a partir das constantes; com 0 a string \"+0\" aparece. Remova essas exibições. Faça grep por \"xp\" em components/ e app/ e remova qualquer outra promessa de XP por ação que não seja fato.\n\nCRON:\n- POST /api/cron/xp (cronAuthorized) chama recomputeAll.\n- deploy/xp.sh no molde de deploy/rsvp.sh: exec bash cron-call.sh \"${1:-prod}\" xp 300.\n- Duas linhas em deploy/crontab.txt, uma por hora: prod no minuto 11 e stage no minuto 41. O fundador reinstala o crontab (F7); escreva isso no PR.\n\nXpBar: \"de onde vem\" expansível (details/summary) com os facts (\"2 presenças · 1 entrega travada · 1 prêmio\"). Copy: \"Seu nível sobe com o que você entrega nos hackathons.\" Sem fato: \"Seu primeiro fato conta quando você fizer check-in num hackathon.\"\n\nANÚNCIO: o nível de quem farmou like vai cair. Escreva no PR um texto curto pro changelog explicando a regra nova, pra não parecer bug.\n\nACEITE:\n1. Membro com check-in, entrega travada e prêmio em edição elegível tem xp 190 depois do recompute.\n2. 100 posts e 100 likes não mudam o xp.\n3. xpLegado guarda o valor anterior.\n4. Cron sem segredo dá 401.\n5. 'influente' some do perfil.\n6. Nenhuma tela mostra \"+0 xp\".\n7. Recompute idempotente.\n\nTESTES: unit de computeXp (cada fato, teto de dúvida, since) e API do cron."
+    },
+    {
+     "slug": "vitrine-de-projeto",
+     "titulo": "Página de projeto estilo Devpost (história, feito com, galeria, quem fez)",
+     "porque": "O projeto é o que a pessoa leva pro portfólio, e hoje /p é a página de uma edição. O Devpost prende pela página permanente com história, \"Built with\" navegável e \"Created by\". A spec 037 diz que o muro de login em projeto não se faz, mas /p deslogado hoje é só cartão.",
+     "tamanho": "G",
+     "migration": "036",
+     "arquivos": [
+      "migrations/036_vitrine_projeto.sql",
+      "lib/techTags.ts (novo)",
+      "lib/entries.ts",
+      "lib/entriesPublic.ts",
+      "app/api/hackathons/[id]/entry/route.ts",
+      "components/EntryEditor.tsx",
+      "app/p/[teamId]/page.tsx",
+      "app/p/[teamId]/opengraph-image.tsx",
+      "lib/projects.ts",
+      "app/projetos/page.tsx",
+      "components/PublicCard.tsx",
+      "tests/api/vitrine-projeto.test.ts",
+      "tests/unit/tech-tags.test.ts",
+      "tests/e2e/vitrine-projeto.spec.ts"
+     ],
+     "spec": "OBJETIVO: /p/[teamId] vira a vitrine permanente do projeto, aberta a quem não tem conta, e /projetos filtra por tecnologia.\n\nREGRAS DO REPO: leia AGENTS.md. SQL por lib/db.ts, schema só na 036, 401 JSON, testes no molde de tests/api/entries.test.ts, canNetwork de lib/network.ts, 390px sem scroll, PT-BR sem emoji.\n\nREAPROVEITAR O QUE EXISTE (migration 010 e 029):\n- team_projects.description é \"O que faz\". tagline continua como subtítulo. Não crie whatItDoes.\n- team_projects.technologies (JSON) continua sendo A FONTE da stack: o editor grava só ali e o snapshot já usa. project_tech é um índice derivado.\n- priorWork e priorExisted continuam como estão (declaração do que já existia).\n- afterNotes NÃO migra agora: vira a seção \"Depois do hackathon\" da vitrine. O projeto-vivo (Onda 3) transforma o conteúdo no primeiro post do diário.\n\nDADOS (036):\n- ALTER team_projects ADD \"inspiration\" TEXT, \"howBuilt\" TEXT, \"challenges\" TEXT, \"learned\" TEXT (até 2000 cada, validado no código) e \"coverUrl\" TEXT.\n- CREATE TABLE project_tech (\"teamId\" FK teams ON DELETE CASCADE, \"tag\" TEXT NOT NULL CHECK (\"tag\" ~ '^[a-z0-9][a-z0-9.+#-]{0,29}$'), PK(teamId, tag)), índice em tag. Backfill na própria 036 a partir de technologies (jsonb_array_elements_text, lower, trim; normalização fina fica pro código no próximo save).\n- CREATE TABLE project_media (\"id\" identity, \"teamId\" FK ON DELETE CASCADE, \"url\" TEXT NOT NULL CHECK (\"url\" ~ '^https://'), \"caption\" TEXT, \"position\" INTEGER NOT NULL DEFAULT 0). Até 6 por projeto, validado no código.\n- ALTER team_members ADD \"role\" TEXT (até 80): o que a pessoa fez.\n\nlib/techTags.ts (puro): normalizeTech(raw) com aliases (next.js e nextjs viram nextjs, js vira javascript, ts vira typescript, react.js vira react, node e node.js viram nodejs, py vira python, postgres e postgresql viram postgresql), parseTechList(input) com até 12 tags únicas, techLabel(tag) pra exibir. syncProjectTech(teamId) em lib/entries.ts reescreve project_tech a partir de technologies normalizado e roda na mesma transação do save.\n\nEDITOR (EntryEditor, rota entry, lib/entries.ts):\n- Novos campos com contador: \"Inspiração\", \"Como foi feito\", \"Desafios\", \"O que aprendemos\". \"O que faz\" é o description atual com o rótulo novo.\n- \"Feito com\" vira chips com autocompletar a partir das tags de project_tech, gravando em technologies.\n- Galeria (URL https e legenda, até 6, reordenar) e capa.\n- Cada integrante edita a própria frase de papel.\n- Os campos que o júri avalia continuam congelados pela trava. Inspiração, Como foi feito, Desafios, O que aprendemos, galeria, capa e papel podem ser editados depois da trava.\n- O snapshot de project_submissions inclui os campos novos. Se o conteúdo atual diferir do último snapshot travado, a página mostra \"atualizado depois da entrega\" e o link \"ver como foi entregue\".\n\nPÁGINA /p/[teamId]: capa, título, tagline, selos (premiado com categoria, finalista, escolha do público), botões demo/repo/vídeo (embed do YouTube só por id validado), galeria (<img loading=lazy>, 1 coluna em 390px), seções na ordem (O que faz, Inspiração, Como foi feito, Desafios, O que aprendemos, Depois do hackathon), seção vazia não aparece, \"Feito com\" com chips pra /projetos?tech=x, \"Quem fez\" com Avatar, nome e papel com link pra /u, e edição com link pra /h/[id] e data.\n\nDESLOGADO:\n- Projeto em visibleArchive (lib/entriesPublic.ts): página completa sem PublicCard e sem feedback do júri.\n- Integrante com canNetwork falso aparece como \"integrante\", sem nome, papel nem link.\n- Fora do visibleArchive continua PublicCard; ajuste o texto do kind 'projeto'.\n- OG com até 4 tags de tecnologia, OG_CACHE_HEADERS (lib/ogCache.ts), sem texto livre longo.\n\n/projetos: filtro ?tech= (join com project_tech), chips das 20 tags mais usadas, paginação real (24 por página, \"anteriores\" e \"próximos\"), card com até 3 chips.\n\nACEITE:\n1. Projeto antigo com technologies aparece em /projetos?tech=x depois da migration.\n2. O time preenche história e tags e /projetos?tech=nextjs acha o projeto.\n3. Deslogado vê a página completa sem feedback do júri.\n4. URL http na galeria dá 400. A 13ª tag é ignorada.\n5. Edição depois da trava mostra o aviso e o snapshot fica intacto.\n6. afterNotes aparece como \"Depois do hackathon\".\n7. 390px sem scroll.\n\nTESTES: unit de techTags, migration (backfill), API (validações, edição pós-trava, snapshot) e e2e (preencher, ver logado e deslogado, filtrar)."
+    },
+    {
+     "slug": "depoimento-de-time",
+     "titulo": "Depoimento de quem fez time com você (com aceite)",
+     "porque": "É a aposta da spec 044 (§1.2): prova social que só quem fez time pode escrever, com o rito de aceitar. Não vira DM nem corrente porque o autor tem que ter sido do mesmo time. É também a métrica do checkpoint entre as ondas 2 e 3 (meta: 30% dos times com pelo menos 1 depoimento).",
+     "tamanho": "M",
+     "migration": "037",
+     "dependeDe": [
+      "evidencia-e-lgpd",
+      "bloqueio-e-denuncia"
+     ],
+     "arquivos": [
+      "migrations/037_depoimentos.sql",
+      "lib/testimonials.ts (novo)",
+      "app/api/testimonials/** (novo)",
+      "app/perfil/depoimentos/page.tsx (novo)",
+      "components/TestimonialList.tsx (novo)",
+      "components/TestimonialForm.tsx (novo)",
+      "app/dashboard/page.tsx",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/depoimentos.test.ts",
+      "tests/e2e/depoimentos.spec.ts"
+     ],
+     "spec": "OBJETIVO: quem fez time com alguém escreve um depoimento sobre essa pessoa. Ela aceita ou recusa. Só os aceitos aparecem no perfil (a exibição no /u chega na Onda 2, pelo perfil-rico, que importa components/TestimonialList.tsx).\n\nREGRAS DO REPO: leia AGENTS.md e specs/044-orkut §1.2. SQL por lib/db.ts, schema só na 037, 401 JSON, notify() com actorId, sameTeam de lib/evidence.ts, isBlockedEither de lib/blocks.ts, ReportDialog, 390px sem scroll. Texto puro, sem HTML nem link clicável. Não escreva \"Orkut\" em tela nenhuma.\n\nDADOS (037): CREATE TABLE team_testimonials (id identity, \"memberId\" FK members (quem recebe), \"authorId\" FK members, \"hackathonId\" FK, \"teamId\" INTEGER REFERENCES teams(\"id\") ON DELETE SET NULL, \"body\" TEXT NOT NULL (40 a 600), \"status\" TEXT NOT NULL CHECK IN ('pendente','aceito','recusado','oculto') DEFAULT 'pendente', \"createdAt\", \"updatedAt\", \"acceptedAt\", UNIQUE(authorId, memberId, hackathonId), CHECK(authorId <> memberId)). authorId está em PEER_COLUMNS: se qualquer lado excluir a conta, o texto some.\n\nlib/testimonials.ts:\n- writeTestimonial(authorId, memberId, hackathonId, body): só se sameTeam(authorId, memberId) contém a edição e não há bloqueio; senão Error 'Depoimento aqui só vem de quem fez time com a pessoa'. Chave 'testimonials' (5/dia).\n- Editar um depoimento aceito volta pra 'pendente' (ninguém troca o texto depois de aprovado).\n- accept, decline (recusado não notifica o autor), hide (o dono esconde um aceito).\n- listAccepted(memberId), listPending(memberId), countAccepted(memberId).\n- teammatesToWrite(memberId): colegas de time em edições encerradas pra quem a pessoa ainda não escreveu.\n\nAPI: POST /api/testimonials, PATCH /api/testimonials/[id] (autor edita), POST /api/testimonials/[id]/accept, /decline, /hide. 401, 403 sem time em comum, 404 em bloqueio, 409 duplicado, 429.\n\nNotificação type 'testimonial': \"@x escreveu um depoimento sobre você. Aceita?\", href /perfil/depoimentos.\n\nUI:\n- /perfil/depoimentos: abas \"pra aceitar\", \"recebidos\" e \"escrever\". Em \"escrever\": \"Você fez time com @a e @b no X. Escreva sobre eles.\" com TestimonialForm. Vazio: \"Depoimento aqui só vem de quem fez time com você.\"\n- components/TestimonialList.tsx (server): props {memberId, me}. Mostra os aceitos com autor, edição e data, e \"denunciar\" (ReportDialog targetType 'depoimento') pra quem não é dono. Esta feature não usa o componente em página nenhuma além de /perfil/depoimentos; o perfil-rico o coloca no /u.\n- app/dashboard/page.tsx: card pequeno quando teammatesToWrite não estiver vazio: \"Você fez time com @a no X. Escreva um depoimento.\"\n\nACEITE:\n1. Quem não foi do time leva 403.\n2. Aceito, aparece em \"recebidos\". Recusado, o autor não é avisado.\n3. Editar um aceito volta pra pendente.\n4. Sexto depoimento no dia dá 429.\n5. Autor excluído leva o depoimento junto.\n6. HTML no texto aparece escapado.\n7. 390px sem scroll.\n\nTESTES: API (cada regra) e e2e (escrever, aceitar, ver em recebidos)."
+    },
+    {
+     "slug": "bicho-motor-e-criador",
+     "titulo": "Bicho do builder: motor voxel próprio, SVG isométrico, criador e grade de revisão",
+     "porque": "Toda rede social precisa de cara, e hoje é foto do Clerk ou iniciais. A ideia que vem do link do Jazz é um bicho fofo montado em 30 segundos que só cresce com coisa de verdade. O motor é nosso, sem API paga, e o SVG resolve lista, OG e celular sem WebGL. Esta feature entrega o contrato completo de montar() pra que as ondas 4 e 5 não editem o motor.",
+     "tamanho": "G",
+     "migration": "043",
+     "dependeDe": [],
+     "arquivos": [
+      "migrations/043_bicho.sql",
+      "package.json (three)",
+      "lib/mascote/tipos.ts (novo)",
+      "lib/mascote/semente.ts (novo)",
+      "lib/mascote/voxel.ts (novo)",
+      "lib/mascote/especies/*.ts (novo, dados)",
+      "lib/mascote/acessorios.ts (novo)",
+      "lib/mascote/paleta.ts (novo)",
+      "lib/mascote/isometrico.ts (novo)",
+      "lib/mascote/validar.ts (novo)",
+      "components/MascoteViewer.tsx (novo)",
+      "components/MascoteEditor.tsx (novo)",
+      "app/api/mascote/m/[id]/route.ts (novo)",
+      "app/api/members/me/mascote/route.ts (novo)",
+      "app/admin/bichos/page.tsx (novo)",
+      "app/perfil/page.tsx",
+      "components/OnboardingWizard.tsx",
+      "app/bem-vindo/page.tsx",
+      "lib/access.ts",
+      "lib/privacy.ts (só ANONYMIZE)",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/unit/mascote.test.ts",
+      "tests/api/mascote.test.ts",
+      "tests/e2e/mascote.spec.ts",
+      "tests/e2e/bichos-grade.spec.ts",
+      "app/perfil/bicho/page.tsx (novo)",
+      "app/u/[username]/page.tsx (só o hero do bicho)"
+     ],
+     "spec": "OBJETIVO: cada membro tem um bicho em voxel. Monta em /perfil ou no fim do /bem-vindo; quem não montar recebe um gerado pela semente. 3D animado onde há espaço, SVG isométrico em todo o resto. A ideia de bichinho veio de um quebra-gelo de evento que o dono viu, mas espécies, nomes, textos, regras e código são nossos.\n\nREGRAS DO REPO: leia AGENTS.md e specs/042-quebra-gelo (só a parte técnica do voxel). Sem API paga nem IA gerando imagem. three.js só por import() dinâmico em componente client. SQL por lib/db.ts, 401 JSON, 390px sem scroll.\n\nDADOS (043): ALTER members ADD \"mascote\" TEXT (JSON validado) e \"mascoteUpdatedAt\" TEXT. Registre os dois em ANONYMIZE (NULL).\n\nCONFIG (lib/mascote/tipos.ts): MascoteConfig = {v:1, especie, cor, acessorio, olhos, nome}.\n- especie: 'cracha' | 'teclado' | 'pizza' | 'servidor' | 'patinho' | 'mouse' (objetos de hackathon; o patinho é o de debug).\n- cor: um de 8 ids de lib/mascote/paleta.ts, que funcionam com papel #fefefe e tinta #0c0c0c.\n- acessorio: 'nada' | 'oculos' | 'bone' | 'fone' | 'gorro'.\n- olhos: 'ponto' | 'feliz' | 'sono'.\n- nome: até 20 caracteres, sem URL.\nlib/mascote/validar.ts valida e normaliza.\n\nSEMENTE: configFromSeed(memberId) determinística (mulberry32 sobre o id) com nome de uma lista nossa de 40 nomes PT-BR curtos. resolveMascote(member) devolve o salvo ou o da semente. Nunca quadrado cinza.\n\nMOTOR (lib/mascote/voxel.ts, TS puro, roda em server e client):\n- Grade até 16x16x16. Primitivas caixa, cilindro, esfera e elipsoide. pintarRosto(matriz ASCII, plano).\n- Modelo = {partes: {nome, pai, pivo, voxels:[x,y,z,cor][]}[], encaixes: Record<'topo'|'olhos'|'peito'|'costas'|'mao', {pos, normal}>}.\n- ESPÉCIES COMO DADOS: cada arquivo em lib/mascote/especies/ exporta um objeto declarativo (lista de primitivas por parte, cores por papel 'corpo'|'detalhe'|'olho', encaixes) e o motor interpreta. Nada de lógica especial por espécie. Assim a arte muda sem mexer no motor.\n- type Peca = {id, encaixe, primitivas, cor}. Acessórios (acessorios.ts) são Peca.\n- CONTRATO FINAL, usado pelas ondas 4 e 5 sem editar este arquivo: montar(config, opts?: {itens?: Peca[], estagio?: 'filhote'|'jovem'|'adulto', extras?: Peca[]}). Toda peça se monta relativa a pos/normal do encaixe. estagio muda escala e proporção (filhote: cabeça maior, corpo 70%; jovem 85%; adulto 100%). Sem opts, o resultado é 'adulto' sem itens. extras serve pra bandeira do time e qualquer peça avulsa.\n\nSVG (lib/mascote/isometrico.ts): toSvg(modelo, {tamanho}) com projeção isométrica, só faces visíveis (culling de vizinho), sombra por face (topo 100%, esquerda 82%, direita 66%), pintor por x+y+z, faces iguais fundidas num <path>. Menos de 40 KB, sem <script>. Cache em memória (Map, limite 500) por hash de {config, itens, estagio, extras}. Exporte hashMascote(...) e mascoteSrc(memberId, hash).\n\nROTA: GET /api/mascote/m/[id] devolve image/svg+xml do bicho do membro (salvo ou semente). Com ?v=<hash>, Cache-Control public, max-age=31536000, immutable; sem v, max-age=300. Header Content-Security-Policy: default-src 'none'. Membro inexistente ou excluído recebe o bicho da semente do id 0. /api/mascote/ entra em PUBLIC_APIS (lib/access.ts).\n\nVIEWER 3D (components/MascoteViewer.tsx, client): props {config, itens?, estagio?, extras?}. import('three') sob demanda, BufferGeometry mesclada por parte, cor por vértice, MeshLambertMaterial, luz ambiente e direcional, câmera ortográfica isométrica girável por arrasto. Canvas até 320px, devicePixelRatio até 2. Animação ociosa: seno, squash and stretch preservando volume (1/√e, e, 1/√e), piscar a cada 3 a 6s, acenar no clique. Pausa com visibilitychange e IntersectionObserver. prefers-reduced-motion deixa estático. Sem WebGL ou com erro, <img> do SVG. Libera geometria e renderer no unmount.\n\nCRIADOR (components/MascoteEditor.tsx): viewer grande, grupos de rádio (espécie com 6 miniaturas SVG, 8 cores, acessório, olhos), nome com \"sortear nome\". \"salvar\" faz PUT /api/members/me/mascote (logado, chave 'mascote' 30/h, 400 com mensagem por campo). Copy: \"Seu bicho cresce com o que você faz nos hackathons: presença, entrega, prêmio, mentoria. Like não conta.\"\n\nGRADE DE REVISÃO (porque \"ficar bonito\" não é checável por agente): /admin/bichos (admin global) mostra a grade espécie x acessório x estágio em SVG, mais uma linha com cada encaixe marcado. tests/e2e/bichos-grade.spec.ts tira screenshot dessa grade e anexa ao PR. O merge só acontece depois de revisão visual humana; escreva isso no PR.\n\nONDE ENTRA: /perfil ganha \"Seu bicho\" (âncora #bicho). /bem-vindo ganha o passo final opcional \"Monte seu bicho\" (com \"pular\" mantendo o da semente), e a tela de conclusão mostra \"Gente pra seguir\" e \"Comunidades\" de lib/suggestions.ts com FollowButton. Avatar, evolução e telão vêm na Onda 4. NÃO edite components/Avatar.tsx.\n\nACEITE:\n1. 6 espécies x 5 acessórios x 3 estágios geram SVG válido abaixo de 40 KB (unit).\n2. Os 5 encaixes existem nas 6 espécies; uma Peca de teste em cada encaixe monta sem sair da grade.\n3. montar(config) e montar(config, {}) dão o mesmo resultado.\n4. Semente estável pro mesmo id.\n5. Salvar e recarregar mostra o bicho salvo; config inválido dá 400.\n6. /api/mascote/m/1 abre deslogado com o CSP.\n7. Sem WebGL (contexto bloqueado no e2e) aparece o <img>.\n8. Screenshot da grade anexado.\n9. 390px sem scroll em /perfil e /bem-vindo.\n\nTESTES: unit (validar, semente, montar com e sem opts, toSvg, encaixes), API (PUT e GET) e e2e (montar no onboarding, ver no perfil, grade).\n\nAJUSTE DO DONO (28/10, prioridade sobre o texto acima): o criador tem que ter CARA DE JOGUINHO, um character creator de verdade, não um formulário. Tudo liberado desde o começo (personalizar é diversão, não recompensa); os itens que vêm de fato verificado são EXTRAS que a onda 4 adiciona.\n- Expanda MascoteConfig (v:1) pra: especie (8: cracha, teclado, pizza, servidor, patinho, mouse, cafe, foguete), corPrincipal e corDetalhe (12 cores cada, da paleta), olhos (6), boca (5), topo/chapéu (8, inclui 'nada'), roupa no peito (6, inclui 'nada'), item na mão (6, inclui 'nada'), acessorio de rosto (5: nada, oculos, oculos-escuros, monoculo, fone), pose/animação (3: pula, acena, dança) e cenario de fundo (4: nada, mesa-de-hackathon, palco, servidor-rack). Validar tudo em validar.ts; versão antiga continua aceita.\n- Tela do criador em /perfil/bicho (e no fim do /bem-vindo): preview 3D grande girando (arrasta pra girar), abas por categoria com miniaturas clicáveis de cada opção (miniatura renderizada pelo SVG isométrico), botão \"sortear\" (dado), botão \"desfazer\", troca instantânea sem recarregar, salvar. Funciona no celular (390px): preview em cima, abas em baixo com scroll horizontal dentro da barra.\n- Sem WebGL: preview cai pro SVG isométrico.\n- O bicho aparece já nesta onda no /u/[username] (hero) e no /perfil. O resto dos lugares é da onda 4.\n- Migration continua 043."
+    },
+    {
+     "slug": "topicos-da-comunidade",
+     "titulo": "Tópicos estilo Reddit dentro da comunidade",
+     "tamanho": "G",
+     "migration": "058",
+     "dependeDe": [
+      "bloqueio-e-denuncia"
+     ],
+     "porque": "O dono pediu explicitamente: comunidades com tópicos estilo Reddit, a brisa de fórum do Orkut. É o que faz a comunidade ter vida entre edições.",
+     "arquivos": [
+      "migrations/058_topicos.sql",
+      "lib/topics.ts (novo)",
+      "app/comunidade/[slug]/t/page.tsx (novo, lista)",
+      "app/comunidade/[slug]/t/novo/page.tsx (novo)",
+      "app/comunidade/[slug]/t/[topicId]/page.tsx (novo)",
+      "app/api/communities/[slug]/topics/** (novo)",
+      "app/api/topics/[id]/** (novo)",
+      "components/TopicList.tsx (novo)",
+      "components/TopicThread.tsx (novo)",
+      "components/VoteButtons.tsx (novo)",
+      "app/comunidade/[slug]/page.tsx (SÓ um bloco \"Tópicos em alta\" com 5 itens e link pra /t; não mexa no resto)",
+      "lib/ratelimit.ts (chaves topic-create, topic-reply, topic-vote)",
+      "lib/privacy.ts (ANONYMIZE/OWNER das tabelas novas)",
+      "tests/api/topics.test.ts",
+      "tests/unit/topics-rank.test.ts",
+      "tests/e2e/topicos.spec.ts"
+     ],
+     "spec": "OBJETIVO: cada comunidade tem um fórum de tópicos estilo Reddit: tópico com título e corpo, respostas em árvore, voto pra cima e pra baixo, ordenação, fixar e trancar. Inspirado no fórum de comunidade do Orkut e no Reddit, sem copiar nome nem visual.\n\nREGRAS DO REPO: leia AGENTS.md e specs/044-orkut (seção tópicos) e 043-gamificacao. SQL por lib/db.ts, schema só na 058 (identificadores entre aspas, datas TEXT DEFAULT sqlite_now() como as migrations recentes), guardas de lib/communityAuth.ts, denúncia pela tabela reports e ReportDialog da Onda 0 (bloqueio-e-denuncia; se ainda não existir no seu base, use o que existir e deixe TODO claro), autores bloqueados escondidos com hiddenIdsFor se existir. 401 JSON, 390px sem scroll, PT-BR sem emoji. Texto puro com markdown seguro do repo (renderUserMarkdown se for o padrão de posts), nada de HTML.\n\nDADOS (058):\n- community_topics(id, communityId FK cascade, authorId FK members SET NULL, title (5 a 140), body (até 10000), flair (até 24, opcional), kind CHECK IN ('discussao','pergunta','enquete','mostra') DEFAULT 'discussao', pinnedAt, lockedAt, removedAt, removedBy, acceptedReplyId, score INT DEFAULT 0, replyCount INT DEFAULT 0, lastActivityAt, createdAt, editedAt).\n- topic_replies(id, topicId FK cascade, parentId FK topic_replies cascade, authorId, body (até 5000), score, removedAt, createdAt, editedAt). Profundidade máxima 6 (resposta mais funda vira irmã).\n- topic_votes(targetType 'topic'|'reply', targetId, memberId, value -1|1, createdAt, PK(targetType,targetId,memberId)).\n- topic_poll_options(id, topicId, label, position) e topic_poll_votes(topicId, optionId, memberId, PK(topicId, memberId)) pro kind enquete (2 a 6 opções).\n- Índices pra listar por comunidade+lastActivityAt, comunidade+score, comunidade+createdAt.\n\nREGRAS:\n- Quem pode criar e responder: membro da comunidade (community_members). Quem só segue lê e vota? NÃO: só membro vota. Visitante logado não-membro lê se a comunidade não for privada. Deslogado vê só a lista no cartão público? Não: tópicos exigem login (fica fora da allowlist), mas o cartão público mostra \"N tópicos\" como chamariz.\n- Voto: 1 por pessoa por alvo, trocar ou desfazer; não vota no próprio; score recalculado na transação. Voto NÃO dá XP nem rep (regra do plano: nada por like).\n- Ordenação: 'em-alta' (hot = sinal(score)*log10(max(|score|,1)) + idadeEmHoras/-12, estilo Reddit adaptado; calcule em SQL ou em TS sobre as 200 mais recentes), 'novos', 'top' (semana, mês, sempre), 'sem-resposta'. Fixados sempre no topo (até 3).\n- Pergunta: o autor marca a resposta aceita (selo \"resolveu\"); some do filtro sem-resposta.\n- Moderação: dono/organizador fixa, tranca (ninguém responde mais), remove tópico ou resposta (fica \"[removido pela moderação]\" mantendo a árvore), edita flair. Autor edita (editedAt) e apaga o próprio (fica \"[apagado]\" se tiver respostas).\n- Notificações (notify): autor do tópico recebe resposta; autor da resposta recebe resposta filha; agrupar quando muitas (uma por tópico por hora).\n- Rate limit: topic-create 10/h, topic-reply 60/h, topic-vote 300/h.\n- Busca simples por título dentro da comunidade (?q=).\n\nUI:\n- /comunidade/[slug]/t: abas de ordenação, filtro por flair, botão \"novo tópico\", cada linha com votos à esquerda (setas), título, flair, autor com avatar/bicho se existir, número de respostas, tempo da última atividade, selos fixado/trancado/resolvido.\n- /comunidade/[slug]/t/novo: tipo (discussão, pergunta, enquete, mostra o que fez), título, corpo, flair, opções de enquete.\n- /comunidade/[slug]/t/[topicId]: tópico, votos, enquete com barras, árvore de respostas com recuo (no celular recuo pequeno e linha vertical), \"responder\" inline, colapsar galho, ordenar respostas por melhores/novas, aceitar resposta (autor), menu de moderação.\n- Bloco \"Tópicos em alta\" (5) na página da comunidade, com link \"ver todos\".\n- Estados vazios: \"Nenhum tópico ainda. Abra o primeiro: dúvida, ideia ou o que você está construindo.\"\n\nACEITE: criar, responder em 3 níveis, votar/trocar/desfazer, ordenar hot/novos/top, fixar e trancar por organizador (403 pra membro), aceitar resposta, enquete com voto único, remoção mantém árvore, não-membro não posta (403), 390px sem scroll.\nTESTES: API (guardas, votos, ordenação, enquete, moderação), unit do ranking, e2e do fluxo completo no celular."
+    }
+   ]
+  },
+  {
+   "nome": "Onda 2: vida diária (timeline, menções e tags, notificações, perfil rico, busca, métricas)",
+   "features": [
+    {
+     "slug": "timeline",
+     "titulo": "Timeline cronológica com abas (seguindo, comunidades, ao vivo, tudo)",
+     "porque": "Hoje o /feed nem aparece no menu e o post 51 em diante some. Uma rede social precisa de um lugar pra abrir todo dia: cronológico, sem algoritmo, com quem você segue. Nesta onda a timeline também é dona do menu e recebe o link da busca.",
+     "tamanho": "M",
+     "migration": "038",
+     "dependeDe": [
+      "seguir-pessoas",
+      "conversa-no-post"
+     ],
+     "arquivos": [
+      "migrations/038_indices_timeline.sql",
+      "lib/timeline.ts (novo)",
+      "lib/suggestions.ts (novo)",
+      "app/api/feed/route.ts (novo)",
+      "components/TimelineList.tsx (novo)",
+      "app/feed/page.tsx",
+      "components/HeaderNav.tsx",
+      "app/dashboard/page.tsx",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/timeline.test.ts",
+      "tests/e2e/timeline.spec.ts"
+     ],
+     "spec": "OBJETIVO: /feed vira a página social, com abas cronológicas e cursor, e entra no menu.\n\nREGRAS DO REPO: leia AGENTS.md. Use PostCard, PostComposer, listPostIds e hydratePosts (Onda 1) SEM editar: PostCard, PostComposer e lib/posts.ts são da feature mencoes-e-tags nesta onda. Use followingIds (lib/memberFollows.ts), hiddenIdsFor (lib/blocks.ts) e communityUpdatesPage/communityAudience (lib/follows.ts) sem editar. SQL por lib/db.ts, 401 JSON, 390px sem scroll.\n\nDADOS (038): só índices. posts(\"memberId\",\"id\" DESC), posts(\"hackathonId\",\"id\" DESC) e posts(\"communityId\",\"id\" DESC). Depois de criar o composto, DROP INDEX idx_posts_community (027), que fica redundante.\n\nlib/timeline.ts: timelinePage(meId, aba, antes?, limit=20) devolve {posts, next}. Escreve a query de ids e chama hydratePosts. Sempre exclui hiddenIdsFor(meId) e comunidade escondida.\n- 'seguindo': posts de quem eu sigo, das comunidades em que sou membro ou que sigo, das edições com inscrição aprovada minha e os meus.\n- 'comunidades': reaproveite communityUpdatesPage.\n- 'ao-vivo': mural de edições hosted acontecendo agora (parseEventTime/eventTime de lib/eventTime.ts).\n- 'tudo': todos.\n- Cursor p.id < antes, ORDER BY p.id DESC, nunca OFFSET.\n\nlib/suggestions.ts:\n- suggestPeople(meId, 6): quem eu não sigo, primeiro quem fez time comigo (sameTeam de lib/evidence.ts), depois mesma comunidade, depois skill ou persona em comum. Exclui excluídos, bloqueados e silenciados. Não ordena por popularidade.\n- suggestCommunities(meId, 4): reaproveite a lógica de CommunitySuggestions.\n\nAPI: GET /api/feed?aba=&antes= devolve {posts, next}, 401, chave 'feed' (600/h).\n\nUI /feed:\n- Abas como links (?aba=) com aria-current. Padrão 'seguindo' se a pessoa segue alguém ou alguma comunidade; senão 'tudo'.\n- Primeira página no servidor; TimelineList (client) com botão \"carregar mais\".\n- A cada 60s, só com a aba visível, checa post novo e mostra \"N posts novos\".\n- PostComposer no topo de seguindo e tudo.\n- Vazio de seguindo: \"Sua timeline aparece quando você segue alguém.\" com 6 pessoas (FollowButton) e 4 comunidades. Vazio de ao-vivo: \"Nenhum hackathon rolando agora.\" com link pro /radar.\n\nMENU (você é o dono de components/HeaderNav.tsx nesta onda): em NAV_IN, { href:'/feed', label:'feed', match:['/feed','/post/'] } como primeiro item; tire '/feed' do match de \"pessoas\"; adicione { href:'/busca', label:'buscar', match:['/busca'] } por último. No mobile, os dois entram no menu atual. A página /busca chega pela feature busca-global; se ela ainda não estiver na main, o link aponta pra uma rota que ainda não existe, então mergeie a timeline depois dela ou junto, no fim da onda.\n\nDASHBOARD: o \"mural global\" de 50 posts vira os 5 primeiros da aba seguindo com \"ver timeline\". Mantenha o card de depoimento da Onda 1.\n\nACEITE:\n1. A segue B, B posta, aparece na aba seguindo de A. C, que A não segue, não aparece.\n2. Com 75 posts, tudo chega via \"carregar mais\".\n3. Post de comunidade escondida e de pessoa bloqueada ou silenciada não aparece em nenhuma aba.\n4. \"feed\" e \"buscar\" no menu desktop e mobile.\n5. 390px sem scroll.\n\nTESTES: API de cada aba e do cursor, unit das sugestões e e2e (seguir, ver o post, carregar mais)."
+    },
+    {
+     "slug": "mencoes-e-tags",
+     "titulo": "Menções @ e tags # com página por tag",
+     "porque": "Sem algoritmo, a descoberta acontece por menção e por hashtag (modelo do Mastodon). A tag de stack junta post, projeto, gente e hackathon numa página só, que também ajuda o SEO e o patrocinador.",
+     "tamanho": "M",
+     "migration": "039",
+     "dependeDe": [
+      "conversa-no-post",
+      "vitrine-de-projeto"
+     ],
+     "arquivos": [
+      "migrations/039_mencoes_tags.sql",
+      "lib/richText.ts (novo)",
+      "components/RichText.tsx (novo)",
+      "lib/tags.ts (novo)",
+      "lib/posts.ts",
+      "lib/comments.ts",
+      "components/PostCard.tsx",
+      "components/PostComposer.tsx",
+      "app/api/members/suggest/route.ts (novo)",
+      "app/tag/[tag]/page.tsx (novo)",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/unit/rich-text.test.ts",
+      "tests/api/mencoes-tags.test.ts",
+      "tests/e2e/mencoes-tags.spec.ts"
+     ],
+     "spec": "OBJETIVO: @usuario vira link e notificação. #tag vira link pra /tag/[tag], que junta posts, projetos, pessoas e hackathons.\n\nREGRAS DO REPO: leia AGENTS.md. Nesta onda você é dono de lib/posts.ts, PostCard.tsx e PostComposer.tsx (a timeline só importa). Não edite lib/notifications.ts; use notify() com actorId. Respeite isBlockedEither e hiddenIdsFor de lib/blocks.ts. SQL por lib/db.ts, 401 JSON, 390px sem scroll.\n\nDADOS (039):\n- CREATE TABLE post_mentions (\"postId\" FK posts ON DELETE CASCADE, \"commentId\" INTEGER REFERENCES post_comments(\"id\") ON DELETE CASCADE, \"memberId\" FK members (mencionado), \"createdAt\"). Índice único parcial (postId, memberId) WHERE commentId IS NULL e (commentId, memberId) WHERE commentId IS NOT NULL.\n- CREATE TABLE post_tags (\"postId\" FK posts ON DELETE CASCADE, \"tag\" TEXT NOT NULL, PK(postId, tag)), índice (tag, postId DESC).\n\nlib/richText.ts (puro): parseRich(body) devolve segmentos {t:'text'|'mention'|'tag'|'url', v}. Menção @([a-z0-9_]{3,20}) (USERNAME_RE de lib/members.ts) sem letra colada antes (e-mail não vira menção). Tag #([\\p{L}0-9_]{2,30}) com flag u, minúscula e sem acento (saúde vira saude), passando por normalizeTech de lib/techTags.ts quando bater com alias de stack. URL http(s). extractMentions e extractTags devolvem únicos, até 5 cada.\n\ncomponents/RichText.tsx: body mais Set de usernames mencionados. Menção existente vira <Link href=/u/x>; inexistente fica texto. Tag vira <Link href=/tag/x>. URL vira <a rel=\"nofollow ugc noopener\" target=_blank>. Quebras preservadas, sem HTML cru.\n\nGANCHO: createPost, updatePost (lib/posts.ts), createComment e updateComment (lib/comments.ts) chamam syncMentionsAndTags(postId, commentId|null, body, actor) de lib/tags.ts. Grava menções só de membros existentes, não excluídos e sem bloqueio com o autor; grava post_tags só no post. Notifica cada mencionado NOVO (type 'mention', \"@x mencionou você\", href /post/id ou /post/id#c-cid). Editar não notifica de novo.\n- hydratePosts passa a devolver mentionedUsernames: string[] via subquery agregada.\n- PostCard troca <div data-post-body> por <RichText>, também no comentário.\n- Exporte postIdsByTag(tag, meId, antes?, limit) em lib/tags.ts (query de ids mais hydratePosts).\n\nAUTOCOMPLETE: no PostComposer e no campo de comentário, @ab (2+ caracteres) consulta GET /api/members/suggest?q= (logada, chave 'suggest' 120/h, 8 resultados, prioridade pra quem eu sigo, sem bloqueados nem silenciados, com username, name e avatarUrl). Combobox ARIA com setas, Enter e Esc, debounce de 200ms.\n\nPÁGINA /tag/[tag] (logada; slug normalizado com 308 se vier fora da forma):\n- \"Posts\": postIdsByTag com cursor e PostCard.\n- \"Projetos\": project_tech com a tag, card igual ao de /projetos, \"ver todos\" pra /projetos?tech=.\n- \"Pessoas\": members.skills (JSON) com a tag (lower no SQL), até 12, com FollowButton. Sem contagem de seguidores.\n- \"Hackathons abertos\": hackathons.tags com a tag e prazo aberto.\n- Seção vazia some. Tudo vazio: \"Ninguém usou #x ainda. Escreva o primeiro post.\" com o composer preenchido com #x.\n- title \"#x no HackaHub\".\n\nACEITE:\n1. Post com @b notifica B uma vez; editar não notifica de novo; @inexistente não vira link.\n2. Menção a quem te bloqueou não vira link nem notifica.\n3. #NextJS e #next.js viram 1 tag nextjs, e /tag/nextjs mostra o post e os projetos com nextjs.\n4. O sexto @ do mesmo post não notifica.\n5. Autocomplete funciona só no teclado.\n6. 390px sem scroll.\n\nTESTES: unit do parser (e-mail, acento, limite), API (sugestão 401/429, bloqueio, notificação, edição) e e2e (mencionar e clicar na tag)."
+    },
+    {
+     "slug": "notificacoes-boas",
+     "titulo": "Notificações agrupadas, preferências e resumo semanal",
+     "porque": "São 27 tipos, quase todos de operação, sem agrupamento, sem preferência e sem paginação. O digest semanal é o maior canal de retorno de comunidade (Circle, DoraHacks). Seguidor, reação, menção e depoimento chegam agora e precisam de lugar bom.",
+     "tamanho": "M",
+     "migration": "040",
+     "arquivos": [
+      "migrations/040_notificacoes.sql",
+      "lib/notifications.ts",
+      "lib/digest.ts (novo)",
+      "app/notificacoes/page.tsx",
+      "app/notificacoes/preferencias/page.tsx (novo)",
+      "components/NotificationBell.tsx",
+      "components/MarkAllReadButton.tsx",
+      "app/api/notifications/**",
+      "app/api/cron/digest/route.ts (novo)",
+      "app/api/notifications/digest/sair/[token]/route.ts (novo)",
+      "lib/access.ts",
+      "deploy/digest.sh (novo)",
+      "deploy/crontab.txt",
+      "tests/api/notificacoes-boas.test.ts",
+      "tests/unit/digest.test.ts",
+      "tests/e2e/notificacoes.spec.ts"
+     ],
+     "spec": "OBJETIVO: avisos parecidos agrupados, preferências por grupo, lista paginada e um resumo semanal por e-mail montado com dados reais.\n\nREGRAS DO REPO: leia AGENTS.md. A assinatura de notify() não muda. E-mail só por lib/notify (emailDriver de lib/notify/email.ts); sem RESEND_API_KEY o digest grava 'pulado' e não falha. Cron com cronAuthorized(). 390px sem scroll.\n\nDADOS (040):\n- CREATE TABLE notification_prefs (\"memberId\" FK, \"group\" TEXT CHECK IN ('social','comunidade','digest'), \"inApp\" INTEGER NOT NULL DEFAULT 1, \"email\" INTEGER NOT NULL DEFAULT 0, PK(memberId, group)). Sem linha vale o padrão: social e comunidade inApp=1, digest email=1.\n- CREATE TABLE digest_sends (\"memberId\" FK, \"week\" TEXT (YYYY-Www em BRT), \"status\" TEXT, \"createdAt\", PK(memberId, week)).\n- Índice notifications(\"memberId\",\"id\" DESC) se não existir.\n\nGRUPOS (mapa TYPE_GROUP em lib/notifications.ts):\n- social: like, reaction, comment, reply, mention, follow, testimonial e os que chegam depois (repost, quote, project_update, encontro, dm). Escreva no comentário que tipo novo entra no mapa na mesma PR, senão cai em essencial.\n- comunidade: community_join, aviso de comunidade, hackathon publicado de comunidade seguida, agenda.\n- Todo o resto é 'essencial' (inscrição, ingresso, RSVP, júri, certificado) e não desliga.\n- notify() não insere se o inApp do grupo estiver desligado.\n- Silenciado (hiddenIdsFor de lib/blocks.ts) não gera notificação social pra quem silenciou.\n\nAGRUPAMENTO: listNotificationsGrouped(memberId, antes?, 30) junta não lidas de mesmo type e href nas últimas 24h, com actors[] (até 3, por actorId) e total. Frases por type num mapa: \"@a, @b e mais 3 reagiram ao seu post\".\n\nPÁGINAS:\n- /notificacoes: abas \"tudo\" e \"menções\", \"mais\" por cursor, marcar como lida ao clicar.\n- /notificacoes/preferencias: toggles por grupo; essencial aparece desligado com \"avisos da sua inscrição sempre chegam\".\n- NotificationBell: mesmo polling, texto agrupado no dropdown (até 8).\n\nDIGEST (lib/digest.ts): buildDigest(memberId, now) devolve {sections, empty}, com dados dos 7 dias anteriores:\n1. \"Fecha nesta semana\": hackathons do radar com registrationDeadline nos próximos 7 dias (até 5).\n2. \"Quem você segue entregou\": times com project_submissions na semana com alguém que você segue.\n3. \"Novos projetos das suas comunidades\": os 3 mais recentes.\n4. \"Você tem N notificações não lidas\".\nSeção vazia some; tudo vazio não envia.\n- Público: quem tem members.lastSeenAt (Onda 0) nos últimos 180 dias.\n- Cron POST /api/cron/digest, segunda 12:00 UTC, idempotente por digest_sends, lotes de 100.\n- deploy/digest.sh no molde de deploy/rsvp.sh, e duas linhas no crontab: prod às 12:00 e stage às 12:30 de segunda. O fundador reinstala o crontab (F7).\n- Texto simples mais HTML mínimo no tom do site.\n- Link \"parar de receber\" com token HMAC (memberId + 'digest') no padrão de ticketToken (lib/checkins.ts), apontando pra GET /api/notifications/digest/sair/[token], que desliga o e-mail do grupo digest e mostra uma confirmação curta. Rota em PUBLIC_APIS de lib/access.ts.\n\nACEITE:\n1. 5 reações num post viram 1 linha agrupada.\n2. Social desligado: reação não notifica, inscrição aprovada notifica.\n3. Digest vazio não envia; duas execuções na semana enviam uma vez; token inválido dá 404; quem não aparece há 181 dias não recebe.\n4. Sem Resend, grava 'pulado'.\n5. 390px sem scroll.\n\nTESTES: unit do buildDigest e do agrupamento, API das preferências e do cron (401, idempotência, driver desligado) e e2e das preferências."
+    },
+    {
+     "slug": "perfil-rico",
+     "titulo": "Perfil de builder: números de fato, depoimentos, comunidades como crachá, fixados, ajuda, atividade, OG e perfil aberto opt-in",
+     "porque": "Hoje o perfil é beco sem saída, sem posts, sem OG e quase vazio pra quem não tem conta. O perfil é o portfólio que o universitário manda pro recrutador. A 044 pede comunidade como crachá e depoimento visível; a 045 pede reaproveitar personas, cidade e instituição em vez de inventar campo novo.",
+     "tamanho": "G",
+     "migration": "041",
+     "dependeDe": [
+      "seguir-pessoas",
+      "nivel-por-entrega",
+      "depoimento-de-time"
+     ],
+     "arquivos": [
+      "migrations/041_perfil_rico.sql",
+      "lib/areas.ts (novo)",
+      "lib/profileFacts.ts (novo)",
+      "lib/members.ts",
+      "lib/privacy.ts (só ANONYMIZE)",
+      "app/api/members/me/route.ts",
+      "components/ProfileForm.tsx",
+      "app/perfil/page.tsx",
+      "app/u/[username]/page.tsx",
+      "app/u/[username]/opengraph-image.tsx (novo)",
+      "components/PublicCard.tsx",
+      "components/CommunityBadges.tsx (novo)",
+      "app/membros/page.tsx",
+      "lib/talent.ts",
+      "app/talento/page.tsx",
+      "tests/api/perfil-rico.test.ts",
+      "tests/e2e/perfil-rico.spec.ts"
+     ],
+     "spec": "OBJETIVO: /u/[username] mostra a trajetória de quem constrói: números derivados, depoimentos aceitos, comunidades como crachá, projetos fixados, \"posso ajudar com\" e \"quero ajuda com\", posts em abas, OG próprio e versão aberta pra quem não tem conta, só se a pessoa escolher.\n\nREGRAS DO REPO: leia AGENTS.md e specs/044-orkut §1.1. Use countFacts (lib/evidence.ts), computeXp (lib/xp.ts), lib/memberFollows.ts, getMemberProjects e getMemberArc (lib/archive.ts), listPostIds({kind:'member'}) e hydratePosts (lib/posts.ts), PostCard, TestimonialList e canNetwork, tudo sem editar. SQL por lib/db.ts, 401 JSON, 390px sem scroll, PT-BR sem emoji.\n\nREAPROVEITAR: members.city, members.institution e members.course já existem (migration 018). NÃO crie city nem college. A UI chama institution de \"faculdade\".\n\nDADOS (041):\n- ALTER members ADD \"helpOffer\" TEXT NOT NULL DEFAULT '[]' e \"helpWant\" TEXT NOT NULL DEFAULT '[]' (JSON de chaves de área).\n- ALTER members ADD \"publicProfile\" INTEGER NOT NULL DEFAULT 0 CHECK IN (0,1).\n- CREATE TABLE member_pins (\"memberId\" FK, \"teamId\" FK teams ON DELETE CASCADE, \"position\" INTEGER, PK(memberId, teamId)), até 3, só time da pessoa, validado no código.\n- Em lib/privacy.ts, registre em ANONYMIZE: helpOffer '[]', helpWant '[]', publicProfile 0.\n\nlib/areas.ts: as áreas de ajuda são um subconjunto das chaves de PERSONAS (lib/personas.ts): dev, design, produto, dados e empreendedor (rótulo de ajuda \"negócio e pitch\"). Exporta AREA_KEYS, areaLabel e parseAreas (até 4). Não crie vocabulário paralelo. Confira looking_for_team.need: se for texto livre, deixe como está e documente que a área de vaga (Onda 3) usa AREA_KEYS.\n\nlib/profileFacts.ts: profileNumbers(memberId) devolve 4 números a partir de countFacts: edições com presença, entregas travadas, prêmios, e \"organizou, mentorou ou julgou\". Sem query duplicada.\n\nFORM (/perfil, ProfileForm, PATCH /api/members/me via updateMemberProfile): cidade e faculdade (os campos existentes, se ainda não estiverem no form), \"posso ajudar com\" e \"quero ajuda com\" (chips de AREA_KEYS, até 4 cada), fixados (até 3 dos meus projetos) e o toggle \"Perfil aberto: quem não tem conta vê sua trajetória, seus projetos e seus números.\" Validação no servidor.\n\n/u/[username] LOGADO (você é dono do arquivo nesta onda):\n- Cabeçalho: Avatar lg, nome, @, headline, cidade e faculdade, links, FollowButton, \"segue você\" e \"vocês fizeram time no X\" (o que a Onda 1 já pôs, mantido). Sem contagem de seguidores pra visitante.\n- Faixa dos 4 números; zero aparece como \"—\" e cada número leva à aba certa.\n- Crachás de comunidade (components/CommunityBadges.tsx): comunidades em que a pessoa é membro, dono primeiro, com link. Comunidade escondida não aparece.\n- Chips \"posso ajudar com\" e \"quero ajuda com\" que levam a /membros?oferece=x.\n- Fixados: até 3 cards; sem pin, premiados e depois os mais recentes.\n- Depoimentos: <TestimonialList memberId me> com os aceitos.\n- Abas via ?aba=: atividade (posts da pessoa com cursor e PostCard; padrão), projetos, trajetória (getMemberArc) e coleção (badges e cartinhas, o que já existe).\n\n/u/[username] DESLOGADO: se publicProfile=1 e canNetwork(memberId) for true, mostra cabeçalho sem e-mail, 4 números, crachás, fixados, projetos, trajetória e a contagem \"N depoimentos de time\" (sem o texto). Atividade não aparece. Senão segue o PublicCard, com o texto do kind 'perfil' trocado por \"Esta pessoa ainda não abriu o perfil.\"\n\nOG: app/u/[username]/opengraph-image.tsx com nome, headline cortada em 80, os 4 números e a marca, OG_CACHE_HEADERS. Só gera conteúdo com publicProfile=1 e canNetwork; senão, card genérico sem nome.\n\n/membros e /talento: filtros ?oferece=, ?quer=, ?cidade= e ?faculdade= (institution), combináveis com q. /talento mostra a contagem de depoimentos e o primeiro trecho.\n\nACEITE:\n1. Os 4 números batem com countFacts.\n2. Quarto pin dá 400; pin de projeto alheio dá 400.\n3. Deslogado não vê perfil com publicProfile=0 e vê com 1.\n4. OG de perfil fechado não traz nome.\n5. /membros?oferece=design filtra; /membros?faculdade=USP usa institution.\n6. Excluir a conta zera helpOffer, helpWant e publicProfile.\n7. Depoimento aceito aparece no /u.\n8. A migration sobe sem erro num banco que já tem members.city.\n9. 390px sem scroll nas 4 abas.\n\nTESTES: API (validação, pins, opt-in, canNetwork, LGPD), unit de profileNumbers e e2e (preencher, abrir aba, ver deslogado).\n\nAJUSTE DO DONO (28/10): inclua RECADO NO PERFIL (brisa Orkut, sem escrever \"Orkut\" em tela): posts com scope {kind:'member', id} (contrato de lib/posts.ts da onda 1). Quem pode deixar recado é configurável em members.recadosFrom ('conexoes' padrão: mesmo time, mesma edição com check-in, mesma comunidade ou seguir mútuo; 'todos'; 'ninguem'). Texto puro até 280, sem contador público de recados, mostra os últimos 10 e \"ver mais\", dono apaga qualquer um, autor apaga o seu, denúncia e bloqueio valem, anti-corrente: mesmo texto pra mais de 5 perfis em 1h é barrado; 10/h por pessoa. Notificação agrupada. Vazio pro dono: \"Quem fez time com você pode deixar recado aqui.\""
+    },
+    {
+     "slug": "busca-global",
+     "titulo": "Busca global (pessoas, projetos, posts, comunidades, hackathons)",
+     "porque": "A busca de hoje é um LIKE de 8 linhas e só existe em /membros e /projetos. Rede social sem busca não deixa ninguém se achar. O copilot da Onda 6 usa este índice.",
+     "tamanho": "M",
+     "migration": "042",
+     "arquivos": [
+      "migrations/042_busca_fts.sql",
+      "lib/search.ts",
+      "app/busca/page.tsx (novo)",
+      "app/api/search/route.ts (novo)",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/busca.test.ts",
+      "tests/e2e/busca.spec.ts"
+     ],
+     "spec": "OBJETIVO: /busca?q= procura em tudo, com resultados por tipo, usando full-text do Postgres.\n\nREGRAS DO REPO: leia AGENTS.md. Testes rodam em PGlite. ANTES da migration, escreva um teste que rode SELECT to_tsvector('portuguese','projetos') no PGlite. Se 'portuguese' não existir, use 'simple' com lower, e a expressão do índice e da consulta têm que ser idênticas. Sem extensão (pg_trgm, unaccent). Não edite lib/posts.ts, lib/members.ts nem components/Header.tsx ou HeaderNav.tsx: o link \"buscar\" do menu é da timeline nesta onda.\n\nDADOS (042): índices GIN de expressão em posts (body), team_projects (title, tagline, description, howBuilt), members (name, username, headline, bio), communities (name, description) e hackathons (name, organizer, description). Confira os nomes reais das colunas.\n\nlib/search.ts: mantenha toLikePattern e adicione searchAll(q, meId, {tipo?, limit=5|20, antes?}). websearch_to_tsquery ordenado por ts_rank. Pessoas também por prefixo do username (ILIKE 'q%' com toLikePattern). Filtros: comunidade escondida, post de comunidade escondida, membro excluído, pessoas em hiddenIdsFor(meId) (lib/blocks.ts) e hackathon com active=0 não aparecem. Projetos só os visíveis pela regra que /projetos usa em lib/projects.ts (importe, não duplique).\n\nAPI: GET /api/search?q=&tipo= logada, chave 'search' (120/h), q de 2 a 80 caracteres; fora disso 400.\n\nPÁGINA /busca (logada): campo com o valor atual; sem tipo, 5 por seção (Pessoas, Projetos, Posts, Comunidades, Hackathons) com \"ver todos\" (?tipo=); com tipo, 20 e \"mais\". Vazio: \"Nada com 'x'. Tente outra palavra ou veja o /radar.\" Post aparece como trecho de 160 caracteres com link pro /post, sem PostCard.\n\nACEITE:\n1. \"projeto de saúde\" acha projeto com \"saúde\" na descrição.\n2. Pessoa achada por prefixo do @.\n3. Comunidade escondida e pessoa bloqueada não aparecem.\n4. q com 1 caractere dá 400.\n5. 390px sem scroll.\n\nTESTES: API (cada tipo, visibilidade, limites) e e2e (abrir /busca e buscar)."
+    },
+    {
+     "slug": "metricas-e-checkpoint",
+     "titulo": "Painel de métricas da rede (sem pausa de checkpoint)",
+     "porque": "Nada no plano mede se a rede pegou. A 044 pede um teste barato antes da onda grande (meta de 30% dos times com depoimento). Sem número, as ondas 3 a 6 são aposta cega.",
+     "tamanho": "P",
+     "migration": "",
+     "arquivos": [
+      "lib/metrics.ts (novo)",
+      "app/admin/metricas/page.tsx (novo)",
+      "app/admin/page.tsx (só o link)",
+      "tests/api/metricas.test.ts"
+     ],
+     "spec": "OBJETIVO: uma página /admin/metricas, só pra admin global, com os números que decidem se a Onda 3 começa.\n\nREGRAS DO REPO: leia AGENTS.md. Só leitura, sem tabela nova, sem rastreio de clique e sem script de terceiros. Tudo sai de query em tabelas que já existem. SQL por lib/db.ts. 390px sem scroll.\n\nlib/metrics.ts, cada função com janela (padrão: últimas 4 semanas, semana a semana em BRT):\n- ativos por semana: members com lastSeenAt na semana (WAU).\n- % de ativos que seguem pelo menos 1 pessoa.\n- posts por semana e % de posts com pelo menos 1 comentário.\n- reações por post (média) e % de reações de tipo diferente de 'curti'.\n- % dos times de edições encerradas nos últimos 60 dias com pelo menos 1 depoimento escrito, e com pelo menos 1 aceito. Meta 30%.\n- % de membros com publicProfile=1.\n- denúncias abertas por fila (global, comunidade, edição) e tempo mediano até resolver.\n- Retenção simples: dos que tiveram check-in em edição encerrada, % que voltaram (lastSeenAt) 14 dias depois do fim.\n\nPÁGINA: tabela por métrica com as 4 semanas e a meta quando houver. No topo, o bloco \"Checkpoint da Onda 3\" com os 3 números que importam (WAU, % com follow, % de times com depoimento) e a frase \"A Onda 3 começa quando o fundador olhar estes números depois da próxima edição.\" Link na página /admin.\n\nPRÉ-REQUISITO: admin definido em prod (F1).\n\nACEITE:\n1. Membro comum leva 404 em /admin/metricas.\n2. Com fixtures, cada número bate com a contagem manual.\n3. 390px sem scroll.\n\nTESTES: unit de cada métrica com fixtures e API de acesso.\n\nAJUSTE: não há pausa entre ondas; entregue só o painel de métricas pro admin."
+    }
+   ]
+  },
+  {
+   "nome": "Onda 3: bicho do builder, projeto vivo, vagas de time e comunidade dona do espaço (começa depois do checkpoint)",
+   "features": [
+    {
+     "slug": "projeto-vivo",
+     "titulo": "Projeto vivo: diário, seguir projeto, semanas construindo, selo \"continuou\" e continuação entre edições",
+     "porque": "Hoje o projeto morre com o evento e o \"depois do hackathon\" é um campo só. Scrapbook do Hack Club, updates do Devpost, BUIDL e Arena mostram que retenção vem do projeto que continua. Reaproveita o dossiê de commits (029) em vez de criar outro coletor.",
+     "tamanho": "G",
+     "migration": "044",
+     "dependeDe": [
+      "vitrine-de-projeto",
+      "timeline"
+     ],
+     "arquivos": [
+      "migrations/044_projeto_vivo.sql",
+      "lib/projectUpdates.ts (novo)",
+      "lib/buildWeeks.ts (novo)",
+      "lib/continuity.ts (novo)",
+      "lib/posts.ts",
+      "lib/timeline.ts",
+      "lib/projects.ts",
+      "app/projetos/page.tsx",
+      "app/p/[teamId]/page.tsx",
+      "app/api/projects/[teamId]/updates/route.ts (novo)",
+      "app/api/projects/[teamId]/follow/route.ts (novo)",
+      "app/api/cron/continuidade/route.ts (novo)",
+      "lib/entries.ts",
+      "components/EntryEditor.tsx",
+      "deploy/continuidade.sh (novo)",
+      "deploy/crontab.txt",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/projeto-vivo.test.ts",
+      "tests/unit/build-weeks.test.ts",
+      "tests/e2e/projeto-vivo.spec.ts"
+     ],
+     "spec": "OBJETIVO: o time posta atualizações no próprio projeto, quem quiser segue o projeto, a página conta quantas semanas o time construiu (contador que nunca zera) e o projeto com commit depois do evento ganha o selo \"continuou\".\n\nREGRAS DO REPO: leia AGENTS.md e specs/043-gamificacao (contador cumulativo com folgas). Você é dono de lib/posts.ts e lib/timeline.ts nesta onda. PostCard e PostComposer só importados. Use collectDossierQuietly e o formato de project_dossiers (lib/dossier.ts, migration 029) sem editar. Cron com cronAuthorized(). 390px sem scroll.\n\nREAPROVEITAR: a declaração do que já existia é team_projects.priorWork com priorExisted (010 e 029). Os commits vêm de project_dossiers.commits e repoPushedAt. Não crie continuesNote nem project_continuity.\n\nDADOS (044):\n- ALTER posts ADD \"teamId\" INTEGER REFERENCES teams(\"id\") ON DELETE CASCADE, índice (teamId, id DESC). Funciona porque a Onda 1 deixou likes e comentários em cascade.\n- CREATE TABLE project_follows (\"memberId\" FK, \"teamId\" FK teams ON DELETE CASCADE, \"createdAt\", PK(memberId, teamId)).\n- ALTER team_projects ADD \"continuesTeamId\" INTEGER REFERENCES teams(\"id\") ON DELETE SET NULL e \"continuedAt\" TEXT (data do primeiro commit depois de endsAt+30d, derivada pelo cron).\n- Migração de afterNotes: pra cada team_project com afterNotes não vazio, INSERT em posts (teamId, memberId do primeiro integrante resolvido por username, body = afterNotes cortado em 1000, createdAt = updatedAt do projeto). afterNotes fica no banco e sai do editor.\n\nATUALIZAÇÃO:\n- lib/posts.ts: createPost aceita teamId. postIdsByTeam(teamId, meId, antes?) em lib/projectUpdates.ts usa hydratePosts.\n- POST /api/projects/[teamId]/updates: só integrante (team_members.username). Body até 1000 e link opcional. Chave 'project-updates' (10/dia).\n- Notifica quem segue o projeto: type 'project_update', no máximo 1 por projeto por seguidor por dia (alreadyNotified com janela de 1 dia). Adicione o type no grupo social de TYPE_GROUP? Não: lib/notifications.ts não é seu; 'project_update' já está listado como social pela Onda 2.\n- /p/[teamId]: seção \"Diário do projeto\" com PostCard paginado, composer só pra integrante, botão \"seguir projeto\" (POST e DELETE /api/projects/[teamId]/follow, 401 e 404) com a contagem visível só pro time.\n- lib/timeline.ts: a aba seguindo inclui atualizações de projetos seguidos.\n- Some a seção \"Depois do hackathon\" da vitrine (o conteúdo virou post).\n\nSEMANAS CONSTRUINDO (lib/buildWeeks.ts):\n- buildWeeks(memberId) e buildWeeksTeam(teamId) devolvem {total, sequencia}. total = semanas ISO (BRT) distintas com atualização de projeto da pessoa ou commit em repo de projeto dela (project_dossiers.commits); é cumulativo e nunca zera. sequencia = semanas seguidas até agora, perdoando até 2 semanas vazias por mês corrido.\n- /p mostra \"o time constrói há N semanas\" quando total ≥ 2. O /u mostra o número da pessoa na Onda 4 (quem edita /u lá é o bicho-avatar). A Onda 4 usa sequencia ≥ 4 pro item broto.\n\nCONTINUOU (lib/continuity.ts e cron mensal POST /api/cron/continuidade):\n- Pra cada time com repoUrl de edição encerrada há 30 a 400 dias, chama collectDossierQuietly (que já respeita rate limit do GitHub e GITHUB_TOKEN opcional), no máximo 50 por execução, os mais antigos primeiro.\n- Depois, grava continuedAt se existir commit no dossiê depois de endsAt + 30 dias.\n- Selo \"continuou\" em /p e no card de /projetos; filtro ?continuou=1 em lib/projects.ts.\n- deploy/continuidade.sh no molde de deploy/rsvp.sh e duas linhas no crontab (prod dia 1 às 07:00 UTC, stage dia 1 às 07:30). O fundador reinstala o crontab (F7).\n\nCONTINUAÇÃO ENTRE EDIÇÕES: no EntryEditor de uma edição nova, o integrante marca \"este projeto continua\" e escolhe um projeto anterior de que fez parte. Nesse caso priorExisted=1 e priorWork passa a ser obrigatório (20 a 1000 caracteres, \"o que já existia antes do evento\"). /p mostra \"continua [projeto anterior]\" com link e o priorWork. O snapshot da entrega inclui continuesTeamId.\n\nACEITE:\n1. Quem não é do time posta atualização e leva 403.\n2. Seguidor recebe 1 notificação por dia mesmo com 3 atualizações.\n3. Atualização aparece na timeline de quem segue o projeto.\n4. afterNotes antigo vira o primeiro post do diário.\n5. Semana sem nada não zera o total; 2 semanas vazias no mês não quebram a sequência.\n6. Cron com o dossiê mockado grava continuedAt e /projetos?continuou=1 filtra.\n7. Continuação sem priorWork dá 400.\n8. Apagar o time apaga as atualizações sem erro de FK.\n9. 390px sem scroll.\n\nTESTES: API (permissões, limite, follow), unit de buildWeeks e continuity com dossiê mockado, migration (afterNotes) e e2e (postar atualização e seguir)."
+    },
+    {
+     "slug": "vagas-de-time",
+     "titulo": "Vagas de time com aceite mútuo, 'procuro time' global e convite a partir do card",
+     "porque": "O teamboard fica preso na edição, não tem botão de convite e o contato depende de alguém escrever telefone. Formar time é o momento em que a rede vira laço (Colosseum matching, roadmap 037 #13). As áreas de ajuda da Onda 2 permitem sugerir quem tem o que falta.",
+     "tamanho": "G",
+     "migration": "045",
+     "dependeDe": [
+      "perfil-rico"
+     ],
+     "arquivos": [
+      "migrations/045_vagas_time.sql",
+      "lib/teamOpenings.ts (novo)",
+      "lib/teamboard.ts",
+      "lib/teamInvites.ts",
+      "components/TeamBoardPanel.tsx",
+      "components/OpeningCard.tsx (novo)",
+      "app/times/page.tsx (novo)",
+      "app/api/openings/** (novo)",
+      "app/api/hackathons/[id]/team-board/route.ts",
+      "app/admin/h/[id]/equipe/page.tsx",
+      "components/HeaderNav.tsx",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/vagas-time.test.ts",
+      "tests/e2e/vagas-time.spec.ts"
+     ],
+     "spec": "OBJETIVO: um time abre vaga (\"procuro design\"), a pessoa se candidata com uma intro curta, e o aceite vira convite de time. Quem não tem time aparece como \"procuro time\". O e-mail só aparece depois do aceite.\n\nREGRAS DO REPO: leia AGENTS.md. Use AREA_KEYS e parseAreas de lib/areas.ts e members.helpOffer/helpWant (Onda 2), canNetwork (lib/network.ts) e isBlockedEither/hiddenIdsFor (lib/blocks.ts) sem editar. team_invites (016) continua sendo convite pendente e team_members continua sendo \"está no time\". SQL por lib/db.ts, 401 JSON, notify() com actorId, 390px sem scroll. O HackaHub é 18+: não escreva regra de menor, só chame canNetwork.\n\nDADOS (045):\n- CREATE TABLE team_openings (id, \"teamId\" FK teams ON DELETE CASCADE, \"hackathonId\" FK, \"area\" TEXT NOT NULL (chave de AREA_KEYS), \"intro\" TEXT NOT NULL (até 280), \"createdBy\" FK members, \"status\" CHECK IN ('aberta','preenchida','fechada') DEFAULT 'aberta', \"createdAt\").\n- CREATE TABLE opening_applications (id, \"openingId\" FK ON DELETE CASCADE, \"memberId\" FK, \"intro\" TEXT NOT NULL (até 280), \"status\" CHECK IN ('enviada','aceita','recusada','retirada'), \"createdAt\", \"respondedAt\", UNIQUE(openingId, memberId)).\n\nREGRAS (lib/teamOpenings.ts):\n- Abrir vaga: integrante do time, edição com inscrição aberta ou em andamento, até 3 vagas abertas por time.\n- Candidatar: inscrição aprovada na mesma edição, sem time, canNetwork true, sem bloqueio com nenhum integrante (bloqueio dá 404 genérico).\n- Aceitar: qualquer integrante. Chama inviteToTeam (lib/teamInvites.ts); a pessoa entra quando aceitar o convite, sem mudar o fluxo atual. Convite aceito marca a vaga como 'preenchida'.\n- CONTATO: o /u logado já mostra GitHub e LinkedIn pra qualquer membro (app/u/[username]/page.tsx). Esta feature não esconde isso. O que só aparece depois de 'aceita', pros dois lados, é o e-mail do perfil. Diga isso na tela: \"O e-mail aparece pros dois quando o time aceitar.\"\n- Recusar notifica com frase neutra (\"A vaga de design no time X foi preenchida de outro jeito.\").\n- Chave 'openings' (20/h).\n\nCOMPATIBILIDADE EM FRASES: matchReasons(memberId, opening) devolve até 3 frases, sem nota numérica: \"oferece design, que é o que a vaga pede\", \"já entregou 2 projetos\" (countFacts), \"vocês são da mesma comunidade\".\n\nTEAMBOARD: card com \"convidar pro meu time\" (só se eu tenho time na edição e a pessoa não tem, sem bloqueio), chamando inviteToTeam; card mostra \"posso ajudar com\"; aviso no campo de nota \"não escreva telefone aqui\" (a validação hasContact continua); moderação do board pelo organizador da edição em /admin/h/[id]/equipe (hasEditionRole), além do admin.\n\nPÁGINA /times (logada): abas \"vagas abertas\" e \"procurando time\" (looking_for_team ativo), filtros edição, área, cidade e faculdade (members.city e members.institution), seção \"Pra você\" (vagas cuja área está no meu helpOffer, e pessoas cujo helpOffer cobre a área que meu time procura, até 6, sem nota, sem bloqueados). Vazios com CTA \"abrir vaga\" ou \"entrar no procuro time\" da edição.\n\nMENU (você é dono de components/HeaderNav.tsx nesta onda): adicione { href:'/times', label:'times', match:['/times'] } depois de \"projetos\".\n\nACEITE:\n1. Vaga aberta, B se candidata, o time aceita, B recebe convite, aceita, entra e a vaga fica preenchida. Antes do aceite B não vê o e-mail do time; depois vê.\n2. Quarta vaga aberta dá 400.\n3. Candidato bloqueado por um integrante leva 404.\n4. Convite pelo card cria team_invites.\n5. Organizador da edição modera o board.\n6. \"times\" no menu.\n7. 390px sem scroll.\n\nTESTES: API (cada regra), unit de matchReasons e e2e (abrir vaga, candidatar, aceitar)."
+    },
+    {
+     "slug": "comunidade-dona-do-espaco",
+     "titulo": "Comunidade dona do próprio espaço: fila de denúncia, avisos, remover e banir membro, excluir e transferir",
+     "porque": "O organizador de uma comunidade não edita aviso nem remove membro, e a fila de denúncia é do admin global, que ainda nem existe em produção. Rede estilo Circle precisa de dono com poder sobre o espaço. Apagar post já funciona desde a Onda 1 (canModeratePost).",
+     "tamanho": "M",
+     "migration": "046",
+     "dependeDe": [
+      "conversa-no-post",
+      "bloqueio-e-denuncia"
+     ],
+     "arquivos": [
+      "migrations/046_comunidade_dona.sql",
+      "lib/communityModeration.ts (novo)",
+      "lib/communities.ts",
+      "lib/follows.ts",
+      "app/api/communities/[slug]/route.ts",
+      "app/api/communities/[slug]/members/route.ts",
+      "app/api/communities/[slug]/members/[username]/route.ts (novo)",
+      "app/api/communities/[slug]/follow/route.ts",
+      "app/api/communities/[slug]/notices/[noticeId]/route.ts (novo)",
+      "app/api/communities/[slug]/transfer/route.ts (novo)",
+      "app/comunidade/[slug]/moderacao/page.tsx (novo)",
+      "app/comunidade/[slug]/page.tsx",
+      "components/CommunityActions.tsx",
+      "tests/api/comunidade-dona.test.ts",
+      "tests/e2e/comunidade-dona.spec.ts"
+     ],
+     "spec": "OBJETIVO: dono e organizador moderam a própria comunidade sem depender do admin global.\n\nREGRAS DO REPO: leia AGENTS.md. Guardas de lib/communityAuth.ts (requireCommunityManager, requireCommunityOwner): reutilize sem mudar comportamento. Apagar post e comentário já é permitido pela canModeratePost (lib/posts.ts, Onda 1): não edite lib/posts.ts nem PostCard. Denúncias vêm de reports (lib/reports.ts, Onda 0) filtradas por communityId. 401 JSON, notify(), 390px sem scroll. Confira as rotas reais de entrar e seguir em app/api/communities/[slug]/ antes de editar; se o caminho for outro, ajuste a lista de arquivos no PR.\n\nDADOS (046):\n- ALTER communities ADD \"deletedAt\" TEXT.\n- CREATE TABLE community_bans (\"communityId\" FK ON DELETE CASCADE, \"memberId\" FK members, \"reason\" TEXT, \"createdBy\" FK, \"createdAt\", PK(communityId, memberId)).\n- CREATE TABLE community_mod_log (id, \"communityId\" FK ON DELETE CASCADE, \"actorId\" INTEGER REFERENCES members(\"id\") ON DELETE SET NULL, \"action\" TEXT, \"target\" TEXT, \"createdAt\").\n\nPODERES (dono e organizador, salvo indicação):\n1. Fila de denúncias em /comunidade/[slug]/moderacao: listReports({communityId}) com snapshot, \"resolver\", \"apagar post\" (DELETE /api/posts/[id], que já aceita quem modera) e \"remover autor\".\n2. Editar e apagar aviso: PATCH e DELETE /api/communities/[slug]/notices/[noticeId].\n3. Remover membro: DELETE /api/communities/[slug]/members/[username]. Ninguém remove o dono; organizador não remove organizador, só o dono. Opção \"impedir de voltar\" grava community_bans. Entrar ou seguir com ban dá 403 \"Você não pode entrar nesta comunidade\" (mude as funções em lib/communities.ts e lib/follows.ts e as rotas de entrar e seguir). O removido recebe notificação neutra.\n4. Excluir comunidade (só dono): DELETE /api/communities/[slug] com confirmação digitando o slug. Soft: deletedAt e hidden=1. Some de listas e da página (404); hackathons mantêm communityId.\n5. Transferir posse pra um organizador (só dono): POST /api/communities/[slug]/transfer.\n6. Toda ação grava em community_mod_log (quem, o quê, quando) e aparece no fim de /moderacao.\n\nUI: em CommunityActions, o item \"moderar\" (só dono e organizador) leva a /moderacao. Essa página tem três blocos: denúncias abertas, posts recentes do mural (lista simples com trecho, autor e os botões \"apagar\" e \"remover autor\") e o log. No mural, o PostCard já mostra \"apagar\" pra quem modera, pela canModerate que a Onda 1 calcula.\n\nACEITE:\n1. Organizador vê e resolve denúncia do mural; organizador de outra comunidade leva 403.\n2. Organizador tenta remover o dono e leva 403.\n3. Ban impede entrar e seguir.\n4. Comunidade excluída some de /comunidades e o slug dá 404.\n5. Transferência troca o dono.\n6. O log registra tudo.\n7. 390px sem scroll.\n\nTESTES: API (cada poder e cada 403) e e2e (denunciar post, ver na fila, resolver)."
+    }
+   ]
+  },
+  {
+   "nome": "Onda 4: o bicho no mundo (avatar em todo lugar, evolução, telão, bicho do time) e repost",
+   "features": [
+    {
+     "slug": "bicho-avatar-e-evolucao",
+     "titulo": "Bicho como avatar em todo lugar e evolução por fato verificado",
+     "porque": "O bicho só vira identidade se aparecer em feed, comentário, /membros, inscritos e OG. E só tem graça se crescer, mas por entrega, nunca por like (roadmap 037). É o que faz voltar pro evento seguinte.",
+     "tamanho": "G",
+     "migration": "047",
+     "dependeDe": [
+      "bicho-motor-e-criador",
+      "nivel-por-entrega",
+      "projeto-vivo"
+     ],
+     "arquivos": [
+      "migrations/047_bicho_avatar.sql",
+      "components/Avatar.tsx",
+      "lib/members.ts",
+      "lib/session.ts",
+      "lib/privacy.ts (só ANONYMIZE)",
+      "lib/mascote/itens.ts (novo)",
+      "lib/mascote/evolucao.ts (novo)",
+      "lib/game.ts",
+      "components/MascoteEditor.tsx",
+      "app/u/[username]/page.tsx",
+      "app/u/[username]/opengraph-image.tsx",
+      "app/api/cron/xp/route.ts",
+      "tests/unit/mascote-evolucao.test.ts",
+      "tests/api/bicho-avatar.test.ts",
+      "tests/e2e/bicho-avatar.spec.ts"
+     ],
+     "spec": "OBJETIVO: (1) o membro escolhe usar o bicho como avatar, e quem não tem foto real no Clerk já nasce com o bicho. (2) O bicho ganha itens e cresce com fatos verificados.\n\nREGRAS DO REPO: leia AGENTS.md. Use lib/mascote/* (Onda 3) SEM editar voxel.ts: montar(config, {itens, estagio}) já existe. Use countFacts (lib/evidence.ts) e buildWeeks (lib/buildWeeks.ts). Sem API paga. 390px sem scroll.\n\nDADOS (047):\n- ALTER members ADD \"avatarKind\" TEXT NOT NULL DEFAULT 'foto' CHECK IN ('foto','bicho'), \"clerkImageUrl\" TEXT (UPDATE com o avatarUrl atual) e \"mascoteItens\" TEXT (JSON, até 3 itens escolhidos).\n- CREATE TABLE mascote_unlocks (\"memberId\" FK, \"itemId\" TEXT, \"unlockedAt\", PK(memberId, itemId)). Só pra notificar uma vez; a fonte de verdade é o fato.\n- ANONYMIZE: avatarKind 'foto', clerkImageUrl NULL, mascoteItens NULL.\n\nAVATAR SEM MEXER EM CADA QUERY:\n- avatarUrl continua sendo o que as listas leem.\n- getOrCreateMember (lib/members.ts): o sync do Clerk grava sempre clerkImageUrl e só sobrescreve avatarUrl quando avatarKind='foto'.\n- Escolher \"bicho\" grava avatarUrl = mascoteSrc(id, hash atual). Voltar pra \"foto\" grava clerkImageUrl. Salvar config novo regrava avatarUrl.\n- Membro novo sem foto real (Clerk user.hasImage === false; leia em lib/session.ts e passe pra getOrCreateMember) nasce com avatarKind='bicho'.\n- components/Avatar.tsx: src que começa com /api/mascote/ renderiza com fundo bg-band, object-contain, sem corte. Iniciais continuam como fallback (onError).\n\nITENS (lib/mascote/itens.ts): catálogo de Peca com {id, nome, encaixe, destrava} e geometria nas 6 espécies:\n- cracha (peito): 1+ presença.\n- mochila (costas): 1+ entrega travada.\n- medalha (peito): 1+ prêmio.\n- cachecol (peito): 2+ edições com presença.\n- prancheta (mao): mentoria, júri ou staff.\n- megafone (mao): organizou.\n- broto (topo): sequencia de buildWeeks ≥ 4.\n- estrela (topo): badge 'quatro-semanas'.\n- antena (topo): badge 'roda'.\n- mapa (mao): badge 'ponte'.\nEm lib/game.ts, declare em BADGES os 3 badges acima com o campo item. Quem concede são as features da Onda 5.\n\nEVOLUÇÃO (lib/mascote/evolucao.ts): unlockedItems(memberId) a partir de countFacts, buildWeeks e badges com item. estagio(memberId): 'filhote' (0 fatos), 'jovem' (1 a 3), 'adulto' (4+). Itens exibidos: os 3 escolhidos em /perfil (MascoteEditor ganha a seção \"itens\", com os bloqueados mostrando o que destrava, por exemplo \"faça check-in num hackathon\"); sem escolha, os 3 mais recentes.\n\nATUALIZAÇÃO DO AVATAR: avatarUrl é gravado em members, então o ?v= não muda sozinho. syncUnlocks(memberId), chamado no cron /api/cron/xp depois do recompute: calcula itens e estágio; se o hash mudou e avatarKind='bicho', REGRAVA avatarUrl com o hash novo; insere em mascote_unlocks o que é novo e notifica type 'mascote_item' (\"Seu bicho ganhou mochila: você entregou um projeto\", href /perfil#bicho). Salvar itens em /perfil também regrava.\n\nONDE APARECE:\n- Automaticamente em feed, comentário, /membros, /talento, inscritos e teamboard, via Avatar.\n- /u/[username] (você é dono nesta onda): herói com MascoteViewer grande ao lado da trajetória, nome do bicho, estágio e \"constrói há N semanas\" (buildWeeks.total ≥ 2).\n- OG do perfil aberto inclui o SVG do bicho em <img src=\"data:image/svg+xml;base64,…\">.\n\nACEITE:\n1. Sem foto real nasce com o bicho; com foto, continua com a foto.\n2. Trocar pra bicho muda o avatar em todas as listas sem query nova.\n3. O login seguinte não sobrescreve o bicho.\n4. Check-in em edição elegível e cron dão o crachá, 1 notificação, e o avatarUrl muda de hash.\n5. Like não destrava nada.\n6. Os 10 itens montam nas 6 espécies e nos 3 estágios (unit).\n7. Excluir a conta zera avatarKind e clerkImageUrl.\n8. 390px sem scroll.\n\nTESTES: unit (itens x espécies x estágios, estagio, unlockedItems), API (avatarKind, sync do Clerk, syncUnlocks regravando) e e2e (trocar avatar e ver no feed)."
+    },
+    {
+     "slug": "telao-e-bicho-do-time",
+     "titulo": "Salão no telão com os bichos de quem está presente e bicho do time na página do projeto",
+     "porque": "O telão (016) só tem palco. Ver os bichos chegando, se juntando em times e levantando bandeira na entrega transforma o check-in em espetáculo e dá foto pro Instagram da comunidade. O bicho do time dá cara própria à vitrine.",
+     "tamanho": "M",
+     "migration": "048",
+     "dependeDe": [
+      "bicho-motor-e-criador"
+     ],
+     "arquivos": [
+      "migrations/048_telao_salao.sql",
+      "lib/mascote/time.ts (novo)",
+      "lib/telaoLayout.ts (novo)",
+      "app/api/mascote/time/[teamId]/route.ts (novo)",
+      "components/TelaoSalao.tsx (novo)",
+      "app/h/[id]/telao/page.tsx",
+      "components/StageScreen.tsx",
+      "components/StageControl.tsx",
+      "lib/stage.ts",
+      "app/api/hackathons/[id]/salao/route.ts (novo)",
+      "app/p/[teamId]/page.tsx",
+      "lib/access.ts",
+      "tests/api/telao-salao.test.ts",
+      "tests/unit/bicho-time.test.ts",
+      "tests/e2e/telao-salao.spec.ts"
+     ],
+     "spec": "OBJETIVO: (1) o telão ganha a tela \"salão\", com uma ilha isométrica e os bichos de quem fez check-in e topou aparecer, agrupados por time, mais contadores ao vivo. (2) Todo projeto tem um bicho do time.\n\nREGRAS DO REPO: leia AGENTS.md. O telão é público (lib/access.ts já libera /h/SEG/telao e a API de stage). Aparecer no salão segue o opt-in de registrations.publicListing (016); quem não consentiu entra só na contagem. Use lib/mascote/* sem editar: a bandeira é uma Peca passada em montar(config, {extras}). NÃO edite components/Avatar.tsx, lib/members.ts nem app/u/[username]/page.tsx (são do bicho-avatar).\n\nDADOS (048): ALTER stage_sessions ADD \"screen\" TEXT NOT NULL DEFAULT 'palco' CHECK IN ('palco','salao').\n\nAPI:\n- GET /api/hackathons/[id]/salao (pública, em PUBLIC_APIS) devolve {presentes, times, entregas, bichos: [{memberId, primeiroNome, src, teamId|null}], teams: [{id, name, delivered, src}]}. bichos só com check-in e publicListing=1, até 300. Cache-Control max-age=10. Edição inexistente ou não hosted dá 404.\n- lib/stage.ts: runStageAction aceita {action:'screen', value} pra organizador e staff (guarda existente). getStageSnapshot inclui screen.\n\nTELÃO:\n- StageScreen mostra TelaoSalao quando screen='salao'.\n- lib/telaoLayout.ts (puro): planSalao(bichos, teams) devolve posições na ilha e o modo de cada bicho: 'malha' pros primeiros 60, 'sprite' do 61º em diante. Bicho sem time fica na \"praça\"; os de um time ficam juntos com a bandeira do time, alta quando delivered.\n- TelaoSalao (client): three.js por import() dinâmico, ilha voxel plana, malhas reais via montar() e sprites billboard com CanvasTexture desenhada do SVG. Polling de 10s; bicho novo entra pulando. Rodapé \"N presentes · N times · N entregas\". prefers-reduced-motion deixa estático. Sem WebGL, grade de <img>.\n- StageControl ganha o seletor \"tela: palco | salão\".\n\nBICHO DO TIME (lib/mascote/time.ts): teamConfig(configsDosIntegrantes) determinístico, integrantes ordenados por username: espécie do 1º, cor do 2º (ou do 1º), acessório do 3º (ou do 1º), nome do time. bandeiraPeca(iniciais) no encaixe 'mao', passada em extras. GET /api/mascote/time/[teamId] devolve o SVG, público (PUBLIC_APIS), com o mesmo cache e CSP da rota de membro. /p/[teamId] mostra o bicho do time no herói (MascoteViewer com extras) e \"montado com uma parte do bicho de cada integrante\".\n\nACEITE:\n1. Quem não consentiu não aparece no JSON, só na contagem.\n2. Trocar a tela pelo StageControl reflete no telão em até 10s.\n3. planSalao com 300 bichos devolve no máximo 60 'malha' e o resto 'sprite' (unit).\n4. Entrega do time marca a bandeira como alta.\n5. Bicho do time estável pra mesma composição.\n6. Telão sem WebGL mostra a grade.\n7. 390px sem scroll no /p.\n\nTESTES: unit (teamConfig, planSalao), API (salão: consentimento, 404, pública; troca de tela com permissão) e e2e (abrir o telão no modo salão)."
+    },
+    {
+     "slug": "repost-e-citacao",
+     "titulo": "Repost e citação (com opção de não aceitar citação)",
+     "porque": "O boost do Mastodon espalha sem criar engajamento tóxico, e é o jeito de um projeto bom sair da bolha de quem segue o time. A citação vem com opção de recusar, como no Mastodon 4.5.",
+     "tamanho": "P",
+     "migration": "049",
+     "dependeDe": [
+      "conversa-no-post",
+      "timeline"
+     ],
+     "arquivos": [
+      "migrations/049_repost.sql",
+      "lib/posts.ts",
+      "lib/timeline.ts",
+      "components/PostCard.tsx",
+      "components/PostComposer.tsx",
+      "app/api/posts/[id]/repost/route.ts (novo)",
+      "app/api/posts/[id]/route.ts",
+      "app/api/posts/route.ts",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/repost.test.ts",
+      "tests/e2e/repost.spec.ts"
+     ],
+     "spec": "OBJETIVO: compartilhar o post de alguém na sua timeline (repost) ou citar com comentário.\n\nREGRAS DO REPO: leia AGENTS.md. Você é dono de PostCard, PostComposer, lib/posts.ts, lib/timeline.ts e app/api/posts/[id]/route.ts nesta onda. Repost não dá XP. notify() com actorId e alreadyNotified. Respeite isBlockedEither. 390px sem scroll.\n\nDADOS (049):\n- ALTER posts ADD \"repostOfId\" INTEGER REFERENCES posts(\"id\") ON DELETE CASCADE (repost puro some com o original; reação e comentário do repost vão em cascade desde a Onda 1).\n- ALTER posts ADD \"quoteOfId\" INTEGER REFERENCES posts(\"id\") ON DELETE SET NULL (a citação fica e mostra \"post apagado\").\n- ALTER posts ADD \"allowQuote\" INTEGER NOT NULL DEFAULT 1.\n- Índice único parcial (memberId, repostOfId) WHERE repostOfId IS NOT NULL.\n\nREGRAS:\n- Repost: POST e DELETE /api/posts/[id]/repost, chave 'reposts' (30/h). Não dá pra repostar o próprio post, um repost (aponta pro original), post de comunidade escondida nem post de quem te bloqueou; cada caso dá 400 com mensagem (bloqueio dá 404). Grava post com body '' e repostOfId; createPost aceita body vazio só nesse caso.\n- Citação: POST /api/posts com quoteOfId. allowQuote=0 dá 403 \"A pessoa não aceita citação neste post\". Body obrigatório.\n- Notifica o autor original: type 'repost' (\"@x compartilhou seu post\") ou 'quote', 1 por par ator→post.\n- Composer com a opção \"não aceitar citação\"; o autor muda depois no menu do post (PATCH /api/posts/[id] aceita allowQuote).\n- Post de mural de edição ou comunidade repostado aparece na timeline de quem segue quem repostou, com o chip da origem.\n\nTIMELINE: inclui reposts de quem eu sigo. O mesmo original aparece só uma vez por página, com \"@a e @b compartilharam\".\n\nPOSTCARD: repost com cabeçalho \"@x compartilhou\" e o original embaixo; citação com o body de quem citou e o original numa caixa (ou \"post apagado\"); botões \"compartilhar\" (toggle) e \"citar\"; contador de compartilhamentos.\n\nACEITE:\n1. B reposta o post de A, quem segue B vê e A recebe 1 notificação.\n2. Repostar o próprio post dá 400.\n3. Citar com allowQuote=0 dá 403.\n4. Apagar o original apaga os reposts (mesmo com reação neles) e deixa a citação com \"post apagado\".\n5. A mesma origem não se repete na página.\n6. 390px sem scroll.\n\nTESTES: API (cada regra) e e2e (repostar e citar)."
+    }
+   ]
+  },
+  {
+   "nome": "Onda 5: eventos (encontros na edição, agenda da comunidade, 4 semanas depois, desafios abertos, liga)",
+   "features": [
+    {
+     "slug": "encontros-na-edicao",
+     "titulo": "Encontros na edição: código do bicho, confirmação dos dois, cartas, missões e do encontro ao time",
+     "porque": "No evento, conversar com gente nova é o que mais assusta quem vai pela primeira vez, e o que mais rende time. O encontro só conta quando os dois confirmam, o contato aparece na hora e dá pra virar convite de time. Segue o desenho da spec 045 e não usa nome, missões, eixos nem regras do quebra-gelo que inspirou a ideia.",
+     "tamanho": "G",
+     "migration": "050",
+     "dependeDe": [
+      "bicho-avatar-e-evolucao",
+      "vagas-de-time",
+      "perfil-rico"
+     ],
+     "arquivos": [
+      "migrations/050_encontros.sql",
+      "lib/encounters.ts (novo)",
+      "lib/encounterCards.ts (novo)",
+      "lib/missions.ts (novo)",
+      "app/h/[id]/encontros/page.tsx (novo)",
+      "components/EncountersClient.tsx (novo)",
+      "app/api/hackathons/[id]/encounters/** (novo)",
+      "app/admin/h/[id]/encontros/page.tsx (novo)",
+      "components/AdminTabs.tsx",
+      "app/perfil/conexoes/page.tsx (novo)",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/encontros.test.ts",
+      "tests/unit/missions.test.ts",
+      "tests/e2e/encontros.spec.ts"
+     ],
+     "spec": "OBJETIVO: durante a edição, quem fez check-in e ativou \"Encontros na edição\" tem um código de 5 caracteres e um QR com o próprio bicho. Lê o código de alguém, a pessoa confirma, o contato aparece pros dois e o encontro pode virar convite de time. O organizador vê só números agregados.\n\nREGRAS DO REPO: leia AGENTS.md e specs/045-conexao (seções Encontro verificado, Cartas e missões, Do encontro ao time, Privacidade). QR com a dependência qrcode e leitura com BarcodeDetector ou jsqr (veja components/CheckinDesk.tsx). Janela por editionCheckinWindow (lib/checkins.ts). canNetwork (lib/network.ts), isBlockedEither e ReportDialog (Onda 0). Badges 'roda' e 'ponte' já declarados em lib/game.ts (Onda 4): conceda com INSERT ... ON CONFLICT DO NOTHING em member_badges, sem editar game.ts nem lib/mascote/*. Encontro NÃO dá XP (spec 043): só alimenta badges e itens do bicho. 401 JSON, 390px sem scroll. Nada de modo online nesta versão.\n\nDADOS (050):\n- ALTER hackathons ADD \"encountersOn\" INTEGER NOT NULL DEFAULT 0.\n- CREATE TABLE edition_meet_codes (\"hackathonId\" FK, \"memberId\" FK, \"code\" TEXT NOT NULL CHECK (\"code\" ~ '^[2-9A-HJ-NP-Z]{5}$'), \"contactChannel\" TEXT CHECK IN ('linkedin','github','email'), \"optedInAt\" TEXT NOT NULL, \"pausedAt\" TEXT, PK(hackathonId, memberId), UNIQUE(hackathonId, code)).\n- CREATE TABLE encounters (id, \"hackathonId\" FK, \"lowId\" FK members, \"highId\" FK members, \"initiatorId\" FK members, \"status\" CHECK IN ('pending','confirmed','declined','expired'), \"createdAt\", \"confirmedAt\", CHECK(lowId < highId), UNIQUE(hackathonId, lowId, highId)). Um encontro por par por edição.\n- CREATE TABLE encounter_sides (\"encounterId\" FK ON DELETE CASCADE, \"memberId\" FK, \"cardKey\" TEXT, \"depth\" TEXT CHECK IN ('rapido','alem'), \"note\" TEXT (até 280, privada), \"hiddenAt\" TEXT, PK(encounterId, memberId)).\n- CREATE TABLE encounter_declines (\"hackathonId\", \"memberId\" (quem recusou), \"peerId\", \"count\" INTEGER, PK).\n- CREATE TABLE introductions (id, \"hackathonId\", \"memberId\" (quem apresentou), \"peerId\", \"recipientId\", \"createdAt\"). memberId/peerId/recipientId seguem PEER_COLUMNS.\n- CREATE TABLE team_up_signals (\"hackathonId\", \"memberId\", \"peerId\", \"createdAt\", PK).\n- lowId, highId e initiatorId não estão em PEER_COLUMNS: adicione-os à constante de lib/privacy.ts (só a constante) pra exclusão apagar os encontros.\n\nFLUXO (/h/[id]/encontros, logada):\n1. Pré-requisitos: inscrição aprovada, check-in, canNetwork e o aceite próprio, que mostra o que o outro vai ver (nome, @, personas, skills, cidade ou faculdade e o canal escolhido). Sem isso, explica o motivo; a API dá 403.\n2. A tela mostra meu bicho (MascoteViewer), meu código e o QR (/h/[id]/encontros?c=CODE), câmera e campo pra digitar, e \"pausar\".\n3. A lê o código de B: encontro 'pending' e A vê o cartão de B sem o contato. Código inválido, pausado, de quem bloqueou ou de quem já recusou 3 vezes devolve a MESMA resposta genérica (\"Código não encontrado.\").\n4. B recebe \"@a quer registrar o encontro\" (polling de 10s só com a aba visível) e escolhe \"Confirmar\" ou \"Agora não\". Ler o QR de A também confirma. Pendente expira em 15 min. Recusa não notifica quem pediu; A vê \"não rolou dessa vez\".\n5. Confirmado, o contato do canal escolhido aparece pros dois e cada um responde \"papo rápido\" ou \"fomos além do oi\" (encounter_sides.depth). Profundidade só conta se os dois marcarem \"além do oi\".\n6. Limites: chave 'encounters' (30/h), no máximo 5 pendentes por pessoa, os dois com check-in na mesma edição, dentro da janela.\n\nCARTAS (lib/encounterCards.ts): use as perguntas da spec 045 (abrir, funda, time). Cada encontro pode registrar a carta usada.\n\nMISSÕES (lib/missions.ts, calculadas a partir de encontros confirmados, organizador liga por edição):\n- \"Primeira viagem\": encontrar alguém que está no primeiro hackathon (0 inscrições aprovadas antes) e topou aparecer como estreante.\n- \"Um mentor\": encontrar alguém com edition_roles mentor na edição.\n- \"Outra faculdade ou cidade\": institution ou city diferentes (o valor nunca é mostrado).\n- \"Ponte\": registrar \"apresentei X a Y\" (introductions); conta quando X e Y confirmam encontro entre si depois.\n- Contadores na tela: \"pessoas\" (distintas confirmadas) e \"além do oi\" (mútuos). Sem ranking.\n- 10 pessoas concede o badge 'roda'; 3 pontes concedem 'ponte'.\n\nDO ENCONTRO AO TIME:\n- Selo de complemento com frase fixa, sem IA (\"você é dev, ela é design; seu time procura design\"), de personas e AREA_KEYS contra a vaga aberta do meu time (team_openings).\n- \"Bora fazer junto?\": sinal mútuo e silencioso (team_up_signals). Quando os dois marcam: se um tem time com vaga, inviteToTeam já preenchido; se nenhum tem, submitTeam com o outro (vira convite); se os dois têm, fica a conexão.\n- \"Procure no evento\": até 3 pessoas por missão, só entre quem fez check-in, ativou encontros e tem publicListing=1, com bicho (SVG) e primeiro nome. Nunca diz onde a pessoa está.\n\n/perfil/conexoes: \"quem eu conheci\" por edição, privada, com FollowButton, \"convidar pro meu time\" e \"denunciar\" (ReportDialog targetType 'encontro', que gera incidente pela Onda 0).\n\nORGANIZADOR (/admin/h/[id]/encontros, hasEditionRole organizador): liga e desliga, e vê agregados: % de presentes com pelo menos 1 encontro, encontros entre faculdades diferentes, times formados com integrante que se conheceu ali, distribuição de pessoas por participante. Nada individual; N < 5 aparece como \"poucos dados\".\n\nADMINTABS: você é dono de components/AdminTabs.tsx nesta onda. Adicione duas abas: \"encontros\" (/admin/h/[id]/encontros) e \"4 semanas\" (/admin/h/[id]/quatro-semanas, página da feature quatro-semanas desta onda). Mergeie depois dela ou junto, no fim da onda.\n\nACEITE:\n1. Sem check-in ou sem aceite, explicação na tela e 403 na API.\n2. Código lido sem confirmação não conta; pendente some em 15 min.\n3. Código inválido e código de quem bloqueou dão a mesma resposta.\n4. Segundo encontro do mesmo par na edição dá 409.\n5. Um lado marca \"além do oi\" e o outro \"papo rápido\": não conta profundidade.\n6. Contato só aparece depois de confirmado.\n7. 10 pessoas concedem 'roda' e o item antena aparece depois do cron de XP.\n8. Bora fazer junto mútuo cria o convite.\n9. O painel não mostra nome.\n10. 390px sem scroll.\n\nTESTES: unit das missões e da profundidade, API (cada regra, resposta genérica, expiração com relógio injetado) e e2e com 2 contextos de navegador (código, confirmar, ver contato).\n\nAJUSTE DO DONO (28/10, prioridade): o dono achou a mecânica do quebra-gelo \"forçada\". Encontro é LEVE e OPCIONAL: trocar código/QR do bicho, os dois confirmam, o contato aparece, dá pra chamar pro time. Sem narrativa obrigatória, sem missões obrigatórias: as missões viram \"sugestões\" que o organizador pode ligar (desligadas por padrão) e nunca bloqueiam nada. Nada de diagnóstico/academia nesta onda."
+    },
+    {
+     "slug": "agenda-da-comunidade",
+     "titulo": "Agenda da comunidade entre edições (meetup, live, workshop, demo day)",
+     "porque": "Entre uma edição e outra a comunidade fica muda. O Circle e o lablab fazem a casa pulsar com evento nativo e live embutida. Também é onde nasce o \"pedir palco no demo day\" do roadmap (#18).",
+     "tamanho": "M",
+     "migration": "051",
+     "arquivos": [
+      "migrations/051_agenda.sql",
+      "lib/meetups.ts (novo)",
+      "app/comunidade/[slug]/agenda/page.tsx (novo)",
+      "app/comunidade/[slug]/agenda/novo/page.tsx (novo)",
+      "app/agenda/[id]/page.tsx (novo)",
+      "app/agenda/[id]/evento.ics/route.ts (novo)",
+      "app/api/meetups/** (novo)",
+      "app/comunidade/[slug]/page.tsx",
+      "lib/follows.ts",
+      "lib/access.ts",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/agenda.test.ts",
+      "tests/unit/embed.test.ts",
+      "tests/e2e/agenda.spec.ts"
+     ],
+     "spec": "OBJETIVO: dono e organizador da comunidade criam um item de agenda (meetup, live, workshop ou demo day) com RSVP, .ics e live embutida. Quem segue fica sabendo.\n\nREGRAS DO REPO: leia AGENTS.md. Use lib/ics.ts, communityAudience (lib/follows.ts), as guardas de lib/communityAuth.ts e lib/eventTime.ts (datas do formulário em BRT, como nas edições). notify(). 401 JSON, 390px sem scroll. Você é dono de app/comunidade/[slug]/page.tsx nesta onda.\n\nDADOS (051):\n- CREATE TABLE meetups (id, \"communityId\" FK ON DELETE CASCADE, \"kind\" CHECK IN ('meetup','live','workshop','demo_day'), \"title\" (até 100), \"description\" (até 3000), \"startsAt\" NOT NULL, \"endsAt\", \"location\", \"onlineUrl\", \"embedUrl\", \"capacity\" INTEGER, \"createdBy\" FK, \"publishedAt\", \"cancelledAt\", \"createdAt\").\n- CREATE TABLE meetup_rsvps (\"meetupId\" FK ON DELETE CASCADE, \"memberId\" FK, \"status\" CHECK IN ('vou','talvez'), \"createdAt\", PK).\n- CREATE TABLE meetup_hosts (\"meetupId\" FK ON DELETE CASCADE, \"memberId\" FK, PK).\n- CREATE TABLE meetup_stage_requests (id, \"meetupId\" FK ON DELETE CASCADE, \"memberId\" FK, \"teamId\" INTEGER REFERENCES teams(\"id\") ON DELETE CASCADE, \"pitch\" (até 280), \"status\" CHECK IN ('pedido','aceito','recusado'), \"createdAt\").\n\nREGRAS:\n- Criar e editar: dono ou organizador, chave 'meetups' (10/dia). Comunidade com ban ou excluída não aparece.\n- Publicar notifica membros e seguidores (communityAudience): type 'meetup', href /agenda/[id]. Cancelar notifica quem respondeu.\n- Embed só YouTube (youtube.com/embed/ID ou watch?v= convertido) e Twitch (player.twitch.tv com parent do domínio). Outra URL dá 400. iframe com sandbox e allow mínimo.\n- Lotação cheia: \"vou\" vira \"talvez\" com a mensagem \"lotado\".\n- Demo day: membro pede palco com um projeto dele e um pitch; projeto alheio dá 403. O organizador aceita ou recusa, e os aceitos aparecem como programação.\n\nPÁGINAS:\n- /comunidade/[slug]/agenda: próximos e passados.\n- /comunidade/[slug]/agenda/novo: formulário.\n- /agenda/[id]: título, quando (BRT), onde ou link, \"vou\" e \"talvez\", contagem, hosts, embed quando startsAt-15min ≤ agora ≤ endsAt, botão .ics (/agenda/[id]/evento.ics) e programação do demo day.\n- /agenda/[id] é teaser público (adicione /agenda/SEG em PUBLIC_PAGES de lib/access.ts): deslogado vê título, data, comunidade e CTA. O link da sala online só aparece logado com RSVP.\n- Página da comunidade: bloco \"Próximos na agenda\" (até 3).\n- lib/follows.ts: listCommunityUpdates ganha o kind 'agenda' (updateHref leva a /agenda/[id]), então aparece na aba comunidades da timeline.\n\nACEITE:\n1. Organizador cria e publica; o seguidor recebe a notificação e vê na timeline.\n2. Embed de domínio estranho dá 400.\n3. Lotação respeitada.\n4. O .ics abre com o horário certo.\n5. Pedido de palco com projeto alheio dá 403.\n6. Deslogado vê o teaser sem o link da sala.\n7. 390px sem scroll.\n\nTESTES: API (permissões, embed, lotação, palco), unit do conversor de embed e e2e (criar, RSVP, baixar .ics)."
+    },
+    {
+     "slug": "quatro-semanas",
+     "titulo": "4 semanas depois: acompanhamento pós-edição com update semanal",
+     "porque": "O projeto continuar é o que transforma o hackathon em portfólio (Colosseum Eternal, roadmap 037 #14). O nome não é \"temporada\" porque a spec 043 usa temporada pra semestre.",
+     "tamanho": "M",
+     "migration": "052",
+     "dependeDe": [
+      "projeto-vivo"
+     ],
+     "arquivos": [
+      "migrations/052_quatro_semanas.sql",
+      "lib/followThrough.ts (novo)",
+      "app/h/[id]/quatro-semanas/page.tsx (novo)",
+      "app/admin/h/[id]/quatro-semanas/page.tsx (novo)",
+      "app/api/hackathons/[id]/quatro-semanas/** (novo)",
+      "app/api/cron/quatro-semanas/route.ts (novo)",
+      "deploy/quatro-semanas.sh (novo)",
+      "deploy/crontab.txt",
+      "tests/api/quatro-semanas.test.ts",
+      "tests/unit/follow-through.test.ts",
+      "tests/e2e/quatro-semanas.spec.ts"
+     ],
+     "spec": "OBJETIVO: depois da edição, o organizador abre o \"4 semanas depois\". Os times que entram postam 1 atualização por semana no diário do projeto e quem completa ganha o badge 'quatro-semanas' (item estrela no bicho).\n\nREGRAS DO REPO: leia AGENTS.md e specs/040-referencias-ux #15 (dado por time é privado do time e do organizador). As atualizações são os posts com teamId (lib/projectUpdates.ts, Onda 3): importe, não duplique. O badge já existe em lib/game.ts (Onda 4): conceda com INSERT ... ON CONFLICT DO NOTHING, sem editar game.ts. Organizador por hasEditionRole (lib/roles.ts). Cron com cronAuthorized(). Semanas em BRT (lib/eventTime.ts). NÃO edite components/AdminTabs.tsx (o encontros-na-edicao adiciona a aba). 390px sem scroll.\n\nDADOS (052):\n- CREATE TABLE follow_through (\"hackathonId\" PK FK, \"startsAt\" NOT NULL, \"weeks\" INTEGER NOT NULL DEFAULT 4 CHECK BETWEEN 2 AND 8, \"demoMeetupId\" INTEGER (opcional, sem FK), \"createdBy\" FK, \"createdAt\", \"closedAt\", \"closedReason\").\n- CREATE TABLE follow_through_teams (\"hackathonId\" FK, \"teamId\" FK ON DELETE CASCADE, \"joinedAt\", PK).\n- CREATE TABLE follow_through_weeks (\"hackathonId\", \"teamId\", \"week\" INTEGER, \"postId\" INTEGER REFERENCES posts(\"id\") ON DELETE SET NULL, \"markedAt\", \"remindedAt\", PK(hackathonId, teamId, week)).\n\nREGRAS:\n- Abrir: organizador da edição, até 30 dias depois de endsAt, startsAt nos próximos 14 dias.\n- Entrar: integrante de time com project_submissions na edição, até o fim da semana 1. Notifica o time.\n- Semana N conta se existir atualização do time com createdAt na janela da semana N.\n- Cron diário POST /api/cron/quatro-semanas: materializa as semanas; na quinta, lembra o time sem atualização (type 'follow_through_reminder', 1 por semana via remindedAt); ao fim, concede o badge pra todos os integrantes dos times com todas as semanas e notifica.\n- deploy/quatro-semanas.sh no molde de deploy/rsvp.sh e duas linhas no crontab (prod 10:15 UTC, stage 10:45). O fundador reinstala o crontab (F7).\n\nPÁGINAS:\n- /h/[id]/quatro-semanas (logada): integrante de time inscrito e organizador veem a grade times x semanas com link pro post. Os outros veem só o agregado (\"12 times · 7 postaram esta semana\") e a lista de times que completaram, depois do fim. Integrante vê \"postar a atualização desta semana\", que leva ao diário em /p/[teamId]. Vazio: \"Nenhum time entrou ainda.\"\n- /admin/h/[id]/quatro-semanas: abrir, ver inscritos, encerrar antes com motivo.\n\nACEITE:\n1. Time sem entrega não entra.\n2. Post fora da janela não conta.\n3. Lembrete único por semana.\n4. As 4 semanas valem badge, e o bicho mostra a estrela depois do cron de XP.\n5. Participante de fora não vê a grade por time.\n6. 390px sem scroll.\n\nTESTES: unit de janelas, API (abrir, entrar, permissões, visibilidade) e cron com relógio injetado."
+    },
+    {
+     "slug": "desafios-abertos",
+     "titulo": "Desafios abertos entre edições (comunidade ou patrocinador, decisão humana)",
+     "porque": "DoraHacks bounties e Hack Club \"You Ship, We Ship\" mantêm gente construindo fora do fim de semana. Hoje desafio é só de patrocinador cadastrado pelo admin e preso a edição. Aqui a comunidade cria sozinha.",
+     "tamanho": "M",
+     "migration": "053",
+     "arquivos": [
+      "migrations/053_desafios_abertos.sql",
+      "lib/openChallenges.ts (novo)",
+      "app/desafios/page.tsx (novo)",
+      "app/desafios/[id]/page.tsx (novo)",
+      "app/comunidade/[slug]/desafios/novo/page.tsx (novo)",
+      "app/api/open-challenges/** (novo)",
+      "components/HeaderNav.tsx",
+      "lib/ratelimit.ts (1 chave)",
+      "tests/api/desafios-abertos.test.ts",
+      "tests/e2e/desafios-abertos.spec.ts"
+     ],
+     "spec": "OBJETIVO: dono ou organizador de comunidade publica um desafio com prazo. Membros entregam com um projeto do HackaHub ou um repo, e quem criou escolhe os vencedores, com resultado público.\n\nPOR QUE TABELA NOVA: challenges (001) é o catálogo de desafios de patrocinador ligado à edição por project_challenges, e o júri e a premiação da edição leem dali. Desafio aberto não tem edição, inscrição nem júri, tem prazo e entrega próprios. Pôr communityId em challenges obrigaria todo o código de edição a tratar desafio sem edição. Escreva isso no topo de lib/openChallenges.ts.\n\nREGRAS DO REPO: leia AGENTS.md. Não edite app/comunidade/[slug]/page.tsx (é da agenda nesta onda): o acesso é por /desafios, pelo menu e por link direto. IA não julga nem ordena nada. notify() e communityAudience só como import. 401 JSON, 390px sem scroll.\n\nDADOS (053):\n- CREATE TABLE open_challenges (id, \"communityId\" FK ON DELETE CASCADE, \"sponsorName\" TEXT, \"title\" (até 100), \"brief\" (até 3000), \"rules\" (até 3000), \"prize\" (até 200, texto livre), \"deadline\" NOT NULL, \"status\" CHECK IN ('rascunho','aberto','resultado'), \"createdBy\" FK, \"createdAt\", \"publishedAt\", \"resultAt\").\n- CREATE TABLE open_challenge_entries (id, \"challengeId\" FK ON DELETE CASCADE, \"memberId\" FK, \"teamId\" INTEGER REFERENCES teams(\"id\") ON DELETE SET NULL, \"repoUrl\", \"demoUrl\", \"summary\" NOT NULL (até 1000), \"submittedAt\", \"place\" INTEGER, UNIQUE(challengeId, memberId)).\n\nREGRAS:\n- Criar: dono ou organizador, chave 'open-challenges' (3/dia). Publicar notifica membros e seguidores.\n- Entregar: membro logado até o deadline (BRT). teamId só se for integrante; repoUrl https.\n- Depois do deadline o desafio aparece como \"encerrado\" (calculado na leitura, sem cron) e não aceita entrega.\n- Resultado: quem criou marca 1º a 3º e publica; notifica cada participante.\n- Com patrocinador, mostra \"patrocinado por X\" em texto.\n\nPÁGINAS:\n- /desafios: abertos (prazo mais próximo primeiro) e encerrados com resultado, filtro por comunidade.\n- /desafios/[id]: brief, regras, prêmio, prazo, \"entregar\", entregas (depois do prazo; antes, só a contagem) e resultado.\n- /comunidade/[slug]/desafios/novo: formulário com pré-visualização.\n- Vazio: \"Nenhum desafio aberto. Sua comunidade pode criar um.\"\n\nMENU (você é dono de components/HeaderNav.tsx nesta onda): { href:'/desafios', label:'desafios', match:['/desafios'] } depois de \"hackathons\".\n\nACEITE:\n1. Membro comum tenta criar e leva 403.\n2. Entrega depois do prazo dá 400.\n3. Entregas escondidas até o prazo.\n4. Resultado publicado notifica.\n5. teamId de time alheio dá 403.\n6. \"desafios\" no menu.\n7. 390px sem scroll.\n\nTESTES: API (cada regra) e e2e (criar, entregar, publicar resultado)."
+    },
+    {
+     "slug": "liga-por-faixa",
+     "titulo": "Liga do semestre por faixa, com ranking só pra quem topar",
+     "porque": "Liga entre edições dá motivo pra voltar, mas ranking geral vira disputa de placar. As specs 043 e 040 #21 mandam mostrar faixa, deixar o ranking opt-in e só abrir depois de falar com 5 organizadores. Por isso entra desligada por flag.",
+     "tamanho": "P",
+     "migration": "054",
+     "dependeDe": [
+      "nivel-por-entrega",
+      "quatro-semanas"
+     ],
+     "arquivos": [
+      "migrations/054_liga.sql",
+      "lib/league.ts (novo)",
+      "app/liga/page.tsx (novo)",
+      "components/XpBar.tsx",
+      "lib/privacy.ts (só ANONYMIZE)",
+      "tests/unit/league.test.ts",
+      "tests/api/liga.test.ts"
+     ],
+     "spec": "OBJETIVO: /liga mostra a faixa da pessoa no semestre (\"você está no top 25% da liga\"), a comparação com o semestre passado e, só pra quem ativar, a lista de quem também ativou.\n\nREGRAS DO REPO: leia AGENTS.md e specs/043-gamificacao (Temporada). Use computeXp(memberId, {since, until}) (lib/xp.ts) e countFacts (lib/evidence.ts) sem editar. Badge 'quatro-semanas' vem da Onda 5. A feature fica atrás de LIGA_ON (env, padrão desligado): desligada, /liga dá 404 e o link não aparece. O fundador liga depois de conversar com 5 organizadores (040 #21). 390px sem scroll.\n\nDADOS (054): ALTER members ADD \"leagueOptIn\" INTEGER NOT NULL DEFAULT 0. Registre em ANONYMIZE (0).\n\nlib/league.ts:\n- semestre(now): mar–jul e ago–dez em BRT (a \"temporada\" da 043), com início e fim.\n- pontos(memberId, semestre) = entregas travadas + prêmios + semanas do \"4 semanas\" cumpridas, a partir dos fatos. Presença sozinha não pontua.\n- faixa(memberId): 'top 10%', 'top 25%', 'top 50%' ou 'começando', calculada entre quem tem pelo menos 1 ponto no semestre.\n- rankingOptIn(semestre, communityId?): só membros com leagueOptIn=1, até 50.\n\nPÁGINA /liga (logada): a faixa, \"neste semestre x no passado\", a regra numa frase (\"A liga soma o que você entregou neste semestre.\"), o toggle \"aparecer na lista da liga\" e, pra quem ativou, a lista com filtro por comunidade. Nunca \"#847\".\n\nXpBar: link \"ver sua faixa na liga\" quando LIGA_ON.\n\nACEITE:\n1. Com LIGA_ON desligado, /liga dá 404.\n2. Os pontos batem com os fatos do semestre.\n3. Quem não ativou não aparece na lista, mas vê a própria faixa.\n4. Nenhuma posição numérica aparece.\n5. 390px sem scroll.\n\nTESTES: unit de semestre, pontos e faixa; API do opt-in e da flag."
+    }
+   ]
+  },
+  {
+   "nome": "Onda 6: arquivo, conversa privada, espaços e rede aberta",
+   "features": [
+    {
+     "slug": "copilot-do-arquivo",
+     "titulo": "Copilot do arquivo: 'já fizeram isso?' com citação, sem nota",
+     "porque": "O Colosseum transformou o histórico em produto. O HackaHub tem projetos, campeões, desafios e dúvidas das edições, e o roadmap 037 já anotou isso como próximo passo. A regra que não muda é IA nunca dar nota.",
+     "tamanho": "G",
+     "migration": "055",
+     "dependeDe": [
+      "busca-global",
+      "vitrine-de-projeto"
+     ],
+     "arquivos": [
+      "migrations/055_copilot.sql",
+      "lib/copilot/retrieve.ts (novo)",
+      "lib/copilot/answer.ts (novo)",
+      "lib/copilot/guard.ts (novo)",
+      "components/CopilotBox.tsx (novo)",
+      "app/copilot/page.tsx (novo)",
+      "app/api/copilot/route.ts (novo)",
+      "app/api/copilot/feedback/route.ts (novo)",
+      "app/h/[id]/duvidas/page.tsx",
+      "lib/ratelimit.ts (2 chaves)",
+      "tests/unit/copilot.test.ts",
+      "tests/api/copilot.test.ts",
+      "tests/e2e/copilot.spec.ts"
+     ],
+     "spec": "OBJETIVO: a pessoa pergunta em português e recebe resultados reais do arquivo, com link. Com LLM configurado, recebe também um resumo curto que cita só esses resultados.\n\nREGRAS DO REPO: leia AGENTS.md. Busca por searchAll (lib/search.ts) e pelas libs existentes (lib/projects.ts, lib/archive.ts, lib/schedule.ts, lib/eventTerms.ts, lib/questions.ts), só importando. LLM OPCIONAL e desligado por padrão: sem COPILOT_LLM_URL e COPILOT_LLM_KEY, a feature funciona inteira só com resultados. Provedor compatível com a API de chat da OpenAI (URL, chave e modelo por env), timeout de 15s, erro cai pro modo só resultados. Não edite Header nem HeaderNav (o link entra pela DM nesta onda). 401 JSON, 390px sem scroll.\n\nDADOS (055): CREATE TABLE copilot_queries (id, \"memberId\" FK, \"question\" (até 300), \"intent\", \"resultCount\", \"usedLlm\", \"helpful\", \"createdAt\"). Apaga o que tem mais de 90 dias no próprio insert.\n\nINTENÇÕES (lib/copilot/retrieve.ts, regras e palavras-chave, sem LLM):\n- 'similar' (\"já fizeram\", \"existe projeto\"): projetos visíveis por FTS em título, tagline, description e howBuilt, mais project_tech. Até 8, com edição, colocação, selo e link /p.\n- 'stack' (\"quem usou\", \"com X\"): projetos e pessoas por project_tech e skills (sem bloqueados).\n- 'edicao' (\"quem ganhou\", \"campeões\"): prize_winners da edição citada ou das últimas.\n- 'regras' (\"prazo\", \"horário\", \"regra\", dentro de /h/[id]): campos da edição, schedule_items, termos e dúvidas resolvidas.\n- Fallback searchAll.\n- Cada resultado vira {n, tipo, titulo, href, trecho}.\n\nGUARDA (lib/copilot/guard.ts):\n- Pedido de avaliação (\"minha ideia é boa\", \"vou ganhar\", \"dá nota\", \"qual a chance\") recebe a resposta fixa \"Eu não avalio ideia nem projeto. Isso é com o júri e com você. Olha o que já foi feito parecido:\" e os resultados de 'similar'.\n- Resumo do LLM: até 120 palavras, PT-BR, só com os fatos, citando [n].\n- Pós-filtro: citação [n] inexistente, nota numérica (\\b\\d+(,\\d+)?\\s*/\\s*10\\b ou a palavra \"nota\") ou limite estourado descartam o resumo.\n- Prompt de sistema versionado em lib/copilot/answer.ts.\n\nAPI: POST /api/copilot {q, hackathonId?} devolve {id, intent, facts, summary|null}. Chave 'copilot' (30/h) e 'copilot-llm' (20/dia, só quando chama o LLM). q de 3 a 300. POST /api/copilot/feedback {id, helpful}.\n\nUI: components/CopilotBox.tsx (campo, exemplos clicáveis \"Já fizeram app de carona universitária?\", \"Quem já usou Supabase?\", \"Quem ganhou a última Hack Inova?\", cards com link, resumo com [n] ancorado, \"ajudou? sim/não\" e o rodapé \"O copilot só mostra o que existe no HackaHub. Ele não avalia projeto.\"). /copilot usa a caixa. /h/[id]/duvidas ganha a caixa \"pergunte ao arquivo da edição\" com hackathonId, antes de abrir dúvida nova.\n\nACEITE:\n1. Sem env de LLM, facts e summary null.\n2. \"minha ideia é boa?\" recebe a resposta fixa e os similares.\n3. LLM mockado com \"nota 8/10\" é descartado.\n4. [9] com 3 fatos é descartado.\n5. Projeto invisível nunca aparece.\n6. 390px sem scroll.\n\nTESTES: unit (intenção, guarda, pós-filtro), API com fetch do LLM mockado e e2e (perguntar e clicar no resultado)."
+    },
+    {
+     "slug": "dm-com-trava",
+     "titulo": "Mensagem direta com trava (seguir mútuo, mesmo time, encontro, vaga aceita ou pedido aceito)",
+     "porque": "DM transforma leitor em conexão (Circle). Aberta pra todo mundo vira spam. A trava usa os laços que as ondas anteriores criaram e o bloqueio da Onda 0.",
+     "tamanho": "G",
+     "migration": "056",
+     "dependeDe": [
+      "seguir-pessoas",
+      "encontros-na-edicao",
+      "vagas-de-time",
+      "bloqueio-e-denuncia"
+     ],
+     "arquivos": [
+      "migrations/056_dm.sql",
+      "lib/dm.ts (novo)",
+      "app/mensagens/page.tsx (novo)",
+      "app/mensagens/[id]/page.tsx (novo)",
+      "components/DmThread.tsx (novo)",
+      "app/api/dm/** (novo)",
+      "components/Header.tsx",
+      "components/HeaderNav.tsx",
+      "app/u/[username]/page.tsx",
+      "lib/ratelimit.ts (2 chaves)",
+      "tests/api/dm.test.ts",
+      "tests/e2e/dm.spec.ts"
+     ],
+     "spec": "OBJETIVO: conversa privada 1 a 1 entre quem já tem laço, mais pedido de conversa pra quem não tem.\n\nREGRAS DO REPO: leia AGENTS.md. Relação entre duas pessoas segue PEER_COLUMNS (memberId e peerId; na exclusão os dois somem). Use member_blocks e isBlockedEither (lib/blocks.ts), createReport e ReportDialog (lib/reports.ts), canNetwork, member_follows, sameTeam, encounters e opening_applications, só lendo. Admin e organizador NÃO leem DM; a única exceção é o snapshot da mensagem denunciada. 401 JSON, 390px sem scroll.\n\nDADOS (056):\n- CREATE TABLE dm_threads (id, \"memberId\" FK (menor id), \"peerId\" FK (maior id), \"status\" CHECK IN ('aberta','pedido','recusada'), \"requestedBy\" INTEGER REFERENCES members(\"id\") ON DELETE CASCADE, \"declinedAt\", \"createdAt\", \"lastMessageAt\", UNIQUE(memberId, peerId), CHECK(memberId < peerId)).\n- CREATE TABLE dm_messages (id, \"threadId\" FK ON DELETE CASCADE, \"memberId\" FK (autor), \"body\" (até 2000), \"createdAt\").\n- CREATE TABLE dm_reads (\"threadId\" FK ON DELETE CASCADE, \"memberId\", \"lastReadId\", PK).\n- Sem dm_blocks nem dm_reports: bloqueio é member_blocks e denúncia é reports (targetType 'dm', snapshot da mensagem).\n\nTRAVA (lib/dm.ts, canMessage(a, b) devolve {estado: 'livre'|'pedido'|'bloqueado', motivo}):\n- Bloqueado: qualquer bloqueio ou canNetwork falso de um dos lados.\n- Livre: os dois se seguem; ou sameTeam não vazio; ou encontro confirmado; ou candidatura aceita entre os dois.\n- Pedido: sem laço. 1 mensagem de até 280 como pedido; o outro aceita ou recusa. Máximo 1 pedido pendente por par e 5 por dia (chave 'dm-requests'). Recusado não pede de novo por 30 dias (400 com \"Espere um tempo antes de pedir de novo.\").\n- Mensagens: chave 'dm' (120/h).\n\nAPI: GET /api/dm; POST /api/dm {username, body}; GET /api/dm/[id]?antes=; POST /api/dm/[id]/messages; POST /api/dm/[id]/accept e /decline; POST /api/dm/messages/[id]/report (createReport com snapshot; se os dois estão na mesma edição em andamento, a Onda 0 já gera o incidente). Thread alheia dá 404, nunca 403.\n\nUI:\n- /mensagens: lista e caixa de pedidos.\n- /mensagens/[id]: polling de 15s só com a aba visível, Enter envia, Shift+Enter quebra linha, menu com bloquear e denunciar.\n- Header: \"mensagens\" com contador de não lidas (mesmo polling do sino). Você é dono de components/Header.tsx e HeaderNav.tsx nesta onda: adicione também { href:'/copilot', label:'copilot', match:['/copilot'] } no NAV_IN (a página vem da feature copilot desta onda; mergeie no fim da onda).\n- /u/[username] (você é dono nesta onda): botão \"mensagem\" ou \"pedir conversa\", com o motivo da trava num texto acessível. Some com bloqueio.\n- Notificação type 'dm' só no primeiro aviso de cada thread não lida.\n\nPRÉ-REQUISITO: admin definido em prod (F1), senão a denúncia de DM fora de evento não tem leitor.\n\nACEITE:\n1. Quem se segue conversa direto.\n2. Desconhecido manda pedido, o outro aceita e a thread abre.\n3. Pedido de novo em menos de 30 dias depois de recusado dá 400.\n4. Bloqueio impede a mensagem e esconde o botão.\n5. Thread alheia dá 404.\n6. A denúncia cria report com o snapshot e mais nada fica visível pro admin.\n7. Exclusão LGPD apaga as threads.\n8. 390px sem scroll.\n\nTESTES: API (cada caminho da trava, 404, limites, denúncia, LGPD) e e2e com 2 contextos de navegador."
+    },
+    {
+     "slug": "espacos-da-comunidade",
+     "titulo": "Espaços dentro da comunidade (geral, ajuda, vagas, mostra) estilo Circle",
+     "porque": "Comunidade grande com um mural só vira barulho. Os Spaces do Circle e os canais do Slack do Hack Club organizam por assunto e deixam a pessoa entrar só no que interessa.",
+     "tamanho": "M",
+     "migration": "057",
+     "dependeDe": [
+      "comunidade-dona-do-espaco"
+     ],
+     "arquivos": [
+      "migrations/057_espacos.sql",
+      "lib/communitySpaces.ts (novo)",
+      "lib/posts.ts",
+      "components/PostComposer.tsx",
+      "app/comunidade/[slug]/page.tsx",
+      "app/comunidade/[slug]/s/[space]/page.tsx (novo)",
+      "app/comunidade/[slug]/espacos/page.tsx (novo)",
+      "app/api/communities/[slug]/spaces/** (novo)",
+      "app/api/posts/route.ts",
+      "tests/api/espacos.test.ts",
+      "tests/e2e/espacos.spec.ts"
+     ],
+     "spec": "OBJETIVO: o mural da comunidade se divide em espaços. Quem posta escolhe o espaço; dono ou organizador cria, renomeia, ordena e arquiva.\n\nREGRAS DO REPO: leia AGENTS.md. Guardas de lib/communityAuth.ts. Você é dono de lib/posts.ts, PostComposer e app/comunidade/[slug]/page.tsx nesta onda. Novo filtro = query de ids própria mais hydratePosts. 401 JSON, 390px sem scroll.\n\nDADOS (057):\n- CREATE TABLE community_spaces (id, \"communityId\" FK ON DELETE CASCADE, \"slug\" CHECK (\"slug\" ~ '^[a-z0-9-]{2,30}$'), \"name\" (até 40), \"description\" (até 200), \"postPolicy\" CHECK IN ('membros','organizacao') DEFAULT 'membros', \"position\" INTEGER, \"archivedAt\", UNIQUE(communityId, slug)).\n- ALTER posts ADD \"spaceId\" INTEGER REFERENCES community_spaces(\"id\") ON DELETE SET NULL.\n- INSERT dos 4 espaços padrão (geral, ajuda, vagas, mostra com a descrição \"mostra o que você fez\") pra toda comunidade existente; UPDATE dos posts antigos com communityId pro geral.\n- Trigger AFTER INSERT ON communities (plpgsql) que cria os 4 espaços. Não edite lib/communities.ts. O teste de migration roda no PGlite e prova que comunidade nova ganha os 4.\n\nREGRAS: até 8 espaços ativos; espaço 'organizacao' só aceita post de dono ou organizador (403); arquivar esconde do seletor e mantém os posts; postIdsBySpace(spaceId, meId, antes?) em lib/communitySpaces.ts; POST /api/posts aceita spaceId (da mesma comunidade e não arquivado, senão 400); post de comunidade sem spaceId cai no geral; quem só segue (community_follows) continua sem postar.\n\nUI: barra de espaços na página da comunidade (chips com scroll horizontal DENTRO da barra) e o mural do espaço ativo; rota /comunidade/[slug]/s/[space]; seletor de espaço no PostComposer quando em comunidade; /comunidade/[slug]/espacos pra dono e organizador (criar, renomear, ordenar com setas, arquivar). Vazio: \"Nada em #ajuda ainda. Pergunte o que está travando você.\"\n\nACEITE:\n1. Comunidade antiga ganha os 4 espaços e os posts vão pro geral.\n2. Comunidade nova ganha os 4 pelo trigger.\n3. Membro posta em espaço 'organizacao' e leva 403.\n4. spaceId de outra comunidade dá 400. Nono espaço dá 400.\n5. Arquivado some do seletor.\n6. 390px sem scroll.\n\nTESTES: API, migration (antiga e nova) e e2e (postar em #ajuda e filtrar)."
+    },
+    {
+     "slug": "rss-aberto",
+     "titulo": "RSS/Atom do perfil aberto, do diário do projeto e do mural da comunidade",
+     "porque": "É o primeiro passo de rede aberta, sem custo de manutenção: qualquer leitor de feed, e boa parte do fediverso, segue um Atom. Fica separado da federação ActivityPub, que vira spike.",
+     "tamanho": "P",
+     "migration": "",
+     "dependeDe": [
+      "perfil-rico",
+      "projeto-vivo"
+     ],
+     "arquivos": [
+      "lib/feeds.ts (novo)",
+      "app/u/[username]/feed.xml/route.ts (novo)",
+      "app/p/[teamId]/feed.xml/route.ts (novo)",
+      "app/comunidade/[slug]/feed.xml/route.ts (novo)",
+      "app/u/[username]/layout.tsx (novo)",
+      "app/p/[teamId]/layout.tsx (novo)",
+      "app/comunidade/[slug]/layout.tsx (novo)",
+      "lib/access.ts",
+      "tests/api/feeds.test.ts"
+     ],
+     "spec": "OBJETIVO: feeds Atom 1.0 públicos, só do que já é público, com link rel=alternate nas páginas.\n\nREGRAS DO REPO: leia AGENTS.md. Use listPostIds/hydratePosts (lib/posts.ts) e postIdsByTeam (lib/projectUpdates.ts) só importando. NÃO edite app/u/[username]/page.tsx (é da DM nesta onda), app/comunidade/[slug]/page.tsx (espaços) nem app/p/[teamId]/page.tsx. O rel=alternate vai em layout.tsx novos de cada segmento, só com generateMetadata devolvendo alternates.types {'application/atom+xml': url} e children sem markup extra. Antes, confira se as páginas definem metadata.alternates (o Next sobrescreve o do layout); se definirem, documente no PR e não mexa. As rotas feed.xml entram em PUBLIC_APIS ou PUBLIC_PAGES de lib/access.ts, conforme o padrão do arquivo.\n\nFEEDS (lib/feeds.ts monta o XML, escapando tudo):\n- /u/[username]/feed.xml: posts globais da pessoa (sem edição nem comunidade) e atualizações dos projetos dela, só se publicProfile=1 e canNetwork. Senão 404.\n- /p/[teamId]/feed.xml: diário do projeto, só se o projeto estiver em visibleArchive. Senão 404.\n- /comunidade/[slug]/feed.xml: posts com communityId da comunidade não escondida e não excluída, de todos os espaços.\n- 30 itens, conteúdo em texto, link pro /post/[id], Cache-Control max-age=600.\n\nACEITE:\n1. Perfil fechado dá 404.\n2. Post de mural de edição nunca entra no feed do perfil.\n3. Comunidade escondida dá 404.\n4. O XML valida como Atom (teste com parser).\n5. As páginas têm o link rel=alternate.\n\nTESTES: API de cada feed (visibilidade e formato)."
+    }
+   ]
+  }
+ ],
+ "naoFazer": [
+  "Token, NFT, voto on-chain ou bicho como ativo negociável",
+  "IA dando nota, ordenando entrega, julgando desafio ou gerando avatar ou bio",
+  "Proctoring, time-tracking ou vigiar tela de participante",
+  "XP, nível, badge ou item do bicho por like, post, comentário, repost, seguidor, encontro ou indicação",
+  "Fato que conta em edição com menos de 15 check-ins, em comunidade não verificada, ou presença e prêmio pra quem organiza a mesma edição",
+  "Contador público de seguidores, 'amigos em comum', grafo público de quem conhece quem ou lista de seguidores aberta a visitante",
+  "Ranking geral como tela padrão, posição numérica (#847), pódio em /membros ou ranking de encontros e reações: liga só por faixa e com lista opt-in",
+  "Contador de sequência que zera: semanas construindo é cumulativo, com folga",
+  "Feed algorítmico: a timeline é cronológica",
+  "Usar o nome 'quebra-gelo' ou copiar espécies, nomes, textos, missões, eixos ('Alcance', 'Profundidade') ou regras de itens do quebra-gelo do Julio Akamine: só a ideia de bichinho em evento",
+  "Espalhar regra de menor pelas features: o HackaHub é 18+ (lib/eventTerms.ts) e toda superfície pública ou de contato chama só canNetwork()",
+  "Criar coluna que já existe (members.city, institution, course; team_projects.technologies, priorWork, afterNotes) ou vocabulário paralelo a PERSONAS",
+  "Fila de denúncia por tipo de conteúdo: toda denúncia vai pra tabela reports, roteada pra comunidade, edição ou admin",
+  "Coluna pessoal nova em members sem registrar em ANONYMIZE (lib/privacy.ts)",
+  "Dedupe de notificação por actorUsername: usar actorId",
+  "Federar post de mural de edição ou comunidade ou de quem não fez opt-in; receber resposta do fediverso; implementar ActivityPub antes do spike dizer que vale",
+  "DM aberta pra qualquer pessoa; admin ou organizador lendo DM (só o snapshot da mensagem denunciada vai pra fila)",
+  "Upload de mídia com armazenamento próprio agora: galeria e capa por URL https até existir moderação de imagem",
+  "Copy atacando ferramenta ('sem Forms', 'sem grupo de zap'), emoji na UI, tripla negativa ou texto com cara de GPT; escrever 'Orkut' em tela",
+  "Chat, Discord, Hopin ou Slido próprios: a live é embed de YouTube ou Twitch",
+  "Modo online de encontro ('call na sala da edição') enquanto a sala não existir",
+  "Feature que só o admin global opera: toda moderação nova vai também pro dono da comunidade ou pro organizador da edição"
+ ],
+ "riscos": [
+  "Pré-requisitos do fundador: F1 (admin definido em prod) antes das ondas 0, 2 (painel de métricas) e 6 (denúncia de DM), senão a fila global não tem leitor. F2 (Resend) antes do digest valer, senão ele grava 'pulado'. F7: cada cron novo (xp, digest, continuidade, quatro-semanas) traz deploy/<nome>.sh e duas linhas no crontab (prod e stage com minutos defasados), mas só entra em vigor quando o fundador reinstala o crontab na VPS. Agente não aplica isso.",
+  "Checkpoint entre as ondas 2 e 3: a Onda 3 (bicho, projeto vivo, vagas) só começa depois que o fundador olhar /admin/metricas depois da próxima edição. Meta da 044: 30% dos times com pelo menos 1 depoimento. Se não bater, rever as ondas 3 a 6 antes de gastar nelas.",
+  "A branch feat-rep-ledger e a worktree dela só têm a spec 043, sem código. O nivel-por-entrega substitui a F0 de rep ledger. Se alguém retomar o ledger, usa migration a partir de 060 pra não disputar 031 a 057. O runner aplica por nome de arquivo (lib/db.ts), então merge fora de ordem funciona, mas número repetido quebra.",
+  "Tabelas compartilhadas com uma linha por feature: lib/ratelimit.ts (RATE_LIMITS), deploy/crontab.txt, lib/access.ts e as constantes ANONYMIZE e PEER_COLUMNS de lib/privacy.ts. O conflito de merge é juntar linhas. O teste de colunas da Onda 0 falha se alguém esquecer o ANONYMIZE, e isso é de propósito.",
+  "Donos de arquivo por onda, pra evitar conflito: HeaderNav é da timeline (Onda 2), de vagas (Onda 3), de desafios (Onda 5) e da DM (Onda 6); /u é do bloqueio (0), seguir (1), perfil-rico (2), bicho-avatar (4) e DM (6); lib/posts.ts é da conversa (1), menções (2), projeto-vivo (3), repost (4) e espaços (6); AdminTabs é dos encontros (5). Algumas features linkam páginas de outra feature da mesma onda (timeline com busca, encontros com 4 semanas, DM com copilot): o deploy dessas ondas só sai com todas mergeadas.",
+  "A arte é o custo real do bicho: 6 espécies, 5 acessórios, 10 itens e 3 estágios. Espécie como dado declarativo e a grade /admin/bichos com screenshot reduzem o risco, mas o merge depende de revisão visual humana. Se o motor sair sem o contrato completo de montar(config, {itens, estagio, extras}), as ondas 4 e 5 vão querer editar voxel.ts.",
+  "Celular fraco e sem WebGL: o SVG é o caminho padrão e o 3D é enfeite. Medir o bundle de three (só import dinâmico) e o tempo do toSvg com cache frio no servidor.",
+  "Mudar o XP pra fatos derruba o nível de quem farmou like. O valor antigo fica em xpLegado. Publicar o texto do changelog antes do deploy, pra não parecer bug.",
+  "A regra antifarm (15 check-ins, comunidade verificada, organizador não pontua na própria edição) deixa de fora edições pequenas legítimas. Se isso doer, o caminho é o admin verificar a comunidade, não baixar o número.",
+  "A trava de contato das vagas e dos encontros segura só o e-mail e o canal escolhido: GitHub e LinkedIn já aparecem no /u logado pra qualquer membro. Esconder isso é decisão separada, que mexe no que já está no ar.",
+  "Abrir /p e /u pra deslogado (opt-in) mexe com LGPD e com a spec 039. Toda superfície pública passa por canNetwork, e o OG de perfil fechado não pode trazer nome.",
+  "Os encontros podem ser farmados (trocar código pelo zap). A trava é confirmação dos dois, check-in, janela do evento, um por par e resposta genérica. Mesmo assim, ligar primeiro numa edição piloto da Hack Inova, com o organizador acionando.",
+  "O copilot precisa de validação de uso com a galera da Hack Inova (roadmap 037) antes de ligar o LLM. O modo só resultados já entrega valor e não custa nada.",
+  "A federação tem ganho pequeno pro público-alvo [palpite]. Por isso virou spike. Se o estudo disser 'não vale agora', o RSS fica como a parte aberta da rede.",
+  "O build e os testes rodam na VPS compartilhada (asyn). Muitas features em worktrees paralelas pressionam disco e CPU, e já existem worktrees antigas abertas em .claude/worktrees. Limitar a 3 worktrees buildando ao mesmo tempo, com nice, limpar as antigas e não tocar serviços dos outros produtos."
+ ],
+ "ajustesSintese": "ver specs/046-rede-social/sintese.md"
+}
