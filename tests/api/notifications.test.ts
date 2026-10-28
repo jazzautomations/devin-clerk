@@ -42,7 +42,7 @@ async function notificationsOf(member: number) {
     .prepare(
       "SELECT * FROM notifications WHERE memberId = ? ORDER BY id DESC",
     )
-    .all(member) as { type: string; text: string; read: number }[];
+    .all(member) as { type: string; text: string; read: number; href: string | null }[];
 }
 
 beforeEach(async () => {
@@ -151,7 +151,7 @@ describe("gatilhos — like e comentário geram notificação", () => {
     ).id;
   }
 
-  it("like no post de outro notifica o autor; unlike não notifica", async () => {
+  it("reação no post de outro notifica o autor com o link do post; tirar não notifica", async () => {
     const { POST: like } = await import("@/app/api/posts/[id]/like/route");
     const postId = await seedPost("clerk_author");
     const author = await memberId("clerk_author");
@@ -164,18 +164,19 @@ describe("gatilhos — like e comentário geram notificação", () => {
     expect(res.status).toBe(200);
     const notes = await notificationsOf(author);
     expect(notes).toHaveLength(1);
-    expect(notes[0].type).toBe("like");
-    expect(notes[0].text).toBe("@u_clerk_liker curtiu seu post");
+    expect(notes[0].type).toBe("reaction");
+    expect(notes[0].text).toBe("@u_clerk_liker reagiu ao seu post: curti");
+    expect(notes[0].href).toBe(`/post/${postId}`);
     expect(notes[0].read).toBe(0);
 
-    // toggle de novo = unlike — nenhuma notificação nova
-    await like(new Request("http://t", { method: "POST" }), {
+    // tirar a reação — nenhuma notificação nova
+    await like(new Request("http://t", { method: "POST", body: JSON.stringify({ kind: null }) }), {
       params: Promise.resolve({ id: String(postId) }),
     });
     expect(await notificationsOf(author)).toHaveLength(1);
   });
 
-  it("like no próprio post não notifica", async () => {
+  it("reação no próprio post é recusada e não notifica", async () => {
     const { POST: like } = await import("@/app/api/posts/[id]/like/route");
     const postId = await seedPost("clerk_na");
     const self = await memberId("clerk_na");
@@ -183,7 +184,7 @@ describe("gatilhos — like e comentário geram notificação", () => {
     const res = await like(new Request("http://t", { method: "POST" }), {
       params: Promise.resolve({ id: String(postId) }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     expect(await notificationsOf(self)).toHaveLength(0);
   });
 
@@ -232,7 +233,7 @@ describe("gatilhos — like e comentário geram notificação", () => {
     });
     const [n] = await listNotifications(author);
     expect(n.actorUsername).toBe(await usernameOf(liker));
-    expect(n.href).toBe("/feed");
+    expect(n.href).toBe(`/post/${postId}`);
   });
 });
 

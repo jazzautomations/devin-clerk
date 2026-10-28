@@ -4,8 +4,6 @@ import { getCommunityBySlug, getMembership } from "@/lib/communities";
 import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
 import { createPost, listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
-import { XP } from "@/lib/game";
-import { awardXp, checkBadges } from "@/lib/xp";
 import { limitOrNull } from "@/lib/ratelimit";
 
 export async function GET(req?: Request) {
@@ -98,11 +96,10 @@ export async function POST(req: Request) {
   }
   let post;
   try {
-    post = await createPost(member.id, body.body, body.link, hackathonId, communityId);
-  } catch {
-    return Response.json({ error: "Link inválido" }, { status: 400 });
+    post = await createPost(member.id, body.body, typeof body.link === "string" ? body.link : null, hackathonId, communityId);
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : "Link inválido" }, { status: 400 });
   }
-  await awardXp(member.id, XP.post);
-  await checkBadges(member.id);
+  // post não dá XP (plano 046): o que conta é presença e entrega
   return Response.json({ post }, { status: 201 });
 }

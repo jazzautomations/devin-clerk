@@ -129,13 +129,13 @@ describe("deleteComment — autor ou admin", () => {
     ).toBe(1);
   });
 
-  it("dono do post NÃO apaga comentário alheio — só autor ou admin", async () => {
+  it("dono do post modera a conversa dele (canModeratePost, migration 034)", async () => {
     const owner = await makeMember("mod_c5");
     const commenter = await makeMember("mod_c6");
     const post = await createPost(owner.id, "post do owner");
     const c = await createComment(post.id, commenter.id, "comentário de terceiro");
-    expect(await deleteComment(c.id, owner)).toBe(false);
-    expect(await listComments(post.id)).toHaveLength(1);
+    expect(await deleteComment(c.id, owner)).toBe(true);
+    expect(await listComments(post.id)).toHaveLength(0);
   });
 
   it("comentário inexistente → false", async () => {

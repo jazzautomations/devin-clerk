@@ -221,11 +221,7 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
       await db.prepare("DELETE FROM registrations WHERE memberId = ? AND hackathonId = ?").run(memberId, r.hackathonId);
       if (future) await dropFromEdition(memberId, r.hackathonId, "conta_excluida");
     }
-    // dependentes sem cascade dos posts da pessoa
-    await db.prepare("DELETE FROM likes WHERE postId IN (SELECT id FROM posts WHERE memberId = ?)").run(memberId);
-    await db
-      .prepare("DELETE FROM post_comments WHERE postId IN (SELECT id FROM posts WHERE memberId = ?)")
-      .run(memberId);
+    // reações e comentários dos posts da pessoa saem por cascade (migration 034)
     await db
       .prepare(
         `DELETE FROM registration_answers WHERE registrationId IN

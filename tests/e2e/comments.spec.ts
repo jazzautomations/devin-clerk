@@ -48,39 +48,19 @@ async function ensureThread(): Promise<number> {
   return id;
 }
 
-// expandir exige React hidratado; em dev frio o primeiro clique pode cair
-// antes da hidratação — retenta até a thread abrir (toggle é idempotente:
-// clique extra fecha, próximo reabre com cache, converge rápido)
-async function expandThread(
-  page: import("@playwright/test").Page,
-): Promise<ReturnType<import("@playwright/test").Page["locator"]>> {
-  const post = page.locator("li", { hasText: MARKER });
-  const toggle = post.getByRole("button", { name: /comentários/i });
-  await expect(toggle).toBeVisible();
-  for (let i = 0; i < 8; i++) {
-    await toggle.click();
-    try {
-      await expect(post.getByText(C1)).toBeVisible({ timeout: 2000 });
-      return post;
-    } catch {
-      // clique caiu antes da hidratação ou fechou — tenta de novo
-    }
-  }
-  await expect(post.getByText(C1)).toBeVisible();
-  return post;
-}
-
 test.describe("comentários — conversa pública no feed", () => {
-  test("anon vê a contagem e lê a thread expandida", async ({ memberPage: page }) => {
-    await ensureThread();
-    await page.goto("/feed");
-    const post = await expandThread(page);
-    // thread pública: ordem cronológica, autor linkado pro perfil
-    await expect(post.getByText(C1)).toBeVisible();
-    await expect(post.getByText(C2)).toBeVisible();
-    await expect(
-      post.getByRole("link", { name: "@e2e_commenter" }).first(),
-    ).toHaveAttribute("href", "/u/e2e_commenter");
+  test("membro vê a contagem no feed e lê a thread no endereço do post", async ({ memberPage: page }) => {
+    const postId = await ensureThread();
+    await page.goto("/feed?aba=tudo");
+    const post = page.locator("li", { hasText: MARKER });
+    // migration 034: a conversa mora em /post/[id]; o feed mostra a contagem
+    await expect(post.getByRole("link", { name: /\d+ comentários/ })).toHaveAttribute("href", `/post/${postId}`);
+    await page.goto(`/post/${postId}`);
+    // thread: ordem cronológica, autor linkado pro perfil
+    const thread = page.getByTestId("thread");
+    await expect(thread.getByText(C1)).toBeVisible();
+    await expect(thread.getByText(C2)).toBeVisible();
+    await expect(thread.getByRole("link", { name: "@e2e_commenter" }).first()).toHaveAttribute("href", "/u/e2e_commenter");
   });
 
   test("anon não lê o feed: vai pro cadastro e volta pro /feed depois (spec 039)", async ({
