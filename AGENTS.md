@@ -73,6 +73,13 @@ horizontal nas rotas novas.
   publica pelo checklist; o dono chama organizador por e-mail. Admin global
   administra todas, esconde (`hidden`) e dá selo (`verified`). Hackathon
   publicado avisa só os membros da comunidade dele (`lib/editionLaunch.ts`).
+- Apoio da comunidade (migration 028, `lib/communitySupporters.ts`): dono/
+  organizador cadastra, ordena e remove apoiadores (tipos em
+  `lib/supportKinds.ts`, inclusive não-financeiros) em
+  `/comunidade/[slug]/apoio`; a página mostra "Quem apoia" só com alguém
+  cadastrado. "Quero apoiar" é lead do `/api/leads` com `community` (slug):
+  fica ligado à comunidade, avisa dono/organizadores e sai da fila do /admin.
+  Patrocínio por edição continua em `lib/editionSponsors.ts`.
 
 ## UI
 

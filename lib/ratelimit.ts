@@ -43,6 +43,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "community-notices": { limit: 10, windowMs: HOUR }, // POST …/[slug]/notices
   "community-invites": { limit: 20, windowMs: HOUR }, // POST …/[slug]/organizers
   "community-report": { limit: 5, windowMs: HOUR }, // POST …/[slug]/report
+  // apoiadores (028): cadastrar, ordenar e remover contam no mesmo balde
+  "community-supporters": { limit: 60, windowMs: HOUR }, // POST/PATCH/DELETE …/[slug]/supporters
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

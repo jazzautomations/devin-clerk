@@ -31,7 +31,12 @@ describe("createLead — validação", () => {
   });
 
   it("cria com message e cada interest da whitelist", async () => {
-    for (const interest of LEAD_INTERESTS) {
+    // 'comunidade' só existe ligado a uma comunidade (migration 028; coberto
+    // em tests/api/community-support.test.ts)
+    await expect(
+      createLead({ company: "Co comunidade", email: "c@co.dev", interest: "comunidade" }),
+    ).rejects.toThrow(/comunidade/);
+    for (const interest of LEAD_INTERESTS.filter((i) => i !== "comunidade")) {
       const { lead } = await createLead({
         company: `Co ${interest}`,
         email: `${interest}@co.dev`,

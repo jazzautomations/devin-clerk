@@ -4,7 +4,7 @@ import { useState } from "react";
 import { userMessage } from "@/lib/apiError";
 import {
   LEAD_INTEREST_LABELS,
-  LEAD_INTERESTS,
+  MARCA_INTERESTS,
   type LeadInterest,
 } from "@/lib/leadInterests";
 
@@ -104,7 +104,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           onChange={(e) => setInterest(e.target.value as LeadInterest)}
           className={inputCls}
         >
-          {LEAD_INTERESTS.filter((i) => i !== "organizar").map((i) => (
+          {MARCA_INTERESTS.map((i) => (
             <option key={i} value={i}>
               {LEAD_INTEREST_LABELS[i]}
             </option>

@@ -9,6 +9,8 @@ import { EditionRows } from "@/components/EditionRows";
 import { FeedSection } from "@/components/FeedSection";
 import { PublicCard } from "@/components/PublicCard";
 import { JoinButton, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
+import { SupportCommunityForm } from "@/components/CommunitySupportActions";
+import { CommunitySupporters } from "@/components/CommunitySupporters";
 import {
   getCommunityItem,
   getMembership,
@@ -17,8 +19,10 @@ import {
   listNotices,
   podiumFor,
 } from "@/lib/communities";
+import { listSupporters } from "@/lib/communitySupporters";
 import { parseEventTime } from "@/lib/eventTime";
 import { getCommunityHackathons } from "@/lib/hackathons";
+import { countCommunityLeads } from "@/lib/leads";
 import { listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
 import { absoluteUrl } from "@/lib/seo";
@@ -59,44 +63,52 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const member = userId ? await currentMember() : null;
   if (!c || (c.hidden && member?.role !== "admin")) notFound();
   const now = new Date();
-  const { upcoming, past, drafts } = await getCommunityHackathons(c.id, now);
+  const [{ upcoming, past, drafts }, supporters] = await Promise.all([getCommunityHackathons(c.id, now), listSupporters(c.id)]);
 
   // ---- sem conta: cartão mínimo ----
   if (!member) {
     return (
-      <PublicCard
-        kind="comunidade"
-        title={c.name}
-        subtitle={c.description}
-        path={`/comunidade/${c.slug}`}
-        facts={[
-          ["onde", communityPlace(c)],
-          // zero não é prova de nada: a linha some até alguém entrar
-          ...(c.members > 0 ? ([["membros", String(c.members)]] as [string, string][]) : []),
-          ...(c.verified ? ([["selo", "verificada pelo HackaHub"]] as [string, string][]) : []),
-        ]}
-        extra={
-          upcoming.length > 0 ? (
-            <div className="border-t-2 border-line px-5 py-4" data-testid="public-community-upcoming">
-              <p className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">próximos hackathons</p>
-              <ul className="mt-2 flex flex-col gap-1.5">
-                {upcoming.slice(0, 3).map((h) => (
-                  <li key={h.id} className="text-[15px]">
-                    <Link href={`/h/${h.id}`} className="font-bold underline-offset-4 hover:underline">
-                      {h.name}
-                    </Link>{" "}
-                    <span className="font-mono text-[12.5px] text-muted">
-                      · {fmtData(h.startsAt)} · {h.location ?? "online"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null
-        }
-      >
-        <CommunityLogo name={c.name} logoUrl={c.logoUrl} size="md" />
-      </PublicCard>
+      <>
+        <PublicCard
+          kind="comunidade"
+          title={c.name}
+          subtitle={c.description}
+          path={`/comunidade/${c.slug}`}
+          facts={[
+            ["onde", communityPlace(c)],
+            // zero não é prova de nada: a linha some até alguém entrar
+            ...(c.members > 0 ? ([["membros", String(c.members)]] as [string, string][]) : []),
+            ...(c.verified ? ([["selo", "verificada pelo HackaHub"]] as [string, string][]) : []),
+          ]}
+          extra={
+            <>
+              {upcoming.length > 0 && (
+                <div className="border-t-2 border-line px-5 py-4" data-testid="public-community-upcoming">
+                  <p className="font-mono text-[12px] tracking-[0.04em] text-muted uppercase">próximos hackathons</p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {upcoming.slice(0, 3).map((h) => (
+                      <li key={h.id} className="text-[15px]">
+                        <Link href={`/h/${h.id}`} className="font-bold underline-offset-4 hover:underline">
+                          {h.name}
+                        </Link>{" "}
+                        <span className="font-mono text-[12.5px] text-muted">
+                          · {fmtData(h.startsAt)} · {h.location ?? "online"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <CommunitySupporters supporters={supporters} variant="card" />
+            </>
+          }
+        >
+          <CommunityLogo name={c.name} logoUrl={c.logoUrl} size="md" />
+        </PublicCard>
+        <div className="mx-auto w-full max-w-2xl px-4 pb-12 sm:px-6">
+          <SupportCommunityForm slug={c.slug} name={c.name} />
+        </div>
+      </>
     );
   }
 
@@ -105,13 +117,14 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const isAdmin = member.role === "admin";
   const canManage = isAdmin || role === "dono" || role === "organizador";
   const isOwner = isAdmin || role === "dono";
-  const [members, notices, posts, podium, invites, registeredIds] = await Promise.all([
+  const [members, notices, posts, podium, invites, registeredIds, supportLeads] = await Promise.all([
     listCommunityMembers(c.id),
     listNotices(c.id, 5),
     listPosts(30, member.id, { communityId: c.id }),
     podiumFor(past.map((h) => h.id)),
     isOwner ? listCommunityInvites(c.id) : Promise.resolve([]),
     getRegistrationIds(member.id),
+    canManage ? countCommunityLeads(c.id) : Promise.resolve(0),
   ]);
   const organizers = members.filter((m) => m.role === "organizador");
   const owners = members.filter((m) => m.role === "dono");
@@ -161,6 +174,9 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
                 </Link>
                 <Link href={`/comunidade/${c.slug}/editar`} className="btn-ghost min-h-[44px]!" data-testid="community-edit">
                   editar
+                </Link>
+                <Link href={`/comunidade/${c.slug}/apoio`} className="btn-ghost min-h-[44px]!" data-testid="community-support-panel">
+                  apoio{supportLeads > 0 ? ` · ${supportLeads} ${supportLeads === 1 ? "pedido" : "pedidos"}` : ""}
                 </Link>
               </div>
             )}
@@ -270,6 +286,12 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
         </div>
 
         <aside className="flex min-w-0 flex-col gap-12">
+          {(supporters.length > 0 || !canManage) && (
+            <div className="flex flex-col gap-4">
+              <CommunitySupporters supporters={supporters} />
+              {!canManage && <SupportCommunityForm slug={c.slug} name={c.name} />}
+            </div>
+          )}
           {/* avisos */}
           <section id="avisos" aria-labelledby="avisos-title" className="flex scroll-mt-24 flex-col gap-4">
             <h2 id="avisos-title" className="text-[clamp(1.4rem,2.6vw,1.7rem)] leading-none font-extrabold tracking-[-0.03em]">
