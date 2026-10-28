@@ -9,7 +9,11 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
 process.env.HACKAHUB_RSVP_SECRET ||= "e2e-rsvp-secret-nao-usar-em-producao";
 // dossiê (migration 029): o server lê o "GitHub" de um servidor falso local
 // (tests/e2e/github-mock.mjs) — e2e nunca vai pra api.github.com
-const GITHUB_MOCK_PORT = PORT + 1000;
+// fetch (undici) recusa as "bad ports" do padrão Fetch: com E2E_PORT=3190 o
+// mock caía na 4190 (ManageSieve) e toda coleta virava "bad port"
+const FETCH_BAD_PORTS = new Set([4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
+let GITHUB_MOCK_PORT = PORT + 1000;
+while (FETCH_BAD_PORTS.has(GITHUB_MOCK_PORT)) GITHUB_MOCK_PORT += 100;
 process.env.HACKAHUB_GITHUB_API = `http://127.0.0.1:${GITHUB_MOCK_PORT}`;
 process.env.GITHUB_TOKEN = "";
 
