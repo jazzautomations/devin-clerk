@@ -66,6 +66,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
   // preferências de notificação (migration 040): cada toggle é um PATCH
   "notification-prefs": { limit: 60, windowMs: HOUR }, // PATCH /api/notifications/preferencias
+  // agenda da comunidade (migration 051): criar e editar evento, por membro
+  meetups: { limit: 10, windowMs: DAY }, // POST /api/meetups, PATCH /api/meetups/[id]
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
