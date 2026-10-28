@@ -60,6 +60,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   reports: { limit: 5, windowMs: HOUR }, // POST /api/reports — membro
   // seguir pessoa (migration 033): seguir e deixar de seguir no mesmo balde
   "member-follows": { limit: 60, windowMs: HOUR }, // POST/DELETE /api/members/[username]/follow
+  // busca global (migration 042): /api/search e a página /busca dividem o balde
+  search: { limit: 120, windowMs: HOUR }, // GET /api/search — membro
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
   // preferências de notificação (migration 040): cada toggle é um PATCH
