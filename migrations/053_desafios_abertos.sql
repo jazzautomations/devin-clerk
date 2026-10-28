@@ -29,7 +29,11 @@ CREATE TABLE open_challenges (
   "createdBy" INTEGER NOT NULL REFERENCES members("id"),
   "createdAt" TEXT NOT NULL DEFAULT sqlite_now(),
   "publishedAt" TEXT,
-  "resultAt" TEXT
+  "resultAt" TEXT,
+  -- tirado do ar pela moderação (dono, organizador ou admin): some das
+  -- listas e da página pra quem não modera; a linha fica de registro
+  "removedAt" TEXT,
+  "removedBy" INTEGER REFERENCES members("id") ON DELETE SET NULL
 );
 -- /desafios e o filtro por comunidade
 CREATE INDEX idx_open_challenges_community ON open_challenges ("communityId", "status");
@@ -45,8 +49,34 @@ CREATE TABLE open_challenge_entries (
   "summary" TEXT NOT NULL CHECK (char_length("summary") BETWEEN 1 AND 1000),
   "submittedAt" TEXT NOT NULL DEFAULT sqlite_now(),
   "place" INTEGER CHECK ("place" IS NULL OR "place" BETWEEN 1 AND 3),
+  -- entrega tirada pela moderação: some da lista, da contagem e do pódio
+  "removedAt" TEXT,
+  "removedBy" INTEGER REFERENCES members("id") ON DELETE SET NULL,
   UNIQUE ("challengeId", "memberId")
 );
 -- cada colocação sai uma vez por desafio
 CREATE UNIQUE INDEX idx_open_challenge_entries_place ON open_challenge_entries ("challengeId", "place") WHERE "place" IS NOT NULL;
 CREATE INDEX idx_open_challenge_entries_member ON open_challenge_entries ("memberId");
+
+-- Denúncia (032) de desafio e de entrega, roteada pra comunidade do desafio.
+-- Outra migration pode ter mexido na lista de tipos: em vez de reescrever a
+-- lista, junta os dois tipos novos à regra que estiver lá.
+DO $$
+DECLARE
+  r record;
+  expr text := NULL;
+BEGIN
+  FOR r IN
+    SELECT c.conname, pg_get_constraintdef(c.oid) AS def
+    FROM pg_constraint c
+    WHERE c.conrelid = 'reports'::regclass AND c.contype = 'c'
+      AND pg_get_constraintdef(c.oid) LIKE '%targetType%'
+  LOOP
+    expr := coalesce(expr || ' AND ', '') || regexp_replace(r.def, '^CHECK ', '');
+    EXECUTE format('ALTER TABLE reports DROP CONSTRAINT %I', r.conname);
+  END LOOP;
+  EXECUTE format(
+    'ALTER TABLE reports ADD CONSTRAINT "reports_targetType_check" CHECK ((%s) OR "targetType" IN (''desafio'', ''desafio_entrega''))',
+    coalesce(expr, 'false')
+  );
+END $$;

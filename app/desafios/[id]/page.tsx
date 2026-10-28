@@ -17,6 +17,7 @@ import {
 } from "@/lib/openChallenges";
 import { currentMember } from "@/lib/session";
 import { EntryForm } from "./EntryForm";
+import { RemoveButton, ReportButton } from "./Moderation";
 import { ResultForm } from "./ResultForm";
 
 // /desafios/[id] (migration 053): o que construir, regras, prêmio, prazo, a
@@ -61,9 +62,11 @@ function EntryLinks({ e }: { e: OpenChallengeEntry }) {
   );
 }
 
-function EntryItem({ e, testId }: { e: OpenChallengeEntry; testId: string }) {
+type EntryAction = { challengeId: number; viewerId: number; moderates: boolean };
+
+function EntryItem({ e, testId, act }: { e: OpenChallengeEntry; testId: string; act: EntryAction }) {
   return (
-    <li className="flex flex-col gap-2 border-t border-line py-4" data-testid={testId}>
+    <li className="flex flex-col gap-2 border-t border-line py-4" data-testid={testId} id={`entrega-${e.id}`}>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {e.place && <span className="chip bare bg-foreground! text-band!">{PLACE_LABELS[e.place]}</span>}
         <Link href={`/u/${e.username}`} className="flex min-w-0 items-center gap-2 font-bold underline-offset-4 hover:underline">
@@ -72,7 +75,20 @@ function EntryItem({ e, testId }: { e: OpenChallengeEntry; testId: string }) {
         </Link>
       </span>
       <p className="text-[14.5px] leading-relaxed break-words whitespace-pre-line text-[#2b2b2b]">{e.summary}</p>
-      <EntryLinks e={e} />
+      <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <EntryLinks e={e} />
+        {act.moderates ? (
+          <RemoveButton
+            url={`/api/open-challenges/${act.challengeId}/entries/${e.id}`}
+            confirmText="Tirar esta entrega do ar? Ela some da lista e do resultado, e quem entregou é avisado."
+            testId="entrega-tirar"
+          />
+        ) : (
+          e.memberId !== act.viewerId && (
+            <ReportButton targetType="desafio_entrega" targetId={e.id} targetLabel="esta entrega" authorUsername={e.username} />
+          )
+        )}
+      </span>
     </li>
   );
 }
@@ -81,13 +97,16 @@ export default async function DesafioPage({ params }: Props) {
   const r = await load((await params).id);
   if (!r) notFound();
   const { member, c } = r;
-  const [v, canEdit, canJudge, role, teams] = await Promise.all([
-    visibleEntries(c, member.id),
+  const [canEdit, canJudge, role, teams] = await Promise.all([
     canEditChallenge(member, c),
     canJudgeChallenge(member, c),
     getMembership(c.communityId, member.id),
     myProjectTeams(member.username),
   ]);
+  // quem julga vê todas; o resto não vê entrega de quem tem bloqueio com ela
+  const v = await visibleEntries(c, member.id, { canJudge });
+  const live = !c.removedAt && c.status !== "rascunho";
+  const act: EntryAction = { challengeId: c.id, viewerId: member.id, moderates: canEdit };
   const organizes = member.id === c.createdBy || role === "dono" || role === "organizador";
   const podium = (v.entries ?? []).filter((e) => e.place).sort((a, b) => a.place! - b.place!);
 
@@ -117,7 +136,26 @@ export default async function DesafioPage({ params }: Props) {
           </span>
           {c.phase === "aberto" && <span className="font-mono text-[13px] text-accent">{timeLeft(c.deadline)}</span>}
         </div>
+        {live && (canEdit || member.id !== c.createdBy) && (
+          <div className="flex flex-wrap gap-4" data-testid="desafio-moderacao">
+            {canEdit ? (
+              <RemoveButton
+                url={`/api/open-challenges/${c.id}`}
+                confirmText="Tirar este desafio do ar? Ele some de /desafios e para de receber entregas."
+                testId="desafio-tirar"
+              />
+            ) : (
+              <ReportButton targetType="desafio" targetId={c.id} targetLabel="este desafio" authorUsername={c.creatorUsername} />
+            )}
+          </div>
+        )}
       </header>
+
+      {c.removedAt && (
+        <p className="border-[1.5px] border-dashed border-orange px-5 py-4 text-[15px]" data-testid="desafio-fora-do-ar">
+          Fora do ar. Só a organização da comunidade vê esta página.
+        </p>
+      )}
 
       {c.phase === "rascunho" && (
         <div className="flex flex-col items-start gap-3 border-[1.5px] border-dashed border-line p-5" data-testid="desafio-rascunho">
@@ -174,7 +212,7 @@ export default async function DesafioPage({ params }: Props) {
         </section>
       )}
 
-      {c.phase === "aberto" && (
+      {c.phase === "aberto" && !c.removedAt && (
         <section aria-labelledby="entregar-title" className="flex flex-col gap-4 border-t-2 border-line pt-8" id="entregar">
           <h2 id="entregar-title" className={h2}>
             {v.mine ? "Sua entrega" : "Entregar"}
@@ -205,7 +243,7 @@ export default async function DesafioPage({ params }: Props) {
           <h2 id="entregas-title" className={h2}>
             Entregas <span className="font-mono text-[15px] font-normal text-muted">{v.count}</span>
           </h2>
-          {c.phase === "encerrado" && canJudge && (v.entries?.length ?? 0) > 0 && (
+          {c.phase === "encerrado" && !c.removedAt && canJudge && (v.entries?.length ?? 0) > 0 && (
             <ResultForm
               challengeId={c.id}
               entries={(v.entries ?? []).map((e) => ({ id: e.id, label: e.name ?? `@${e.username}`, project: e.projectTitle }))}
@@ -220,13 +258,15 @@ export default async function DesafioPage({ params }: Props) {
           {(v.entries?.length ?? 0) > 0 ? (
             <ul className="flex flex-col border-b border-line" data-testid="desafio-entregas">
               {v.entries!.map((e) => (
-                <EntryItem key={e.id} e={e} testId="desafio-entrega" />
+                <EntryItem key={e.id} e={e} testId="desafio-entrega" act={act} />
               ))}
             </ul>
           ) : (
-            <p className="border-[1.5px] border-line px-4 py-4 text-[15px] text-muted" data-testid="desafio-sem-entregas">
-              Ninguém entregou neste desafio.
-            </p>
+            v.count === 0 && (
+              <p className="border-[1.5px] border-line px-4 py-4 text-[15px] text-muted" data-testid="desafio-sem-entregas">
+                Ninguém entregou neste desafio.
+              </p>
+            )
           )}
         </section>
       )}

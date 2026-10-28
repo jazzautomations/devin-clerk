@@ -11,6 +11,7 @@ import { openE2eDb } from "./db";
 
 const SHOTS = process.env.E2E_SHOT_DIR;
 const MINE = "e2e-desafios-org";
+const MINE2 = "e2e-desafios-org-dois";
 const OTHER = "e2e-desafios-outra";
 const OTHER_TITLE = "E2E Desafio da Outra";
 const MY_TITLE = "E2E Fila do bandejão";
@@ -37,8 +38,18 @@ let ids: Ids;
 
 async function cleanup() {
   const db = openE2eDb();
-  await db.prepare("DELETE FROM communities WHERE slug IN (?, ?)").run(MINE, OTHER);
-  await db.prepare("DELETE FROM notifications WHERE type IN ('desafio_aberto', 'desafio_resultado') AND text LIKE ?").run("%E2E%");
+  // a denúncia do último teste bloqueia a Ana pro membro de teste: desfaz
+  await db
+    .prepare(
+      `DELETE FROM member_blocks WHERE "blockedId" IN (SELECT id FROM members WHERE username IN (?, ?, ?))
+          OR "memberId" IN (SELECT id FROM members WHERE username IN (?, ?, ?))`,
+    )
+    .run(...SEEDED, ...SEEDED);
+  await db.prepare(`DELETE FROM reports WHERE "targetType" IN ('desafio', 'desafio_entrega')`).run();
+  await db.prepare("DELETE FROM communities WHERE slug IN (?, ?, ?)").run(MINE, MINE2, OTHER);
+  await db
+    .prepare("DELETE FROM notifications WHERE type IN ('desafio_aberto', 'desafio_resultado', 'desafio_entrega_removida') AND text LIKE ?")
+    .run("%E2E%");
   const t = await db.prepare("SELECT id FROM teams WHERE hackathonId = ? AND name = ?").get<{ id: number }>(HACK, TEAM);
   if (t) {
     await db.prepare("DELETE FROM team_projects WHERE teamId = ?").run(t.id);
@@ -103,6 +114,8 @@ test.describe("desafios abertos", () => {
   test("'desafios' no menu, depois de 'hackathons'; vazio da comunidade tem o caminho pra criar (390px)", async ({ memberPage: page }) => {
     await page.goto("/radar");
     const nav = page.getByRole("navigation", { name: "Navegação principal" });
+    // allTextContents não espera: com a máquina carregada a nav ainda não tinha os links
+    await expect(nav.getByRole("link", { name: "desafios" })).toBeVisible();
     const labels = await nav.getByRole("link").allTextContents();
     expect(labels.slice(0, 2)).toEqual(["hackathons", "desafios"]);
     await nav.getByRole("link", { name: "desafios" }).click();
@@ -303,5 +316,72 @@ test.describe("desafios abertos", () => {
     await expect(page.getByTestId("desafios-encerrados")).toContainText(MY_TITLE);
     await noHorizontalScroll(page);
     await shot(page, "desafios-lista-390");
+  });
+
+  test("quem organiza duas comunidades abre o menu de criar inteiro na tela (390px)", async ({ memberPage: page }) => {
+    const db = openE2eDb();
+    const c = await db
+      .prepare(`INSERT INTO communities (slug, name, city, "createdBy") VALUES (?, 'E2E Desafios Segunda Comunidade de Nome Comprido', 'Recife, PE', ?) RETURNING id`)
+      .get<{ id: number }>(MINE2, ids.me);
+    await db.prepare(`INSERT INTO community_members ("communityId", "memberId", role) VALUES (?, ?, 'dono')`).run(c!.id, ids.me);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/desafios");
+    const menu = page.getByTestId("desafios-criar-menu");
+    await menu.locator("summary").click();
+    const list = menu.locator("ul");
+    await expect(list.locator(`a[href="/comunidade/${MINE2}/desafios/novo"]`)).toBeVisible();
+    const box = (await list.boundingBox())!;
+    expect(box.x, "menu começa dentro da tela").toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width, "menu termina dentro da tela").toBeLessThanOrEqual(390);
+    await noHorizontalScroll(page);
+    await shot(page, "desafios-criar-menu-390");
+  });
+
+  test("denunciar entrega vai pra fila da comunidade e esconde a pessoa; quem organiza tira entrega e desafio do ar (390px)", async ({
+    memberPage: page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const db = openE2eDb();
+    // na outra comunidade o membro de teste é só membro: denuncia a entrega da Ana
+    await page.goto(`/desafios/${ids.otherChallenge}`);
+    const ana = page.getByTestId("desafio-entrega").filter({ hasText: "bot da ana" });
+    await expect(page.getByTestId("entrega-tirar")).toHaveCount(0);
+    await ana.getByTestId("report-open").click();
+    const dialog = ana.getByTestId("report-dialog");
+    await dialog.getByLabel("spam ou propaganda").check();
+    await dialog.getByTestId("report-send").click();
+    await expect(dialog).toContainText("Você não vai mais ver conteúdo de @e2e_desafio_ana.");
+    await dialog.getByRole("button", { name: "fechar", exact: true }).last().click();
+    await expect(page.getByTestId("desafio-entregas")).not.toContainText("bot da ana");
+    await expect(page.getByTestId("desafio-entregas")).toContainText("Bot no Telegram que lê o edital.");
+    const anaEntry = await db
+      .prepare(`SELECT id FROM open_challenge_entries WHERE "challengeId" = ? AND "memberId" = ?`)
+      .get<{ id: number }>(ids.otherChallenge, ids.ana);
+    expect(
+      await db.prepare(`SELECT "communityId", "targetMemberId" FROM reports WHERE "targetType" = 'desafio_entrega' AND "targetId" = ?`).all(String(anaEntry!.id)),
+    ).toEqual([{ communityId: ids.other, targetMemberId: ids.ana }]);
+    await noHorizontalScroll(page);
+    await shot(page, "desafio-denuncia-390");
+
+    // no próprio desafio, o dono tira a entrega do Beto: some da lista e do pódio, o Beto é avisado
+    const id = (await myChallengeId())!;
+    await page.goto(`/desafios/${id}`);
+    const beto = page.getByTestId("desafio-entrega").filter({ hasText: "fila do beto" });
+    page.once("dialog", (d) => d.accept());
+    await beto.getByTestId("entrega-tirar").click();
+    await expect(page.getByTestId("desafio-entregas")).not.toContainText("fila do beto");
+    await expect(page.getByTestId("desafio-resultado")).not.toContainText("E2E Beto");
+    expect(await db.prepare(`SELECT text FROM notifications WHERE "memberId" = ? AND type = 'desafio_entrega_removida'`).all(ids.beto)).toEqual([
+      { text: `A organização tirou sua entrega de "${MY_TITLE}".` },
+    ]);
+
+    // e tira o desafio inteiro do ar: só a organização ainda abre a página
+    page.once("dialog", (d) => d.accept());
+    await page.getByTestId("desafio-tirar").click();
+    await expect(page.getByTestId("desafio-fora-do-ar")).toBeVisible();
+    await noHorizontalScroll(page);
+    await page.goto("/desafios");
+    await expect(page.getByTestId("desafios-page")).not.toContainText(MY_TITLE);
   });
 });

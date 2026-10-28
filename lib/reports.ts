@@ -15,6 +15,7 @@ import { notify } from "@/lib/notifications";
 // O admin global vê todas. Denunciar pessoa ou conteúdo de alguém também
 // bloqueia esse alguém pra quem denunciou.
 //
+// Desafio aberto e entrega (053) vão pra comunidade do desafio.
 // Tipo novo (depoimento, dm, encontro) entra com um `case` em resolveTarget:
 // devolva o autor, o texto pro snapshot e o espaço (communityId/hackathonId).
 // Enquanto o tipo não tem case, a denúncia dá 404.
@@ -24,7 +25,7 @@ import { notify } from "@/lib/notifications";
 // direto pro admin (sem aviso pro autor nem incidente). E quem é o autor
 // (targetMemberId) nunca lê nem resolve a denúncia, nem se virar moderador depois.
 
-export const REPORT_TARGETS = ["post", "comment", "member", "community", "depoimento", "dm", "encontro"] as const;
+export const REPORT_TARGETS = ["post", "comment", "member", "community", "depoimento", "dm", "encontro", "desafio", "desafio_entrega"] as const;
 export type ReportTarget = (typeof REPORT_TARGETS)[number];
 
 export const REPORT_TARGET_LABEL: Record<ReportTarget, string> = {
@@ -35,6 +36,8 @@ export const REPORT_TARGET_LABEL: Record<ReportTarget, string> = {
   depoimento: "depoimento",
   dm: "mensagem",
   encontro: "encontro",
+  desafio: "desafio",
+  desafio_entrega: "entrega de desafio",
 };
 
 export const REPORT_LIMITS = { reasonMin: 5, reason: 500, snapshot: 2000, resolution: 300 } as const;
@@ -132,6 +135,52 @@ async function resolveTarget(type: ReportTarget, id: string, viewerRole: string 
       if (!r) return null;
       // contra a comunidade inteira: só o admin (o dono não modera a si mesmo)
       return { authorId: null, authorUsername: null, authorRole: null, snapshot: [r.name, r.description].filter(Boolean).join("\n"), communityId: null, hackathonId: null };
+    }
+    case "desafio": {
+      // desafio aberto (053): rascunho e desafio fora do ar não existem pra denúncia
+      if (num === null) return null;
+      const r = await db
+        .prepare(
+          `SELECT oc.createdBy, m.username, m.role, oc.title, oc.brief, oc.prize, oc.sponsorName, oc.communityId, oc.status,
+                  oc.removedAt, co.hidden
+           FROM open_challenges oc JOIN communities co ON co.id = oc.communityId LEFT JOIN members m ON m.id = oc.createdBy
+           WHERE oc.id = ?`,
+        )
+        .get<{ createdBy: number; username: string | null; role: string | null; title: string; brief: string; prize: string | null; sponsorName: string | null; communityId: number; status: string; removedAt: string | null; hidden: number }>(num);
+      if (!r || r.status === "rascunho" || r.removedAt || (Number(r.hidden) && !seesHidden)) return null;
+      return {
+        authorId: r.createdBy,
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: [`Desafio "${r.title}" de @${r.username}`, r.sponsorName && `patrocinado por ${r.sponsorName}`, r.prize && `prêmio: ${r.prize}`, r.brief]
+          .filter(Boolean)
+          .join("\n"),
+        communityId: r.communityId,
+        hackathonId: null,
+      };
+    }
+    case "desafio_entrega": {
+      // entrega só é pública depois do prazo: antes disso, denúncia dá 404
+      if (num === null) return null;
+      const r = await db
+        .prepare(
+          `SELECT e.memberId, m.username, m.role, e.summary, e.repoUrl, e.demoUrl, e.removedAt, oc.title, oc.communityId,
+                  oc.removedAt AS challengeRemovedAt, co.hidden,
+                  (oc.status = 'resultado' OR (oc.status = 'aberto' AND to_ts(oc.deadline) <= now())) AS closed
+           FROM open_challenge_entries e JOIN open_challenges oc ON oc.id = e.challengeId
+           JOIN communities co ON co.id = oc.communityId JOIN members m ON m.id = e.memberId
+           WHERE e.id = ?`,
+        )
+        .get<{ memberId: number; username: string; role: string; summary: string; repoUrl: string | null; demoUrl: string | null; removedAt: string | null; title: string; communityId: number; challengeRemovedAt: string | null; hidden: number; closed: boolean }>(num);
+      if (!r || r.removedAt || r.challengeRemovedAt || !r.closed || (Number(r.hidden) && !seesHidden)) return null;
+      return {
+        authorId: r.memberId,
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: [`@${r.username} no desafio "${r.title}": ${r.summary}`, r.repoUrl, r.demoUrl].filter(Boolean).join("\n"),
+        communityId: r.communityId,
+        hackathonId: null,
+      };
     }
     default:
       return null;
@@ -305,19 +354,21 @@ type ReportRow = Omit<Report, "href" | "routedTo"> & {
   resolvedBy: number | null;
   targetUsername: string | null;
   targetCommunitySlug: string | null;
+  targetChallengeId: number | null;
 };
 
 const SELECT = `SELECT r.id, r.targetType, r.targetId, r.reporterId, r.targetMemberId, r.reason, r.snapshot,
     r.communityId, co.name AS communityName, co.slug AS communitySlug,
     r.hackathonId, h.name AS hackathonName,
     r.createdAt, r.resolvedAt, r.resolvedBy, rb.username AS resolvedByUsername, r.resolution,
-    tm.username AS targetUsername, tc.slug AS targetCommunitySlug
+    tm.username AS targetUsername, tc.slug AS targetCommunitySlug, te.challengeId AS targetChallengeId
   FROM reports r
   LEFT JOIN communities co ON co.id = r.communityId
   LEFT JOIN hackathons h ON h.id = r.hackathonId
   LEFT JOIN members rb ON rb.id = r.resolvedBy
   LEFT JOIN members tm ON r.targetType = 'member' AND tm.id::text = r.targetId
-  LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId`;
+  LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId
+  LEFT JOIN open_challenge_entries te ON r.targetType = 'desafio_entrega' AND te.id::text = r.targetId`;
 
 function toReport(r: ReportRow): Report {
   let href: string | null = null;
@@ -327,6 +378,10 @@ function toReport(r: ReportRow): Report {
     href = `/u/${r.targetUsername}`;
   } else if (r.targetType === "community" && r.targetCommunitySlug) {
     href = `/comunidade/${r.targetCommunitySlug}`;
+  } else if (r.targetType === "desafio") {
+    href = `/desafios/${r.targetId}`;
+  } else if (r.targetType === "desafio_entrega" && r.targetChallengeId) {
+    href = `/desafios/${r.targetChallengeId}#entrega-${r.targetId}`;
   }
   const routedTo = r.communityName
     ? `comunidade ${r.communityName}`

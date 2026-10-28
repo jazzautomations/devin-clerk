@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { block } from "@/lib/blocks";
 import db from "@/lib/db";
 import {
   challengePhase,
@@ -70,6 +71,8 @@ const routes = {
   one: () => import("@/app/api/open-challenges/[id]/route"),
   entry: () => import("@/app/api/open-challenges/[id]/entry/route"),
   result: () => import("@/app/api/open-challenges/[id]/result/route"),
+  modEntry: () => import("@/app/api/open-challenges/[id]/entries/[entryId]/route"),
+  reports: () => import("@/app/api/reports/route"),
 };
 const body = (slug: string, extra: Record<string, unknown> = {}) => ({
   community: slug,
@@ -246,10 +249,9 @@ describe("rascunho e publicar", () => {
     expect(await notes(dono.id, "desafio_aberto")).toEqual([]);
     expect(await notes(fora.id, "desafio_aberto")).toEqual([]);
 
-    // publicado: não edita, não publica de novo, não apaga
+    // publicado: não edita nem publica de novo (tirar do ar está em "achados da revisão")
     expect((await one.PATCH(req("PATCH", { publish: true }), idCtx(id))).status).toBe(409);
     expect((await one.PATCH(req("PATCH", body(c.slug)), idCtx(id))).status).toBe(409);
-    expect((await one.DELETE(req("DELETE"), idCtx(id))).status).toBe(409);
     expect((await notes(membro.id, "desafio_aberto")).length).toBe(1);
 
     as(fora);
@@ -540,5 +542,211 @@ describe("listagem e LGPD", () => {
     expect(await db.prepare("SELECT COUNT(*) AS n FROM open_challenge_entries WHERE memberId = ?").get(ana.id)).toEqual({ n: 0 });
     await deleteMemberData(dono.id);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM open_challenges WHERE id = ?").get(data.challenge.id)).toEqual({ n: 1 });
+  });
+});
+
+describe("achados da revisão", () => {
+  async function openChallenge() {
+    const dono = await member();
+    const c = await community(dono);
+    as(dono);
+    const { data } = await create(c.slug, { publish: true });
+    return { dono, c, id: data.challenge.id };
+  }
+  const submit = async (id: number, b: unknown) => (await routes.entry()).POST(req("POST", b), idCtx(id));
+  const entryOf = async (id: number, memberId: number) =>
+    (await db.prepare("SELECT id FROM open_challenge_entries WHERE challengeId = ? AND memberId = ?").get<{ id: number }>(id, memberId))!.id;
+  const modDelete = async (id: number, entryId: number | string) =>
+    (await routes.modEntry()).DELETE(req("DELETE"), { params: Promise.resolve({ id: String(id), entryId: String(entryId) }) });
+  const report = async (targetType: string, targetId: number) =>
+    (await routes.reports()).POST(req("POST", { targetType, targetId: String(targetId), reason: "spam ou propaganda" }));
+  type View = { entryCount: number; entries: { memberId: number; summary: string }[] | null };
+  const view = async (id: number) => (await (await (await routes.one()).GET(req("GET"), idCtx(id))).json()) as View;
+
+  it("link com acento que passa de 300 depois de normalizado dá 400, não 500", async () => {
+    const longo = "https://github.com/" + "á".repeat(280);
+    expect(longo.length).toBeLessThanOrEqual(300);
+    expect(parseEntryInput({ repoUrl: longo, summary: "x" })).toEqual({ error: "Link até 300 caracteres." });
+    expect(parseEntryInput({ repoUrl: "https://github.com/a/b", demoUrl: "https://x.dev/" + "a".repeat(300), summary: "x" })).toEqual({
+      error: "Link até 300 caracteres.",
+    });
+    expect(parseEntryInput({ repoUrl: "https://github.com/ana/ação", summary: "x" })).toMatchObject({ value: { repoUrl: "https://github.com/ana/a%C3%A7%C3%A3o" } });
+    const { id } = await openChallenge();
+    as(await member());
+    const r = await submit(id, { repoUrl: longo, summary: "x" });
+    expect(r.status).toBe(400);
+    expect(((await r.json()) as { error: string }).error).toBe("Link até 300 caracteres.");
+  });
+
+  it("quem criou e saiu da comunidade não publica o resultado; o dono publica", async () => {
+    const dono = await member();
+    const c = await community(dono);
+    const org = await member();
+    await addRole(c.id, org, "organizador");
+    as(org);
+    const { data } = await create(c.slug, { publish: true });
+    const id = data.challenge.id;
+    const ana = await member();
+    as(ana);
+    await submit(id, { repoUrl: "https://github.com/a/b", summary: "x" });
+    await closeNow(id);
+    const e = await entryOf(id, ana.id);
+    await db.prepare("DELETE FROM community_members WHERE communityId = ? AND memberId = ?").run(c.id, org.id);
+    as(org);
+    const v = (await (await (await routes.one()).GET(req("GET"), idCtx(id))).json()) as { canJudge: boolean };
+    expect(v.canJudge).toBe(false);
+    const post = async () => (await routes.result()).POST(req("POST", { places: [{ entryId: e, place: 1 }] }), idCtx(id));
+    expect((await post()).status).toBe(403);
+    // rebaixado a membro também perde
+    await addRole(c.id, org, "membro");
+    expect((await post()).status).toBe(403);
+    as(dono);
+    expect((await post()).status).toBe(200);
+  });
+
+  it("bloqueio nos dois sentidos esconde a entrega de quem não julga; quem julga vê todas; a contagem fica cheia", async () => {
+    const { dono, id } = await openChallenge();
+    const ana = await member();
+    const beto = await member();
+    const caio = await member();
+    for (const [p, txt] of [
+      [ana, "da ana"],
+      [beto, "do beto"],
+      [caio, "do caio"],
+    ] as const) {
+      as(p);
+      await submit(id, { repoUrl: "https://github.com/x/y", summary: txt });
+    }
+    await block(ana.id, beto.id);
+    await block(ana.id, dono.id);
+    await closeNow(id);
+    as(beto);
+    let v = await view(id);
+    expect(v.entryCount).toBe(3);
+    expect(v.entries!.map((e) => e.summary)).toEqual(["do beto", "do caio"]);
+    as(ana);
+    v = await view(id);
+    expect(v.entries!.map((e) => e.summary)).toEqual(["da ana", "do caio"]);
+    // quem julga escolhe entre todas, mesmo bloqueado
+    as(dono);
+    v = await view(id);
+    expect(v.entries!.map((e) => e.summary)).toEqual(["da ana", "do beto", "do caio"]);
+  });
+
+  it("moderação tira entrega: só dono, organizador ou admin; some da lista e da contagem; a pessoa é avisada e não reenvia", async () => {
+    const { dono, c, id } = await openChallenge();
+    const ana = await member();
+    const beto = await member();
+    as(ana);
+    await submit(id, { repoUrl: "https://github.com/ana/x", summary: "da ana" });
+    as(beto);
+    await submit(id, { repoUrl: "https://github.com/beto/x", summary: "do beto" });
+    const e = await entryOf(id, ana.id);
+
+    as(beto);
+    expect((await modDelete(id, e)).status).toBe(403);
+    as(ana);
+    expect((await modDelete(id, e)).status).toBe(403);
+    const org = await member();
+    await addRole(c.id, org, "organizador");
+    as(org);
+    expect((await modDelete(id, "abc")).status).toBe(404);
+    expect((await modDelete(id, 999999)).status).toBe(404);
+    expect((await modDelete(id, e)).status).toBe(200);
+    expect((await modDelete(id, e)).status).toBe(404);
+    // entrega de outro desafio não sai por este
+    const outro = await openChallenge();
+    as(beto);
+    await submit(outro.id, { repoUrl: "https://github.com/beto/y", summary: "outra" });
+    as(dono);
+    expect((await modDelete(id, await entryOf(outro.id, beto.id))).status).toBe(404);
+
+    expect(await notes(ana.id, "desafio_entrega_removida")).toEqual([
+      { text: `A organização tirou sua entrega de "Fila do bandejão".`, href: `/desafios/${id}`, actorId: org.id },
+    ]);
+    as(ana);
+    expect((await view(id)).entryCount).toBe(1);
+    const again = await submit(id, { repoUrl: "https://github.com/ana/x", summary: "de novo" });
+    expect(again.status).toBe(403);
+    expect(((await again.json()) as { error: string }).error).toBe("A organização tirou sua entrega deste desafio.");
+    await closeNow(id);
+    as(beto);
+    expect((await view(id)).entries!.map((x) => x.summary)).toEqual(["do beto"]);
+    // admin global também tira
+    const admin = await member("admin");
+    as(admin);
+    expect((await modDelete(id, await entryOf(id, beto.id))).status).toBe(200);
+    // a linha fica, com quem tirou
+    expect(await db.prepare("SELECT removedBy FROM open_challenge_entries WHERE id = ?").get(e)).toEqual({ removedBy: org.id });
+  });
+
+  it("moderação tira o desafio publicado do ar: some pra quem não modera, não recebe entrega nem resultado", async () => {
+    const { dono, c, id } = await openChallenge();
+    const ana = await member();
+    as(ana);
+    await submit(id, { repoUrl: "https://github.com/ana/x", summary: "da ana" });
+    const one = await routes.one();
+    expect((await one.DELETE(req("DELETE"), idCtx(id))).status).toBe(403);
+    const org = await member();
+    await addRole(c.id, org, "organizador");
+    as(org);
+    const r = await one.DELETE(req("DELETE"), idCtx(id));
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ ok: true, removed: "publicado" });
+    expect((await one.DELETE(req("DELETE"), idCtx(id))).status).toBe(409);
+    as(ana);
+    expect((await one.GET(req("GET"), idCtx(id))).status).toBe(404);
+    expect((await submit(id, { repoUrl: "https://github.com/ana/x", summary: "x" })).status).toBe(404);
+    const { open, closed } = await listOpenChallenges({ communityId: c.id });
+    expect([...open, ...closed].map((x) => x.id)).not.toContain(id);
+    as(dono);
+    const g = (await (await one.GET(req("GET"), idCtx(id))).json()) as { challenge: { removedAt: string | null } };
+    expect(g.challenge.removedAt).toBeTruthy();
+    await closeNow(id);
+    const e = await entryOf(id, ana.id);
+    expect((await (await routes.result()).POST(req("POST", { places: [{ entryId: e, place: 1 }] }), idCtx(id))).status).toBe(404);
+  });
+
+  it("denúncia de desafio e de entrega vai pra fila da comunidade; entrega só depois do prazo; rascunho e fora do ar dão 404", async () => {
+    const { dono, c, id } = await openChallenge();
+    const ana = await member();
+    as(ana);
+    await submit(id, { repoUrl: "https://github.com/ana/x", summary: "phishing aqui" });
+    const e = await entryOf(id, ana.id);
+    const beto = await member();
+    as(beto);
+    // antes do prazo a entrega dos outros não é pública
+    expect((await report("desafio_entrega", e)).status).toBe(404);
+    const r1 = await report("desafio", id);
+    expect(r1.status).toBe(201);
+    await closeNow(id);
+    const r2 = await report("desafio_entrega", e);
+    expect(r2.status).toBe(201);
+    expect(((await r2.json()) as { blocked: string }).blocked).toBe(ana.username);
+    const rows = await db
+      .prepare("SELECT targetType, communityId, targetMemberId, snapshot FROM reports WHERE reporterId = ? ORDER BY id")
+      .all<{ targetType: string; communityId: number; targetMemberId: number; snapshot: string }>(beto.id);
+    expect(rows.map((r) => [r.targetType, r.communityId, r.targetMemberId])).toEqual([
+      // o desafio é de quem modera a comunidade: a denúncia contra ele vai pro admin
+      ["desafio", null, dono.id],
+      ["desafio_entrega", c.id, ana.id],
+    ]);
+    expect(rows[1].snapshot).toContain("phishing aqui");
+    expect(rows[1].snapshot).toContain("https://github.com/ana/x");
+    // a da entrega cai na fila da comunidade, com o link pra entrega
+    as(dono);
+    const q = (await (await (await routes.reports()).GET(new Request(`http://t/api/reports?comunidade=${c.slug}`))).json()) as {
+      reports: { targetType: string; href: string }[];
+    };
+    expect(q.reports.map((r) => [r.targetType, r.href])).toEqual([["desafio_entrega", `/desafios/${id}#entrega-${e}`]]);
+
+    // fora do ar e rascunho não aceitam denúncia
+    await (await routes.modEntry()).DELETE(req("DELETE"), { params: Promise.resolve({ id: String(id), entryId: String(e) }) });
+    as(await member());
+    expect((await report("desafio_entrega", e)).status).toBe(404);
+    as(dono);
+    const draft = await create(c.slug);
+    as(beto);
+    expect((await report("desafio", draft.data.challenge.id)).status).toBe(404);
   });
 });

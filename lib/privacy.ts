@@ -109,6 +109,9 @@ const EXPORT_SKIP = new Set([
   "reports.resolvedBy",
   "reports.targetMemberId",
   "notifications.actorId",
+  // quem tirou do ar não leva o desafio nem a entrega alheia no próprio export
+  "open_challenges.removedBy",
+  "open_challenge_entries.removedBy",
 ]);
 const EXPORT_OMIT: Record<string, string[]> = {
   incidents: ["internalNote", "updatedBy"],

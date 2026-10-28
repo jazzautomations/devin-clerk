@@ -1,3 +1,4 @@
+import { hiddenIdsFor } from "@/lib/blocks";
 import db from "@/lib/db";
 import { canManageCommunity, cleanUrl, isCommunityOwner } from "@/lib/communities";
 import { parseEventTime, toEventIso } from "@/lib/eventTime";
@@ -25,8 +26,14 @@ import { currentMember } from "@/lib/session";
 //   sem cron. Encerrado não aceita entrega.
 // - entregas ficam escondidas até o prazo (até de quem criou); antes disso
 //   só a contagem. Cada pessoa vê a própria.
-// - resultado: quem criou (ou o dono da comunidade, se quem criou saiu)
-//   marca 1º a 3º depois do prazo e publica; cada participante é avisado.
+// - resultado: quem criou, enquanto ainda organiza a comunidade, ou o dono
+//   (e o admin) marca 1º a 3º depois do prazo e publica; cada participante
+//   é avisado.
+// - moderação: dono, organizador e admin tiram do ar o desafio publicado ou
+//   uma entrega (removedAt, a linha fica). Denúncia de desafio e de entrega
+//   vai pra fila da comunidade (lib/reports.ts).
+// - bloqueio: quem não julga não vê entrega de quem bloqueou ou foi
+//   bloqueado (dois sentidos). A contagem continua cheia.
 // - IA não julga nem ordena nada: a lista de entregas é por ordem de envio.
 
 export const OPEN_CHALLENGE_STATUSES = ["rascunho", "aberto", "resultado"] as const;
@@ -52,6 +59,7 @@ const MAX_LEAD_MS = 366 * 24 * 60 * 60 * 1000;
 export const ENTRY_RATE_LIMIT = { limit: 30, windowMs: 60 * 60 * 1000 };
 
 export const DEADLINE_PASSED = "O prazo deste desafio acabou. Não dá mais pra entregar.";
+export const ENTRY_REMOVED = "A organização tirou sua entrega deste desafio.";
 
 export const PLACE_LABELS: Record<number, string> = { 1: "1º lugar", 2: "2º lugar", 3: "3º lugar" };
 
@@ -84,6 +92,8 @@ export type OpenChallenge = {
   createdAt: string;
   publishedAt: string | null;
   resultAt: string | null;
+  /** tirado do ar pela moderação; só quem modera ainda abre a página */
+  removedAt: string | null;
   entryCount: number;
 };
 
@@ -111,8 +121,8 @@ const toChallenge = (r: Row, now = new Date()): OpenChallenge => ({
 const SELECT = `
   SELECT oc.id, oc.communityId, c.slug AS communitySlug, c.name AS communityName, c.hidden AS communityHidden,
          oc.sponsorName, oc.title, oc.brief, oc.rules, oc.prize, oc.deadline, oc.status, oc.createdBy,
-         m.username AS creatorUsername, oc.createdAt, oc.publishedAt, oc.resultAt,
-         (SELECT COUNT(*) FROM open_challenge_entries e WHERE e.challengeId = oc.id) AS entryCount
+         m.username AS creatorUsername, oc.createdAt, oc.publishedAt, oc.resultAt, oc.removedAt,
+         (SELECT COUNT(*) FROM open_challenge_entries e WHERE e.challengeId = oc.id AND e.removedAt IS NULL) AS entryCount
   FROM open_challenges oc
   JOIN communities c ON c.id = oc.communityId
   LEFT JOIN members m ON m.id = oc.createdBy`;
@@ -175,9 +185,13 @@ export function parseEntryInput(raw: unknown): { value: EntryInput } | { error: 
     teamId = n;
   }
   const links: Record<"repoUrl" | "demoUrl", string | null> = { repoUrl: null, demoUrl: null };
+  const tooLong = `Link até ${OPEN_CHALLENGE_LIMITS.url} caracteres.`;
   for (const k of ["repoUrl", "demoUrl"] as const) {
+    if (typeof b[k] === "string" && b[k].trim().length > OPEN_CHALLENGE_LIMITS.url) return { error: tooLong };
     const r = cleanUrl(b[k], { httpsOnly: true });
     if ("error" in r) return { error: k === "repoUrl" ? "O repo precisa de link https://" : "A demo precisa de link https://" };
+    // o link normalizado pode crescer (acento vira %C3%A1): o limite vale pro que é gravado
+    if (r.value && r.value.length > OPEN_CHALLENGE_LIMITS.url) return { error: tooLong };
     links[k] = r.value;
   }
   if (!teamId && !links.repoUrl) return { error: "Escolha um projeto seu do HackaHub ou cole o link do repo." };
@@ -193,11 +207,20 @@ export async function canEditChallenge(actor: Actor | null, c: Pick<OpenChalleng
   return canManageCommunity(actor, c.communityId);
 }
 
-/** escolhe vencedores: quem criou, ou o dono da comunidade (ou admin) */
+/**
+ * Escolhe vencedores: quem criou, enquanto ainda organiza a comunidade; senão
+ * o dono da comunidade (ou admin). Quem foi tirado da organização perde o
+ * desafio junto.
+ */
 export async function canJudgeChallenge(actor: Actor | null, c: Pick<OpenChallenge, "communityId" | "createdBy">): Promise<boolean> {
   if (!actor) return false;
-  if (actor.id === c.createdBy) return true;
+  if (actor.id === c.createdBy && (await canManageCommunity(actor, c.communityId))) return true;
   return isCommunityOwner(actor, c.communityId);
+}
+
+/** tira do ar desafio publicado ou entrega: quem modera a comunidade (dono, organizador, admin) */
+export async function canModerateChallenge(actor: Actor | null, c: Pick<OpenChallenge, "communityId">): Promise<boolean> {
+  return canManageCommunity(actor, c.communityId);
 }
 
 /**
@@ -207,7 +230,7 @@ export async function canJudgeChallenge(actor: Actor | null, c: Pick<OpenChallen
 export async function canSeeChallenge(actor: Actor | null, c: OpenChallenge): Promise<boolean> {
   if (!actor) return false;
   if (c.communityHidden && actor.role !== "admin") return false;
-  if (c.status === "rascunho") return canEditChallenge(actor, c);
+  if (c.status === "rascunho" || c.removedAt) return canEditChallenge(actor, c);
   return true;
 }
 
@@ -232,7 +255,7 @@ export async function listOpenChallenges(opts: { communityId?: number | null; li
   const rows = await db
     .prepare(
       `${SELECT}
-       WHERE oc.status <> 'rascunho' AND c.hidden = 0
+       WHERE oc.status <> 'rascunho' AND oc.removedAt IS NULL AND c.hidden = 0
          AND (?::int IS NULL OR oc.communityId = ?::int)
        ORDER BY to_ts(oc.deadline) ASC, oc.id ASC`,
     )
@@ -252,7 +275,7 @@ export async function challengeCommunities(): Promise<{ slug: string; name: stri
     .prepare(
       `SELECT DISTINCT c.id, c.slug, c.name FROM communities c
        JOIN open_challenges oc ON oc.communityId = c.id
-       WHERE oc.status <> 'rascunho' AND c.hidden = 0
+       WHERE oc.status <> 'rascunho' AND oc.removedAt IS NULL AND c.hidden = 0
        ORDER BY c.name`,
     )
     .all<{ slug: string; name: string; id: number }>();
@@ -302,26 +325,34 @@ const ENTRY_SELECT = `
 /** todas as entregas, por colocação e depois por ordem de envio (nunca por nota) */
 export async function listEntries(challengeId: number): Promise<OpenChallengeEntry[]> {
   return db
-    .prepare(`${ENTRY_SELECT} WHERE e.challengeId = ? ORDER BY e.place ASC NULLS LAST, e.submittedAt ASC, e.id ASC`)
+    .prepare(`${ENTRY_SELECT} WHERE e.challengeId = ? AND e.removedAt IS NULL ORDER BY e.place ASC NULLS LAST, e.submittedAt ASC, e.id ASC`)
     .all<OpenChallengeEntry>(challengeId);
 }
 
 export async function myEntry(challengeId: number, memberId: number): Promise<OpenChallengeEntry | null> {
-  const r = await db.prepare(`${ENTRY_SELECT} WHERE e.challengeId = ? AND e.memberId = ?`).get<OpenChallengeEntry>(challengeId, memberId);
+  const r = await db.prepare(`${ENTRY_SELECT} WHERE e.challengeId = ? AND e.memberId = ? AND e.removedAt IS NULL`).get<OpenChallengeEntry>(challengeId, memberId);
   return r ?? null;
 }
 
 /**
  * O que quem vê a página pode ler das entregas. Antes do prazo: só a
- * contagem e a própria. Depois: todas. Rascunho não tem entrega.
+ * contagem e a própria. Depois: todas, menos as de quem tem bloqueio com
+ * quem vê (nos dois sentidos). Quem julga (canJudge) vê a lista inteira, e a
+ * contagem é sempre a de todas. Rascunho não tem entrega.
  */
 export async function visibleEntries(
   c: OpenChallenge,
   viewerId: number | null,
+  opts: { canJudge?: boolean } = {},
 ): Promise<{ count: number; entries: OpenChallengeEntry[] | null; mine: OpenChallengeEntry | null }> {
   const mine = viewerId ? await myEntry(c.id, viewerId) : null;
   if (c.phase === "aberto" || c.phase === "rascunho") return { count: c.entryCount, entries: null, mine };
-  return { count: c.entryCount, entries: await listEntries(c.id), mine };
+  const [all, hidden] = await Promise.all([
+    listEntries(c.id),
+    viewerId && !opts.canJudge ? hiddenIdsFor(viewerId) : Promise.resolve(null),
+  ]);
+  const blocked = new Set(hidden?.blocked ?? []);
+  return { count: c.entryCount, entries: blocked.size ? all.filter((e) => !blocked.has(e.memberId)) : all, mine };
 }
 
 export type EntryTeam = { teamId: number; teamName: string; projectTitle: string; hackathonName: string };
@@ -418,7 +449,7 @@ export async function submitEntry(
   member: Pick<Member, "id" | "username" | "role">,
   input: EntryInput,
 ): Promise<OpenChallengeEntry> {
-  if (c.status === "rascunho") throw new OpenChallengeError("Desafio não encontrado", 404);
+  if (c.status === "rascunho" || c.removedAt) throw new OpenChallengeError("Desafio não encontrado", 404);
   if (c.phase !== "aberto") throw new OpenChallengeError(DEADLINE_PASSED, 400);
   if (!(await canNetwork(member.id))) throw new OpenChallengeError("Sua conta não pode entregar em desafios.", 403);
   // admin global modera, não organiza: só dono e organizador da comunidade ficam de fora
@@ -443,14 +474,22 @@ export async function submitEntry(
     .prepare(
       `INSERT INTO open_challenge_entries (challengeId, memberId, teamId, repoUrl, demoUrl, summary)
        SELECT oc.id, ?, ?, ?, ?, ? FROM open_challenges oc
-       WHERE oc.id = ? AND oc.status = 'aberto' AND to_ts(oc.deadline) > now()
+       WHERE oc.id = ? AND oc.status = 'aberto' AND oc.removedAt IS NULL AND to_ts(oc.deadline) > now()
        ON CONFLICT (challengeId, memberId) DO UPDATE SET
          teamId = EXCLUDED.teamId, repoUrl = EXCLUDED.repoUrl, demoUrl = EXCLUDED.demoUrl,
          summary = EXCLUDED.summary, submittedAt = sqlite_now()
+       WHERE open_challenge_entries.removedAt IS NULL
        RETURNING id`,
     )
     .get<{ id: number }>(member.id, input.teamId, input.repoUrl, input.demoUrl, input.summary, c.id);
-  if (!r) throw new OpenChallengeError(DEADLINE_PASSED, 400);
+  if (!r) {
+    // a entrega que a moderação tirou não volta reenviando
+    const removed = await db
+      .prepare("SELECT 1 AS y FROM open_challenge_entries WHERE challengeId = ? AND memberId = ? AND removedAt IS NOT NULL")
+      .get<{ y: number }>(c.id, member.id);
+    if (removed) throw new OpenChallengeError(ENTRY_REMOVED, 403);
+    throw new OpenChallengeError(DEADLINE_PASSED, 400);
+  }
   return (await myEntry(c.id, member.id))!;
 }
 
@@ -460,7 +499,7 @@ export async function withdrawEntry(c: OpenChallenge, memberId: number): Promise
   const r = await db
     .prepare(
       `DELETE FROM open_challenge_entries e USING open_challenges oc
-       WHERE e.challengeId = ? AND e.memberId = ? AND oc.id = e.challengeId
+       WHERE e.challengeId = ? AND e.memberId = ? AND oc.id = e.challengeId AND e.removedAt IS NULL
          AND oc.status = 'aberto' AND to_ts(oc.deadline) > now()`,
     )
     .run(c.id, memberId);
@@ -495,19 +534,20 @@ export async function publishResult(
   actor: Pick<Member, "id" | "username">,
   picks: PlacePick[],
 ): Promise<{ notified: number }> {
+  if (c.removedAt) throw new OpenChallengeError("Desafio não encontrado", 404);
   if (c.status === "resultado") throw new OpenChallengeError("O resultado já saiu.", 409);
   if (c.phase !== "encerrado") throw new OpenChallengeError("O resultado sai depois do prazo de entrega.", 400);
   return db.transaction(async () => {
     const locked = await db
       .prepare(
         `UPDATE open_challenges SET status = 'resultado', resultAt = sqlite_now()
-         WHERE id = ? AND status = 'aberto' AND to_ts(deadline) <= now()
+         WHERE id = ? AND status = 'aberto' AND removedAt IS NULL AND to_ts(deadline) <= now()
          RETURNING id`,
       )
       .get<{ id: number }>(c.id);
     if (!locked) throw new OpenChallengeError("O resultado já saiu.", 409);
     const entries = await db
-      .prepare("SELECT id, memberId FROM open_challenge_entries WHERE challengeId = ?")
+      .prepare("SELECT id, memberId FROM open_challenge_entries WHERE challengeId = ? AND removedAt IS NULL")
       .all<{ id: number; memberId: number }>(c.id);
     const byId = new Map(entries.map((e) => [e.id, e]));
     for (const p of picks) {
@@ -531,6 +571,49 @@ export async function publishResult(
     }
     return { notified: entries.length };
   })();
+}
+
+/**
+ * Moderação tira do ar o desafio publicado. A linha fica (quem tirou e
+ * quando); some de /desafios e da página pra quem não modera, e não recebe
+ * mais entrega nem resultado. false = já estava fora do ar ou é rascunho.
+ */
+export async function removeChallenge(id: number, actorId: number): Promise<boolean> {
+  const r = await db
+    .prepare("UPDATE open_challenges SET removedAt = sqlite_now(), removedBy = ? WHERE id = ? AND status <> 'rascunho' AND removedAt IS NULL")
+    .run(actorId, id);
+  return r.changes > 0;
+}
+
+/**
+ * Moderação tira uma entrega: some da lista, da contagem e do pódio (a
+ * colocação é liberada), e quem entregou é avisado. A linha fica, e a pessoa
+ * não reenvia por cima. null = a entrega não é deste desafio ou já saiu.
+ */
+export async function removeEntry(
+  c: OpenChallenge,
+  entryId: number,
+  actor: Pick<Member, "id" | "username">,
+): Promise<{ memberId: number } | null> {
+  if (!Number.isInteger(entryId) || entryId <= 0) return null;
+  const r = await db
+    .prepare(
+      `UPDATE open_challenge_entries SET removedAt = sqlite_now(), removedBy = ?, place = NULL
+       WHERE id = ? AND challengeId = ? AND removedAt IS NULL
+       RETURNING memberId`,
+    )
+    .get<{ memberId: number }>(actor.id, entryId, c.id);
+  if (!r) return null;
+  if (r.memberId !== actor.id) {
+    await notify(r.memberId, {
+      type: "desafio_entrega_removida",
+      actorId: actor.id,
+      actorUsername: actor.username,
+      text: `A organização tirou sua entrega de "${c.title}".`,
+      href: `/desafios/${c.id}`,
+    });
+  }
+  return { memberId: r.memberId };
 }
 
 /** "faltam 3 dias", "faltam 5 h", "acabou" — legível sem relógio na cabeça */

@@ -5,6 +5,7 @@ import {
   getOpenChallenge,
   parseOpenChallengeInput,
   publishOpenChallenge,
+  removeChallenge,
   requireOpenChallenge,
   updateDraft,
   visibleEntries,
@@ -14,20 +15,15 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // GET: o desafio e as entregas que quem pede pode ver (antes do prazo só a
 // contagem e a própria). PATCH: edita o rascunho e/ou publica ({publish:
-// true}). DELETE: apaga o rascunho. Publicado não muda nem some por aqui.
+// true}). DELETE: apaga o rascunho; publicado não muda, mas a moderação
+// (dono, organizador, admin) tira do ar: some das listas e a linha fica.
 
 export async function GET(_req: Request, { params }: Ctx) {
   const g = await requireOpenChallenge((await params).id);
   if ("response" in g) return g.response;
-  const v = await visibleEntries(g.challenge, g.member.id);
-  return Response.json({
-    challenge: g.challenge,
-    entryCount: v.count,
-    entries: v.entries,
-    mine: v.mine,
-    canEdit: await canEditChallenge(g.member, g.challenge),
-    canJudge: await canJudgeChallenge(g.member, g.challenge),
-  });
+  const [canEdit, canJudge] = await Promise.all([canEditChallenge(g.member, g.challenge), canJudgeChallenge(g.member, g.challenge)]);
+  const v = await visibleEntries(g.challenge, g.member.id, { canJudge });
+  return Response.json({ challenge: g.challenge, entryCount: v.count, entries: v.entries, mine: v.mine, canEdit, canJudge });
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
@@ -61,8 +57,12 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const g = await requireOpenChallenge((await params).id);
   if ("response" in g) return g.response;
   if (!(await canEditChallenge(g.member, g.challenge))) return Response.json({ error: "Forbidden" }, { status: 403 });
-  if (!(await deleteDraft(g.challenge.id))) {
-    return Response.json({ error: "Só rascunho pode ser apagado." }, { status: 409 });
+  if (g.challenge.status === "rascunho") {
+    if (!(await deleteDraft(g.challenge.id))) return Response.json({ error: "Esse rascunho já foi publicado." }, { status: 409 });
+    return Response.json({ ok: true, removed: "rascunho" });
   }
-  return Response.json({ ok: true });
+  if (!(await removeChallenge(g.challenge.id, g.member.id))) {
+    return Response.json({ error: "Esse desafio já está fora do ar." }, { status: 409 });
+  }
+  return Response.json({ ok: true, removed: "publicado" });
 }

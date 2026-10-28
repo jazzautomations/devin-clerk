@@ -85,9 +85,9 @@ export default async function DesafiosPage({ searchParams }: PageProps<"/desafio
                 criar desafio →
               </Link>
             ) : (
-              <details className="relative">
+              <details className="relative" data-testid="desafios-criar-menu">
                 <summary className="btn cursor-pointer list-none">criar desafio →</summary>
-                <ul className="absolute right-0 z-10 mt-2 w-[min(280px,calc(100vw-2rem))] border-[1.5px] border-line bg-background">
+                <ul className="absolute left-0 z-10 mt-2 w-[min(280px,calc(100vw-2rem))] border-[1.5px] border-line bg-background sm:right-0 sm:left-auto">
                   {mine.map((c) => (
                     <li key={c.slug} className="border-t border-line-soft first:border-t-0">
                       <Link href={`/comunidade/${c.slug}/desafios/novo`} className="block px-4 py-3 text-[15px] font-semibold hover:bg-mint">
