@@ -19,6 +19,8 @@ import { getNextStep, listMyActiveEditions } from "@/lib/nextStepFacts";
 import { listMyEditionRoles } from "@/lib/roles";
 import { ProfileReminder } from "@/components/ProfileReminder";
 import { communityNextStep, listMyCommunities } from "@/lib/communities";
+import { listCommunityUpdates } from "@/lib/follows";
+import { CommunityUpdates } from "@/components/CommunityUpdates";
 
 // spec 039 — o painel é "meu próximo passo": primeiro o que a pessoa tem
 // que fazer em cada edição ativa, depois a equipe, os certificados, o
@@ -44,7 +46,7 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 
-  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities] = await Promise.all([
+  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates] = await Promise.all([
     listMyActiveEditions(member.id, now),
     listMyEditionRoles(member.id),
     getOpenHackathons(now),
@@ -55,6 +57,7 @@ export default async function DashboardPage() {
     getAttendanceHistory(member.id, now),
     listPosts(20, member.id),
     listMyCommunities(member.id),
+    listCommunityUpdates(member.id, { limit: 3 }),
   ]);
   const steps = await Promise.all(active.map(async (h) => ({ h, step: await getNextStep(h, member, now) })));
   // abertos: edições do HackaHub primeiro, depois Brasil com a cidade/UF do perfil na
@@ -152,7 +155,9 @@ export default async function DashboardPage() {
                     <Link href={`/comunidade/${c.slug}`} className="text-[17px] font-extrabold tracking-[-0.02em] hover:underline">
                       {c.name}
                     </Link>
-                    {c.role !== "membro" && <span className="chip bare ml-2">{c.role === "dono" ? "dono" : "organiza"}</span>}
+                    {c.role !== "membro" && (
+                      <span className="chip bare ml-2">{c.role === "dono" ? "dono" : c.role === "organizador" ? "organiza" : "segue"}</span>
+                    )}
                     <p className="mt-0.5 text-[14.5px] text-muted">{next.text}</p>
                   </div>
                   <Link href={next.href} className="btn-ghost min-h-[40px]! text-[14px]!">
@@ -179,6 +184,27 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* novidades das comunidades que a pessoa segue (membro já segue) */}
+      {communities.length > 0 && (
+        <section aria-labelledby="novidades-title" className="flex flex-col gap-4" data-testid="dashboard-community-updates">
+          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+            <h2 id="novidades-title" className="text-[clamp(1.5rem,3vw,2rem)] leading-none font-extrabold tracking-[-0.035em]">
+              Novidades das suas comunidades
+            </h2>
+            <Link href="/feed?aba=comunidades" className="font-mono text-[13px] text-accent underline-offset-4 hover:underline">
+              ver no feed →
+            </Link>
+          </div>
+          {updates.length > 0 ? (
+            <CommunityUpdates items={updates} compact />
+          ) : (
+            <p className="border-[1.5px] border-line px-4 py-4 text-[15px] text-muted" data-testid="dashboard-updates-empty">
+              Nada novo ainda. Post no mural, aviso e hackathon aberto das suas comunidades aparecem aqui.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* equipe da edição — atalho pro painel de quem organiza/ajuda */}
       {roles.length > 0 && (

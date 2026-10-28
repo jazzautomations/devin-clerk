@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FollowButton } from "@/components/CommunityActions";
 import { CommunityLogo } from "@/components/CommunityLogo";
 import type { CommunityListItem } from "@/lib/communities";
 import { parseEventTime } from "@/lib/eventTime";
@@ -12,25 +13,32 @@ export function communityPlace(c: { city: string | null; online: boolean }): str
 }
 
 // lista de comunidades (/comunidades, landing): só número do banco —
-// membros e hackathons; próximo hackathon quando existe
+// membros e hackathons; próximo hackathon quando existe. Com `follow`
+// (logado), cada linha ganha o botão seguir — ou o selo de membro, que já segue
 export function CommunityRows({
   communities,
   testId,
   near,
+  follow,
 }: {
   communities: CommunityListItem[];
   testId?: string;
   near?: Map<number, "cidade" | "estado">;
+  follow?: { member: Set<number>; following: Set<number> };
 }) {
   return (
     <ul className="border-b-2 border-line" data-testid={testId}>
       {communities.map((c) => {
         const match = near?.get(c.id);
         return (
-          <li key={c.id} className="border-t-2 border-line" data-testid="community-row">
+          <li
+            key={c.id}
+            className={`border-t-2 border-line ${follow ? "grid grid-cols-1 items-center sm:grid-cols-[minmax(0,1fr)_auto]" : ""}`}
+            data-testid="community-row"
+          >
             <Link
               href={`/comunidade/${c.slug}`}
-              className="group grid grid-cols-[56px_1fr] items-center gap-x-4 gap-y-2 py-4 hover:bg-mint sm:grid-cols-[56px_1fr_auto] sm:gap-x-6 sm:px-2"
+              className="group grid min-w-0 grid-cols-[56px_1fr] items-center gap-x-4 gap-y-2 py-4 hover:bg-mint sm:grid-cols-[56px_1fr_auto] sm:gap-x-6 sm:px-2"
             >
               <CommunityLogo name={c.name} logoUrl={c.logoUrl} />
               <span className="min-w-0">
@@ -59,6 +67,15 @@ export function CommunityRows({
                 )}
               </span>
             </Link>
+            {follow && (
+              <div className="pb-4 pl-[72px] sm:pr-2 sm:pb-0 sm:pl-4" data-testid="community-row-follow">
+                {follow.member.has(c.id) ? (
+                  <span className="chip bare bg-foreground! text-band!">você está aqui</span>
+                ) : (
+                  <FollowButton slug={c.slug} following={follow.following.has(c.id)} compact />
+                )}
+              </div>
+            )}
           </li>
         );
       })}

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { userMessage } from "@/lib/apiError";
 
-// Ações da página da comunidade que precisam de clique: entrar/sair,
+// Ações da página da comunidade que precisam de clique: entrar/sair, seguir,
 // aviso da organização, organizadores (dono), denúncia e moderação (admin).
 
 async function call(url: string, method: string, body?: unknown) {
@@ -44,6 +44,44 @@ export function JoinButton({ slug, member }: { slug: string; member: boolean }) 
         data-testid={member ? "community-leave" : "community-join"}
       >
         {busy ? "um instante…" : member ? "sair da comunidade" : "entrar na comunidade →"}
+      </button>
+      {error && (
+        <p role="alert" className="max-w-[40ch] font-mono text-[12.5px] text-orange">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Seguir leve (migration 030): pra quem não quer ser membro. Membro já
+ * segue, então este botão só aparece pra quem não está na comunidade.
+ */
+export function FollowButton({ slug, following, compact = false }: { slug: string; following: boolean; compact?: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function toggle() {
+    setBusy(true);
+    setError(null);
+    const r = await call(`/api/communities/${slug}/follow`, following ? "DELETE" : "POST");
+    setBusy(false);
+    if (!r.ok) return setError(r.error);
+    router.refresh();
+  }
+  const size = compact ? "min-h-[40px]! px-3! text-[14px]!" : "min-h-[44px]!";
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={busy}
+        aria-pressed={following}
+        className={`btn-ghost ${size}`}
+        data-testid={following ? "community-unfollow" : "community-follow"}
+      >
+        {busy ? "um instante…" : following ? "deixar de seguir" : "seguir"}
       </button>
       {error && (
         <p role="alert" className="max-w-[40ch] font-mono text-[12.5px] text-orange">

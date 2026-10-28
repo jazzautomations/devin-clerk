@@ -339,7 +339,8 @@ export async function listCommunityMembers(communityId: number, limit = 200): Pr
 }
 
 export type MyCommunity = Pick<Community, "id" | "slug" | "name" | "city" | "online"> & {
-  role: CommunityRole;
+  /** "segue" = só segue, sem ser membro (migration 030) */
+  role: CommunityRole | "segue";
   /** rascunho mais recente da comunidade (pro próximo passo de quem organiza) */
   draftId: string | null;
   draftName: string | null;
@@ -357,7 +358,12 @@ export async function listMyCommunities(memberId: number): Promise<MyCommunity[]
            d.id AS "draftId", d.name AS "draftName",
            nx.id AS "nextId", nx.name AS "nextName", nx.startsAt AS "nextStartsAt",
            (SELECT COUNT(*)::int FROM community_members x WHERE x.communityId = c.id) AS members
-         FROM community_members cm JOIN communities c ON c.id = cm.communityId
+         FROM (
+           SELECT communityId, memberId, role FROM community_members
+           UNION ALL
+           SELECT f.communityId, f.memberId, 'segue' FROM community_follows f
+           WHERE NOT EXISTS (SELECT 1 FROM community_members x WHERE x.communityId = f.communityId AND x.memberId = f.memberId)
+         ) cm JOIN communities c ON c.id = cm.communityId
          LEFT JOIN LATERAL (
            SELECT h.id, h.name FROM hackathons h
            WHERE h.communityId = c.id AND h.active = 0 AND h.publishedAt IS NULL
@@ -369,7 +375,7 @@ export async function listMyCommunities(memberId: number): Promise<MyCommunity[]
            ORDER BY to_ts(h.startsAt) LIMIT 1
          ) nx ON true
          WHERE cm.memberId = ? AND c.hidden = 0
-         ORDER BY CASE cm.role WHEN 'dono' THEN 0 WHEN 'organizador' THEN 1 ELSE 2 END, c.name`,
+         ORDER BY CASE cm.role WHEN 'dono' THEN 0 WHEN 'organizador' THEN 1 WHEN 'membro' THEN 2 ELSE 3 END, c.name`,
       )
       .all<Omit<MyCommunity, "online"> & { online: number }>(memberId)
   ).map((r) => ({ ...r, online: r.online === 1, members: Number(r.members) }));
@@ -455,6 +461,8 @@ export async function joinCommunity(c: Pick<Community, "id" | "slug" | "name">, 
   const res = await db
     .prepare("INSERT OR IGNORE INTO community_members (communityId, memberId, role) VALUES (?, ?, 'membro')")
     .run(c.id, member.id);
+  // membro já segue (migration 030): o "seguir" leve de antes deixa de existir
+  await db.prepare("DELETE FROM community_follows WHERE communityId = ? AND memberId = ?").run(c.id, member.id);
   if (res.changes === 0) return false;
   const owners = await db
     .prepare("SELECT memberId FROM community_members WHERE communityId = ? AND role = 'dono'")

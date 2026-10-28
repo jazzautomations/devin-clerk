@@ -8,7 +8,7 @@ import { communityPlace } from "@/components/CommunityRows";
 import { EditionRows } from "@/components/EditionRows";
 import { FeedSection } from "@/components/FeedSection";
 import { PublicCard } from "@/components/PublicCard";
-import { JoinButton, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
+import { FollowButton, JoinButton, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
 import {
   getCommunityItem,
   getMembership,
@@ -18,6 +18,7 @@ import {
   podiumFor,
 } from "@/lib/communities";
 import { parseEventTime } from "@/lib/eventTime";
+import { isFollowing } from "@/lib/follows";
 import { getCommunityHackathons } from "@/lib/hackathons";
 import { listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
@@ -105,13 +106,14 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const isAdmin = member.role === "admin";
   const canManage = isAdmin || role === "dono" || role === "organizador";
   const isOwner = isAdmin || role === "dono";
-  const [members, notices, posts, podium, invites, registeredIds] = await Promise.all([
+  const [members, notices, posts, podium, invites, registeredIds, following] = await Promise.all([
     listCommunityMembers(c.id),
     listNotices(c.id, 5),
     listPosts(30, member.id, { communityId: c.id }),
     podiumFor(past.map((h) => h.id)),
     isOwner ? listCommunityInvites(c.id) : Promise.resolve([]),
     getRegistrationIds(member.id),
+    role ? Promise.resolve(false) : isFollowing(c.id, member.id),
   ]);
   const organizers = members.filter((m) => m.role === "organizador");
   const owners = members.filter((m) => m.role === "dono");
@@ -144,6 +146,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
                 <p className="tag">COMUNIDADE</p>
                 {c.verified && <span className="chip bare border-accent! bg-mint! text-accent!">verificada</span>}
                 {role && <span className="chip bare bg-foreground! text-band!">{role === "membro" ? "você está aqui" : `você ${ROLE_LABEL[role]}`}</span>}
+                {following && <span className="chip bare" data-testid="community-following-chip">você segue</span>}
               </div>
               <h1 className="mt-3 text-[clamp(2.2rem,6vw,4rem)] leading-[0.95] font-extrabold tracking-[-0.045em] break-words">{c.name}</h1>
               <p className="mt-2 font-mono text-[13px] text-muted">
@@ -153,7 +156,20 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
             </div>
           </div>
           <div className="flex shrink-0 flex-col gap-3 sm:items-end">
-            {role !== "dono" && <JoinButton slug={c.slug} member={!!role} />}
+            {role !== "dono" && (
+              <div className="flex flex-wrap items-start gap-2 sm:justify-end">
+                <JoinButton slug={c.slug} member={!!role} />
+                {/* membro já segue; seguir é pra quem acompanha sem entrar */}
+                {!role && <FollowButton slug={c.slug} following={following} />}
+              </div>
+            )}
+            {!role && (
+              <p className="max-w-[44ch] font-mono text-[12px] text-muted sm:text-right" data-testid="community-follow-hint">
+                {following
+                  ? "Você vê o mural, os avisos e os hackathons daqui no seu feed."
+                  : "Seguir põe o mural, os avisos e os hackathons daqui no seu feed, sem entrar."}
+              </p>
+            )}
             {canManage && (
               <div className="flex flex-wrap gap-2 sm:justify-end">
                 <Link href={`/comunidade/${c.slug}/hackathon/novo`} className="btn min-h-[44px]!" data-testid="community-new-hackathon">
