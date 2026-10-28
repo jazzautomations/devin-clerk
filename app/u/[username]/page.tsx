@@ -21,6 +21,9 @@ import { PublicCard } from "@/components/PublicCard";
 import { ProfileSafetyMenu } from "@/components/ProfileSafetyMenu";
 import { currentMember } from "@/lib/session";
 import { isBlockedBy, relationTo } from "@/lib/blocks";
+import { followsMe, isFollowingMember, ownCounts } from "@/lib/memberFollows";
+import { sharedTeamsLabel } from "@/lib/evidence";
+import { FollowButton } from "@/components/FollowButton";
 
 // spec 029 — desfecho de cada edição do arco → chip da trajetória:
 // pódio nas cores de raridade, entrega em accent, presença em muted
@@ -119,6 +122,14 @@ export default async function PublicProfilePage({
   if (viewer && (await isBlockedBy(viewer.id, member.id))) notFound();
   const own = viewer?.id === member.id;
   const relation = viewer && !own ? await relationTo(viewer.id, member.id) : null;
+  // seguir pessoa (migration 033): visitante vê "segue você" e o time em
+  // comum, nunca número. O dono vê os próprios números e as listas.
+  const [iFollow, followsViewer, teamLine, counts] = await Promise.all([
+    viewer && !own ? isFollowingMember(viewer.id, member.id) : false,
+    viewer && !own ? followsMe(viewer.id, member.id) : false,
+    viewer && !own ? sharedTeamsLabel(viewer.id, member.id) : null,
+    own ? ownCounts(member.id) : null,
+  ]);
 
   const history = (
     await Promise.all((await getRegistrationIds(member.id)).map((id) => getHackathon(id)))
@@ -189,6 +200,35 @@ export default async function PublicProfilePage({
             </a>
           ))}
         </div>
+        {counts && (
+          <p className="flex flex-wrap items-center gap-x-2 font-mono text-[13px] text-muted" data-testid="own-follow-counts">
+            <Link href="/perfil/seguidores" className="text-foreground underline-offset-4 hover:text-accent hover:underline">
+              {counts.seguidores} {counts.seguidores === 1 ? "seguidor" : "seguidores"}
+            </Link>
+            <span aria-hidden>·</span>
+            <Link href="/perfil/seguindo" className="text-foreground underline-offset-4 hover:text-accent hover:underline">
+              {counts.seguindo} seguindo
+            </Link>
+            <span className="basis-full text-[12px]">só você vê esses números</span>
+          </p>
+        )}
+        {relation && !relation.blocked && (
+          <div className="flex flex-col gap-2 border-y border-line py-3" data-testid="profile-follow">
+            <div className="flex flex-wrap items-center gap-3">
+              <FollowButton username={member.username} following={iFollow} />
+              {followsViewer && (
+                <span className="tag" data-testid="follows-you">
+                  segue você
+                </span>
+              )}
+            </div>
+            {teamLine && (
+              <p className="font-mono text-[13px] text-foreground" data-testid="same-team">
+                {teamLine}
+              </p>
+            )}
+          </div>
+        )}
         {relation?.blocked && (
           <p className="border-[1.5px] border-orange px-3 py-2 font-mono text-[12.5px] text-orange" data-testid="profile-blocked-note">
             Você bloqueou @{member.username}. Vocês não se veem no HackaHub.

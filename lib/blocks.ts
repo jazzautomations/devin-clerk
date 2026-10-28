@@ -4,7 +4,7 @@ import db from "@/lib/db";
 //
 // - Bloquear vale nos dois sentidos pra quem lê: eu não vejo a pessoa e ela
 //   não me vê. Quem foi bloqueado recebe 404 no /u de quem bloqueou. Bloquear
-//   desfaz o seguir pessoa nos dois sentidos (member_follows, quando existir).
+//   desfaz o seguir pessoa nos dois sentidos (member_follows, migration 033).
 // - Silenciar só esconde pra mim: posts e notificações da pessoa somem, ela
 //   continua vendo tudo e nada muda do lado dela.
 //
@@ -20,11 +20,6 @@ export type SafetyPerson = {
   createdAt: string;
 };
 
-async function tableExists(name: string): Promise<boolean> {
-  const row = await db.prepare("SELECT to_regclass(?::text) IS NOT NULL AS ok").get<{ ok: boolean }>(name);
-  return Boolean(row?.ok);
-}
-
 /** bloqueia (idempotente); devolve true se a linha é nova */
 export async function block(memberId: number, blockedId: number): Promise<boolean> {
   if (memberId === blockedId) throw new Error("não dá pra bloquear a si mesmo");
@@ -32,15 +27,13 @@ export async function block(memberId: number, blockedId: number): Promise<boolea
     const res = await db
       .prepare("INSERT OR IGNORE INTO member_blocks (memberId, blockedId) VALUES (?, ?)")
       .run(memberId, blockedId);
-    // seguir pessoa chega na onda 1 (member_follows: memberId segue followedId)
-    if (await tableExists("member_follows")) {
-      await db
-        .prepare(
-          `DELETE FROM member_follows
-           WHERE (memberId = ? AND followedId = ?) OR (memberId = ? AND followedId = ?)`,
-        )
-        .run(memberId, blockedId, blockedId, memberId);
-    }
+    // seguir pessoa (migration 033): bloquear desfaz o seguir dos dois lados
+    await db
+      .prepare(
+        `DELETE FROM member_follows
+         WHERE (memberId = ? AND followedId = ?) OR (memberId = ? AND followedId = ?)`,
+      )
+      .run(memberId, blockedId, blockedId, memberId);
     return res.changes > 0;
   })();
 }

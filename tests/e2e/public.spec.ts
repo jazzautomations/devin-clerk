@@ -76,7 +76,7 @@ test.describe("comunidade e feed — pra quem tem conta", () => {
   test("/membros lista quem constrói", async ({ memberPage: page }) => {
     await page.goto("/membros");
     await expect(
-      page.getByRole("heading", { name: /quem tá na frente/i }),
+      page.getByRole("heading", { name: /quem constrói aqui/i }),
     ).toBeVisible();
   });
 

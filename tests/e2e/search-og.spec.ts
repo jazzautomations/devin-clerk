@@ -56,7 +56,7 @@ test.describe("?q= — busca server-side nas listas públicas", () => {
     await ensureSearchMember(request);
 
     await page.goto("/membros?q=wasm");
-    const rows = page.locator("li[data-rank]");
+    const rows = page.locator("li[data-member]");
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText("@e2e_search");
 
@@ -67,7 +67,7 @@ test.describe("?q= — busca server-side nas listas públicas", () => {
 
     // curinga SQL é literal: ninguém tem % nos campos → empty state
     await page.goto("/membros?q=%25");
-    await expect(page.locator("li[data-rank]")).toHaveCount(0);
+    await expect(page.locator("li[data-member]")).toHaveCount(0);
     await expect(page.getByText(/nenhum membro/i)).toBeVisible();
   });
 

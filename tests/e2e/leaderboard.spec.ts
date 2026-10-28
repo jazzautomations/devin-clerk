@@ -1,41 +1,26 @@
 import { expect } from "@playwright/test";
 import { test } from "./auth";
 
-// BDD do leaderboard de membros — spec 007.
+// /membros — spec 007, revista na 046 (seguir pessoas): a ordem pode seguir
+// o xp, mas sem pódio, sem posição numerada e sem destaque de ranking.
 
-test.describe("leaderboard — ranking público por xp", () => {
-  test("mostra posições numeradas e o #1 em destaque lendário", async ({
-    memberPage: page,
-  }) => {
+test.describe("membros — lista sem placar", () => {
+  test("sem posição (#1) nem pódio; cada linha linka pro perfil", async ({ memberPage: page }) => {
     await page.goto("/membros");
-    await expect(
-      page.getByRole("heading", { name: /quem tá na frente/i }),
-    ).toBeVisible();
-
-    // lista ordenada semanticamente; topo carrega o token lendário (ouro)
-    const top = page.locator("li[data-rank='1']");
-    await expect(top).toBeVisible();
-    await expect(top).toContainText("#1");
-    await expect(top).toHaveClass(/lendario/);
-
-    // a linha linka pro perfil público do membro
-    await expect(top.getByRole("link").first()).toHaveAttribute(
-      "href",
-      /^\/u\//,
-    );
+    await expect(page.getByRole("heading", { name: /quem constrói aqui/i })).toBeVisible();
+    await expect(page.locator("[data-rank]")).toHaveCount(0);
+    await expect(page.locator("main")).not.toContainText(/#\d+\b/);
+    await expect(page.locator("main li[class*='lendario']")).toHaveCount(0);
+    await expect(page.locator('main li a[href^="/u/"]').first()).toBeVisible();
   });
 
-  test("toggle 'recém-chegados' ordena por entrada e some com o pódio", async ({
-    memberPage: page,
-  }) => {
+  test("toggle 'recém-chegados' troca a ordem e volta pra 'por xp'", async ({ memberPage: page }) => {
     await page.goto("/membros");
     await page.getByRole("link", { name: /recém-chegados/i }).click();
     await expect(page).toHaveURL(/sort=recent/);
-    // ordem cronológica não é mérito — #1 sem ouro
-    await expect(page.locator("li[data-rank='1']")).not.toHaveClass(/lendario/);
-    // volta pro ranking por xp
+    await expect(page.getByRole("link", { name: /recém-chegados/i })).toHaveAttribute("aria-current", "page");
     await page.getByRole("link", { name: "por xp" }).click();
     await expect(page).toHaveURL(/\/membros$/);
-    await expect(page.locator("li[data-rank='1']")).toHaveClass(/lendario/);
+    await expect(page.getByRole("link", { name: "por xp" })).toHaveAttribute("aria-current", "page");
   });
 });

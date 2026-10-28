@@ -175,12 +175,14 @@ describe("lib/blocks", () => {
     expect(await listMySafety(b1.id)).toEqual({ blocked: [], muted: [] });
   });
 
-  it("bloquear sem member_follows (seguir pessoa chega na onda 1) não quebra", async () => {
+  it("bloquear desfaz o seguir pessoa nos dois sentidos (migration 033)", async () => {
     const a = await member();
     const b = await member();
-    const exists = await db.prepare("SELECT to_regclass('member_follows') IS NOT NULL AS ok").get<{ ok: boolean }>();
-    expect(Boolean(exists?.ok)).toBe(false);
+    const c = await member();
+    await db.prepare("INSERT INTO member_follows (memberId, followedId) VALUES (?, ?), (?, ?), (?, ?)").run(a.id, b.id, b.id, a.id, a.id, c.id);
     expect(await block(a.id, b.id)).toBe(true);
+    const left = await db.prepare("SELECT memberId, followedId FROM member_follows WHERE memberId IN (?, ?) ORDER BY memberId").all(a.id, b.id);
+    expect(left).toEqual([{ memberId: a.id, followedId: c.id }]);
   });
 });
 

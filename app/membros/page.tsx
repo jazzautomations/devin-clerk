@@ -3,23 +3,15 @@ import type { Metadata } from "next";
 import { listLeaderboard, type LeaderboardSort } from "@/lib/members";
 import { XpBar } from "@/components/XpBar";
 import { Avatar } from "@/components/Avatar";
-
-// pódio usa os tokens de raridade — ouro lendário pro #1, acento sutil #2/#3
-const PODIUM_ROW: Record<number, string> = {
-  1: "border-lendario bg-lendario/10",
-  2: "border-epico/40",
-  3: "border-raro/40",
-};
-const PODIUM_RANK: Record<number, string> = {
-  1: "text-lendario",
-  2: "text-epico",
-  3: "text-raro",
-};
+import { FollowButton } from "@/components/FollowButton";
+import { hiddenIdsFor } from "@/lib/blocks";
+import { followingIds } from "@/lib/memberFollows";
+import { currentMember } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "membros",
   description:
-    "Quem está na frente no ranking de XP da comunidade HackaHub, com conquistas, skills e histórico de campanhas.",
+    "Quem constrói no HackaHub: skills, conquistas e campanhas de cada pessoa.",
   alternates: { canonical: "/membros" },
 };
 
@@ -31,7 +23,16 @@ export default async function MembrosPage({
   const { sort, q: rawQ } = await searchParams;
   const q = rawQ?.trim() ?? "";
   const mode: LeaderboardSort = sort === "recent" ? "recent" : "xp";
-  const members = await listLeaderboard(mode, 100, q);
+  const me = await currentMember();
+  const [all, hidden, mine] = await Promise.all([
+    listLeaderboard(mode, 100, q),
+    me ? hiddenIdsFor(me.id) : null,
+    me ? followingIds(me.id) : [],
+  ]);
+  // bloqueio (dois sentidos) e silêncio somem da lista, conta excluída também
+  const out = new Set([...(hidden?.blocked ?? []), ...(hidden?.muted ?? [])]);
+  const members = all.filter((m) => !out.has(m.id) && !m.clerkId.startsWith("deleted:"));
+  const followed = new Set(mine);
   const isXp = mode === "xp";
 
   const chip = (active: boolean) =>
@@ -45,14 +46,13 @@ export default async function MembrosPage({
     <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6">
       <div className="flex flex-col gap-3">
         <p className="tag self-start uppercase">
-          {"ranking"}
+          {"membros"}
         </p>
         <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] font-extrabold tracking-[-0.035em] leading-[0.95]">
-          Quem tá na frente
+          Quem constrói aqui
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          XP acumulado em inscrições, posts e presença nas edições. O topo é
-          lendário — literalmente.
+          Todo mundo que está no HackaHub. Siga quem você quer acompanhar.
         </p>
       </div>
 
@@ -95,27 +95,19 @@ export default async function MembrosPage({
         </Link>
       </div>
 
-      <ol className="flex flex-col gap-2">
-        {members.map((m, i) => {
-          const rank = i + 1;
-          const podium = isXp ? PODIUM_ROW[rank] : undefined;
-          const rankColor = (isXp && PODIUM_RANK[rank]) || "text-muted";
-          return (
-            <li
-              key={m.username}
-              data-rank={rank}
-              className={`border bg-background transition hover:bg-surface ${podium ?? "border-line"}`}
+      <ul className="flex flex-col gap-2">
+        {members.map((m) => (
+          <li
+            key={m.username}
+            data-member={m.username}
+            className="flex flex-col gap-3 border border-line bg-background p-4 transition hover:bg-surface sm:flex-row sm:items-center sm:gap-6"
+          >
+            <Link
+              href={`/u/${m.username}`}
+              aria-label={`@${m.username}`}
+              className="group flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-6"
             >
-              <Link
-                href={`/u/${m.username}`}
-                aria-label={`#${rank} — @${m.username}`}
-                className="group flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-6"
-              >
-                <span
-                  className={`w-12 shrink-0 font-display text-xl font-bold ${rankColor}`}
-                >
-                  #{rank}
-                </span>
+              <span className="flex min-w-0 flex-1 items-start gap-3">
                 <Avatar
                   username={m.username}
                   name={m.name}
@@ -124,7 +116,7 @@ export default async function MembrosPage({
                 />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="font-display font-extrabold tracking-[-0.035em] transition group-hover:text-accent">
+                    <span className="font-display font-extrabold tracking-[-0.035em] transition [overflow-wrap:anywhere] group-hover:text-accent">
                       {m.name ?? `@${m.username}`}
                     </span>
                     <span className="font-mono text-xs text-muted">
@@ -137,7 +129,7 @@ export default async function MembrosPage({
                     )}
                   </span>
                   {m.headline && (
-                    <span className="font-mono text-xs text-muted">
+                    <span className="font-mono text-xs text-muted [overflow-wrap:anywhere]">
                       {m.headline}
                     </span>
                   )}
@@ -146,20 +138,28 @@ export default async function MembrosPage({
                     {m.cards ?? 0} cards
                   </span>
                 </span>
-                <span className="w-full shrink-0 sm:w-60">
-                  <XpBar xp={m.xp} />
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ol>
+              </span>
+              <span className="w-full shrink-0 sm:w-52">
+                <XpBar xp={m.xp} />
+              </span>
+            </Link>
+            {me && me.id !== m.id && (
+              <FollowButton
+                username={m.username}
+                following={followed.has(m.id)}
+                compact
+                className="shrink-0"
+              />
+            )}
+          </li>
+        ))}
+      </ul>
 
       {members.length === 0 && (
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {q
             ? `nenhum membro com "${q}"`
-            : "ainda vazio. Crie sua conta e entre no ranking."}
+            : "Ninguém por aqui ainda."}
         </p>
       )}
     </section>
