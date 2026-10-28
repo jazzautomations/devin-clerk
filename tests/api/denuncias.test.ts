@@ -245,6 +245,119 @@ describe("roteamento e quem lê", () => {
   });
 });
 
+describe("ninguém modera denúncia contra si", () => {
+  it("post do dono no mural da própria comunidade vai pro admin; o dono não é avisado, não vê e leva 403", async () => {
+    const dono = await member();
+    const org = await member();
+    const admin = await member("admin");
+    const quem = await member();
+    const c = await community("dn-dono-autor", dono);
+    await db.prepare("INSERT INTO community_members (communityId, memberId, role) VALUES (?, ?, 'organizador')").run(c.id, org.id);
+    const p = await post(dono, "ofensa do dono", { communityId: c.id });
+    const { POST, GET } = await reportsRoute();
+    as(quem);
+    const r = await POST(json("POST", { targetType: "post", targetId: String(p), reason: "ofensa ou assédio" }));
+    expect(r.status).toBe(201);
+    const { id } = await r.json();
+    const rep = (await getReport(id))!;
+    expect(rep).toMatchObject({ communityId: null, hackathonId: null, routedTo: "admin", targetMemberId: dono.id });
+    expect(await canHandleReport(dono, rep)).toBe(false);
+    expect(await canHandleReport(org, rep)).toBe(false);
+    expect(await canHandleReport(admin, rep)).toBe(true);
+    expect(await notif(dono.id, "/comunidade/dn-dono-autor/denuncias")).toEqual([]);
+    expect(await notif(dono.id, "/admin#denuncias")).toEqual([]);
+    expect(await notif(admin.id, "/admin#denuncias")).toHaveLength(1);
+    as(dono);
+    expect((await (await GET(json("GET", undefined, "http://t/api/reports?comunidade=dn-dono-autor"))).json()).reports).toEqual([]);
+    const { PATCH } = await reportRoute();
+    expect((await PATCH(json("PATCH", { resolution: "não vi problema" }), idCtx(id))).status).toBe(403);
+    expect(await countOpenByType({ communityId: c.id, viewerId: dono.id })).toEqual({});
+    as(admin);
+    expect((await (await GET(json("GET", undefined, "http://t/api/reports?tipo=post"))).json()).reports.some((x: { id: number }) => x.id === id)).toBe(true);
+  });
+
+  it("comentário de organizador da comunidade também vai pro admin", async () => {
+    const dono = await member();
+    const org = await member();
+    const autor = await member();
+    const quem = await member();
+    const c = await community("dn-org-autor", dono);
+    await db.prepare("INSERT INTO community_members (communityId, memberId, role) VALUES (?, ?, 'organizador')").run(c.id, org.id);
+    const p = await post(autor, "post comum", { communityId: c.id });
+    const cm = await comment(org, p, "comentário do organizador");
+    const { id } = await createReport({ targetType: "comment", targetId: String(cm), reporterId: quem.id, reason: "ofensa ou assédio" });
+    expect(await getReport(id)).toMatchObject({ communityId: null, routedTo: "admin" });
+    expect(await notif(dono.id, "/comunidade/dn-org-autor/denuncias")).toEqual([]);
+  });
+
+  it("organizador ou responsável de conduta denunciado no mural da edição rolando: vai pro admin, sem incidente", async () => {
+    const org = await member();
+    const conduta = await member();
+    const quem = await member();
+    const admin = await member("admin");
+    await edition("dn-org-ao-vivo", org, true);
+    await db.prepare("INSERT INTO edition_conduct_handlers (hackathonId, memberId) VALUES ('dn-org-ao-vivo', ?)").run(conduta.id);
+    const p1 = await post(org, "post do organizador", { hackathonId: "dn-org-ao-vivo" });
+    const r1 = await createReport({ targetType: "post", targetId: String(p1), reporterId: quem.id, reason: "ofensa ou assédio" });
+    expect(r1.incidentId).toBeNull();
+    const rep1 = (await getReport(r1.id))!;
+    expect(rep1).toMatchObject({ hackathonId: null, routedTo: "admin" });
+    expect(await canHandleReport(org, rep1)).toBe(false);
+    expect(await canHandleReport(conduta, rep1)).toBe(false);
+    expect(await canHandleReport(admin, rep1)).toBe(true);
+    const p2 = await post(conduta, "post de quem trata conduta", { hackathonId: "dn-org-ao-vivo" });
+    const quem2 = await member();
+    const r2 = await createReport({ targetType: "post", targetId: String(p2), reporterId: quem2.id, reason: "ofensa ou assédio" });
+    expect(r2.incidentId).toBeNull();
+    expect(await getReport(r2.id)).toMatchObject({ hackathonId: null });
+    const n = await db.prepare("SELECT COUNT(*) n FROM incidents WHERE hackathonId = 'dn-org-ao-vivo'").get<{ n: number }>();
+    expect(Number(n?.n)).toBe(0);
+  });
+
+  it("quem virou moderador depois da denúncia não vê nem resolve a que é contra si", async () => {
+    const dono = await member();
+    const autor = await member();
+    const quem = await member();
+    const c = await community("dn-promovido", dono);
+    const p = await post(autor, "post antes de virar organizador", { communityId: c.id });
+    const { id } = await createReport({ targetType: "post", targetId: String(p), reporterId: quem.id, reason: "spam ou propaganda" });
+    expect(await getReport(id)).toMatchObject({ communityId: c.id, targetMemberId: autor.id });
+    await db.prepare("INSERT INTO community_members (communityId, memberId, role) VALUES (?, ?, 'organizador')").run(c.id, autor.id);
+    expect(await canHandleReport(autor, (await getReport(id))!)).toBe(false);
+    expect(await listReports({ communityId: c.id, viewerId: autor.id })).toEqual([]);
+    expect(await countOpenByType({ communityId: c.id, viewerId: autor.id })).toEqual({});
+    // o dono continua vendo
+    expect((await listReports({ communityId: c.id, viewerId: dono.id })).map((r) => r.id)).toEqual([id]);
+    expect(await countOpenByType({ communityId: c.id, viewerId: dono.id })).toEqual({ post: 1 });
+    const { PATCH } = await reportRoute();
+    as(autor);
+    expect((await PATCH(json("PATCH", { resolution: "não vi problema" }), idCtx(id))).status).toBe(403);
+  });
+});
+
+describe("comunidade escondida", () => {
+  it("post e comentário de comunidade escondida dão 404 pra quem não é admin, sem bloquear nem avisar", async () => {
+    const dono = await member();
+    const autor = await member();
+    const quem = await member();
+    const admin = await member("admin");
+    const c = await community("dn-escondida", dono);
+    const p = await post(autor, "post escondido", { communityId: c.id });
+    const cm = await comment(autor, p, "comentário escondido");
+    await setModeration(c.id, { hidden: true });
+    const { POST } = await reportsRoute();
+    as(quem);
+    const r = await POST(json("POST", { targetType: "post", targetId: String(p), reason: "spam total" }));
+    expect(r.status).toBe(404);
+    expect(await r.json()).not.toHaveProperty("blocked");
+    expect((await POST(json("POST", { targetType: "comment", targetId: String(cm), reason: "spam total" }))).status).toBe(404);
+    expect(await isBlockedEither(quem.id, autor.id)).toBe(false);
+    expect(await notif(dono.id, "/comunidade/dn-escondida/denuncias")).toEqual([]);
+    as(admin);
+    expect((await POST(json("POST", { targetType: "post", targetId: String(p), reason: "spam total" }))).status).toBe(201);
+  });
+});
+
 describe("PATCH /api/reports/[id]", () => {
   it("401, 404, 403 pra quem não modera, 400 sem dizer o que foi feito, 200 e 409 na segunda vez", async () => {
     const { PATCH } = await reportRoute();

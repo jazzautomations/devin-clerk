@@ -12,6 +12,7 @@ import {
   unmute,
 } from "@/lib/blocks";
 import { listCommunityUpdates } from "@/lib/follows";
+import { changeUsername } from "@/lib/members";
 import { listNotifications, notify, unreadCount } from "@/lib/notifications";
 import { listPosts } from "@/lib/posts";
 import { deleteMemberData, exportMemberData } from "@/lib/privacy";
@@ -237,6 +238,26 @@ describe("o que some da vista", () => {
     await block(chato.id, me.id);
     expect((await listNotifications(me.id)).map((n) => n.actorUsername)).toEqual([ok.username]);
     expect(await unreadCount(me.id)).toBe(1);
+  });
+
+  it("quem foi silenciado ou bloqueado troca o @ e as notificações antigas continuam escondidas", async () => {
+    const me = await member();
+    const chato = await member();
+    const bloqueado = await member();
+    await notify(me.id, { type: "like", actorUsername: chato.username, text: "curtiu", href: "/feed" });
+    await notify(me.id, { type: "comment", actorUsername: bloqueado.username, text: "comentou", href: "/feed" });
+    await mute(me.id, chato.id);
+    await block(me.id, bloqueado.id);
+    expect(await unreadCount(me.id)).toBe(0);
+    await changeUsername(chato.id, `novo_${chato.username}`);
+    await changeUsername(bloqueado.id, `novo_${bloqueado.username}`);
+    expect(await unreadCount(me.id)).toBe(0);
+    expect(await listNotifications(me.id)).toEqual([]);
+    // com o @ novo também não passa
+    await notify(me.id, { type: "like", actorUsername: `novo_${chato.username}`, text: "curtiu de novo", href: "/feed" });
+    expect(await unreadCount(me.id)).toBe(0);
+    await unmute(me.id, chato.id);
+    expect((await listNotifications(me.id)).map((n) => n.text).sort()).toEqual(["curtiu", "curtiu de novo"]);
   });
 });
 

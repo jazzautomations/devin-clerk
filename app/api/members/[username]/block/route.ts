@@ -7,8 +7,10 @@ import { currentMember } from "@/lib/session";
 // meu perfil (404) e some da minha vista, nos dois sentidos. DELETE desfaz.
 
 type Ctx = { params: Promise<{ username: string }> };
+type Who = { id: number };
+type Guard = { response: Response } | { me: Who; other: Who };
 
-async function guard(req: Request, { params }: Ctx) {
+async function guard(req: Request, { params }: Ctx): Promise<Guard> {
   const me = await currentMember();
   if (!me) return { response: Response.json({ error: "Unauthorized" }, { status: 401 }) };
   const { username } = await params;

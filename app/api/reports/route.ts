@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!b || typeof b !== "object") return Response.json({ error: "Corpo inválido." }, { status: 400 });
   try {
-    const r = await createReport({ targetType: b.targetType, targetId: b.targetId, reporterId: me.id, reason: b.reason });
+    const r = await createReport({ targetType: b.targetType, targetId: b.targetId, reporterId: me.id, reporterRole: me.role, reason: b.reason });
     return Response.json({ ok: true, id: r.id, blocked: r.blocked }, { status: 201 });
   } catch (e) {
     if (e instanceof ReportError) return Response.json({ error: e.message }, { status: e.status });
@@ -35,12 +35,12 @@ export async function GET(req: Request) {
   if (slug) {
     const c = await getCommunityBySlug(slug);
     if (!c || (c.hidden && me.role !== "admin")) return Response.json({ error: "Comunidade não encontrada" }, { status: 404 });
-    scope = { communityId: c.id };
+    scope = { communityId: c.id, viewerId: me.id };
     if (!(await canHandleReport(me, { communityId: c.id, hackathonId: null }))) return Response.json({ error: "Forbidden" }, { status: 403 });
   } else if (edition) {
     const h = await getHackathon(edition);
     if (!h) return Response.json({ error: "Edição não encontrada" }, { status: 404 });
-    scope = { hackathonId: h.id };
+    scope = { hackathonId: h.id, viewerId: me.id };
     if (!(await canHandleReport(me, { communityId: null, hackathonId: h.id }))) return Response.json({ error: "Forbidden" }, { status: 403 });
   } else if (me.role !== "admin") {
     return Response.json({ error: "Forbidden" }, { status: 403 });

@@ -13,7 +13,7 @@ export default async function DenunciasEdicaoPage({ params, searchParams }: Page
   const member = await currentMember();
   if (!member || !(await canHandleReport(member, { communityId: null, hackathonId: id }))) notFound();
   const type = reportTypeParam((await searchParams).tipo);
-  const scope = { hackathonId: id };
+  const scope = { hackathonId: id, viewerId: member.id };
   const [open, resolved, counts] = await Promise.all([
     listReports(scope, { type }),
     listReports(scope, { status: "resolved", limit: 20 }),

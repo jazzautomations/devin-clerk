@@ -128,7 +128,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
     getRegistrationIds(member.id),
     role ? Promise.resolve(false) : isFollowing(c.id, member.id),
     canManage ? countCommunityLeads(c.id) : Promise.resolve(0),
-    canManage ? countOpenByType({ communityId: c.id }) : Promise.resolve<Awaited<ReturnType<typeof countOpenByType>>>({}),
+    canManage ? countOpenByType({ communityId: c.id, viewerId: member.id }) : Promise.resolve<Awaited<ReturnType<typeof countOpenByType>>>({}),
   ]);
   const openReports = Object.values(reportCounts).reduce((a, b) => a + (b ?? 0), 0);
   const organizers = members.filter((m) => m.role === "organizador");

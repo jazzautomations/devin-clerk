@@ -18,7 +18,7 @@ export default async function DenunciasComunidadePage({ params, searchParams }: 
   if (!member || !c || (c.hidden && member.role !== "admin")) notFound();
   if (!(await canHandleReport(member, { communityId: c.id, hackathonId: null }))) notFound();
   const type = reportTypeParam((await searchParams).tipo);
-  const scope = { communityId: c.id };
+  const scope = { communityId: c.id, viewerId: member.id };
   const [open, resolved, counts] = await Promise.all([
     listReports(scope, { type }),
     listReports(scope, { status: "resolved", limit: 20 }),

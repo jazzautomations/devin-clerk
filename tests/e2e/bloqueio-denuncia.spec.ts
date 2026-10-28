@@ -79,10 +79,21 @@ async function seed() {
     .get<{ id: number }>(autor, c!.id);
   await db
     .prepare(
-      `INSERT INTO reports ("targetType", "targetId", "reporterId", reason, snapshot, "communityId")
-       VALUES ('post', ?, ?, 'spam ou propaganda', ?, ?)`,
+      `INSERT INTO reports ("targetType", "targetId", "reporterId", "targetMemberId", reason, snapshot, "communityId")
+       VALUES ('post', ?, ?, ?, 'spam ou propaganda', ?, ?)`,
     )
-    .run(String(p!.id), fiscal, `@${AUTOR}: Compre seguidores no meu link`, c!.id);
+    .run(String(p!.id), fiscal, autor, `@${AUTOR}: Compre seguidores no meu link`, c!.id);
+  // denúncia contra o próprio dono (membro e2e) na fila da comunidade dele:
+  // ele não vê, não conta e não resolve
+  const mine = await db
+    .prepare(`INSERT INTO posts ("memberId", body, "communityId") VALUES (?, 'Post do dono no mural', ?) RETURNING id`)
+    .get<{ id: number }>(meId, c!.id);
+  await db
+    .prepare(
+      `INSERT INTO reports ("targetType", "targetId", "reporterId", "targetMemberId", reason, snapshot, "communityId")
+       VALUES ('post', ?, ?, ?, 'ofensa contra o dono', 'Post do dono no mural', ?)`,
+    )
+    .run(String(mine!.id), fiscal, meId, c!.id);
 }
 
 test.describe.configure({ mode: "serial" });
@@ -200,10 +211,12 @@ test.describe("bloqueio e denúncia", () => {
       await expect(item.getByRole("link", { name: "ver onde está" })).toHaveAttribute("href", `/comunidade/${COM}`);
       // quem denunciou não aparece
       await expect(item).not.toContainText(FISCAL);
+      // a denúncia contra o próprio dono não está na fila dele
+      await expect(page.getByText("ofensa contra o dono")).toHaveCount(0);
       await noHorizontalScroll(page);
       await shot(page, `fila-comunidade-${vw === 390 ? "390" : "desktop"}`);
     }
-    const id = (await openE2eDb().prepare(`SELECT id FROM reports WHERE "targetType" = 'post' AND "communityId" = (SELECT id FROM communities WHERE slug = ?)`).get<{ id: number }>(COM))!.id;
+    const id = (await openE2eDb().prepare(`SELECT id FROM reports WHERE "targetType" = 'post' AND reason = 'spam ou propaganda' AND "communityId" = (SELECT id FROM communities WHERE slug = ?)`).get<{ id: number }>(COM))!.id;
     await page.getByTestId(`resolve-${id}`).click();
     await page.getByTestId(`resolve-send-${id}`).click();
     await expect(page.getByTestId(`resolve-form-${id}`).getByRole("alert")).toContainText("Escolha o que foi feito.");
@@ -212,6 +225,16 @@ test.describe("bloqueio e denúncia", () => {
     await expect(page.getByTestId("report-queue-empty")).toBeVisible();
     await expect(page.getByText("resolvidas há pouco (1)")).toBeVisible();
     await noHorizontalScroll(page);
+  });
+
+  test("o dono não resolve denúncia contra si mesmo", async ({ memberPage: page }) => {
+    const db = openE2eDb();
+    const id = (await db.prepare(`SELECT id FROM reports WHERE reason = 'ofensa contra o dono' AND "targetMemberId" = ?`).get<{ id: number }>(await me()))!.id;
+    const res = await page.request.patch(`/api/reports/${id}`, { data: { resolution: "não vi problema" } });
+    expect(res.status()).toBe(403);
+    const list = await (await page.request.get(`/api/reports?comunidade=${COM}`)).json();
+    expect(list.reports.some((r: { id: number }) => r.id === id)).toBe(false);
+    expect(await db.prepare(`SELECT "resolvedAt" FROM reports WHERE id = ?`).get(id)).toEqual({ resolvedAt: null });
   });
 
   test("a fila de outra comunidade não existe pra quem não modera", async ({ memberPage: page }) => {
