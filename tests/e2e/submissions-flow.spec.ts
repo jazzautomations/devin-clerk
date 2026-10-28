@@ -174,7 +174,7 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await expect(page.getByTestId("judged-version")).toContainText("v1");
     await expect(page.getByText("piloto com a prefeitura em novembro")).toBeVisible();
     // ordem: vídeo antes da descrição; versão avaliada antes do "depois do hackathon"
-    const text = await page.locator("section").first().innerText();
+    const text = await page.getByTestId("project-page").innerText();
     expect(text.indexOf("vídeo do time")).toBeLessThan(text.indexOf("Problema: fila"));
     expect(text.indexOf("versão avaliada")).toBeLessThan(text.indexOf("piloto com a prefeitura"));
     await noOverflow(page, "ficha-projeto-390");

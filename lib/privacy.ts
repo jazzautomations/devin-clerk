@@ -271,7 +271,8 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
         .prepare(`UPDATE ${ident(table)} SET ${fields.map((f) => `${ident(f)} = NULL`).join(", ")} WHERE ${ident(column)} = ?`)
         .run(memberId);
     }
-    await db.prepare("UPDATE team_members SET username = ? WHERE username = ?").run(anon, member.username);
+    // o papel no time (migration 036) é texto da pessoa: sai junto com o @
+    await db.prepare("UPDATE team_members SET username = ?, role = NULL WHERE username = ?").run(anon, member.username);
     // inscrição mantida pela contagem não aparece mais na lista pública
     await db.prepare("UPDATE registrations SET publicListing = 0 WHERE memberId = ?").run(memberId);
     const cols = Object.keys(ANONYMIZE);

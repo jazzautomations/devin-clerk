@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { publishAnnouncement } from "@/lib/announcements";
 import { ABANDONED_SQL } from "@/lib/archive";
+import { KNOWN_TECH, normalizeTech, parseTechEntries } from "@/lib/techTags";
 
 // Entrega de projeto (spec 034 §5). O projeto do time vive em team_projects
 // como RASCUNHO (autosave). Enviar valida os obrigatórios da edição e grava
@@ -9,6 +10,11 @@ import { ABANDONED_SQL } from "@/lib/archive";
 // TRAVA os campos avaliados; o júri avalia a última versão enviada até o
 // prazo. "Depois do hackathon" (afterNotes) segue editável e fica fora do
 // snapshot. Reabrir é só do organizador, com motivo, e fica no log.
+//
+// Vitrine (spec 046, migration 036): a história do projeto (inspiração,
+// como foi feito, desafios, o que aprendemos), a capa, a galeria e o papel
+// de cada integrante não são avaliados. Seguem editáveis depois da trava e
+// entram no snapshot, pra /p mostrar "atualizado depois da entrega".
 //
 // Edição sem submissionDeadline = modo antigo: sem trava, júri vê todo time
 // (o arquivo das edições passadas não tem versão nenhuma).
@@ -235,18 +241,38 @@ export type EntryFields = {
   usedAi: boolean | null;
 };
 
-export type Snapshot = EntryFields & { members: string[] };
+/** galeria do projeto (project_media): URL https + legenda, até 6 */
+export type ProjectMedia = { url: string; caption: string | null };
+
+/** vitrine: fora do júri, editável depois da trava (migration 036) */
+export type ShowcaseFields = {
+  inspiration: string | null;
+  howBuilt: string | null;
+  challenges: string | null;
+  learned: string | null;
+  coverUrl: string | null;
+  media: ProjectMedia[];
+};
+
+/** papel de cada integrante (team_members.role), por @ */
+export type MemberRoles = Record<string, string | null>;
+
+export type Snapshot = EntryFields & ShowcaseFields & { members: string[]; roles: MemberRoles };
+
+export const STORY_MAX = 2_000;
+export const MEDIA_MAX = 6;
+export const CAPTION_MAX = 140;
+export const ROLE_MAX = 80;
+/** chaves do PATCH que passam depois da trava */
+export const AFTER_LOCK_KEYS = new Set([
+  "afterNotes", "inspiration", "howBuilt", "challenges", "learned", "coverUrl", "media", "role",
+]);
+export const STORY_KEYS = ["inspiration", "howBuilt", "challenges", "learned"] as const;
 
 export const TAGLINE_MAX = 140;
 
 /** sugestões da lista controlada; o time pode digitar outras */
-export const TECH_SUGGESTIONS = [
-  "TypeScript", "JavaScript", "Python", "Go", "Rust", "Java", "Kotlin", "Swift", "Dart",
-  "React", "Next.js", "Vue", "Svelte", "Node.js", "FastAPI", "Django", "Flutter", "React Native",
-  "PostgreSQL", "SQLite", "MongoDB", "Supabase", "Firebase", "Redis",
-  "OpenAI", "Claude", "Gemini", "LangChain", "Whisper", "Hugging Face",
-  "WhatsApp API", "Docker", "Vercel", "AWS", "Google Cloud", "Arduino", "Figma",
-];
+export const TECH_SUGGESTIONS = KNOWN_TECH;
 
 const httpUrl = (u: string) => /^https?:\/\/\S+$/i.test(u);
 
@@ -275,6 +301,12 @@ function optUrl(v: unknown, key: string): string | null {
   return s;
 }
 
+function httpsUrl(v: unknown, key: string): string | null {
+  const s = optText(v, key, 500);
+  if (s && !/^https:\/\/\S+$/i.test(s)) throw new EntryError(`${key}: só endereço https://`);
+  return s;
+}
+
 function stringList(v: unknown, key: string, maxItems: number, maxLen: number): string[] {
   if (!Array.isArray(v)) throw new EntryError(`${key} precisa ser lista`);
   const out: string[] = [];
@@ -289,9 +321,12 @@ function stringList(v: unknown, key: string, maxItems: number, maxLen: number): 
   return out;
 }
 
+export type DraftPatch = Partial<EntryFields> &
+  Partial<ShowcaseFields> & { afterNotes?: string | null; role?: string | null };
+
 /** valida o patch do rascunho; só devolve as chaves presentes */
-export function validateDraftPatch(raw: Record<string, unknown>): Partial<EntryFields> & { afterNotes?: string | null } {
-  const out: Partial<EntryFields> & { afterNotes?: string | null } = {};
+export function validateDraftPatch(raw: Record<string, unknown>): DraftPatch {
+  const out: DraftPatch = {};
   if (raw.title !== undefined) {
     const t = optText(raw.title, "title", 120);
     if (!t) throw new EntryError("título não pode ficar vazio");
@@ -306,7 +341,12 @@ export function validateDraftPatch(raw: Record<string, unknown>): Partial<EntryF
   for (const k of ["repoUrl", "demoUrl", "videoUrl", "slidesUrl", "logoUrl"] as const) {
     if (raw[k] !== undefined) out[k] = optUrl(raw[k], k);
   }
-  if (raw.technologies !== undefined) out.technologies = stringList(raw.technologies, "technologies", 20, 40);
+  if (raw.technologies !== undefined) {
+    // valida o formato; depois fica com até 12 únicas pela tag (da 13ª em
+    // diante é ignorada, lib/techTags)
+    stringList(raw.technologies, "technologies", Number.MAX_SAFE_INTEGER, 40);
+    out.technologies = parseTechEntries(raw.technologies).map((e) => e.label);
+  }
   if (raw.socialPosts !== undefined) {
     out.socialPosts = stringList(raw.socialPosts, "socialPosts", 10, 500);
     if (out.socialPosts.some((u) => !httpUrl(u))) throw new EntryError("socialPosts: URL inválida — só http(s)");
@@ -326,6 +366,26 @@ export function validateDraftPatch(raw: Record<string, unknown>): Partial<EntryF
   }
   if (raw.challengeIds !== undefined) out.challengeIds = stringList(raw.challengeIds, "challengeIds", 10, 80);
   if (raw.afterNotes !== undefined) out.afterNotes = optText(raw.afterNotes, "afterNotes", 4_000);
+  for (const k of STORY_KEYS) {
+    if (raw[k] !== undefined) out[k] = optText(raw[k], k, STORY_MAX);
+  }
+  if (raw.coverUrl !== undefined) out.coverUrl = httpsUrl(raw.coverUrl, "capa");
+  if (raw.media !== undefined) out.media = validateMedia(raw.media);
+  if (raw.role !== undefined) out.role = optText(raw.role, "papel", ROLE_MAX);
+  return out;
+}
+
+/** galeria: lista de { url https, legenda }; linha sem URL some; até 6 */
+export function validateMedia(v: unknown): ProjectMedia[] {
+  if (!Array.isArray(v)) throw new EntryError("galeria precisa ser lista");
+  const out: ProjectMedia[] = [];
+  for (const item of v) {
+    const o = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    const url = httpsUrl(o.url ?? null, "galeria");
+    if (!url) continue;
+    out.push({ url, caption: optText(o.caption ?? null, "legenda", CAPTION_MAX) });
+  }
+  if (out.length > MEDIA_MAX) throw new EntryError(`galeria: no máximo ${MEDIA_MAX} imagens`);
   return out;
 }
 
@@ -334,7 +394,7 @@ export function missingRequired(f: EntryFields, s: SubmissionSettings | null): s
   const miss: string[] = [];
   if (!f.title?.trim()) miss.push("título");
   if (!f.tagline?.trim()) miss.push("tagline");
-  if (!f.description?.trim()) miss.push("descrição");
+  if (!f.description?.trim()) miss.push("o que faz");
   // "não existia nada antes" já responde a pergunta do trabalho anterior
   if (!f.priorWork?.trim() && f.priorExisted !== false) miss.push("trabalho anterior");
   if (f.technologies.length === 0) miss.push("tecnologias");
@@ -381,6 +441,11 @@ type ProjectRow = {
   stageVideoUrl: string | null;
   afterNotes: string | null;
   lastSavedAt: string | null;
+  inspiration: string | null;
+  howBuilt: string | null;
+  challenges: string | null;
+  learned: string | null;
+  coverUrl: string | null;
 };
 
 const jsonList = <T>(v: string | null | undefined): T[] => {
@@ -413,6 +478,17 @@ function fieldsFrom(p: ProjectRow, challengeIds: string[]): EntryFields {
   };
 }
 
+function showcaseFrom(p: ProjectRow | undefined, media: ProjectMedia[]): ShowcaseFields {
+  return {
+    inspiration: p?.inspiration ?? null,
+    howBuilt: p?.howBuilt ?? null,
+    challenges: p?.challenges ?? null,
+    learned: p?.learned ?? null,
+    coverUrl: p?.coverUrl ?? null,
+    media,
+  };
+}
+
 export function parseSnapshot(text: string): Snapshot {
   const s = JSON.parse(text) as Partial<Snapshot>;
   return {
@@ -432,8 +508,40 @@ export function parseSnapshot(text: string): Snapshot {
     challengeIds: s.challengeIds ?? [],
     priorExisted: typeof s.priorExisted === "boolean" ? s.priorExisted : null,
     usedAi: typeof s.usedAi === "boolean" ? s.usedAi : null,
+    // versão enviada antes da 036 não tem vitrine: vale como vazia
+    inspiration: s.inspiration ?? null,
+    howBuilt: s.howBuilt ?? null,
+    challenges: s.challenges ?? null,
+    learned: s.learned ?? null,
+    coverUrl: s.coverUrl ?? null,
+    media: Array.isArray(s.media) ? s.media : [],
     members: s.members ?? [],
+    roles: s.roles && typeof s.roles === "object" && !Array.isArray(s.roles) ? s.roles : {},
   };
+}
+
+/** papel vazio e ausente são a mesma coisa */
+const cleanRoles = (r: MemberRoles) =>
+  Object.entries(r)
+    .filter(([, v]) => !!v)
+    .sort(([a], [b]) => a.localeCompare(b));
+
+/**
+ * A vitrine atual difere da entregue? Puro: compara história, capa, galeria
+ * e papéis. Campo avaliado não entra (a trava já segura).
+ */
+export function showcaseDiffers(
+  current: ShowcaseFields & { roles: MemberRoles },
+  delivered: ShowcaseFields & { roles: MemberRoles },
+): boolean {
+  const norm = (x: ShowcaseFields & { roles: MemberRoles }) =>
+    JSON.stringify([
+      ...STORY_KEYS.map((k) => x[k] ?? null),
+      x.coverUrl ?? null,
+      x.media.map((m) => [m.url, m.caption ?? null]),
+      cleanRoles(x.roles),
+    ]);
+  return norm(current) !== norm(delivered);
 }
 
 const sameFields = (a: EntryFields, b: EntryFields) =>
@@ -453,6 +561,10 @@ export type Entry = {
   /** rascunho tem mudança que ainda não foi enviada */
   dirty: boolean;
   fields: EntryFields | null;
+  /** vitrine atual (história, capa, galeria); null sem projeto */
+  showcase: ShowcaseFields | null;
+  /** papel de cada integrante, por @ (null = não escreveu) */
+  roles: MemberRoles;
   afterNotes: string | null;
   stageVideoUrl: string | null;
   lastSavedAt: string | null;
@@ -479,19 +591,61 @@ async function versionsOf(teamId: number): Promise<(VersionInfo & { snapshot: st
     .all<VersionInfo & { snapshot: string }>(teamId);
 }
 
+async function mediaOf(teamId: number): Promise<ProjectMedia[]> {
+  return db
+    .prepare("SELECT url, caption FROM project_media WHERE teamId = ? ORDER BY position, id")
+    .all<ProjectMedia>(teamId);
+}
+
+/**
+ * Reescreve o índice project_tech a partir de team_projects.technologies
+ * (a fonte). Roda dentro da transação do save e normaliza de novo o que
+ * veio do backfill da 036.
+ */
+export async function syncProjectTech(teamId: number): Promise<string[]> {
+  const row = await db
+    .prepare("SELECT technologies FROM team_projects WHERE teamId = ?")
+    .get<{ technologies: string }>(teamId);
+  const tags = parseTechEntries(jsonList<string>(row?.technologies)).map((e) => e.tag);
+  await db.prepare("DELETE FROM project_tech WHERE teamId = ?").run(teamId);
+  for (const tag of tags) {
+    await db.prepare("INSERT INTO project_tech (teamId, tag) VALUES (?, ?) ON CONFLICT DO NOTHING").run(teamId, tag);
+  }
+  return tags;
+}
+
+/**
+ * Tags pro autocompletar do editor: as que pelo menos dois times já usam
+ * (tag de um time só não vira sugestão pros outros) e as conhecidas.
+ */
+export async function techSuggestions(limit = 60): Promise<string[]> {
+  const used = await db
+    .prepare(
+      `SELECT tag FROM project_tech GROUP BY tag HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC, tag LIMIT ?`,
+    )
+    .all<{ tag: string }>(limit);
+  const out = used.map((r) => r.tag);
+  for (const t of KNOWN_TECH) {
+    const tag = normalizeTech(t);
+    if (tag && !out.includes(tag)) out.push(tag);
+  }
+  return out;
+}
+
 export async function getEntry(teamId: number, now = new Date()): Promise<Entry | null> {
   const team = await db
     .prepare("SELECT id, name, hackathonId, finalist, reopenedUntil FROM teams WHERE id = ?")
     .get<{ id: number; name: string; hackathonId: string; finalist: number; reopenedUntil: string | null }>(teamId);
   if (!team) return null;
-  const [settings, project, members, challengeIds, versions] = await Promise.all([
+  const [settings, project, members, challengeIds, versions, media] = await Promise.all([
     getSubmissionSettings(team.hackathonId),
     db.prepare("SELECT * FROM team_projects WHERE teamId = ?").get<ProjectRow>(teamId),
     db
-      .prepare("SELECT username FROM team_members WHERE teamId = ? ORDER BY username")
-      .all<{ username: string }>(teamId),
+      .prepare("SELECT username, role FROM team_members WHERE teamId = ? ORDER BY username")
+      .all<{ username: string; role: string | null }>(teamId),
     challengeIdsOf(teamId),
     versionsOf(teamId),
+    mediaOf(teamId),
   ]);
   const locked = isLocked(settings, team.reopenedUntil, now);
   const fields = project ? fieldsFrom(project, challengeIds) : null;
@@ -507,6 +661,8 @@ export async function getEntry(teamId: number, now = new Date()): Promise<Entry 
     locked,
     dirty: !!fields && (!last || !sameFields(fields, parseSnapshot(last.snapshot))),
     fields,
+    showcase: project ? showcaseFrom(project, media) : null,
+    roles: Object.fromEntries(members.map((m) => [m.username, m.role ?? null])),
     afterNotes: project?.afterNotes ?? null,
     stageVideoUrl: project?.stageVideoUrl ?? null,
     lastSavedAt: project?.lastSavedAt ?? null,
@@ -559,7 +715,8 @@ export async function assertEvaluatedEditable(teamId: number, now = new Date()) 
 
 /**
  * Autosave do rascunho. Campo avaliado depois da trava → 403; afterNotes
- * ("depois do hackathon") passa sempre. Grava lastSavedAt.
+ * ("depois do hackathon") e a vitrine (história, capa, galeria, papel)
+ * passam sempre. Grava lastSavedAt. O papel salvo é só o de quem salva.
  */
 export async function saveDraft(
   teamId: number,
@@ -571,7 +728,7 @@ export async function saveDraft(
   const patch = validateDraftPatch(raw);
   const keys = Object.keys(patch);
   if (keys.length === 0) throw new EntryError("nenhum campo pra salvar");
-  if (keys.some((k) => k !== "afterNotes")) await assertEvaluatedEditable(teamId, now);
+  if (keys.some((k) => !AFTER_LOCK_KEYS.has(k))) await assertEvaluatedEditable(teamId, now);
 
   if (patch.challengeIds) {
     const valid = new Set(
@@ -586,11 +743,18 @@ export async function saveDraft(
 
   const cols: { col: string; value: unknown }[] = [];
   for (const [k, v] of Object.entries(patch)) {
-    if (k === "challengeIds") continue;
+    if (k === "challengeIds" || k === "media" || k === "role") continue;
     cols.push({ col: k, value: Array.isArray(v) ? JSON.stringify(v) : typeof v === "boolean" ? (v ? 1 : 0) : v });
   }
+  const touchesProject = cols.length > 0 || patch.challengeIds !== undefined || patch.media !== undefined;
 
   await db.transaction(async () => {
+    if (patch.role !== undefined) {
+      await db
+        .prepare("UPDATE team_members SET role = ? WHERE teamId = ? AND username = ?")
+        .run(patch.role, teamId, member.username);
+    }
+    if (!touchesProject) return;
     const exists = await db.prepare("SELECT 1 FROM team_projects WHERE teamId = ?").get(teamId);
     if (!exists) {
       if (!patch.title) throw new EntryError("dê um título pro projeto antes de salvar");
@@ -606,6 +770,15 @@ export async function saveDraft(
         await db.prepare("INSERT INTO project_challenges (teamId, challengeId) VALUES (?, ?)").run(teamId, c);
       }
     }
+    if (patch.media) {
+      await db.prepare("DELETE FROM project_media WHERE teamId = ?").run(teamId);
+      for (const [i, m] of patch.media.entries()) {
+        await db
+          .prepare("INSERT INTO project_media (teamId, url, caption, position) VALUES (?, ?, ?, ?)")
+          .run(teamId, m.url, m.caption, i);
+      }
+    }
+    await syncProjectTech(teamId);
   })();
   return (await getEntry(teamId, now))!;
 }
@@ -655,7 +828,12 @@ export async function submitEntry(
     );
   }
 
-  const snapshot: Snapshot = { ...entry.fields, members: entry.members };
+  const snapshot: Snapshot = {
+    ...entry.fields,
+    ...(entry.showcase ?? showcaseFrom(undefined, [])),
+    members: entry.members,
+    roles: entry.roles,
+  };
   // dois integrantes clicando "enviar" ao mesmo tempo: a trava no time põe um
   // depois do outro (versão 1 e 2), em vez de os dois lerem o mesmo MAX e um
   // estourar o UNIQUE(teamId, version)

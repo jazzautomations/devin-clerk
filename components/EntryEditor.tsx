@@ -3,14 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { Entry, EntryFields, EntryLink, EntryStatus } from "@/lib/entries";
+import type { Entry, EntryFields, EntryLink, EntryStatus, ShowcaseFields } from "@/lib/entries";
+import { normalizeTech, parseTechEntries, TECH_MAX, techLabel } from "@/lib/techTags";
 
 // spec 034 — editor da entrega: rascunho com autosave ("último salvamento"),
 // enviar = versão nova, trava no prazo (o servidor manda; aqui só reflete) e
 // a seção "depois do hackathon", que segue aberta e não é julgada.
+// spec 046 — a vitrine (história, capa, galeria e o papel de cada um) tem
+// autosave próprio e segue aberta depois da trava; "Feito com" vira chips.
 // Só tipos de lib/entries aqui — o módulo fala com o banco.
 
 const TAGLINE_MAX = 140;
+const STORY_MAX = 2000;
+const MEDIA_MAX = 6;
+const CAPTION_MAX = 140;
+const ROLE_MAX = 80;
 const STATUS_LABEL: Record<EntryStatus, string> = {
   rascunho: "rascunho",
   enviado: "enviado",
@@ -32,7 +39,7 @@ type Form = {
   slidesUrl: string;
   logoUrl: string;
   priorWork: string;
-  technologies: string;
+  technologies: string[];
   links: EntryLink[];
   socialPosts: string;
   aiUsage: string;
@@ -53,7 +60,7 @@ function toForm(f: EntryFields | null, rubric: string[]): Form {
     slidesUrl: f?.slidesUrl ?? "",
     logoUrl: f?.logoUrl ?? "",
     priorWork: f?.priorWork ?? "",
-    technologies: (f?.technologies ?? []).join(", "),
+    technologies: f?.technologies ?? [],
     links: f?.links ?? [],
     socialPosts: (f?.socialPosts ?? []).join("\n"),
     aiUsage: f?.aiUsage ?? "",
@@ -74,7 +81,7 @@ function toPayload(f: Form) {
     slidesUrl: f.slidesUrl,
     logoUrl: f.logoUrl,
     priorWork: f.priorWork,
-    technologies: f.technologies.split(",").map((s) => s.trim()).filter(Boolean),
+    technologies: f.technologies,
     links: f.links.filter((l) => l.url.trim()),
     socialPosts: f.socialPosts.split("\n").map((s) => s.trim()).filter(Boolean),
     aiUsage: f.aiUsage,
@@ -83,6 +90,49 @@ function toPayload(f: Form) {
     usedAi: f.usedAi,
   };
 }
+
+type Story = {
+  inspiration: string;
+  howBuilt: string;
+  challenges: string;
+  learned: string;
+  coverUrl: string;
+  media: { url: string; caption: string }[];
+  role: string;
+};
+
+function toStory(s: ShowcaseFields | null, role: string | null): Story {
+  return {
+    inspiration: s?.inspiration ?? "",
+    howBuilt: s?.howBuilt ?? "",
+    challenges: s?.challenges ?? "",
+    learned: s?.learned ?? "",
+    coverUrl: s?.coverUrl ?? "",
+    media: (s?.media ?? []).map((m) => ({ url: m.url, caption: m.caption ?? "" })),
+    role: role ?? "",
+  };
+}
+
+/** sem projeto criado ainda, só o papel pode ser salvo */
+function storyPayload(s: Story, hasProject: boolean): Record<string, unknown> {
+  if (!hasProject) return { role: s.role };
+  return {
+    inspiration: s.inspiration,
+    howBuilt: s.howBuilt,
+    challenges: s.challenges,
+    learned: s.learned,
+    coverUrl: s.coverUrl,
+    media: s.media.filter((m) => m.url.trim()).map((m) => ({ url: m.url.trim(), caption: m.caption })),
+    role: s.role,
+  };
+}
+
+const STORY_FIELDS = [
+  ["inspiration", "Inspiração", "de onde veio a ideia, quem tem esse problema"],
+  ["howBuilt", "Como foi feito", "arquitetura, stack, como o time dividiu o trabalho"],
+  ["challenges", "Desafios", "o que deu errado e como vocês resolveram"],
+  ["learned", "O que aprendemos", "o que o time leva daqui"],
+] as const;
 
 const timeOf = (dbText: string | null) => {
   if (!dbText) return "";
@@ -108,14 +158,18 @@ const dateTimeOf = (dbText: string | null) => {
 export function EntryEditor({
   hackathonId,
   initial,
+  me,
   rubric,
   challenges,
   techSuggestions,
 }: {
   hackathonId: string;
   initial: Entry;
+  /** @ de quem está editando: o papel no time é só o dele */
+  me: string;
   rubric: string[];
   challenges: { id: string; title: string; sponsor: string }[];
+  /** tags (normalizadas) pro autocompletar de "Feito com" */
   techSuggestions: string[];
 }) {
   const router = useRouter();
@@ -127,27 +181,58 @@ export function EntryEditor({
   const [submitMsg, setSubmitMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const dirtyRef = useRef(false);
+  const [story, setStory] = useState<Story>(() => toStory(initial.showcase, initial.roles?.[me] ?? null));
+  const [storySave, setStorySave] = useState<"idle" | "pending" | "saving" | "error">("idle");
+  const [storyErr, setStoryErr] = useState("");
+  const storyDirtyRef = useRef(false);
   const s = entry.settings;
   const locked = entry.locked;
+  const hasProject = !!entry.fields;
 
-  async function patch(body: Record<string, unknown>): Promise<boolean> {
-    const res = await fetch(`/api/hackathons/${hackathonId}/entry`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  async function patch(body: Record<string, unknown>, onError: (m: string) => void = setErr): Promise<boolean> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/hackathons/${hackathonId}/entry`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      onError("sem conexão: não salvou. Tente de novo.");
+      return false;
+    }
     if (res.status === 401) {
       router.push("/sign-in");
       return false;
     }
     const data = await res.json().catch(() => null);
     if (!res.ok) {
-      setErr(data?.error ?? "erro ao salvar");
+      onError(data?.error ?? "erro ao salvar");
       return false;
     }
     setEntry(data.entry);
-    setErr("");
+    onError("");
     return true;
+  }
+
+  // autosave da vitrine: independente da trava (o servidor deixa passar)
+  useEffect(() => {
+    if (!storyDirtyRef.current) return;
+    const t = setTimeout(async () => {
+      setStorySave("saving");
+      const ok = await patch(storyPayload(story, hasProject), setStoryErr);
+      if (ok) storyDirtyRef.current = false;
+      setStorySave(ok ? "idle" : "error");
+    }, 1200);
+    return () => clearTimeout(t);
+    // patch muda a cada render; o gatilho é a vitrine
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [story]);
+
+  function setS<K extends keyof Story>(k: K, v: Story[K]) {
+    storyDirtyRef.current = true;
+    setStorySave("pending");
+    setStory((x) => ({ ...x, [k]: v }));
   }
 
   // autosave: 1,2 s depois da última tecla; sem título não dá pra criar o projeto
@@ -169,7 +254,7 @@ export function EntryEditor({
   // (sem título o autosave não roda, então o texto só existe aqui)
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (!dirtyRef.current) return;
+      if (!dirtyRef.current && !storyDirtyRef.current) return;
       e.preventDefault();
       e.returnValue = "";
     };
@@ -189,7 +274,9 @@ export function EntryEditor({
     setBusy(true);
     setSubmitMsg("");
     // campos ainda não salvos vão junto no envio: o envio não depende do autosave
-    const pending = dirtyRef.current && form.title.trim() ? toPayload(form) : null;
+    const pendingForm = dirtyRef.current && form.title.trim() ? toPayload(form) : null;
+    const pendingStory = storyDirtyRef.current && hasProject ? storyPayload(story, true) : null;
+    const pending = pendingForm || pendingStory ? { ...pendingStory, ...pendingForm } : null;
     let res: Response;
     try {
       res = await fetch(`/api/hackathons/${hackathonId}/entry`, {
@@ -211,7 +298,8 @@ export function EntryEditor({
       setErr(data?.error ?? "erro ao enviar");
       return;
     }
-    if (pending) dirtyRef.current = false;
+    if (pendingForm) dirtyRef.current = false;
+    if (pendingStory) storyDirtyRef.current = false;
     setEntry(data.entry);
     setErr("");
     setSubmitMsg(`versão ${data.version} enviada — o time recebeu a confirmação`);
@@ -226,7 +314,6 @@ export function EntryEditor({
     if (ok) setSubmitMsg("\"depois do hackathon\" salvo");
   }
 
-  const techs = toPayload(form).technologies;
   const lastVersion = entry.versions.at(-1);
   const missing = entry.missing;
   const needsTitle = !form.title.trim();
@@ -299,7 +386,7 @@ export function EntryEditor({
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className={label}>descrição * (markdown; o modelo segue os critérios do júri)</span>
+          <span className={label}>o que faz * (markdown; o modelo segue os critérios do júri)</span>
           <textarea
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
@@ -328,32 +415,12 @@ export function EntryEditor({
             className={input}
           />
         </label>
-        <div className="flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1.5">
-            <span className={label}>tecnologias * (separadas por vírgula)</span>
-            <input
-              value={form.technologies}
-              onChange={(e) => set("technologies", e.target.value)}
-              placeholder="Next.js, Postgres, Whisper"
-              className={input}
-            />
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {techSuggestions
-              .filter((t) => !techs.some((x) => x.toLowerCase() === t.toLowerCase()))
-              .slice(0, 14)
-              .map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => set("technologies", [...techs, t].join(", "))}
-                  className="chip cursor-pointer hover:border-accent hover:text-accent"
-                >
-                  {t}
-                </button>
-              ))}
-          </div>
-        </div>
+        <TechChips
+          value={form.technologies}
+          onChange={(v) => set("technologies", v)}
+          suggestions={techSuggestions}
+          disabled={locked}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           {(
@@ -486,6 +553,136 @@ export function EntryEditor({
         </div>
       )}
 
+      <section data-testid="showcase-editor" className="flex min-w-0 flex-col gap-5 border-[1.5px] border-line p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">vitrine do projeto · não é julgada</h2>
+          <span className="font-mono text-[12px] text-muted" aria-live="polite" data-testid="showcase-save">
+            {storySave === "saving"
+              ? "salvando…"
+              : storySave === "pending"
+                ? "alterações não salvas"
+                : storySave === "error"
+                  ? "não salvou"
+                  : "vitrine salva"}
+          </span>
+        </div>
+        <p className="text-[14px] text-muted">
+          É o que aparece na página do projeto. Fica aberta depois da trava: dá pra contar a história com calma.
+        </p>
+
+        <label className="flex flex-col gap-1.5">
+          <span className={label}>seu papel no time · {story.role.length}/{ROLE_MAX}</span>
+          <input
+            value={story.role}
+            onChange={(e) => setS("role", e.target.value)}
+            maxLength={ROLE_MAX}
+            placeholder="ex.: back-end e integração com o WhatsApp"
+            className={input}
+          />
+        </label>
+
+        {!hasProject ? (
+          <p className="font-mono text-[12px] text-orange">dê um título ao projeto pra liberar a história, a capa e a galeria</p>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1.5">
+              <span className={label}>capa (URL https da imagem, 16:9)</span>
+              <input
+                value={story.coverUrl}
+                onChange={(e) => setS("coverUrl", e.target.value)}
+                placeholder="https://…/capa.png"
+                inputMode="url"
+                className={input}
+              />
+            </label>
+
+            {STORY_FIELDS.map(([k, l, ph]) => (
+              <label key={k} className="flex flex-col gap-1.5">
+                <span className={label}>
+                  {l} · {story[k].length}/{STORY_MAX}
+                </span>
+                <textarea
+                  value={story[k]}
+                  onChange={(e) => setS(k, e.target.value)}
+                  rows={4}
+                  maxLength={STORY_MAX}
+                  placeholder={ph}
+                  className={input}
+                />
+              </label>
+            ))}
+
+            <div className="flex flex-col gap-2">
+              <span className={label}>
+                galeria · {story.media.length}/{MEDIA_MAX} (URL https e legenda)
+              </span>
+              {story.media.map((m, i) => (
+                <div key={i} className="flex min-w-0 flex-col gap-2 border-[1.5px] border-line-soft p-2 sm:flex-row sm:items-center">
+                  <input
+                    aria-label={`imagem ${i + 1}`}
+                    value={m.url}
+                    onChange={(e) => setS("media", story.media.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
+                    placeholder="https://…/tela.png"
+                    inputMode="url"
+                    className={input}
+                  />
+                  <input
+                    aria-label={`legenda da imagem ${i + 1}`}
+                    value={m.caption}
+                    maxLength={CAPTION_MAX}
+                    onChange={(e) => setS("media", story.media.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x)))}
+                    placeholder="legenda"
+                    className={input}
+                  />
+                  <div className="flex shrink-0 gap-3 font-mono text-[12px]">
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      aria-label={`subir imagem ${i + 1}`}
+                      onClick={() => setS("media", move(story.media, i, -1))}
+                      className="min-h-[36px] text-muted hover:text-accent disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === story.media.length - 1}
+                      aria-label={`descer imagem ${i + 1}`}
+                      onClick={() => setS("media", move(story.media, i, 1))}
+                      className="min-h-[36px] text-muted hover:text-accent disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`remover imagem ${i + 1}`}
+                      onClick={() => setS("media", story.media.filter((_, j) => j !== i))}
+                      className="min-h-[36px] text-muted hover:text-orange"
+                    >
+                      remover
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {story.media.length < MEDIA_MAX && (
+                <button
+                  type="button"
+                  onClick={() => setS("media", [...story.media, { url: "", caption: "" }])}
+                  className="w-fit font-mono text-[12px] text-accent hover:underline"
+                >
+                  + imagem
+                </button>
+              )}
+            </div>
+          </>
+        )}
+        {storyErr && (
+          <p role="alert" className="font-mono text-[13px] text-orange">
+            {storyErr}
+          </p>
+        )}
+      </section>
+
       <section className="flex flex-col gap-3 border-[1.5px] border-line bg-mint p-4">
         <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">depois do hackathon · não é julgado</h2>
         <p className="text-[14px] text-muted">
@@ -509,6 +706,104 @@ export function EntryEditor({
         )}
         {locked && submitMsg && <p className="font-mono text-[13px] text-accent">{submitMsg}</p>}
       </section>
+    </div>
+  );
+}
+
+function move<T>(list: T[], i: number, d: -1 | 1): T[] {
+  const j = i + d;
+  if (j < 0 || j >= list.length) return list;
+  const out = [...list];
+  [out[i], out[j]] = [out[j], out[i]];
+  return out;
+}
+
+/**
+ * "Feito com": chips com autocompletar. Grava o rótulo (o que o time vê);
+ * o servidor deriva a tag de project_tech. Até 12, sem repetir pela tag.
+ */
+function TechChips({
+  value,
+  onChange,
+  suggestions,
+  disabled,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  suggestions: string[];
+  disabled: boolean;
+}) {
+  const [text, setText] = useState("");
+  const tags = value.map((v) => normalizeTech(v));
+  const full = value.length >= TECH_MAX;
+  const q = normalizeTech(text) ?? "";
+  const matches = suggestions
+    .filter((t) => !tags.includes(t) && (!q || t.includes(q) || techLabel(t).toLowerCase().includes(text.trim().toLowerCase())))
+    .slice(0, q ? 8 : 14);
+
+  function add(raw: string) {
+    const next = parseTechEntries([...value, ...raw.split(",")]).map((e) => e.label);
+    onChange(next);
+    setText("");
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2" data-testid="tech-chips">
+      <span className={label} id="tech-label">
+        feito com * · {value.length}/{TECH_MAX}
+      </span>
+      {value.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-labelledby="tech-label">
+          {value.map((t) => (
+            <li key={t} className="inline-flex items-center gap-1 border-[1.5px] border-foreground bg-foreground px-2 py-0.5 font-mono text-[12px] text-band">
+              {t}
+              <button
+                type="button"
+                aria-label={`tirar ${t}`}
+                disabled={disabled}
+                onClick={() => onChange(value.filter((x) => x !== t))}
+                className="px-1 text-background hover:text-orange disabled:opacity-50"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!full && (
+        <input
+          aria-label="adicionar tecnologia"
+          value={text}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v.includes(",")) add(v);
+            else setText(v);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && text.trim()) {
+              e.preventDefault();
+              add(text);
+            }
+          }}
+          placeholder="digite e aperte Enter: Next.js, Postgres, Whisper"
+          className={input}
+        />
+      )}
+      {!full && matches.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {matches.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => add(techLabel(t))}
+              className="chip cursor-pointer hover:border-accent hover:text-accent"
+            >
+              {techLabel(t)}
+            </button>
+          ))}
+        </div>
+      )}
+      {full && <span className="font-mono text-[12px] text-muted">limite de {TECH_MAX} tecnologias</span>}
     </div>
   );
 }

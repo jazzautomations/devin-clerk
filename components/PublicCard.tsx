@@ -28,12 +28,12 @@ export function PublicCard({
   const LABEL = { perfil: "PERFIL", projeto: "PROJETO", comunidade: "COMUNIDADE" } as const;
   const REST = {
     perfil: "Trajetória, projetos, cartas e links ficam pra quem tem conta.",
-    projeto: "Demo, repo, vídeo e o que o time entregou ficam pra quem tem conta.",
+    projeto: "A história, a demo e o código aparecem aqui quando a edição abre os projetos.",
     comunidade: "Membros, mural, avisos e os hackathons que já rolaram ficam pra quem entra.",
   } as const;
   const CTA = {
     perfil: "entrar pra ver o perfil completo",
-    projeto: "entrar pra ver o projeto completo",
+    projeto: "criar conta no HackaHub",
     comunidade: "entrar na comunidade",
   } as const;
   const back = encodeURIComponent(path);
