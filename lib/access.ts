@@ -40,6 +40,7 @@ export const PUBLIC_APIS: RegExp[] = [
   new RegExp(`^/api/me/calendar/${SEG}$`), // feed .ics pessoal por token
   new RegExp(`^/api/hackathons/${SEG}/incidents$`), // relato anônimo
   new RegExp(`^/api/hackathons/${SEG}/stage(/stream)?$`), // estado do telão
+  /^\/api\/mascote\/.+$/, // SVG do bicho (migration 043): avatar em lista, OG e telão
 ];
 
 /** rotas logadas que não passam pelo onboarding (evita loop) */

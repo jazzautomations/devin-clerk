@@ -24,6 +24,9 @@ import { isBlockedBy, relationTo } from "@/lib/blocks";
 import { followsMe, isFollowingMember, ownCounts } from "@/lib/memberFollows";
 import { sharedTeamsLabel } from "@/lib/evidence";
 import { FollowButton } from "@/components/FollowButton";
+import { MascoteViewer } from "@/components/MascoteViewer";
+import { mascoteDoMembro } from "@/lib/mascote/store";
+import { ESPECIE_DEFS } from "@/lib/mascote/especies";
 
 // spec 029 — desfecho de cada edição do arco → chip da trajetória:
 // pódio nas cores de raridade, entrega em accent, presença em muted
@@ -130,6 +133,7 @@ export default async function PublicProfilePage({
     viewer && !own ? sharedTeamsLabel(viewer.id, member.id) : null,
     own ? ownCounts(member.id) : null,
   ]);
+  const bicho = (await mascoteDoMembro(member.id)).config;
 
   const history = (
     await Promise.all((await getRegistrationIds(member.id)).map((id) => getHackathon(id)))
@@ -172,6 +176,25 @@ export default async function PublicProfilePage({
             {member.name ?? `@${member.username}`}
           </h1>
         </div>
+        {/* bicho (migration 043) */}
+        <figure className="flex items-center gap-4" data-testid="u-bicho">
+          <div className="desk w-[132px] shrink-0 border-x-2 p-1.5">
+            <div className="border-2 border-line bg-background">
+              <MascoteViewer config={bicho} tamanho={116} />
+            </div>
+          </div>
+          <figcaption className="flex min-w-0 flex-col gap-0.5 font-mono text-[13px]">
+            <span className="font-semibold [overflow-wrap:anywhere]">{bicho.nome}</span>
+            <span className="text-muted">
+              {ESPECIE_DEFS[bicho.especie].nome} · {ESPECIE_DEFS[bicho.especie].frase}
+            </span>
+            {own && (
+              <Link href="/perfil/bicho" className="mt-1 text-accent underline-offset-4 hover:underline" data-testid="u-bicho-editar">
+                trocar o visual →
+              </Link>
+            )}
+          </figcaption>
+        </figure>
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-mono text-sm text-muted">@{member.username}</p>
           <span className="border border-line bg-surface px-1.5 font-mono text-[12px] text-foreground">

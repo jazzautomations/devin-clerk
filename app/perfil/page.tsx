@@ -13,6 +13,10 @@ import { ContactShareRevoke } from "@/components/ContactShareRevoke";
 import { listMyContactShares } from "@/lib/sponsorContacts";
 import { channelsEnabled } from "@/lib/notify/channels";
 import { formatDbTime } from "@/lib/format";
+import { MascoteViewer } from "@/components/MascoteViewer";
+import { mascoteDoMembro } from "@/lib/mascote/store";
+import { ESPECIE_DEFS } from "@/lib/mascote/especies";
+import { COPY_CRESCE } from "@/lib/mascote/tipos";
 
 export default async function PerfilPage() {
   const { userId } = await auth();
@@ -28,11 +32,12 @@ export default async function PerfilPage() {
     imageUrl: user?.imageUrl ?? null,
   });
 
-  const [openTo, contact, images, shares] = await Promise.all([
+  const [openTo, contact, images, shares, bicho] = await Promise.all([
     getOpenTo(member.id),
     getContactPrefs(member.id),
     listMyImageConsents(member.id),
     listMyContactShares(member.id),
+    mascoteDoMembro(member.id),
   ]);
   const channels = channelsEnabled();
 
@@ -60,6 +65,30 @@ export default async function PerfilPage() {
           bloqueados e silenciados →
         </Link>
       </div>
+      {/* bicho (migration 043) */}
+      <section
+        id="bicho"
+        className="flex scroll-mt-24 flex-col gap-5 border-t-2 border-line pt-6 sm:flex-row sm:items-center"
+        data-testid="perfil-bicho"
+      >
+        <div className="desk w-[176px] shrink-0 border-x-2 p-2">
+          <div className="border-2 border-line bg-background">
+            <MascoteViewer config={bicho.config} tamanho={160} />
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
+          <h2 className="text-xl font-extrabold tracking-[-0.03em]">Seu bicho</h2>
+          <p className="font-mono text-[13px] [overflow-wrap:anywhere]">
+            <span className="font-semibold">{bicho.config.nome}</span>
+            <span className="text-muted"> · {ESPECIE_DEFS[bicho.config.especie].nome}</span>
+            {!bicho.salvo && <span className="text-muted"> · sorteado</span>}
+          </p>
+          <p className="max-w-prose text-sm text-muted">{COPY_CRESCE}</p>
+          <Link href="/perfil/bicho" className="btn-ghost min-h-[44px]! self-start rounded-[6px] font-mono text-[14px]!" data-testid="perfil-bicho-editar">
+            {bicho.salvo ? "trocar o visual →" : "montar seu bicho →"}
+          </Link>
+        </div>
+      </section>
       <ProfileReminder member={member} href="/bem-vindo?refazer=1" />
       <ProfileForm member={member} openTo={openTo} contact={contact} channels={channels} />
       {images.length > 0 && (
