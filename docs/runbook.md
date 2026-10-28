@@ -206,8 +206,10 @@ docker exec hackahub-pg psql -U hackahub -d hackahub -c "UPDATE members SET role
 
 ## Roles do Postgres
 
-Hoje todos os ambientes usam o superusuário `hackahub`. Pra separar
-(`deploy/pg-roles.sql`, um role por ambiente, sem superusuário):
+Desde 27/10/2026 prod e stage usam `hh_prod` e `hh_stage` (sem
+superusuário); o scraper usa `url.hh_<env>`. Backup, drill, smoke e
+manutenção seguem com o superusuário `hackahub` via `docker exec`. Pra
+reaplicar (idempotente, `deploy/pg-roles.sql`):
 
 ```bash
 bash ~/hackahub/ops/pg-roles.sh       # cria hh_prod/hh_stage/hh_dev e grava url.hh_<env> (não imprime)
@@ -226,6 +228,10 @@ existindo pro backup e pra manutenção.
 2. Recuperar `prod.env`, `stage.env`, `pg.env` e `backup-par.url` do
    gerenciador de senhas ou do `secrets.tar.age` do bucket
    (`age -d -i <chave-privada> secrets.tar.age | tar -x -C ~/hackahub-secrets`).
+   A chave privada do age NÃO fica na VPS: está no notebook do dono
+   (`~/.config/hackahub/backup-age.key`) e no imac-server
+   (`~/hackahub-keys/backup-age.key`). Na VPS só a pública
+   (`~/hackahub-secrets/backup-age.pub`).
    O `HACKAHUB_TICKET_SECRET` precisa ser o mesmo, senão os QRs emitidos
    param de valer.
 3. `bash deploy/pg-up.sh` sobe o container e cria os bancos.
