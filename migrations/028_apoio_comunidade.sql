@@ -19,6 +19,9 @@ CREATE TABLE community_supporters (
   "createdAt" TEXT NOT NULL DEFAULT sqlite_now()
 );
 CREATE INDEX idx_community_supporters_community ON community_supporters ("communityId", "position");
+-- o mesmo nome não entra duas vezes na mesma comunidade (nem em cadastro
+-- simultâneo); a lib devolve 409
+CREATE UNIQUE INDEX idx_community_supporters_name ON community_supporters ("communityId", lower("name"));
 
 -- "quero apoiar esta comunidade": o lead da porta comercial (001/018) ganha
 -- a comunidade e o tipo de apoio oferecido. Lead sem comunidade segue sendo

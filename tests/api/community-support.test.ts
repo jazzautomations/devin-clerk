@@ -150,6 +150,35 @@ describe("apoiadores — cadastrar, ordenar, remover", () => {
     expect(await listSupporters(c.id)).toHaveLength(1);
   });
 
+  it("cadastro simultâneo: o mesmo nome entra uma vez só e o limite segura", async () => {
+    const dono = await member();
+    const c = await community("simultaneo-apoio", dono);
+    as(dono);
+    const res = await Promise.all([
+      add(c.slug, { name: "Padaria do Centro", kind: "comida" }),
+      add(c.slug, { name: "padaria do centro", kind: "comida" }),
+    ]);
+    expect(res.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect((await listSupporters(c.id)).map((s) => s.name)).toEqual(["Padaria do Centro"]);
+
+    for (let i = 0; i < 38; i++) {
+      await db.prepare("INSERT INTO community_supporters (communityId, name, kind, position) VALUES (?, ?, 'outro', ?)").run(c.id, `L${i}`, i + 2);
+    }
+    const last = await Promise.all([add(c.slug, { name: "Quase", kind: "outro" }), add(c.slug, { name: "Passou", kind: "outro" })]);
+    expect(last.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await listSupporters(c.id)).toHaveLength(40);
+  });
+
+  it("o banco recusa nome repetido na mesma comunidade (índice único), não em outra", async () => {
+    const a = await community("unico-a", await member());
+    const b = await community("unico-b", await member());
+    const ins = (id: number, name: string) =>
+      db.prepare("INSERT INTO community_supporters (communityId, name, kind) VALUES (?, ?, 'outro')").run(id, name);
+    await ins(a.id, "Loja Única");
+    await expect(ins(a.id, "LOJA ÚNICA")).rejects.toMatchObject({ code: "23505" });
+    await ins(b.id, "Loja Única");
+  });
+
   it("limite de apoiadores por comunidade", async () => {
     const dono = await member();
     const c = await community("limite-apoio", dono);
@@ -260,7 +289,7 @@ describe("quero apoiar esta comunidade — POST /api/leads com community", () =>
       message: "pão de queijo pro hackathon",
     });
     const expected = [
-      { type: "community_support", text: `Padaria do Centro quer apoiar a Comunidade ${c.slug} (comida).`, href: `/comunidade/${c.slug}/apoio#pedidos` },
+      { type: "community_support", text: `Padaria do Centro quer apoiar a comunidade Comunidade ${c.slug} (comida).`, href: `/comunidade/${c.slug}/apoio#pedidos` },
     ];
     expect(await notes(dono.id)).toEqual(expected);
     expect(await notes(org.id)).toEqual(expected);
@@ -277,7 +306,7 @@ describe("quero apoiar esta comunidade — POST /api/leads com community", () =>
     const { POST } = await routes.leads();
     expect((await POST(req("POST", { company: "Acme", email: "x@acme.dev", community: c.slug }))).status).toBe(201);
     expect(await notes(admin.id)).toEqual([
-      { type: "community_support", text: `Acme quer apoiar a Comunidade ${c.slug}.`, href: `/comunidade/${c.slug}/apoio#pedidos` },
+      { type: "community_support", text: `Acme quer apoiar a comunidade Comunidade ${c.slug}.`, href: `/comunidade/${c.slug}/apoio#pedidos` },
     ]);
   });
 
@@ -309,7 +338,39 @@ describe("quero apoiar esta comunidade — POST /api/leads com community", () =>
     expect((await POST(req("POST", { ...base, community: 42 }))).status).toBe(400);
     expect((await POST(req("POST", { ...base, interest: "comunidade" }))).status).toBe(400);
     expect((await POST(req("POST", { ...base, community: ok.slug, email: "nope" }))).status).toBe(400);
+    // tamanho: empresa e e-mail no limite dos formulários
+    expect((await POST(req("POST", { ...base, community: ok.slug, company: "x".repeat(121) }))).status).toBe(400);
+    expect((await POST(req("POST", { ...base, community: ok.slug, email: `${"a".repeat(195)}@x.dev` }))).status).toBe(400);
+    // e-mail que vira mailto com bcc/subject escondido
+    const inj = await POST(req("POST", { ...base, community: ok.slug, email: "contato@empresa.com?bcc=espiao%40evil.com&subject=Proposta" }));
+    expect(inj.status).toBe(400);
+    expect(await inj.json()).toEqual({ error: "e-mail inválido" });
     expect(await countCommunityLeads(ok.id)).toBe(0);
+  });
+
+  it("sem tipo escolhido grava null (nada inventado) e o aviso não cita tipo", async () => {
+    const dono = await member();
+    const c = await community("sem-tipo-lead", dono);
+    const { POST } = await routes.leads();
+    for (const supportKind of [undefined, null]) {
+      const r = await POST(req("POST", { company: `Banco ${String(supportKind)}`, email: "b@banco.dev", community: c.slug, supportKind }));
+      expect(r.status).toBe(201);
+      expect((await r.json()).lead.supportKind).toBeNull();
+    }
+    // string vazia (select sem escolha mandado cru) é recusada, não vira tipo
+    expect((await POST(req("POST", { company: "Banco vazio", email: "b@banco.dev", community: c.slug, supportKind: "" }))).status).toBe(400);
+    expect((await notes(dono.id)).map((n) => n.text)).toEqual([
+      `Banco undefined quer apoiar a comunidade Comunidade ${c.slug}.`,
+      `Banco null quer apoiar a comunidade Comunidade ${c.slug}.`,
+    ]);
+  });
+
+  it("limites valem pra lead da plataforma também", async () => {
+    const { POST } = await routes.leads();
+    const base = { company: "Acme", email: "p@acme.dev", interest: "desafio" };
+    expect((await POST(req("POST", { ...base, message: "x".repeat(1001) }))).status).toBe(400);
+    expect((await POST(req("POST", { ...base, company: "x".repeat(121) }))).status).toBe(400);
+    expect((await POST(req("POST", { ...base, message: "x".repeat(1000), company: "x".repeat(120) }))).status).toBe(201);
   });
 
   it("honeypot: 201 silencioso, nada grava, ninguém é avisado", async () => {

@@ -79,6 +79,9 @@ horizontal nas rotas novas.
   `/comunidade/[slug]/apoio`; a página mostra "Quem apoia" só com alguém
   cadastrado. "Quero apoiar" é lead do `/api/leads` com `community` (slug):
   fica ligado à comunidade, avisa dono/organizadores e sai da fila do /admin.
+  Tipo de apoio nunca vem pré-escolhido (lead sem tipo = `null`). Limites de
+  lead (empresa 120, e-mail 200 sem `?&%/#`, mensagem 1000) moram em
+  `createLead` e valem pra todo lead.
   Patrocínio por edição continua em `lib/editionSponsors.ts`.
 
 ## UI

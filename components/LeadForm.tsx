@@ -70,6 +70,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           </span>
           <input
             id="lead-company"
+            maxLength={120}
             type="text"
             required
             value={company}
@@ -84,6 +85,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
           </span>
           <input
             id="lead-email"
+            maxLength={200}
             type="email"
             required
             value={email}
@@ -118,6 +120,7 @@ export function LeadForm({ variant = "marca" }: { variant?: "marca" | "organizar
         </span>
         <textarea
           id="lead-message"
+          maxLength={1000}
           rows={3}
           value={message}
           onChange={(e) => setMessage(e.target.value)}

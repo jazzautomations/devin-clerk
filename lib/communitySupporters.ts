@@ -68,9 +68,15 @@ export class SupporterError extends Error {
   }
 }
 
-/** cadastra no fim da lista */
+/**
+ * cadastra no fim da lista. A linha da comunidade fica travada (FOR UPDATE)
+ * até o fim: dois cadastros ao mesmo tempo não passam juntos pelo limite nem
+ * pelo nome repetido. O índice único em (communityId, lower(name)) da 028 é a
+ * rede de baixo.
+ */
 export async function addSupporter(communityId: number, input: SupporterInput, by: number): Promise<CommunitySupporter> {
   return db.transaction(async () => {
+    await db.prepare("SELECT id FROM communities WHERE id = ? FOR UPDATE").get(communityId);
     const n = await db
       .prepare("SELECT COUNT(*)::int AS n FROM community_supporters WHERE communityId = ?")
       .get<{ n: number }>(communityId);
@@ -88,7 +94,11 @@ export async function addSupporter(communityId: number, input: SupporterInput, b
            (SELECT COALESCE(MAX(position), 0) + 1 FROM community_supporters WHERE communityId = @communityId))
          RETURNING ${COLS}`,
       )
-      .get<CommunitySupporter>({ communityId, ...input, by });
+      .get<CommunitySupporter>({ communityId, ...input, by })
+      .catch((e: unknown) => {
+        if ((e as { code?: string })?.code === "23505") throw new SupporterError(`${input.name} já está na lista.`, 409);
+        throw e;
+      });
     return row!;
   })();
 }
@@ -105,6 +115,7 @@ export async function removeSupporter(communityId: number, id: number): Promise<
  */
 export async function reorderSupporters(communityId: number, ids: number[]): Promise<CommunitySupporter[]> {
   return db.transaction(async () => {
+    await db.prepare("SELECT id FROM communities WHERE id = ? FOR UPDATE").get(communityId);
     const current = await listSupporters(communityId);
     const have = new Set(current.map((s) => s.id));
     if (ids.length !== have.size || new Set(ids).size !== ids.length || ids.some((id) => !have.has(id))) {

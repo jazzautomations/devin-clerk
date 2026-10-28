@@ -16,6 +16,9 @@ export type { LeadInterest } from "@/lib/leadInterests";
 export const LEAD_DEDUPE_MS = 10 * 60 * 1000;
 
 export const LEAD_MESSAGE_MAX = 1000;
+/** mesmos limites do maxLength dos formulários; a API aplica de novo */
+export const LEAD_COMPANY_MAX = 120;
+export const LEAD_EMAIL_MAX = 200;
 
 export type Lead = {
   id: number;
@@ -29,7 +32,18 @@ export type Lead = {
   supportKind: SupportKind | null;
 };
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// sem ? & % / # nem aspas/<>: o e-mail vira `mailto:` no painel e não pode
+// carregar parâmetro (bcc, subject) escondido
+const EMAIL_RE = /^[^@\s?&%/#"'<>]+@[^@\s?&%/#"'<>]+\.[^@\s?&%/#"'<>]+$/;
+
+export function isLeadEmail(email: string): boolean {
+  return email.length <= LEAD_EMAIL_MAX && EMAIL_RE.test(email);
+}
+
+/** href de resposta só pra e-mail seguro; lead antigo fora do padrão fica sem link */
+export function leadMailto(email: string): string | null {
+  return isLeadEmail(email) ? `mailto:${email}` : null;
+}
 
 const opt = (v?: string | null) =>
   typeof v === "string" && v.trim() ? v.trim() : null;
@@ -45,9 +59,13 @@ export async function createLead(input: {
 }): Promise<{ lead: Lead; created: boolean }> {
   const company = typeof input.company === "string" ? input.company.trim() : "";
   if (!company) throw new Error("nome da empresa obrigatório");
+  if (company.length > LEAD_COMPANY_MAX) throw new Error(`empresa: até ${LEAD_COMPANY_MAX} caracteres`);
 
   const email = typeof input.email === "string" ? input.email.trim() : "";
-  if (!EMAIL_RE.test(email)) throw new Error("e-mail inválido");
+  if (!isLeadEmail(email)) throw new Error("e-mail inválido");
+
+  const message = opt(input.message);
+  if (message && message.length > LEAD_MESSAGE_MAX) throw new Error(`mensagem: até ${LEAD_MESSAGE_MAX} caracteres`);
 
   if (!isLeadInterest(input.interest)) {
     throw new Error("interesse inválido");
@@ -85,7 +103,7 @@ export async function createLead(input: {
       company,
       normalized,
       input.interest,
-      opt(input.message),
+      message,
       new Date().toISOString(),
       communityId,
       supportKind,
@@ -158,7 +176,7 @@ async function notifyCommunity(lead: Lead): Promise<void> {
     to.map((m) =>
       notify(m.id, {
         type: "community_support",
-        text: `${lead.company} quer apoiar a ${c.name}${how}.`,
+        text: `${lead.company} quer apoiar a comunidade ${c.name}${how}.`,
         href: `/comunidade/${c.slug}/apoio#pedidos`,
       }),
     ),

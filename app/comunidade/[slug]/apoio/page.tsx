@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SupportersAdmin } from "@/components/CommunitySupportActions";
 import { canManageCommunity, getCommunityBySlug } from "@/lib/communities";
 import { listSupporters } from "@/lib/communitySupporters";
-import { listCommunityLeads } from "@/lib/leads";
+import { leadMailto, listCommunityLeads } from "@/lib/leads";
 import { currentMember } from "@/lib/session";
 import { SUPPORT_KIND_LABELS } from "@/lib/supportKinds";
 
@@ -21,7 +21,9 @@ export default async function ApoioComunidadePage({ params }: PageProps<"/comuni
   const [member, c] = await Promise.all([currentMember(), getCommunityBySlug(slug)]);
   if (!member || !c || (c.hidden && member.role !== "admin")) notFound();
   if (!(await canManageCommunity(member, c.id))) notFound();
-  const [supporters, leads] = await Promise.all([listSupporters(c.id), listCommunityLeads(c.id)]);
+  const [supporters, rawLeads] = await Promise.all([listSupporters(c.id), listCommunityLeads(c.id)]);
+  // e-mail fora do padrão seguro (lead antigo) aparece sem link de resposta
+  const leads = rawLeads.map((l) => ({ ...l, mailto: leadMailto(l.email) }));
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-12 overflow-x-clip px-4 py-10 sm:px-6 sm:py-14" data-testid="community-support-page">
@@ -67,9 +69,13 @@ export default async function ApoioComunidadePage({ params }: PageProps<"/comuni
                 </span>
                 <span className="flex flex-wrap items-center gap-2">
                   {l.supportKind && <span className="chip bare">{SUPPORT_KIND_LABELS[l.supportKind]}</span>}
-                  <a href={`mailto:${l.email}`} className="font-mono text-[13px] break-all text-accent underline-offset-4 hover:underline">
-                    {l.email}
-                  </a>
+                  {l.mailto ? (
+                    <a href={l.mailto} className="font-mono text-[13px] break-all text-accent underline-offset-4 hover:underline">
+                      {l.email}
+                    </a>
+                  ) : (
+                    <span className="font-mono text-[13px] break-all">{l.email}</span>
+                  )}
                 </span>
                 {l.message && <p className="text-[14.5px] leading-relaxed break-words whitespace-pre-line text-[#2b2b2b]">{l.message}</p>}
               </li>

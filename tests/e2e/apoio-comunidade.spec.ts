@@ -87,11 +87,16 @@ test.describe("apoio da comunidade", () => {
       await expect(page.getByTestId("supporters-admin-list")).toContainText(name);
     }
 
+    // o tipo não vem escolhido: sem tipo o botão não salva
+    await form.getByLabel("nome").fill("E2E Padaria");
+    await expect(page.getByTestId("supporter-kind")).toHaveValue("");
+    await expect(page.getByTestId("supporter-submit")).toBeDisabled();
     await cadastrar("E2E Padaria", "comida", { url: "https://padaria.example.com", desc: "café da manhã nos hackathons" });
     await cadastrar("E2E Coworking", "espaco", { desc: "cede a sala no fim de semana" });
     await cadastrar("E2E Remover", "outro");
     // logo http é recusado com mensagem
     await form.getByLabel("nome").fill("E2E Logo Ruim");
+    await page.getByTestId("supporter-kind").selectOption("premio");
     await form.getByLabel("logo (opcional, link https)").fill("http://x.example.com/logo.png");
     await page.getByTestId("supporter-submit").click();
     await expect(page.getByTestId("supporters-msg")).toContainText(/https/);
@@ -112,6 +117,35 @@ test.describe("apoio da comunidade", () => {
     expect((await supportersInDb()).map((s) => s.name)).toEqual(["E2E Coworking", "E2E Padaria"]);
     await noHorizontalScroll(page);
     await shot(page, "apoio-painel-390");
+  });
+
+  test("lista velha no painel: erro recarrega a lista e o próximo clique funciona", async ({ memberPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto(`/comunidade/${SLUG}/apoio`);
+    await expect(page.getByTestId("supporters-admin-row")).toHaveCount(2);
+    // outra pessoa da organização cadastra enquanto esta tela está aberta
+    const db = openE2eDb();
+    const c = await db.prepare("SELECT id FROM communities WHERE slug = ?").get<{ id: number }>(SLUG);
+    await db
+      .prepare(`INSERT INTO community_supporters ("communityId", name, kind, position) VALUES (?, 'E2E Loja Nova', 'outro', 3)`)
+      .run(c!.id);
+    await page.getByRole("button", { name: "descer E2E Coworking" }).click();
+    await expect(page.getByTestId("supporters-msg")).toHaveText("A lista mudou. Confira e tente de novo.");
+    await expect(page.getByTestId("supporters-admin-row")).toHaveCount(3);
+    await page.getByRole("button", { name: "descer E2E Coworking" }).click();
+    await expect(page.getByTestId("supporters-admin-row").first()).toContainText("E2E Padaria");
+    expect((await supportersInDb()).map((s) => s.name)).toEqual(["E2E Padaria", "E2E Coworking", "E2E Loja Nova"]);
+
+    // e alguém já tirou o apoiador que esta tela ainda mostra
+    await db.prepare("DELETE FROM community_supporters WHERE name = 'E2E Loja Nova'").run();
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "tirar E2E Loja Nova" }).click();
+    await expect(page.getByTestId("supporters-msg")).toHaveText("A lista mudou. Confira e tente de novo.");
+    await expect(page.getByTestId("supporters-admin-row")).toHaveCount(2);
+    // volta à ordem que os testes seguintes esperam
+    await page.getByRole("button", { name: "subir E2E Coworking" }).click();
+    await expect(page.getByTestId("supporters-admin-row").first()).toContainText("E2E Coworking");
+    expect((await supportersInDb()).map((s) => s.name)).toEqual(["E2E Coworking", "E2E Padaria"]);
   });
 
   test("anon vê Quem apoia e deixa o contato em 'quero apoiar'", async ({ page }) => {
@@ -135,11 +169,21 @@ test.describe("apoio da comunidade", () => {
     const form = page.getByTestId("support-form");
     await form.getByLabel("empresa ou instituição").fill("E2E Mercado Bom");
     await form.getByLabel("e-mail").fill("e2e-apoio@mercado.example.com");
-    await page.getByTestId("support-kind").selectOption("premio");
+    // ninguém escolhe o tipo pela empresa: começa em "ainda não sei"
+    await expect(page.getByTestId("support-kind")).toHaveValue("");
+    await expect(page.getByTestId("support-kind").locator("option:checked")).toHaveText("ainda não sei");
     await form.getByLabel("mensagem (opcional)").fill("vale-compras pros três primeiros");
+    await expect(page.getByTestId("support-privacy")).toHaveText(`Seu contato vai pra organização da comunidade ${NAME}.`);
     await noHorizontalScroll(page);
     await page.getByTestId("support-submit").click();
-    await expect(page.getByTestId("support-done")).toContainText(NAME);
+    await expect(page.getByTestId("support-done")).toHaveText("Contato enviado. A organização da comunidade vê seu pedido no painel.");
+
+    // e-mail com parâmetro de mailto escondido é recusado
+    const bad = await page.request.post("/api/leads", {
+      headers: { "x-forwarded-for": `10.${rand()}.${rand()}.${rand()}` },
+      data: { company: "E2E Espiao", email: "contato@empresa.com?bcc=espiao%40evil.com&subject=Proposta", community: SLUG },
+    });
+    expect(bad.status()).toBe(400);
 
     const db = openE2eDb();
     const lead = await db
@@ -149,7 +193,7 @@ test.describe("apoio da comunidade", () => {
       )
       .all(SLUG);
     expect(lead).toEqual([
-      { company: "E2E Mercado Bom", interest: "comunidade", supportKind: "premio", message: "vale-compras pros três primeiros" },
+      { company: "E2E Mercado Bom", interest: "comunidade", supportKind: null, message: "vale-compras pros três primeiros" },
     ]);
     const note = await db
       .prepare(
@@ -157,7 +201,7 @@ test.describe("apoio da comunidade", () => {
          WHERE n.type = 'community_support' AND m.email = ?`,
       )
       .all(E2E_MEMBER_EMAIL);
-    expect(note).toEqual([{ text: `E2E Mercado Bom quer apoiar a ${NAME} (prêmio).`, href: `/comunidade/${SLUG}/apoio#pedidos` }]);
+    expect(note).toEqual([{ text: `E2E Mercado Bom quer apoiar a comunidade ${NAME}.`, href: `/comunidade/${SLUG}/apoio#pedidos` }]);
   });
 
   test("o pedido aparece no painel da comunidade", async ({ memberPage: page }) => {
@@ -169,7 +213,8 @@ test.describe("apoio da comunidade", () => {
     const lead = page.getByTestId("support-lead");
     await expect(lead).toHaveCount(1);
     await expect(lead).toContainText("E2E Mercado Bom");
-    await expect(lead).toContainText("prêmio");
+    // sem tipo escolhido, sem chip de tipo
+    await expect(lead.locator(".chip")).toHaveCount(0);
     await expect(lead.getByRole("link", { name: "e2e-apoio@mercado.example.com" })).toHaveAttribute(
       "href",
       "mailto:e2e-apoio@mercado.example.com",
@@ -177,6 +222,11 @@ test.describe("apoio da comunidade", () => {
     await noHorizontalScroll(page);
     await shot(page, "apoio-pedidos-390");
   });
+});
+
+test("política de privacidade conta pra onde vai o contato do 'quero apoiar'", async ({ page }) => {
+  await page.goto("/legal/privacidade");
+  await expect(page.getByTestId("privacidade-apoio")).toContainText("dono e pros organizadores daquela comunidade");
 });
 
 test.describe("apoio da comunidade — guardas", () => {

@@ -2,7 +2,6 @@ import { getCommunityBySlug } from "@/lib/communities";
 import {
   createLead,
   LEAD_INTERESTS,
-  LEAD_MESSAGE_MAX,
   type LeadInterest,
 } from "@/lib/leads";
 import { limitOrNull } from "@/lib/ratelimit";
@@ -51,6 +50,8 @@ export async function POST(req: Request) {
   ) {
     return Response.json({ error: "mensagem inválida" }, { status: 400 });
   }
+  // limites (empresa, e-mail, mensagem) e formato do e-mail valem pra todo
+  // lead e moram em createLead: erro dela vira 400 abaixo
 
   // apoio a uma comunidade: o interesse é sempre 'comunidade'
   let communityId: number | null = null;
@@ -65,9 +66,6 @@ export async function POST(req: Request) {
     }
     if (b.supportKind !== undefined && b.supportKind !== null && !isSupportKind(b.supportKind)) {
       return Response.json({ error: "tipo de apoio inválido" }, { status: 400 });
-    }
-    if (typeof b.message === "string" && b.message.trim().length > LEAD_MESSAGE_MAX) {
-      return Response.json({ error: `mensagem: até ${LEAD_MESSAGE_MAX} caracteres` }, { status: 400 });
     }
     communityId = c.id;
     interest = "comunidade";

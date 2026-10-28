@@ -15,9 +15,9 @@ async function call(url: string, method: string, body?: unknown) {
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).catch(() => null);
-  if (!res) return { ok: false, error: "Sem conexão. Tente de novo.", data: null };
+  if (!res) return { ok: false, status: 0, error: "Sem conexão. Tente de novo.", data: null };
   const data = await res.json().catch(() => null);
-  return { ok: res.ok, error: res.ok ? null : userMessage(res, data, "Não deu certo. Tente de novo."), data };
+  return { ok: res.ok, status: res.status, error: res.ok ? null : userMessage(res, data, "Não deu certo. Tente de novo."), data };
 }
 
 const input =
@@ -29,7 +29,8 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
   const [open, setOpen] = useState(false);
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
-  const [kind, setKind] = useState<SupportKind>("espaco");
+  // começa vazio: o tipo só é gravado se a empresa escolher
+  const [kind, setKind] = useState<SupportKind | "">("");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
@@ -39,7 +40,7 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
     e.preventDefault();
     setStatus("saving");
     setError("");
-    const r = await call("/api/leads", "POST", { company, email, community: slug, supportKind: kind, message, website });
+    const r = await call("/api/leads", "POST", { company, email, community: slug, supportKind: kind || null, message, website });
     if (r.ok) return setStatus("done");
     setStatus("error");
     setError(r.error ?? "");
@@ -48,7 +49,7 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
   if (status === "done") {
     return (
       <p role="status" className="border-[1.5px] border-line bg-mint px-4 py-3 font-mono text-[13px] text-accent" data-testid="support-done">
-        recebido. A organização da {name} recebeu seu contato e responde por e-mail.
+        Contato enviado. A organização da comunidade vê seu pedido no painel.
       </p>
     );
   }
@@ -56,7 +57,7 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
   if (!open) {
     return (
       <div className="flex flex-col gap-2 border-[1.5px] border-line p-4" data-testid="support-cta">
-        <p className="text-[15px] font-bold">Sua empresa quer apoiar a {name}?</p>
+        <p className="text-[15px] font-bold">Sua empresa quer apoiar a comunidade {name}?</p>
         <p className="text-[14px] leading-snug text-muted">Dinheiro, espaço, comida, prêmio, mentoria ou divulgação. A organização recebe seu contato.</p>
         <button type="button" onClick={() => setOpen(true)} className="btn mt-1 self-start min-h-[44px]!" data-testid="support-open">
           quero apoiar esta comunidade →
@@ -67,7 +68,7 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3 border-[1.5px] border-line p-4" data-testid="support-form">
-      <p className="text-[15px] font-bold">Apoiar a {name}</p>
+      <p className="text-[15px] font-bold">Apoiar a comunidade {name}</p>
       <label className="flex flex-col gap-1.5">
         <span className={label}>empresa ou instituição</span>
         <input className={input} required maxLength={120} value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Padaria do Centro" />
@@ -78,7 +79,8 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
       </label>
       <label className="flex flex-col gap-1.5">
         <span className={label}>como quer apoiar</span>
-        <select className={input} value={kind} onChange={(e) => setKind(e.target.value as SupportKind)} data-testid="support-kind">
+        <select className={input} value={kind} onChange={(e) => setKind(e.target.value as SupportKind | "")} data-testid="support-kind">
+          <option value="">ainda não sei</option>
           {SUPPORT_KINDS.map((k) => (
             <option key={k} value={k}>
               {SUPPORT_KIND_LABELS[k]}
@@ -116,6 +118,9 @@ export function SupportCommunityForm({ slug, name }: { slug: string; name: strin
           cancelar
         </button>
       </div>
+      <p className="font-mono text-[12px] text-muted" data-testid="support-privacy">
+        Seu contato vai pra organização da comunidade {name}.
+      </p>
       {status === "error" && (
         <p role="alert" className="font-mono text-[12.5px] text-orange">
           {error}
@@ -131,7 +136,8 @@ type AdminSupporter = { id: number; name: string; kind: SupportKind; url: string
 export function SupportersAdmin({ slug, supporters }: { slug: string; supporters: AdminSupporter[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<SupportKind>("dinheiro");
+  // sem tipo pré-escolhido: quem cadastra escolhe (a página mostra o tipo)
+  const [kind, setKind] = useState<SupportKind | "">("");
   const [url, setUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [description, setDescription] = useState("");
@@ -150,7 +156,16 @@ export function SupportersAdmin({ slug, supporters }: { slug: string; supporters
     setUrl("");
     setLogoUrl("");
     setDescription("");
+    setKind("");
     router.refresh();
+  }
+
+  // 400/404 aqui = a lista na tela ficou velha (outra pessoa cadastrou ou
+  // tirou alguém): recarrega pra o próximo clique mandar a lista certa
+  function failed(r: { status: number; error: string | null }) {
+    const stale = r.status === 400 || r.status === 404;
+    setMsg({ ok: false, text: stale ? "A lista mudou. Confira e tente de novo." : (r.error ?? "") });
+    if (stale) router.refresh();
   }
 
   async function move(index: number, delta: -1 | 1) {
@@ -161,7 +176,7 @@ export function SupportersAdmin({ slug, supporters }: { slug: string; supporters
     setBusy(true);
     const r = await call(api, "PATCH", { order: ids });
     setBusy(false);
-    if (!r.ok) return setMsg({ ok: false, text: r.error ?? "" });
+    if (!r.ok) return failed(r);
     setMsg(null);
     router.refresh();
   }
@@ -171,7 +186,7 @@ export function SupportersAdmin({ slug, supporters }: { slug: string; supporters
     setBusy(true);
     const r = await call(api, "DELETE", { id: s.id });
     setBusy(false);
-    if (!r.ok) return setMsg({ ok: false, text: r.error ?? "" });
+    if (!r.ok) return failed(r);
     setMsg({ ok: true, text: `${s.name} saiu da página.` });
     router.refresh();
   }
@@ -224,7 +239,10 @@ export function SupportersAdmin({ slug, supporters }: { slug: string; supporters
           </label>
           <label className="flex min-w-0 flex-col gap-1.5">
             <span className={label}>tipo de apoio</span>
-            <select className={input} value={kind} onChange={(e) => setKind(e.target.value as SupportKind)} data-testid="supporter-kind">
+            <select className={input} required value={kind} onChange={(e) => setKind(e.target.value as SupportKind | "")} data-testid="supporter-kind">
+              <option value="" disabled>
+                escolha
+              </option>
               {SUPPORT_KINDS.map((k) => (
                 <option key={k} value={k}>
                   {SUPPORT_KIND_LABELS[k]}
@@ -251,7 +269,7 @@ export function SupportersAdmin({ slug, supporters }: { slug: string; supporters
             placeholder="cede o auditório nos hackathons"
           />
         </label>
-        <button type="submit" disabled={busy || !name.trim()} className="btn self-start min-h-[44px]!" data-testid="supporter-submit">
+        <button type="submit" disabled={busy || !name.trim() || !kind} className="btn self-start min-h-[44px]!" data-testid="supporter-submit">
           {busy ? "salvando…" : "cadastrar →"}
         </button>
       </form>

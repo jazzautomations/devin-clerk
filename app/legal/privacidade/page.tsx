@@ -109,6 +109,14 @@ export default function PrivacidadePage() {
             , guardamos empresa, e-mail, interesse e mensagem pra organização
             responder.
           </li>
+          <li data-testid="privacidade-apoio">
+            <span className="text-foreground">Apoio a uma comunidade</span>: o
+            formulário &quot;quero apoiar esta comunidade&quot;, na página de
+            cada comunidade, manda empresa, e-mail, tipo de apoio e mensagem pro
+            dono e pros organizadores daquela comunidade, que são pessoas de
+            fora da equipe do HackaHub. Eles veem esses dados no painel da
+            comunidade pra responder. Apagar a comunidade apaga os pedidos.
+          </li>
         </ul>
       </div>
 
