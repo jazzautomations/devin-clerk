@@ -25,6 +25,12 @@ export type EmailMessage = {
   idempotencyKey: string;
   /** vira header List-Unsubscribe (Gmail/Outlook mostram "cancelar inscrição") */
   unsubscribeUrl?: string;
+  /**
+   * a URL acima desliga com um POST sem corpo: manda também
+   * List-Unsubscribe-Post (RFC 8058) e o Gmail/Yahoo cancelam num clique.
+   * Só pra URL que aceita POST — página de preferências não.
+   */
+  oneClickUnsubscribe?: boolean;
   /** endereço que recebe a resposta; sem ele vale HACKAHUB_EMAIL_REPLY_TO */
   replyTo?: string;
   /** anexos; com contentId viram imagem inline (<img src="cid:…">) */

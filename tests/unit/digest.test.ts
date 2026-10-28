@@ -234,6 +234,9 @@ describe("buildDigest", () => {
     for (let i = 1; i <= 4; i++) await team("dg-com-ed", `Com ${i}`, [], daysAgo(i));
 
     await notify(ana.id, { type: "answer", text: "responderam sua dúvida" });
+    await notify(ana.id, { type: "answer", text: "aviso de um mês atrás" });
+    await db.prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ? AND text = ?").run(daysAgo(1), ana.id, "responderam sua dúvida");
+    await db.prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ? AND text = ?").run(daysAgo(30), ana.id, "aviso de um mês atrás");
 
     const d = await buildDigest(ana.id, NOW);
     expect(d.empty).toBe(false);
@@ -245,7 +248,7 @@ describe("buildDigest", () => {
     expect(entregou.items[0].title).toBe("Projeto Time Bia");
     expect(entregou.items[0].detail).toBe(`@${bia.username} · Edição dg-ed`);
     expect(comunidades.items.map((i) => i.title)).toEqual(["Projeto Com 1", "Projeto Com 2", "Projeto Com 3"]);
-    expect(naoLidas.title).toBe("Você tem 1 notificação não lida");
+    expect(naoLidas.title).toBe("Você tem 1 notificação da semana sem abrir");
 
     const mail = renderDigestEmail(d, { name: "Ana Souza", stopUrl: "https://x.dev/sair" });
     expect(mail.subject).toBe("Sua semana no HackaHub");
@@ -253,6 +256,23 @@ describe("buildDigest", () => {
     expect(mail.text).toContain("Parar de receber: https://x.dev/sair");
     expect(mail.html).toContain("Projeto Time Bia");
     expect(mail.html).toContain('href="https://x.dev/sair"');
+  });
+
+  it("não lida antiga não entra no resumo; a da semana entra", async () => {
+    const ana = await member();
+    // o radar de outro teste deste arquivo pode aparecer; aqui vale a seção
+    const keys = async () => (await buildDigest(ana.id, NOW)).sections.map((s) => s.key);
+    await notify(ana.id, { type: "answer", text: "velha" });
+    await db.prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ?").run(daysAgo(30), ana.id);
+    expect(await keys()).not.toContain("naoLidas");
+    // no limite: 8 dias atrás fora, 6 dias atrás dentro
+    await db.prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ?").run(daysAgo(8), ana.id);
+    expect(await keys()).not.toContain("naoLidas");
+    await db.prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ?").run(daysAgo(6), ana.id);
+    expect(await keys()).toContain("naoLidas");
+    // lida não conta
+    await db.prepare("UPDATE notifications SET read = 1 WHERE memberId = ?").run(ana.id);
+    expect(await keys()).not.toContain("naoLidas");
   });
 
   it("quem eu silenciei não aparece no 'quem você segue entregou'", async () => {

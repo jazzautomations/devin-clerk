@@ -140,11 +140,16 @@ export async function buildDigest(memberId: number, now: Date = new Date()): Pro
       .map((p) => ({ title: p.title, detail: p.community, href: `/p/${p.teamId}` })),
   });
 
-  // 4. o que está esperando no sino
-  const unread = await unreadCount(memberId);
+  // 4. o que chegou no sino na semana e ninguém abriu. Só a janela: aviso
+  //    velho esquecido não pode manter o resumo chegando toda segunda.
+  //    Fim fechado: createdAt tem precisão de segundo e pode bater com `now`.
+  const unread = await unreadCount(memberId, { from, to });
   sections.push({
     key: "naoLidas",
-    title: unread === 1 ? "Você tem 1 notificação não lida" : `Você tem ${unread} notificações não lidas`,
+    title:
+      unread === 1
+        ? "Você tem 1 notificação da semana sem abrir"
+        : `Você tem ${unread} notificações da semana sem abrir`,
     href: "/notificacoes",
     items: [],
   });
@@ -367,6 +372,7 @@ export async function runDigest(
           ...mail,
           idempotencyKey: `digest:${m.id}:${week}`,
           unsubscribeUrl: stopUrl,
+          oneClickUnsubscribe: true,
         });
         if (res.status === "sent") {
           await finish(m.id, week, "enviado", null);

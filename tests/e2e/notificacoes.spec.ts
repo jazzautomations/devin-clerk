@@ -211,4 +211,18 @@ test.describe("notificações boas", () => {
       .get<{ email: number }>(meId);
     expect(after?.email).toBe(0);
   });
+
+  test("cancelar num clique do Gmail: POST anônimo com o corpo da RFC 8058 desliga", async ({ request }) => {
+    const meId = await me();
+    const db = openE2eDb();
+    await db.prepare(`UPDATE notification_prefs SET email = 1 WHERE "memberId" = ? AND "group" = 'digest'`).run(meId);
+    const res = await request.post(`/api/notifications/digest/sair/${digestToken(meId)}`, {
+      form: { "List-Unsubscribe": "One-Click" },
+    });
+    expect(res.status()).toBe(200);
+    const row = await db
+      .prepare(`SELECT email FROM notification_prefs WHERE "memberId" = ? AND "group" = 'digest'`)
+      .get<{ email: number }>(meId);
+    expect(row?.email).toBe(0);
+  });
 });

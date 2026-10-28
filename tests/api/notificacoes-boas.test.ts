@@ -57,6 +57,15 @@ function fakeDriver(result: SendOutcome = { status: "sent" }) {
   return { driver, sent };
 }
 
+// notificação criada "agora" (relógio real) cai fora da janela de NOW (2031);
+// o resumo só conta não lidas da semana, então a data vai pra dentro dela
+async function notifyThisWeek(memberId: number) {
+  await notify(memberId, { type: "answer", text: "resposta" });
+  await db
+    .prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ?")
+    .run(iso(new Date(NOW.getTime() - 86_400_000)), memberId);
+}
+
 async function sendsOf(memberId: number) {
   return db
     .prepare("SELECT week, status, reason FROM digest_sends WHERE memberId = ? ORDER BY week")
@@ -254,7 +263,7 @@ describe("runDigest", () => {
   it("vazio não envia; com conteúdo envia uma vez por semana", async () => {
     const vazio = await member();
     const cheio = await member();
-    await notify(cheio.id, { type: "answer", text: "resposta" });
+    await notifyThisWeek(cheio.id);
     const { driver, sent } = fakeDriver();
     const r1 = await runDigest(NOW, driver);
     expect(r1.week).toBe(isoWeekBrt(NOW));
@@ -265,7 +274,8 @@ describe("runDigest", () => {
     const msg = sent.find((m) => m.to.startsWith(cheio.username.slice(2)))!;
     expect(msg.idempotencyKey).toBe(`digest:${cheio.id}:${r1.week}`);
     expect(msg.unsubscribeUrl).toContain(`/api/notifications/digest/sair/${digestToken(cheio.id)}`);
-    expect(msg.text).toContain("Você tem 1 notificação não lida");
+    expect(msg.oneClickUnsubscribe).toBe(true);
+    expect(msg.text).toContain("Você tem 1 notificação da semana sem abrir");
 
     // segunda execução na mesma semana: ninguém recebe de novo
     const again = fakeDriver();
@@ -274,9 +284,21 @@ describe("runDigest", () => {
     expect((await sendsOf(cheio.id))).toHaveLength(1);
   });
 
+  it("só uma não lida de um mês atrás: vazio, toda semana", async () => {
+    const ana = await member();
+    await notify(ana.id, { type: "answer", text: "velha" });
+    await db
+      .prepare("UPDATE notifications SET createdAt = ? WHERE memberId = ?")
+      .run(iso(new Date(NOW.getTime() - 30 * 86_400_000)), ana.id);
+    const { driver, sent } = fakeDriver();
+    const r = await runDigest(NOW, driver);
+    expect(await sendsOf(ana.id)).toEqual([{ week: r.week, status: "vazio", reason: null }]);
+    expect(sent.some((m) => m.idempotencyKey === `digest:${ana.id}:${r.week}`)).toBe(false);
+  });
+
   it("falhou: a próxima execução tenta de novo", async () => {
     const ana = await member();
-    await notify(ana.id, { type: "answer", text: "resposta" });
+    await notifyThisWeek(ana.id);
     const bad = fakeDriver({ status: "failed", error: "HTTP 500" });
     await runDigest(NOW, bad.driver);
     expect((await sendsOf(ana.id))[0]).toMatchObject({ status: "falhou", reason: "HTTP 500" });
@@ -291,7 +313,7 @@ describe("runDigest", () => {
     const nunca = await member({ lastSeenDaysAgo: null });
     const desligou = await member();
     const recente = await member({ lastSeenDaysAgo: 179 });
-    for (const m of [sumido, nunca, desligou, recente]) await notify(m.id, { type: "answer", text: "r" });
+    for (const m of [sumido, nunca, desligou, recente]) await notifyThisWeek(m.id);
     await setPref(desligou.id, "digest", { email: false });
     const { driver } = fakeDriver();
     await runDigest(NOW, driver);
@@ -304,7 +326,7 @@ describe("runDigest", () => {
   it("bounce vira pulado sem chamar o driver", async () => {
     const ana = await member();
     await db.prepare("UPDATE members SET emailBouncedAt = sqlite_now() WHERE id = ?").run(ana.id);
-    await notify(ana.id, { type: "answer", text: "r" });
+    await notifyThisWeek(ana.id);
     const { driver, sent } = fakeDriver();
     await runDigest(NOW, driver);
     expect((await sendsOf(ana.id))[0].status).toBe("pulado");
@@ -364,6 +386,21 @@ describe("parar de receber pelo link", () => {
     expect((await getPrefs(ana.id)).digest.email).toBe(false);
     // o resto continua como estava
     expect((await getPrefs(ana.id)).social.inApp).toBe(true);
+  });
+
+  it("POST de um clique do Gmail (RFC 8058) desliga", async () => {
+    const ana = await member();
+    const route = await import("@/app/api/notifications/digest/sair/[token]/route");
+    const res = await route.POST(
+      new Request("http://t", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "List-Unsubscribe=One-Click",
+      }),
+      { params: Promise.resolve({ token: digestToken(ana.id) }) },
+    );
+    expect(res.status).toBe(200);
+    expect((await getPrefs(ana.id)).digest.email).toBe(false);
   });
 
   it("conta excluída: 404", async () => {

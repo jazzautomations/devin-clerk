@@ -234,13 +234,20 @@ export async function listNotifications(
   return rows.map(toNotification);
 }
 
-export async function unreadCount(memberId: number): Promise<number> {
+/** não lidas visíveis; com `window`, só as criadas em [from, to] (o resumo semanal) */
+export async function unreadCount(
+  memberId: number,
+  window?: { from: string; to: string },
+): Promise<number> {
+  const range = window
+    ? " AND to_ts(createdAt) >= @from::timestamptz AND to_ts(createdAt) <= @to::timestamptz"
+    : "";
   return (
     await db
       .prepare(
-        `SELECT COUNT(*) n FROM notifications WHERE memberId = @me AND read = 0 AND ${NOT_HIDDEN}`,
+        `SELECT COUNT(*) n FROM notifications WHERE memberId = @me AND read = 0 AND ${NOT_HIDDEN}${range}`,
       )
-      .get({ me: memberId }) as { n: number }
+      .get({ me: memberId, ...(window ?? {}) }) as { n: number }
   ).n;
 }
 

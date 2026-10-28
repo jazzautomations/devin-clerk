@@ -67,7 +67,12 @@ export function emailDriver(env: DriverEnv = process.env): Driver<EmailMessage> 
                 }
               : {}),
             ...(m.unsubscribeUrl
-              ? { headers: { "List-Unsubscribe": `<${m.unsubscribeUrl}>` } }
+              ? {
+                  headers: {
+                    "List-Unsubscribe": `<${m.unsubscribeUrl}>`,
+                    ...(m.oneClickUnsubscribe ? { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : {}),
+                  },
+                }
               : {}),
           }),
         });

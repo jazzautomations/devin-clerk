@@ -64,6 +64,21 @@ describe("emailDriver (Resend)", () => {
     });
   });
 
+  it("cancelar num clique: List-Unsubscribe-Post só quando a URL aceita POST", async () => {
+    const fetchFn = mockFetch(200, '{"id":"re_2"}');
+    const d = emailDriver({ RESEND_API_KEY: "k" });
+    await d.send({ ...msg, unsubscribeUrl: "https://hackahub.dev/api/notifications/digest/sair/D1.1.x", oneClickUnsubscribe: true });
+    const body = JSON.parse((fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.headers).toEqual({
+      "List-Unsubscribe": "<https://hackahub.dev/api/notifications/digest/sair/D1.1.x>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+    // sem a flag (ex.: página de preferências) fica só o List-Unsubscribe
+    await d.send(msg);
+    const plain = JSON.parse((fetchFn.mock.calls[1] as unknown as [string, RequestInit])[1].body as string);
+    expect(plain.headers).toEqual({ "List-Unsubscribe": "<https://hackahub.dev/perfil#contato>" });
+  });
+
   it("422 é falha permanente; 500 é falha que pode tentar de novo", async () => {
     mockFetch(422, '{"message":"invalid to"}');
     const d = emailDriver({ RESEND_API_KEY: "k" });
