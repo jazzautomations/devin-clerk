@@ -27,7 +27,8 @@ import db from "@/lib/db";
 //   nenhum dos dois. Tempo até resolver: mediana das resolvidas na semana.
 // - volta em 14 dias: quem fez check-in numa edição que terminou na semana e
 //   tem lastSeenAt 14 dias ou mais depois do fim. Edição que terminou há
-//   menos de 14 dias ainda não entra.
+//   menos de 14 dias ainda não entra. Conta excluída sai (privacy.ts guarda o
+//   check-in e zera o lastSeenAt, então ela pesaria sempre como "não voltou").
 //
 // Depoimento (migration 037) e perfil aberto (041) chegam em branches
 // paralelas: enquanto a tabela ou a coluna não existe, a métrica volta null.
@@ -219,7 +220,8 @@ export async function retentionWeek(w: MetricWeek, now: Date): Promise<Ratio | n
        )
        SELECT COUNT(*)::int AS den,
               COUNT(*) FILTER (WHERE to_ts(m.lastSeenAt) >= co.endAt + interval '14 days')::int AS num
-       FROM cohort co JOIN members m ON m.id = co.memberId`,
+       FROM cohort co JOIN members m ON m.id = co.memberId
+       WHERE m.clerkId NOT LIKE 'deleted:%'`,
     )
     .get<{ den: number; num: number }>({ s: w.start, e: w.end, now: now.toISOString() });
   if (!r || r.den === 0) return null;
