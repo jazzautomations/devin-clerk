@@ -117,6 +117,43 @@ describe("exclusão e export", () => {
     expect(n).toEqual({ actorUsername: `removido-${ana.id}`, actorId: ana.id });
   });
 
+  it("o @ sai do texto que a outra pessoa vê, do link pro perfil e das notificações antigas com @ trocado", async () => {
+    const ana = await fullMember("anon6");
+    const bia = await fullMember("anon7");
+    const anon = `removido-${ana.id}`;
+    await notify(bia.id, { type: "like", actorUsername: ana.username, text: `@${ana.username} curtiu seu post`, href: "/feed" });
+    await notify(bia.id, {
+      type: "follow",
+      actorUsername: ana.username,
+      text: `@${ana.username} seguiu você (não é @${ana.username}x)`,
+      href: `/u/${ana.username}`,
+    });
+    await notify(bia.id, { type: "x", actorUsername: ana.username, text: `@${ana.username}`, href: `/u/${ana.username}x` });
+    // linha de antes da 031 que o backfill não casou: @ antigo, sem actorId
+    await db.prepare("INSERT INTO username_redirects (oldUsername, memberId) VALUES (?, ?)").run("anon6velho", ana.id);
+    await db
+      .prepare("INSERT INTO notifications (memberId, actorUsername, type, text, href) VALUES (?, 'anon6velho', 'comment', ?, ?)")
+      .run(bia.id, "@anon6velho comentou no seu post", "/u/anon6velho#posts");
+    // @ legado com caractere de regex: o ponto é literal
+    await db
+      .prepare("INSERT INTO notifications (memberId, actorUsername, actorId, type, text) VALUES (?, 'anon6.v', ?, 'legado', ?)")
+      .run(bia.id, ana.id, "@anon6.v curtiu, @anon6xv não");
+    // de outra pessoa: não muda
+    await notify(bia.id, { type: "like", actorUsername: "u_outra", text: "@u_outra curtiu seu post", href: "/feed" });
+    await deleteMemberData(ana.id);
+    const rows = await db
+      .prepare("SELECT type, actorUsername, actorId, text, href FROM notifications WHERE memberId = ? ORDER BY id")
+      .all(bia.id);
+    expect(rows).toEqual([
+      { type: "like", actorUsername: anon, actorId: ana.id, text: `@${anon} curtiu seu post`, href: "/feed" },
+      { type: "follow", actorUsername: anon, actorId: ana.id, text: `@${anon} seguiu você (não é @${ana.username}x)`, href: null },
+      { type: "x", actorUsername: anon, actorId: ana.id, text: `@${anon}`, href: `/u/${ana.username}x` },
+      { type: "comment", actorUsername: anon, actorId: ana.id, text: `@${anon} comentou no seu post`, href: null },
+      { type: "legado", actorUsername: anon, actorId: ana.id, text: `@${anon} curtiu, @anon6xv não`, href: null },
+      { type: "like", actorUsername: "u_outra", actorId: null, text: "@u_outra curtiu seu post", href: "/feed" },
+    ]);
+  });
+
   it("rota DELETE /api/members/me zera os campos novos", async () => {
     const caio = await fullMember("anon4");
     authMock.mockResolvedValue({ userId: caio.clerkId });

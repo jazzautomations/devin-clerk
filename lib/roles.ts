@@ -131,6 +131,11 @@ export async function revokeEditionRole(
         "DELETE FROM edition_roles WHERE hackathonId = ? AND memberId = ? AND role = ?",
       )
       .run(hackathonId, memberId, role);
+    // histórico só cresce: a regra antifarm de lib/evidence.ts olha quem já
+    // foi organizador da edição, não só quem é hoje
+    await db
+      .prepare("INSERT INTO edition_role_revocations (hackathonId, memberId, role) VALUES (?, ?, ?)")
+      .run(hackathonId, memberId, role);
     if (role === "jurado") {
       await db
         .prepare("DELETE FROM judge_assignments WHERE hackathonId = ? AND judgeMemberId = ?")

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
+import { revokeEditionRole } from "@/lib/roles";
 import {
   DUVIDA_MAX_PER_EDITION,
   EVIDENCE_MIN_CHECKINS,
@@ -16,13 +17,16 @@ import {
 // fixture, os limites antifarm (15 check-ins, organizador da mesma edição,
 // comunidade não verificada) e o recorte por data.
 
+const authMock = vi.fn(async () => ({ userId: null as string | null }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: () => authMock() }));
+
 let seq = 0;
-async function member(tag = "ev"): Promise<{ id: number; username: string }> {
+async function member(tag = "ev"): Promise<{ id: number; username: string; tag: string }> {
   const t = `${tag}${seq++}`;
   const r = await db
     .prepare("INSERT INTO members (clerkId, username, email, name) VALUES (?, ?, ?, ?) RETURNING id")
     .get<{ id: number }>(`clerk_${t}`, `u_${t}`, `${t}@t.dev`, `Pessoa ${t}`);
-  return { id: r!.id, username: `u_${t}` };
+  return { id: r!.id, username: `u_${t}`, tag: t };
 }
 
 async function community(verified: number, hidden = 0): Promise<number> {
@@ -165,6 +169,40 @@ describe("fatos", () => {
     await submit(t, 1);
     await prize(h, t, "Geral");
     expect(await kinds(org.id)).toEqual(["organizou"]);
+  });
+
+  it("organizador que perdeu o papel depois do evento continua sem presença, entrega e prêmio", async () => {
+    const h = await edition();
+    await crowd(h, EVIDENCE_MIN_CHECKINS);
+    const org = await member();
+    const alt = await member();
+    await role(h, org.id, "organizador");
+    await role(h, alt.id, "organizador");
+    await checkin(org.id, h);
+    const t = await team(h, [org.username]);
+    await submit(t, 1);
+    await prize(h, t, "Geral");
+    // a conta "alt" tira o papel de quem rodou a edição: os fatos não destravam
+    const { DELETE } = await import("@/app/api/admin/hackathons/[id]/roles/route");
+    authMock.mockResolvedValue({ userId: `clerk_${alt.tag}` });
+    const res = await DELETE(
+      new Request("http://t", { method: "DELETE", body: JSON.stringify({ memberId: org.id, role: "organizador" }) }),
+      { params: Promise.resolve({ id: h }) },
+    );
+    expect(res.status).toBe(200);
+    expect(await db.prepare("SELECT 1 FROM edition_roles WHERE hackathonId = ? AND memberId = ?").get(h, org.id)).toBeFalsy();
+    expect(await kinds(org.id)).toEqual([]);
+    authMock.mockResolvedValue({ userId: null });
+  });
+
+  it("papel de staff tirado não conta como organizador", async () => {
+    const h = await edition();
+    await crowd(h, EVIDENCE_MIN_CHECKINS);
+    const ana = await member();
+    await role(h, ana.id, "staff");
+    await revokeEditionRole(h, ana.id, "staff");
+    await checkin(ana.id, h);
+    expect(await kinds(ana.id)).toEqual(["presenca"]);
   });
 
   it("organizou só em edição publicada e encerrada", async () => {

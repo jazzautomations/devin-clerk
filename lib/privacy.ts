@@ -223,6 +223,24 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
     await db
       .prepare("UPDATE incidents SET reporterId = NULL, contact = NULL WHERE reporterId = ?")
       .run(memberId);
+    // notificação que a pessoa causou na caixa de outra: o @ congelado sai
+    // de onde aparece (o texto mostrado, o actorUsername e o link pro perfil
+    // antigo). Casa por actorId e, nas linhas antigas sem id, pelo @ atual ou
+    // por um @ antigo dela (username_redirects, antes do loop que o apaga).
+    // @ como regex (o @ é [a-z0-9_], mas @ legado pode ter outro caractere)
+    const handleRe = String.raw`regexp_replace(actorUsername, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g')`;
+    await db
+      .prepare(
+        `UPDATE notifications SET
+           text = regexp_replace(text, '@' || ${handleRe} || '(?![a-z0-9_])', '@' || ?::text, 'g'),
+           href = CASE WHEN href ~ ('^/u/' || ${handleRe} || '([/?#]|$)') THEN NULL ELSE href END,
+           actorUsername = ?::text,
+           actorId = ?::int
+         WHERE actorUsername IS NOT NULL
+           AND (actorId = ?::int OR (actorId IS NULL AND actorUsername IN
+             (SELECT ?::text UNION SELECT "oldUsername" FROM username_redirects WHERE "memberId" = ?::int)))`,
+      )
+      .run(anon, anon, memberId, memberId, member.username, memberId);
     for (const { table, column } of refs) {
       const action = deleteAction(table, column);
       if (action === "nullify") {
@@ -231,9 +249,6 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
         await db.prepare(`DELETE FROM ${ident(table)} WHERE ${ident(column)} = ?`).run(memberId);
       }
     }
-    // notificação que a pessoa causou na caixa de outra: o @ congelado vira
-    // o anonimizado (o id fica apontando pra linha anonimizada)
-    await db.prepare("UPDATE notifications SET actorUsername = ? WHERE actorId = ?").run(anon, memberId);
     for (const [table, { column, fields }] of Object.entries(FREE_TEXT)) {
       await db
         .prepare(`UPDATE ${ident(table)} SET ${fields.map((f) => `${ident(f)} = NULL`).join(", ")} WHERE ${ident(column)} = ?`)

@@ -12,7 +12,7 @@ import { hostedSql } from "@/lib/hackathons";
 //   - é global (communityId NULL) ou de comunidade verificada e não escondida.
 // Isso fecha o ciclo "crio comunidade, crio edição, me aprovo, faço check-in
 // em mim e me dou prêmio". E presença, entrega e prêmio não contam pra quem é
-// organizador da mesma edição.
+// ou já foi organizador da mesma edição.
 //
 // Fatos ({kind, hackathonId, teamId?, at}; at = "YYYY-MM-DD HH:MM:SS" UTC):
 //   presenca  check-in da inscrição aprovada (1 por edição)
@@ -61,9 +61,13 @@ export async function eligibleEdition(hackathonId: string): Promise<boolean> {
   return !!row;
 }
 
+// quem é OU JÁ FOI organizador: tirar o papel depois do evento não destrava
+// os fatos (edition_role_revocations guarda o histórico)
 const notOrganizer = (hackathonCol: string) =>
   `NOT EXISTS (SELECT 1 FROM edition_roles ev_o
-     WHERE ev_o.hackathonId = ${hackathonCol} AND ev_o.memberId = @m AND ev_o.role = 'organizador')`;
+     WHERE ev_o.hackathonId = ${hackathonCol} AND ev_o.memberId = @m AND ev_o.role = 'organizador')
+   AND NOT EXISTS (SELECT 1 FROM edition_role_revocations ev_rv
+     WHERE ev_rv.hackathonId = ${hackathonCol} AND ev_rv.memberId = @m AND ev_rv.role = 'organizador')`;
 
 type Row = { hackathonId: string; teamId: number | null; at: string };
 
