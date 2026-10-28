@@ -498,6 +498,9 @@ export async function leaveCommunity(communityId: number, memberId: number): Pro
       }
     }
     await db.prepare("DELETE FROM community_members WHERE communityId = ? AND memberId = ?").run(communityId, memberId);
+    // um "seguir" que corria junto com o entrar pode ter sobrado: quem sai
+    // não segue sem ter escolhido seguir
+    await db.prepare("DELETE FROM community_follows WHERE communityId = ? AND memberId = ?").run(communityId, memberId);
     return true;
   })();
 }

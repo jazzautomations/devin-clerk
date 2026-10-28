@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
-import { joinCommunity, listMyCommunities, communityNextStep } from "@/lib/communities";
+import { joinCommunity, leaveCommunity, listMyCommunities, communityNextStep } from "@/lib/communities";
 import { announceEditionLaunch } from "@/lib/editionLaunch";
 import {
   FEED_PAGE_SIZE,
@@ -139,6 +139,29 @@ describe("seguir e ser membro", () => {
     const st = await followStates(m.id);
     expect([...st.member]).toEqual([c.id]);
     expect([...st.following]).toEqual([]);
+  });
+
+  it("sair da comunidade não deixa um seguir que a pessoa não escolheu", async () => {
+    const m = await member();
+    const dono = await member();
+    const c = await community("fw-leave", { members: [dono.id] });
+    await db.prepare("UPDATE community_members SET role = 'dono' WHERE communityId = ?").run(c.id);
+    await joinCommunity(c, m);
+    // o follow que commitou depois do DELETE do joinCommunity (cliques em paralelo)
+    await db.prepare("INSERT INTO community_follows (communityId, memberId) VALUES (?, ?)").run(c.id, m.id);
+    expect(await leaveCommunity(c.id, m.id)).toBe(true);
+    expect(await isFollowing(c.id, m.id)).toBe(false);
+    expect(await communityAudience(c.id)).toEqual([dono.id]);
+    expect((await listMyCommunities(m.id)).map((x) => x.slug)).not.toContain(c.slug);
+    // e depois de sair pode seguir de propósito
+    expect(await followCommunity(c.id, m.id)).toBe("followed");
+  });
+
+  it("membro não ganha linha de seguir: a checagem vai no próprio insert", async () => {
+    const m = await member();
+    const c = await community("fw-member-follow", { members: [m.id] });
+    expect(await followCommunity(c.id, m.id)).toBe("member");
+    expect(await isFollowing(c.id, m.id)).toBe(false);
   });
 
   it("painel lista as seguidas como 'segue', depois das que a pessoa é membro", async () => {

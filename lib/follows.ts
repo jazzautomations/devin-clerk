@@ -13,13 +13,21 @@ const FOLLOWED_SQL = `SELECT cm.communityId FROM community_members cm WHERE cm.m
 
 export type FollowResult = "followed" | "already" | "member";
 
-/** segue. Quem já é membro não ganha linha nova (membro já segue). */
+/**
+ * segue. Quem já é membro não ganha linha nova (membro já segue). A checagem
+ * de membro vai no próprio INSERT; a corrida com o entrar que ainda sobrar
+ * o leaveCommunity limpa.
+ */
 export async function followCommunity(communityId: number, memberId: number): Promise<FollowResult> {
-  if (await getMembership(communityId, memberId)) return "member";
   const res = await db
-    .prepare("INSERT OR IGNORE INTO community_follows (communityId, memberId) VALUES (?, ?)")
-    .run(communityId, memberId);
-  return res.changes > 0 ? "followed" : "already";
+    .prepare(
+      `INSERT INTO community_follows (communityId, memberId)
+       SELECT @c, @m WHERE NOT EXISTS (SELECT 1 FROM community_members WHERE communityId = @c AND memberId = @m)
+       ON CONFLICT DO NOTHING`,
+    )
+    .run({ c: communityId, m: memberId });
+  if (res.changes > 0) return "followed";
+  return (await getMembership(communityId, memberId)) ? "member" : "already";
 }
 
 export async function unfollowCommunity(communityId: number, memberId: number): Promise<boolean> {

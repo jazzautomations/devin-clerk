@@ -241,4 +241,27 @@ test.describe("seguir comunidade", () => {
     const r = await api.post(`/api/communities/${DONA}/follow`);
     expect(r.status()).toBe(409);
   });
+
+  test("sair da comunidade não deixa um seguir que sobrou de clique em paralelo", async ({ memberPage: page }) => {
+    const db = openE2eDb();
+    const id = await me();
+    const c = await db.prepare("SELECT id FROM communities WHERE slug = ?").get<{ id: number }>(SEG);
+    await page.setViewportSize({ width: 390, height: 900 });
+    page.on("dialog", (d) => d.accept());
+    await page.goto(`/comunidade/${SEG}`);
+    await page.getByTestId("community-join").click();
+    await expect(page.getByTestId("community-leave")).toBeVisible();
+    // o follow que commitou depois de entrar: membro não vê botão pra tirar
+    await db
+      .prepare(`INSERT INTO community_follows ("communityId", "memberId") VALUES (?, ?) ON CONFLICT DO NOTHING`)
+      .run(c!.id, id);
+    await page.getByTestId("community-leave").click();
+    await expect(page.getByTestId("community-follow")).toBeVisible();
+    await expect(page.getByTestId("community-following-chip")).toHaveCount(0);
+    const left = await db
+      .prepare(`SELECT 1 AS ok FROM community_follows WHERE "communityId" = ? AND "memberId" = ?`)
+      .get(c!.id, id);
+    expect(left).toBeFalsy();
+    await noHorizontalScroll(page);
+  });
 });
