@@ -159,11 +159,11 @@ test.describe("bicho do builder", () => {
   test("sem WebGL o preview cai pro <img> do SVG", async ({ browser, baseURL }) => {
     const ctx = await browser.newContext({ storageState: AUTH_FILE, baseURL });
     await ctx.addInitScript(() => {
-      const orig = HTMLCanvasElement.prototype.getContext;
-      // @ts-expect-error -- sobrescreve pra simular navegador sem WebGL
-      HTMLCanvasElement.prototype.getContext = function (tipo: string, ...rest: unknown[]) {
+      // simula navegador sem WebGL; os outros contextos passam direto
+      const proto = HTMLCanvasElement.prototype as unknown as { getContext: (tipo: string, ...rest: unknown[]) => unknown };
+      const orig = proto.getContext;
+      proto.getContext = function (this: HTMLCanvasElement, tipo: string, ...rest: unknown[]) {
         if (String(tipo).startsWith("webgl") || tipo === "experimental-webgl") return null;
-        // @ts-expect-error -- repassa os outros contextos
         return orig.call(this, tipo, ...rest);
       };
     });
