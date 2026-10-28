@@ -72,7 +72,11 @@ horizontal nas rotas novas.
   hackathon (nasce rascunho e quem cria vira `organizador` da edição) e
   publica pelo checklist; o dono chama organizador por e-mail. Admin global
   administra todas, esconde (`hidden`) e dá selo (`verified`). Hackathon
-  publicado avisa só os membros da comunidade dele (`lib/editionLaunch.ts`).
+  publicado avisa quem segue a comunidade dele (`lib/editionLaunch.ts`).
+- Seguir (`lib/follows.ts`, migration 030): membro = segue. `community_follows`
+  é o seguir leve de quem não quer ser membro: vê mural, avisos e hackathons
+  no /feed (aba "minhas comunidades") e no painel e recebe o anúncio de
+  hackathon; não posta no mural nem recebe aviso. Entrar apaga o seguir.
 
 ## UI
 

@@ -1,11 +1,13 @@
 import db from "@/lib/db";
 import { publishToMembers } from "@/lib/announcements";
+import { communityAudience } from "@/lib/follows";
 
 /**
  * Hackathon de uma comunidade que entra no ar pela primeira vez é anunciado
- * pros MEMBROS DESSA COMUNIDADE (não pra plataforma inteira): notificação
- * dentro do HackaHub e o mesmo aviso na fila de entregas (e-mail; zap só com
- * opt-in), marcado como aviso do sistema. Edição sem comunidade (evento
+ * pra quem SEGUE ESSA COMUNIDADE (os membros e quem só segue, migration 030),
+ * não pra plataforma inteira: notificação dentro do HackaHub e o mesmo aviso
+ * na fila de entregas (e-mail; zap só com opt-in), marcado como aviso do
+ * sistema. Edição sem comunidade (evento
  * externo, edição antiga do painel) não anuncia.
  *
  * Idempotente por launchAnnouncedAt: despublicar e publicar de novo não
@@ -26,13 +28,8 @@ export async function announceEditionLaunch(
       .get<{ id: string; name: string; communityName: string; communityId: number }>(hackathonId);
     if (!h) return null;
 
-    const members = await db
-      .prepare(
-        `SELECT m.id FROM community_members cm JOIN members m ON m.id = cm.memberId
-         WHERE cm.communityId = ? AND m.clerkId NOT LIKE 'deleted:%' ORDER BY m.id`,
-      )
-      .all<{ id: number }>(h.communityId);
-    const ids = members.map((m) => m.id);
+    // membros e quem só segue a comunidade (migration 030)
+    const ids = await communityAudience(h.communityId);
     if (ids.length === 0) return { notified: 0, queued: 0 };
 
     const text = `${h.communityName} abriu ${h.name}. As inscrições estão abertas.`;
@@ -50,7 +47,7 @@ export async function announceEditionLaunch(
       null,
       {
         title: `${h.communityName} abriu um hackathon: ${h.name}`,
-        body: `${h.communityName} abriu ${h.name}. Você recebe este aviso porque está nessa comunidade no HackaHub. Data, local e desafios estão na página do hackathon.\n\n${site}${href}`,
+        body: `${h.communityName} abriu ${h.name}. Você recebe este aviso porque segue essa comunidade no HackaHub. Data, local e desafios estão na página do hackathon.\n\n${site}${href}`,
       },
       ids,
       { system: true },

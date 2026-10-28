@@ -40,6 +40,7 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   communities: { limit: 3, windowMs: DAY }, // POST /api/communities — membro
   "community-hackathons": { limit: 5, windowMs: DAY }, // POST …/communities/[slug]/hackathons
   "community-join": { limit: 30, windowMs: HOUR }, // POST/DELETE …/[slug]/members
+  "community-follow": { limit: 30, windowMs: HOUR }, // POST/DELETE …/[slug]/follow
   "community-notices": { limit: 10, windowMs: HOUR }, // POST …/[slug]/notices
   "community-invites": { limit: 20, windowMs: HOUR }, // POST …/[slug]/organizers
   "community-report": { limit: 5, windowMs: HOUR }, // POST …/[slug]/report

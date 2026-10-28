@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CommunityRows } from "@/components/CommunityRows";
 import { listCommunities, nearby } from "@/lib/communities";
+import { followStates } from "@/lib/follows";
 import { currentMember } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default async function ComunidadesPage({ searchParams }: PageProps<"/comu
   const nearIds = new Set(near.map((n) => n.item.id));
   const rest = list.filter((c) => !nearIds.has(c.id));
   const nearMap = new Map(near.map((n) => [n.item.id, n.match] as const));
+  const follow = member ? await followStates(member.id) : undefined;
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 sm:py-16">
@@ -30,7 +32,8 @@ export default async function ComunidadesPage({ searchParams }: PageProps<"/comu
             Quem faz hackathon por aí.
           </h1>
           <p className="max-w-[52ch] text-[16px] leading-relaxed text-[#2b2b2b]">
-            Entre na comunidade da sua cidade, da sua faculdade ou do seu tema. É lá que saem os próximos hackathons.
+            Entre na comunidade da sua cidade, da sua faculdade ou do seu tema. É lá que saem os próximos hackathons. A de
+            outra cidade dá pra só seguir: o que ela publica aparece no seu feed.
           </p>
         </div>
         <Link href="/comunidades/nova" className="btn shrink-0 self-start sm:self-auto" data-testid="comunidades-criar">
@@ -55,7 +58,7 @@ export default async function ComunidadesPage({ searchParams }: PageProps<"/comu
       {near.length > 0 && (
         <div className="flex flex-col gap-3" data-testid="comunidades-perto">
           <h2 className="font-mono text-[13px] tracking-[0.08em] uppercase">perto de você</h2>
-          <CommunityRows communities={near.map((n) => n.item)} near={nearMap} />
+          <CommunityRows communities={near.map((n) => n.item)} near={nearMap} follow={follow} />
         </div>
       )}
 
@@ -74,7 +77,7 @@ export default async function ComunidadesPage({ searchParams }: PageProps<"/comu
           {q ? `resultado pra “${q}”` : near.length > 0 ? "outras comunidades" : "todas"}
         </h2>
         {rest.length > 0 ? (
-          <CommunityRows communities={rest} testId="comunidades-lista" />
+          <CommunityRows communities={rest} testId="comunidades-lista" follow={follow} />
         ) : (
           <div className="flex flex-col items-start gap-3 border-[1.5px] border-line p-5" data-testid="comunidades-vazio">
             <p className="text-[17px] font-bold">
