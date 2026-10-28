@@ -104,6 +104,35 @@ test.describe("notificações boas", () => {
     expect(Number(left?.n)).toBe(0);
   });
 
+  test("seguidores novos viram uma linha que leva à lista de seguidores", async ({ memberPage: page }) => {
+    const db = openE2eDb();
+    const meId = await me();
+    // seguidor de outro spec não entra na conta deste
+    await db.prepare(`UPDATE notifications SET read = 1 WHERE "memberId" = ? AND type = 'follow'`).run(meId);
+    // o href de cada uma é o perfil de quem seguiu, como em notifyNewFollower
+    for (const u of PEOPLE.slice(0, 4)) {
+      await db
+        .prepare(
+          `INSERT INTO notifications ("memberId", "actorId", "actorUsername", type, text, href)
+           SELECT ?, id, username, 'follow', ?, ? FROM members WHERE username = ?`,
+        )
+        .run(meId, `@${u} começou a seguir você`, `/u/${u}`, u);
+    }
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/notificacoes");
+    const group = page.getByTestId("notification-row").filter({ hasText: "começaram a seguir você" });
+    await expect(group).toHaveCount(1);
+    await expect(group).toHaveAttribute("data-total", "4");
+    await expect(group).toContainText("@e2e_nb_d, @e2e_nb_c e mais 2 começaram a seguir você");
+    await noHorizontalScroll(page);
+    await group.click();
+    await expect(page).toHaveURL(/\/perfil\/seguidores$/);
+    const left = await db
+      .prepare(`SELECT COUNT(*)::int AS n FROM notifications WHERE "memberId" = ? AND type = 'follow' AND read = 0`)
+      .get<{ n: number }>(meId);
+    expect(Number(left?.n)).toBe(0);
+  });
+
   test("aba menções: vazia com texto, depois mostra a menção", async ({ memberPage: page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/notificacoes?aba=mencoes");
