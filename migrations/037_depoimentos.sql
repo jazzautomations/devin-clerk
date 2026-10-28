@@ -10,6 +10,8 @@
 --   aceito    aparece no perfil
 --   recusado  recusa silenciosa: o autor continua vendo "enviado"
 --   oculto    o dono aceitou e depois tirou do perfil
+--   removido  quem trata a denúncia tirou do ar: some pros dois lados, o dono
+--             não traz de volta e o autor não reescreve (o UNIQUE segura)
 -- Editar um aceito volta pra pendente (lib/testimonials.ts). Um depoimento
 -- por autor, pessoa e edição. teamId fica nulo se o time for apagado.
 
@@ -20,7 +22,7 @@ CREATE TABLE team_testimonials (
   "hackathonId" TEXT NOT NULL REFERENCES hackathons("id") ON DELETE CASCADE,
   "teamId" INTEGER REFERENCES teams("id") ON DELETE SET NULL,
   "body" TEXT NOT NULL CHECK (char_length("body") BETWEEN 40 AND 600),
-  "status" TEXT NOT NULL DEFAULT 'pendente' CHECK ("status" IN ('pendente', 'aceito', 'recusado', 'oculto')),
+  "status" TEXT NOT NULL DEFAULT 'pendente' CHECK ("status" IN ('pendente', 'aceito', 'recusado', 'oculto', 'removido')),
   "createdAt" TEXT NOT NULL DEFAULT sqlite_now(),
   "updatedAt" TEXT NOT NULL DEFAULT sqlite_now(),
   "acceptedAt" TEXT,

@@ -1,8 +1,9 @@
 import db from "@/lib/db";
 import { isBlockedEither } from "@/lib/blocks";
-import { sameTeam } from "@/lib/evidence";
+import { eligibleEdition, sameTeam } from "@/lib/evidence";
 import { canNetwork } from "@/lib/network";
-import { notify } from "@/lib/notifications";
+import { notify, notifyOnce } from "@/lib/notifications";
+import { canHandleReport, getReport } from "@/lib/reports";
 
 // Depoimento de time (migration 037, aposta da spec 044 §1.2).
 //
@@ -15,6 +16,17 @@ import { notify } from "@/lib/notifications";
 //   esconder não avisam o autor: pra ele continua "enviado".
 // - Editar um aceito volta pra pendente: ninguém troca o texto depois de
 //   aprovado. Editar recusado ou oculto não avisa ninguém e não muda o status.
+//   Por isso aceitar (e mostrar de novo) leva o texto que a tela mostrou: se
+//   o autor trocou no meio, dá 409 e a pessoa relê.
+// - O aviso "escreveu sobre você" sai uma vez por par a cada
+//   RENOTIFY_DAYS: apagar e reescrever não vira canal de cobrança.
+// - Denúncia de depoimento vai pra edição; quem trata a denúncia (ou o admin)
+//   tira do ar com takeDownTestimonial (status "removido"). Removido some pros
+//   dois lados, o dono não traz de volta e o autor não reescreve.
+// - Edição fora da regra antifarm (eligibleEdition de lib/evidence.ts:
+//   menos de 15 check-ins, comunidade não verificada) aceita depoimento e ele
+//   aparece no perfil, mas não entra em countAccepted, que é o número que
+//   talento, cartão e bicho usam.
 // - Conta excluída leva o texto junto (authorId em PEER_COLUMNS).
 // - Quem aparece pra outra pessoa passa por canNetwork, dos dois lados.
 // - Depoimento nunca dá XP, badge nem item do bicho (spec 043).
@@ -22,8 +34,13 @@ import { notify } from "@/lib/notifications";
 export const TESTIMONIAL_MIN = 40;
 export const TESTIMONIAL_MAX = 600;
 
-export const TESTIMONIAL_STATUSES = ["pendente", "aceito", "recusado", "oculto"] as const;
+export const TESTIMONIAL_STATUSES = ["pendente", "aceito", "recusado", "oculto", "removido"] as const;
 export type TestimonialStatus = (typeof TESTIMONIAL_STATUSES)[number];
+
+/** janela do aviso "escreveu sobre você" por par (autor, pessoa) */
+export const RENOTIFY_DAYS = 30;
+
+export const TEXT_CHANGED = "O texto mudou. Recarregue a página.";
 
 export const NOT_TEAMMATE = "Depoimento aqui só vem de quem fez time com a pessoa";
 
@@ -159,13 +176,18 @@ export async function writeTestimonial(
     .get<{ id: number }>(memberId, authorId, hackathonId, teamId, body);
   if (!row) throw new TestimonialError("Você já escreveu sobre essa pessoa nessa edição. Dá pra editar em enviados.", 409);
   const t = (await getTestimonial(Number(row.id)))!;
-  await notify(memberId, {
-    type: "testimonial",
-    actorId: authorId,
-    actorUsername: t.author.username,
-    text: `@${t.author.username} escreveu um depoimento sobre você. Aceita?`,
-    href: "/perfil/depoimentos",
-  });
+  // apagar e reescrever não avisa de novo: o texto novo espera na caixa
+  await notifyOnce(
+    memberId,
+    {
+      type: "testimonial",
+      actorId: authorId,
+      actorUsername: t.author.username,
+      text: `@${t.author.username} escreveu um depoimento sobre você. Aceita?`,
+      href: "/perfil/depoimentos",
+    },
+    RENOTIFY_DAYS,
+  );
   return t;
 }
 
@@ -177,7 +199,7 @@ export async function editTestimonial(id: number, authorId: number, rawBody: unk
   const t = await getTestimonial(id);
   if (!t || (t.authorId !== authorId && t.memberId !== authorId)) throw new TestimonialError("Depoimento não encontrado.", 404);
   if (t.authorId !== authorId) throw new TestimonialError("Só quem escreveu pode editar.", 403);
-  if (await isBlockedEither(t.authorId, t.memberId)) throw new TestimonialError("Depoimento não encontrado.", 404);
+  if (t.status === "removido" || (await isBlockedEither(t.authorId, t.memberId))) throw new TestimonialError("Depoimento não encontrado.", 404);
   const body = cleanBody(rawBody);
   if (body === t.body) return t;
   const res = await db
@@ -188,7 +210,7 @@ export async function editTestimonial(id: number, authorId: number, rawBody: unk
            status = CASE WHEN n.status = 'aceito' THEN 'pendente' ELSE n.status END,
            acceptedAt = CASE WHEN n.status = 'aceito' THEN NULL ELSE n.acceptedAt END
        FROM (SELECT id, status AS before FROM team_testimonials WHERE id = @id FOR UPDATE) o
-       WHERE n.id = o.id AND n.authorId = @author
+       WHERE n.id = o.id AND n.authorId = @author AND o.before <> 'removido'
        RETURNING o.before AS "before"`,
     )
     .get<{ before: TestimonialStatus }>({ body, id, author: authorId });
@@ -205,12 +227,14 @@ export async function editTestimonial(id: number, authorId: number, rawBody: unk
   return (await getTestimonial(id))!;
 }
 
-/** o autor retira o que escreveu (qualquer status) */
+/** o autor retira o que escreveu (qualquer status, menos removido) */
 export async function deleteTestimonial(id: number, authorId: number): Promise<void> {
   const t = await getTestimonial(id);
   if (!t || (t.authorId !== authorId && t.memberId !== authorId)) throw new TestimonialError("Depoimento não encontrado.", 404);
   if (t.authorId !== authorId) throw new TestimonialError("Só quem escreveu pode apagar. Você pode esconder.", 403);
-  await db.prepare("DELETE FROM team_testimonials WHERE id = ? AND authorId = ?").run(id, authorId);
+  // removido fica: a linha é o que impede reescrever o mesmo texto
+  if (t.status === "removido") throw new TestimonialError("Depoimento não encontrado.", 404);
+  await db.prepare("DELETE FROM team_testimonials WHERE id = ? AND authorId = ? AND status <> 'removido'").run(id, authorId);
 }
 
 type Decision = "accept" | "decline" | "hide";
@@ -224,30 +248,40 @@ const FROM: Record<Decision, TestimonialStatus[]> = {
 };
 const TO: Record<Decision, TestimonialStatus> = { accept: "aceito", decline: "recusado", hide: "oculto" };
 
-async function decide(id: number, memberId: number, d: Decision): Promise<Testimonial> {
+/** seen: o texto que a tela mostrou (obrigatório pra aceitar) */
+async function decide(id: number, memberId: number, d: Decision, seen?: unknown): Promise<Testimonial> {
   const t = await getTestimonial(id);
-  if (!t || (t.memberId !== memberId && t.authorId !== memberId)) throw new TestimonialError("Depoimento não encontrado.", 404);
+  if (!t || t.status === "removido" || (t.memberId !== memberId && t.authorId !== memberId)) {
+    throw new TestimonialError("Depoimento não encontrado.", 404);
+  }
   if (t.memberId !== memberId) throw new TestimonialError("Só quem recebeu decide.", 403);
   if (await isBlockedEither(t.authorId, t.memberId)) throw new TestimonialError("Depoimento não encontrado.", 404);
+  if (d === "accept" && typeof seen !== "string") throw new TestimonialError(TEXT_CHANGED, 400);
+  if (d === "accept" && seen !== t.body) throw new TestimonialError(TEXT_CHANGED, 409);
   if (t.status === TO[d]) return t;
   if (!FROM[d].includes(t.status)) {
     throw new TestimonialError(d === "hide" ? "Só dá pra esconder o que está no perfil." : "Esse depoimento já foi decidido.", 409);
   }
+  // o body no WHERE fecha a corrida com um PATCH do autor entre a leitura e aqui
   const res = await db
     .prepare(
       `UPDATE team_testimonials
        SET status = @to, updatedAt = sqlite_now(),
            acceptedAt = CASE WHEN @to::text = 'aceito' THEN sqlite_now() ELSE acceptedAt END
-       WHERE id = @id AND memberId = @m AND status = ANY(@from::text[])`,
+       WHERE id = @id AND memberId = @m AND status = ANY(@from::text[])
+         AND (@seen::text IS NULL OR body = @seen::text)`,
     )
-    .run({ to: TO[d], id, m: memberId, from: `{${FROM[d].join(",")}}` });
-  if (res.changes === 0) throw new TestimonialError("Esse depoimento mudou. Recarregue a página.", 409);
+    .run({ to: TO[d], id, m: memberId, from: `{${FROM[d].join(",")}}`, seen: d === "accept" ? (seen as string) : null });
+  if (res.changes === 0) throw new TestimonialError(d === "accept" ? TEXT_CHANGED : "Esse depoimento mudou. Recarregue a página.", 409);
   return (await getTestimonial(id))!;
 }
 
-/** aceita: vai pro perfil. Não avisa o autor (o perfil já mostra). */
-export function acceptTestimonial(id: number, memberId: number): Promise<Testimonial> {
-  return decide(id, memberId, "accept");
+/**
+ * Aceita: vai pro perfil. Não avisa o autor (o perfil já mostra). seenBody é
+ * o texto que a pessoa leu; se o autor trocou depois, 409 TEXT_CHANGED.
+ */
+export function acceptTestimonial(id: number, memberId: number, seenBody: unknown): Promise<Testimonial> {
+  return decide(id, memberId, "accept", seenBody);
 }
 /** recusa em silêncio: o autor continua vendo "enviado" */
 export function declineTestimonial(id: number, memberId: number): Promise<Testimonial> {
@@ -275,9 +309,21 @@ export async function listAccepted(memberId: number, viewerId: number | null = n
   return filterNetwork(rows.map(toTestimonial), "author");
 }
 
-/** quantos aceitos (a mesma regra de listAccepted) */
+/**
+ * Quantos aceitos contam: a regra de listAccepted e só de edição elegível
+ * (eligibleEdition, antifarm de lib/evidence.ts). É o número de talento, cartão e bicho.
+ */
 export async function countAccepted(memberId: number, viewerId: number | null = null): Promise<number> {
-  return (await listAccepted(memberId, viewerId)).length;
+  const list = await listAccepted(memberId, viewerId);
+  if (list.length === 0) return 0;
+  const ids = [...new Set(list.map((t) => t.hackathonId))];
+  const ok = new Set<string>();
+  await Promise.all(
+    ids.map(async (h) => {
+      if (await eligibleEdition(h)) ok.add(h);
+    }),
+  );
+  return list.filter((t) => ok.has(t.hackathonId)).length;
 }
 
 /** pra aceitar: os pendentes de memberId, do mais velho pro mais novo */
@@ -304,7 +350,7 @@ export type SentTestimonial = Omit<Testimonial, "status"> & { publicStatus: "env
 
 export async function listWrittenBy(authorId: number): Promise<SentTestimonial[]> {
   const rows = await db
-    .prepare(`${SELECT} WHERE t.authorId = ? AND ${LIVE} ORDER BY t.id DESC`)
+    .prepare(`${SELECT} WHERE t.authorId = ? AND t.status <> 'removido' AND ${LIVE} ORDER BY t.id DESC`)
     .all<Row>(authorId);
   const list = await filterNetwork(rows.map(toTestimonial), "member");
   return list.map(({ status, ...t }) => ({ ...t, publicStatus: status === "aceito" ? "no perfil" : "enviado" }));
@@ -385,4 +431,30 @@ export function joinHandles(people: { username: string }[], max = Infinity): str
 export async function canWriteBack(memberId: number, authorId: number): Promise<boolean> {
   const groups = await teammatesToWrite(memberId, 50);
   return groups.some((g) => g.people.some((p) => p.id === authorId));
+}
+
+/**
+ * Quem trata a denúncia (canHandleReport: organização da edição, conduta ou
+ * admin) tira o depoimento denunciado do ar. Vira "removido" e todas as
+ * denúncias abertas dele saem resolvidas. 404 sem denúncia ou depoimento,
+ * 403 sem permissão, 400 se a denúncia não é de depoimento.
+ */
+export async function takeDownTestimonial(reportId: number, actor: { id: number; role: string }): Promise<Testimonial> {
+  const report = await getReport(reportId);
+  if (!report) throw new TestimonialError("Denúncia não encontrada.", 404);
+  if (!(await canHandleReport(actor, report))) throw new TestimonialError("Forbidden", 403);
+  if (report.targetType !== "depoimento") throw new TestimonialError("Essa denúncia não é de depoimento.", 400);
+  const id = /^\d{1,12}$/.test(report.targetId) ? Number(report.targetId) : NaN;
+  const t = await getTestimonial(id);
+  if (!t) throw new TestimonialError("Depoimento não encontrado.", 404);
+  await db.transaction(async () => {
+    await db.prepare("UPDATE team_testimonials SET status = 'removido', updatedAt = sqlite_now() WHERE id = ?").run(id);
+    await db
+      .prepare(
+        `UPDATE reports SET resolvedAt = sqlite_now(), resolvedBy = ?, resolution = 'tirei o conteúdo do ar'
+         WHERE targetType = 'depoimento' AND targetId = ? AND resolvedAt IS NULL`,
+      )
+      .run(actor.id, String(id));
+  })();
+  return (await getTestimonial(id))!;
 }

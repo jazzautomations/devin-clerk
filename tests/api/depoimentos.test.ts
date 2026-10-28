@@ -4,7 +4,7 @@ import db from "@/lib/db";
 import { block } from "@/lib/blocks";
 import { deleteMemberData, exportMemberData } from "@/lib/privacy";
 import { resetRateLimits } from "@/lib/ratelimit";
-import { createReport } from "@/lib/reports";
+import { createReport, getReport } from "@/lib/reports";
 import {
   cleanBody,
   countAccepted,
@@ -13,6 +13,7 @@ import {
   listHidden,
   listPending,
   listWrittenBy,
+  takeDownTestimonial,
   teammatesToWrite,
   TESTIMONIAL_MAX,
   writeTestimonial,
@@ -63,7 +64,20 @@ const routes = async () => ({
   accept: await import("@/app/api/testimonials/[id]/accept/route"),
   decline: await import("@/app/api/testimonials/[id]/decline/route"),
   hide: await import("@/app/api/testimonials/[id]/hide/route"),
+  takedown: await import("@/app/api/reports/[id]/takedown/route"),
 });
+/** aceitar manda o texto que a tela mostrou */
+const seen = (t: { body: string }) => json("POST", { body: t.body });
+/** n pessoas com check-in aprovado: a edição passa na regra antifarm */
+async function makeEligible(hackathonId: string, n = 15) {
+  for (let i = 0; i < n; i++) {
+    const p = await member();
+    const r = await db
+      .prepare("INSERT INTO registrations (memberId, hackathonId, status) VALUES (?, ?, 'approved') RETURNING id")
+      .get<{ id: number }>(p.id, hackathonId);
+    await db.prepare("INSERT INTO checkins (registrationId) VALUES (?)").run(r!.id);
+  }
+}
 const notifs = (to: number) =>
   db
     .prepare("SELECT type, text, href, actorId FROM notifications WHERE memberId = ? AND type = 'testimonial' ORDER BY id")
@@ -100,6 +114,7 @@ describe("POST /api/testimonials", () => {
     expect((await r.one.PATCH(json("PATCH", { body: TEXT }), idCtx(1))).status).toBe(401);
     expect((await r.one.DELETE(json("DELETE"), idCtx(1))).status).toBe(401);
     for (const route of [r.accept, r.decline, r.hide]) expect((await route.POST(json("POST"), idCtx(1))).status).toBe(401);
+    expect((await r.takedown.POST(json("POST"), { params: Promise.resolve({ id: "1" }) })).status).toBe(401);
   });
 
   it("quem não foi do time leva 403; edição que não começou também", async () => {
@@ -164,7 +179,8 @@ describe("POST /api/testimonials", () => {
     const { root, accept } = await routes();
     const { testimonial } = await (await post(a, b)).json();
     as(b);
-    expect((await accept.POST(json("POST"), idCtx(testimonial.id))).status).toBe(200);
+    expect((await accept.POST(seen(testimonial), idCtx(testimonial.id))).status).toBe(200);
+    await makeEligible(PAST);
     expect(await countAccepted(b.id)).toBe(1);
 
     await block(b.id, a.id);
@@ -200,15 +216,15 @@ describe("aceitar, recusar, esconder", () => {
     const { testimonial } = await (await post(a, b)).json();
     // só quem recebeu decide: autor 403, estranho 404
     as(a);
-    expect((await accept.POST(json("POST"), idCtx(testimonial.id))).status).toBe(403);
+    expect((await accept.POST(seen(testimonial), idCtx(testimonial.id))).status).toBe(403);
     const x = await member();
     as(x);
-    expect((await accept.POST(json("POST"), idCtx(testimonial.id))).status).toBe(404);
+    expect((await accept.POST(seen(testimonial), idCtx(testimonial.id))).status).toBe(404);
     as(b);
-    expect((await accept.POST(json("POST"), idCtx("abc"))).status).toBe(404);
-    expect((await accept.POST(json("POST"), idCtx(999999))).status).toBe(404);
+    expect((await accept.POST(seen(testimonial), idCtx("abc"))).status).toBe(404);
+    expect((await accept.POST(seen(testimonial), idCtx(999999))).status).toBe(404);
 
-    const r = await accept.POST(json("POST"), idCtx(testimonial.id));
+    const r = await accept.POST(seen(testimonial), idCtx(testimonial.id));
     expect(r.status).toBe(200);
     const data = await r.json();
     expect(data.status).toBe("aceito");
@@ -220,7 +236,7 @@ describe("aceitar, recusar, esconder", () => {
     expect(await notifs(a.id)).toEqual([]);
     expect((await listWrittenBy(a.id)).map((t) => t.publicStatus)).toEqual(["no perfil"]);
     // aceitar de novo é idempotente
-    expect((await accept.POST(json("POST"), idCtx(testimonial.id))).status).toBe(200);
+    expect((await accept.POST(seen(testimonial), idCtx(testimonial.id))).status).toBe(200);
   });
 
   it("recusado não avisa o autor, que continua vendo 'enviado'", async () => {
@@ -246,14 +262,14 @@ describe("aceitar, recusar, esconder", () => {
     const { accept, hide, decline } = await routes();
     const { testimonial } = await (await post(a, b)).json();
     as(b);
-    await accept.POST(json("POST"), idCtx(testimonial.id));
+    await accept.POST(seen(testimonial), idCtx(testimonial.id));
     expect((await hide.POST(json("POST"), idCtx(testimonial.id))).status).toBe(200);
     expect(await listAccepted(b.id)).toEqual([]);
     expect((await listHidden(b.id)).map((t) => t.id)).toEqual([testimonial.id]);
     expect((await listWrittenBy(a.id)).map((t) => t.publicStatus)).toEqual(["enviado"]);
     // recusar depois de aceito não existe
     expect((await decline.POST(json("POST"), idCtx(testimonial.id))).status).toBe(409);
-    expect((await accept.POST(json("POST"), idCtx(testimonial.id))).status).toBe(200);
+    expect((await accept.POST(seen(testimonial), idCtx(testimonial.id))).status).toBe(200);
     expect((await listAccepted(b.id)).length).toBe(1);
   });
 });
@@ -264,7 +280,7 @@ describe("PATCH e DELETE /api/testimonials/[id]", () => {
     const { accept, one } = await routes();
     const { testimonial } = await (await post(a, b)).json();
     as(b);
-    await accept.POST(json("POST"), idCtx(testimonial.id));
+    await accept.POST(seen(testimonial), idCtx(testimonial.id));
     // quem recebeu não edita; estranho nem vê
     expect((await one.PATCH(json("PATCH", { body: `${TEXT} editado por b` }), idCtx(testimonial.id))).status).toBe(403);
     as(await member());
@@ -408,5 +424,150 @@ describe("LGPD, denúncia e tela", () => {
     // dono sem nenhum aceito: o porquê
     const own = renderToStaticMarkup((await TestimonialList({ memberId: empty.id, me: { id: empty.id } }))!);
     expect(own).toContain("Depoimento aqui só vem de quem fez time com você.");
+  });
+});
+
+describe("achados da revisão", () => {
+  it("aceitar confere o texto que a tela mostrou: troca no meio dá 409 e nada vai pro perfil", async () => {
+    const { a, b } = await pair();
+    const { accept, one } = await routes();
+    const { testimonial } = await (await post(a, b)).json();
+    // b abriu a caixa com o texto original; a troca o pendente em silêncio
+    as(a);
+    const troca = `${TEXT} Troquei depois que você abriu.`;
+    expect((await one.PATCH(json("PATCH", { body: troca }), idCtx(testimonial.id))).status).toBe(200);
+    as(b);
+    const r = await accept.POST(seen(testimonial), idCtx(testimonial.id));
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: "O texto mudou. Recarregue a página." });
+    expect(await statusOf(testimonial.id)).toEqual({ status: "pendente", acceptedAt: null });
+    // sem o texto não aceita
+    expect((await accept.POST(json("POST"), idCtx(testimonial.id))).status).toBe(400);
+    expect((await accept.POST(json("POST", { body: 42 }), idCtx(testimonial.id))).status).toBe(400);
+    // releu: aceita o texto novo
+    expect((await accept.POST(json("POST", { body: troca }), idCtx(testimonial.id))).status).toBe(200);
+    expect((await listAccepted(b.id)).map((t) => t.body)).toEqual([troca]);
+  });
+
+  it("mostrar de novo um oculto editado também exige o texto novo", async () => {
+    const { a, b } = await pair();
+    const { accept, hide, one } = await routes();
+    const { testimonial } = await (await post(a, b)).json();
+    as(b);
+    await accept.POST(seen(testimonial), idCtx(testimonial.id));
+    await hide.POST(json("POST"), idCtx(testimonial.id));
+    const [hidden] = await listHidden(b.id);
+    as(a);
+    const troca = `${TEXT} Mudei enquanto estava escondido.`;
+    await one.PATCH(json("PATCH", { body: troca }), idCtx(testimonial.id));
+    expect((await statusOf(testimonial.id))?.status).toBe("oculto");
+    as(b);
+    expect((await accept.POST(seen(hidden), idCtx(testimonial.id))).status).toBe(409);
+    expect((await statusOf(testimonial.id))?.status).toBe("oculto");
+    expect((await accept.POST(json("POST", { body: troca }), idCtx(testimonial.id))).status).toBe(200);
+    expect((await statusOf(testimonial.id))?.status).toBe("aceito");
+  });
+
+  it("apagar e reescrever não avisa de novo; o texto novo espera na caixa", async () => {
+    const { a, b } = await pair();
+    const { decline, one } = await routes();
+    const first = (await (await post(a, b)).json()).testimonial;
+    as(b);
+    await decline.POST(json("POST"), idCtx(first.id));
+    for (let i = 0; i < 3; i++) {
+      as(a);
+      const sent = (await listWrittenBy(a.id))[0];
+      expect((await one.DELETE(json("DELETE"), idCtx(sent.id))).status).toBe(200);
+      expect((await post(a, b, `${TEXT} Tentativa ${i}.`)).status).toBe(201);
+    }
+    expect((await notifs(b.id)).length).toBe(1);
+    expect((await listPending(b.id)).map((t) => t.body)).toEqual([`${TEXT} Tentativa 2.`]);
+    // passado a janela, o aviso volta (outro par segue independente)
+    await db.prepare("UPDATE notifications SET createdAt = '2020-01-01 00:00:00' WHERE memberId = ?").run(b.id);
+    as(a);
+    await one.DELETE(json("DELETE"), idCtx((await listWrittenBy(a.id))[0].id));
+    expect((await post(a, b)).status).toBe(201);
+    expect((await notifs(b.id)).length).toBe(2);
+  });
+
+  it("quem trata a denúncia tira o depoimento do ar; dono não traz de volta, autor não reescreve", async () => {
+    const { a, b } = await pair();
+    const { accept, one, takedown } = await routes();
+    const { testimonial } = await (await post(a, b)).json();
+    as(b);
+    await accept.POST(seen(testimonial), idCtx(testimonial.id));
+    const v = await member();
+    const v2 = await member();
+    const rep = await createReport({ targetType: "depoimento", targetId: testimonial.id, reporterId: v.id, reason: "expõe dado de outra pessoa" });
+    const rep2 = await createReport({ targetType: "depoimento", targetId: testimonial.id, reporterId: v2.id, reason: "ofensa ou assédio" });
+    // a fila linka pro perfil de quem recebeu
+    expect((await getReport(rep.id))?.href).toBe(`/u/${b.username}`);
+
+    const org = await member();
+    await db.prepare("INSERT INTO edition_roles (hackathonId, memberId, role) VALUES (?, ?, 'organizador')").run(PAST, org.id);
+    const ctx = (id: number | string) => ({ params: Promise.resolve({ id: String(id) }) });
+    // estranho 403, autor e dono também (não moderam)
+    for (const who of [v, a, b]) {
+      as(who);
+      expect((await takedown.POST(json("POST"), ctx(rep.id))).status).toBe(403);
+    }
+    as(org);
+    expect((await takedown.POST(json("POST"), ctx("abc"))).status).toBe(404);
+    expect((await takedown.POST(json("POST"), ctx(999999))).status).toBe(404);
+    expect((await takedown.POST(json("POST"), ctx(rep.id))).status).toBe(200);
+    expect((await statusOf(testimonial.id))?.status).toBe("removido");
+    // as duas denúncias saem resolvidas
+    for (const id of [rep.id, rep2.id]) {
+      const r = await getReport(id);
+      expect([r?.resolution, r?.resolvedByUsername]).toEqual(["tirei o conteúdo do ar", org.username]);
+    }
+
+    expect(await listAccepted(b.id)).toEqual([]);
+    expect(await listHidden(b.id)).toEqual([]);
+    expect(await listPending(b.id)).toEqual([]);
+    as(b);
+    expect((await accept.POST(seen(testimonial), idCtx(testimonial.id))).status).toBe(404);
+    as(a);
+    expect(await listWrittenBy(a.id)).toEqual([]);
+    expect((await one.PATCH(json("PATCH", { body: `${TEXT} de novo` }), idCtx(testimonial.id))).status).toBe(404);
+    expect((await one.DELETE(json("DELETE"), idCtx(testimonial.id))).status).toBe(404);
+    expect((await post(a, b)).status).toBe(409);
+    expect((await teammatesToWrite(a.id)).flatMap((g) => g.people.map((p) => p.id))).not.toContain(b.id);
+    // denunciar de novo: não existe mais
+    await expect(createReport({ targetType: "depoimento", targetId: testimonial.id, reporterId: org.id, reason: "ainda está lá?" })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("admin global tira do ar; denúncia de outro tipo dá 400", async () => {
+    const { a, b } = await pair();
+    const t = await writeTestimonial(a.id, b.id, PAST, TEXT);
+    await db.prepare("UPDATE team_testimonials SET status = 'aceito', acceptedAt = sqlite_now() WHERE id = ?").run(t.id);
+    const v = await member();
+    const rep = await createReport({ targetType: "depoimento", targetId: t.id, reporterId: v.id, reason: "ofensa ou assédio" });
+    const admin = await member();
+    await db.prepare("UPDATE members SET role = 'admin' WHERE id = ?").run(admin.id);
+    await takeDownTestimonial(rep.id, { id: admin.id, role: "admin" });
+    expect((await statusOf(t.id))?.status).toBe("removido");
+    const other = await createReport({ targetType: "member", targetId: a.id, reporterId: (await member()).id, reason: "perfil falso" });
+    await expect(takeDownTestimonial(other.id, { id: admin.id, role: "admin" })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("edição fora da regra antifarm aparece no perfil mas não conta", async () => {
+    // edição nova, encerrada, sem check-in nenhum
+    const ed = `dp-ed-${seq++}`;
+    await db
+      .prepare(
+        `INSERT INTO hackathons (id, name, organizer, startsAt, endsAt, format, registrationUrl, tags, active, source)
+         VALUES (?, 'Hack Pequeno', 'Org', '2025-03-01T09:00:00-03:00', '2025-03-02T18:00:00-03:00', 'presencial', '', '[]', 1, 'painel')`,
+      )
+      .run(ed);
+    const a = await member();
+    const b = await member();
+    await team(ed, [a, b]);
+    const t = await writeTestimonial(a.id, b.id, ed, TEXT);
+    await db.prepare("UPDATE team_testimonials SET status = 'aceito', acceptedAt = sqlite_now() WHERE id = ?").run(t.id);
+    expect((await listAccepted(b.id)).length).toBe(1);
+    expect(await countAccepted(b.id)).toBe(0);
+    await makeEligible(ed);
+    expect(await countAccepted(b.id)).toBe(1);
   });
 });

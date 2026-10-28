@@ -15,7 +15,10 @@ import { notify } from "@/lib/notifications";
 // O admin global vê todas. Denunciar pessoa ou conteúdo de alguém também
 // bloqueia esse alguém pra quem denunciou.
 //
-// Tipo novo (depoimento, dm, encontro) entra com um `case` em resolveTarget:
+// Depoimento: quem trata a denúncia também tira do ar pela fila
+// (takeDownTestimonial em lib/testimonials.ts, POST /api/reports/[id]/takedown).
+//
+// Tipo novo (dm, encontro) entra com um `case` em resolveTarget:
 // devolva o autor, o texto pro snapshot e o espaço (communityId/hackathonId).
 // Enquanto o tipo não tem case, a denúncia dá 404.
 //
@@ -326,19 +329,23 @@ type ReportRow = Omit<Report, "href" | "routedTo"> & {
   resolvedBy: number | null;
   targetUsername: string | null;
   targetCommunitySlug: string | null;
+  /** depoimento: @ de quem recebeu (o texto mora no perfil dela) */
+  testimonialOwner: string | null;
 };
 
 const SELECT = `SELECT r.id, r.targetType, r.targetId, r.reporterId, r.targetMemberId, r.reason, r.snapshot,
     r.communityId, co.name AS communityName, co.slug AS communitySlug,
     r.hackathonId, h.name AS hackathonName,
     r.createdAt, r.resolvedAt, r.resolvedBy, rb.username AS resolvedByUsername, r.resolution,
-    tm.username AS targetUsername, tc.slug AS targetCommunitySlug
+    tm.username AS targetUsername, tc.slug AS targetCommunitySlug, tdm.username AS "testimonialOwner"
   FROM reports r
   LEFT JOIN communities co ON co.id = r.communityId
   LEFT JOIN hackathons h ON h.id = r.hackathonId
   LEFT JOIN members rb ON rb.id = r.resolvedBy
   LEFT JOIN members tm ON r.targetType = 'member' AND tm.id::text = r.targetId
-  LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId`;
+  LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId
+  LEFT JOIN team_testimonials tt ON r.targetType = 'depoimento' AND tt.id::text = r.targetId
+  LEFT JOIN members tdm ON tdm.id = tt.memberId`;
 
 function toReport(r: ReportRow): Report {
   let href: string | null = null;
@@ -348,6 +355,8 @@ function toReport(r: ReportRow): Report {
     href = `/u/${r.targetUsername}`;
   } else if (r.targetType === "community" && r.targetCommunitySlug) {
     href = `/comunidade/${r.targetCommunitySlug}`;
+  } else if (r.targetType === "depoimento" && r.testimonialOwner) {
+    href = `/u/${r.testimonialOwner}`;
   }
   const routedTo = r.communityName
     ? `comunidade ${r.communityName}`

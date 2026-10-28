@@ -52,7 +52,9 @@ export function TestimonialForm({ username, hackathonId, testimonialId, initialB
     const data = await res.json().catch(() => null);
     if (!res.ok) return setError(userMessage(res, data, "Não deu pra enviar. Tente de novo."));
     setDone(editing ? (accepted ? `Salvo. Foi pra @${username} aceitar de novo.` : "Salvo.") : `Enviado. @${username} decide se aparece no perfil.`);
-    if (!editing) setBody("");
+    // novo: sem refresh. A pessoa sai da lista "escrever" no refresh e o
+    // aviso de enviado sumia junto; a lista atualiza na próxima visita.
+    if (!editing) return setBody("");
     router.refresh();
   }
 
@@ -121,9 +123,11 @@ const LABEL: Record<Action, string> = {
 type ActionsProps = {
   id: number;
   actions: Action[];
+  /** texto que a tela mostra: aceitar e mostrar de novo mandam pra API conferir */
+  body?: string;
 };
 
-export function TestimonialActions({ id, actions }: ActionsProps) {
+export function TestimonialActions({ id, actions, body }: ActionsProps) {
   const router = useRouter();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +139,11 @@ export function TestimonialActions({ id, actions }: ActionsProps) {
     setBusy(a);
     setError(null);
     const url = a === "delete" ? `/api/testimonials/${id}` : `/api/testimonials/${id}/${a === "show" ? "accept" : a}`;
-    const res = await fetch(url, { method: a === "delete" ? "DELETE" : "POST" }).catch(() => null);
+    const sendsBody = a === "accept" || a === "show";
+    const res = await fetch(url, {
+      method: a === "delete" ? "DELETE" : "POST",
+      ...(sendsBody ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) } : {}),
+    }).catch(() => null);
     if (!res) {
       setBusy(null);
       return setError("Sem conexão. Tente de novo.");

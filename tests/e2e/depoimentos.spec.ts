@@ -4,7 +4,9 @@ import { openE2eDb } from "./db";
 
 // Depoimento de time (migration 037): o card do painel chama pra escrever,
 // o membro escreve sobre quem fez time com ele, aceita o que recebeu (com o
-// HTML escapado) e vê em "recebidos". Tudo em 390px sem scroll horizontal.
+// HTML escapado) e vê em "recebidos". Aceitar confere o texto que a tela
+// mostrou (troca no meio dá 409) e a organização da edição tira do ar pela
+// fila de denúncias. Tudo em 390px sem scroll horizontal.
 
 const SHOTS = process.env.E2E_SHOT_DIR;
 const ALVO = "e2e_dep_alvo"; // fez time com o membro e2e: ele escreve sobre o alvo
@@ -41,6 +43,8 @@ async function cleanup() {
   const meId = (await me()).id;
   const ids = (await Promise.all(PEOPLE.map(idOf))).filter((x): x is number => x !== null);
   const all = `{${[meId, ...ids].join(",")}}`;
+  await db.prepare(`DELETE FROM reports WHERE "targetType" = 'depoimento' AND "hackathonId" = ? AND "targetMemberId" = ANY(?::int[])`).run(HACK, all);
+  await db.prepare(`DELETE FROM edition_roles WHERE "hackathonId" = ? AND "memberId" = ?`).run(HACK, meId);
   await db.prepare(`DELETE FROM team_testimonials WHERE "memberId" = ANY(?::int[]) OR "authorId" = ANY(?::int[])`).run(all, all);
   await db.prepare(`DELETE FROM notifications WHERE type = 'testimonial' AND ("memberId" = ANY(?::int[]) OR "actorId" = ANY(?::int[]))`).run(all, all);
   const t = await db.prepare(`SELECT id FROM teams WHERE "hackathonId" = ? AND name = ?`).get<{ id: number }>(HACK, TEAM);
@@ -173,5 +177,73 @@ test.describe("depoimento de time", () => {
     await expect(page.getByTestId("testimonial-empty")).toHaveText("Depoimento aqui só vem de quem fez time com você.");
     await page.getByTestId("hidden-list").getByTestId("testimonial-show").click();
     await expect(page.getByTestId("testimonial-list").getByTestId("testimonial")).toHaveCount(1);
+  });
+
+  test("aceitar com o texto antigo na tela dá 409 e nada vai pro perfil", async ({ memberPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const db = openE2eDb();
+    const eu = await me();
+    const alvo = (await idOf(ALVO))!;
+    const antes = "Cuidou do banco e das migrations do time inteiro sem reclamar uma vez. Valeu demais.";
+    const depois = "Texto trocado depois que a pessoa abriu a página. Isso não pode ir pro perfil assim.";
+    const t = await db.prepare(`SELECT id FROM teams WHERE "hackathonId" = ? AND name = ?`).get<{ id: number }>(HACK, TEAM);
+    await db
+      .prepare(`INSERT INTO team_testimonials ("memberId", "authorId", "hackathonId", "teamId", body) VALUES (?, ?, ?, ?, ?)`)
+      .run(eu.id, alvo, HACK, t!.id, antes);
+    await page.goto("/perfil/depoimentos?aba=aceitar");
+    const pending = page.getByTestId("pending").filter({ hasText: `@${ALVO}` });
+    await expect(pending.getByTestId("testimonial-text")).toHaveText(antes);
+    // o autor troca o texto com a tela aberta
+    await db.prepare(`UPDATE team_testimonials SET body = ? WHERE "authorId" = ? AND "memberId" = ?`).run(depois, alvo, eu.id);
+    await pending.getByTestId("testimonial-accept").click();
+    await expect(pending.getByRole("alert")).toHaveText("O texto mudou. Recarregue a página.");
+    expect((await written(alvo, eu.id))?.status).toBe("pendente");
+    await noHorizontalScroll(page);
+
+    await page.reload();
+    const fresh = page.getByTestId("pending").filter({ hasText: `@${ALVO}` });
+    await expect(fresh.getByTestId("testimonial-text")).toHaveText(depois);
+    await fresh.getByTestId("testimonial-accept").click();
+    await expect(page.getByTestId("accepted-banner")).toBeVisible();
+    expect(await written(alvo, eu.id)).toEqual({ status: "aceito", body: depois });
+  });
+
+  test("a organização da edição tira o depoimento denunciado do ar pela fila", async ({ memberPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const db = openE2eDb();
+    const eu = await me();
+    const autor = (await idOf(AUTOR))!;
+    const alvo = (await idOf(ALVO))!;
+    const dep = (await db
+      .prepare(`SELECT id FROM team_testimonials WHERE "authorId" = ? AND "memberId" = ?`)
+      .get<{ id: number }>(autor, eu.id))!.id;
+    await db.prepare(`UPDATE team_testimonials SET status = 'aceito', "acceptedAt" = sqlite_now() WHERE id = ?`).run(dep);
+    await db.prepare(`INSERT INTO edition_roles ("hackathonId", "memberId", role) VALUES (?, ?, 'organizador')`).run(HACK, eu.id);
+    const rep = (await db
+      .prepare(
+        `INSERT INTO reports ("targetType", "targetId", "reporterId", "targetMemberId", reason, snapshot, "hackathonId")
+         VALUES ('depoimento', ?, ?, ?, 'expõe dado de outra pessoa', ?, ?) RETURNING id`,
+      )
+      .get<{ id: number }>(String(dep), alvo, autor, `@${AUTOR} sobre @${eu.username}: ${RECEBIDO}`, HACK))!.id;
+
+    await page.goto(`/admin/h/${HACK}/denuncias`);
+    const item = page.getByTestId("report-item").filter({ hasText: "expõe dado de outra pessoa" });
+    await expect(item).toContainText(`@${AUTOR} sobre @${eu.username}`);
+    await expect(item.getByRole("link", { name: "ver onde está" })).toHaveAttribute("href", `/u/${eu.username}`);
+    await noHorizontalScroll(page);
+    await shot(page, "depoimento-fila-390");
+    await item.getByTestId(`takedown-${rep}`).click();
+    await expect(item.getByTestId(`takedown-${rep}`)).toHaveText("tirar do ar mesmo");
+    await item.getByTestId(`takedown-${rep}`).click();
+    await expect(page.getByTestId("report-item").filter({ hasText: "expõe dado de outra pessoa" })).toHaveCount(0);
+    await expect.poll(async () => (await written(autor, eu.id))?.status).toBe("removido");
+    await noHorizontalScroll(page);
+
+    // sumiu do perfil e o dono não traz de volta
+    await page.goto("/perfil/depoimentos?aba=recebidos");
+    await expect(page.getByTestId("testimonial-list")).not.toContainText(`@${AUTOR}`);
+    await expect(page.getByTestId("hidden-list")).toHaveCount(0);
+    const back = await page.request.post(`/api/testimonials/${dep}/accept`, { data: { body: RECEBIDO } });
+    expect(back.status()).toBe(404);
   });
 });

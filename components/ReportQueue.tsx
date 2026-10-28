@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ReportResolve } from "@/components/ReportResolve";
+import { ReportTakedown } from "@/components/ReportTakedown";
 import { formatDbTime } from "@/lib/format";
 import { REPORT_TARGET_LABEL, type Report, type ReportTarget } from "@/lib/reports";
 
@@ -76,7 +77,10 @@ export function ReportQueue({ open, resolved, counts, type, basePath, anchor = "
                   </span>
                 )}
               </p>
-              <ReportResolve id={r.id} />
+              <div className="flex flex-wrap items-start gap-2">
+                {r.targetType === "depoimento" && <ReportTakedown id={r.id} />}
+                <ReportResolve id={r.id} />
+              </div>
             </li>
           ))}
         </ul>

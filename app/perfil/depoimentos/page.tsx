@@ -151,7 +151,7 @@ export default async function DepoimentosPage({
             <ul className="flex flex-col border-b border-line" data-testid="pending-list">
               {pending.map((t) => (
                 <TestimonialCard key={t.id} t={t} testId="pending">
-                  <TestimonialActions id={t.id} actions={["accept", "decline"]} />
+                  <TestimonialActions id={t.id} actions={["accept", "decline"]} body={t.body} />
                 </TestimonialCard>
               ))}
             </ul>
@@ -168,7 +168,7 @@ export default async function DepoimentosPage({
               <ul className="flex flex-col border-b border-line" data-testid="hidden-list">
                 {hidden.map((t) => (
                   <TestimonialCard key={t.id} t={t} testId="hidden">
-                    <TestimonialActions id={t.id} actions={["show"]} />
+                    <TestimonialActions id={t.id} actions={["show"]} body={t.body} />
                   </TestimonialCard>
                 ))}
               </ul>
