@@ -3,6 +3,11 @@ import { claimEditionInvites } from "@/lib/roles";
 import { claimSponsorInvites } from "@/lib/editionSponsors";
 import { claimCommunityInvites } from "@/lib/communities";
 import { toLikePattern } from "@/lib/search";
+import { RETIRED_BADGE_IDS } from "@/lib/game";
+
+// badge aposentado (criador, influente) não entra no contador "N badges".
+// ids são constantes do código, sem entrada de usuário.
+const RETIRED_BADGES_SQL = RETIRED_BADGE_IDS.map((id) => `'${id}'`).join(", ");
 
 // spec 032 — "campanhas" públicas contam só inscrições aprovadas (pedido
 // pendente não é campanha)
@@ -287,7 +292,8 @@ export async function listLeaderboard(
   const rows = await db
     .prepare(
       `SELECT m.*,
-              (SELECT COUNT(*) FROM member_badges mb WHERE mb.memberId = m.id) AS badges,
+              (SELECT COUNT(*) FROM member_badges mb
+                WHERE mb.memberId = m.id AND mb.badgeId NOT IN (${RETIRED_BADGES_SQL})) AS badges,
               (SELECT COUNT(*) FROM registrations r WHERE r.memberId = m.id AND r.status = 'approved') AS campaigns,
               (SELECT COUNT(*) FROM member_cards mc WHERE mc.memberId = m.id) AS cards
        FROM members m

@@ -410,18 +410,20 @@ export async function getPublicListing(memberId: number, hackathonId: string): P
 export async function completeRegistration(
   memberId: number,
   hackathonId: string,
-): Promise<{ xp: string; cardSerial: number | null; newBadges: Badge[] }> {
+): Promise<{ xp: string; cardSerial: number | null; newBadges: Badge[]; rewarded: boolean }> {
   const first = await db
     .prepare(
       `INSERT INTO registration_rewards (memberId, hackathonId) VALUES (?, ?)
        ON CONFLICT DO NOTHING RETURNING memberId`,
     )
     .get(memberId, hackathonId);
-  if (!first) return { xp: "+0", cardSerial: null, newBadges: [] };
+  if (!first) return { xp: "+0", cardSerial: null, newBadges: [], rewarded: false };
+  // XP.register = 0 desde a spec 046 (nível vem de fato verificado); o campo
+  // xp fica "+0" pelo contrato das rotas
   await awardXp(memberId, XP.register);
   const cardSerial = await mintCard(memberId, hackathonId);
   const newBadges = await checkBadges(memberId);
-  return { xp: `+${XP.register}`, cardSerial, newBadges };
+  return { xp: `+${XP.register}`, cardSerial, newBadges, rewarded: true };
 }
 
 export type ReviewResult =
@@ -517,7 +519,7 @@ export async function reviewRegistration(
       text: `sua inscrição em ${name} foi aprovada. Seu ingresso já está disponível.`,
       href: `/h/${hackathonId}/ingresso`,
     });
-    return { status: "approved", rewarded: reward.xp !== "+0", ...reward };
+    return { status: "approved", ...reward };
   })();
 }
 

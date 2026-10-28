@@ -80,7 +80,7 @@ beforeEach(async () => {
 });
 
 describe("recompensa e cancelamento (unregister-sem-regra)", () => {
-  it("inscrever → cancelar → inscrever 4× paga +50 xp uma vez só", async () => {
+  it("inscrever → cancelar → inscrever 4× não rende xp e minta uma carta só", async () => {
     const m = await member("farm");
     const before = await xpOf(m.id);
     for (let i = 0; i < 4; i++) {
@@ -89,7 +89,9 @@ describe("recompensa e cancelamento (unregister-sem-regra)", () => {
       await unregister(m.id, H);
     }
     await signup(m);
-    expect((await xpOf(m.id)) - before).toBe(50);
+    expect((await xpOf(m.id)) - before).toBe(0); // XP por inscrição acabou (spec 046)
+    const cards = await db.prepare("SELECT COUNT(*)::int AS n FROM member_cards WHERE memberId = ? AND hackathonId = ?").get<{ n: number }>(m.id, H);
+    expect(cards!.n).toBe(1);
   });
 
   it("inscrição recusada não cancela (409) e a linha fica", async () => {

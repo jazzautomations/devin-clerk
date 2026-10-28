@@ -5,7 +5,7 @@ import { getOrCreateMember } from "@/lib/members";
 import { touchLastSeen } from "@/lib/session";
 import { listPosts } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
-import { getMemberBadges, getMemberCards } from "@/lib/xp";
+import { getMemberBadges, getMemberCards, recomputeXp } from "@/lib/xp";
 import { FeedSection } from "@/components/FeedSection";
 import { XpBar } from "@/components/XpBar";
 import { BadgeChip } from "@/components/BadgeChip";
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 
-  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates] = await Promise.all([
+  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates, xp] = await Promise.all([
     listMyActiveEditions(member.id, now),
     listMyEditionRoles(member.id),
     getOpenHackathons(now),
@@ -61,6 +61,8 @@ export default async function DashboardPage() {
     listPosts(20, member.id),
     listMyCommunities(member.id),
     listCommunityUpdates(member.id, { limit: 3 }),
+    // o próprio painel já recalcula (não espera o cron da hora cheia)
+    recomputeXp(member.id),
   ]);
   const steps = await Promise.all(active.map(async (h) => ({ h, step: await getNextStep(h, member, now) })));
   // abertos: edições do HackaHub primeiro, depois Brasil com a cidade/UF do perfil na
@@ -268,7 +270,7 @@ export default async function DashboardPage() {
       {/* progresso + presença */}
       <section aria-label="Teu progresso" className={`grid gap-8 ${attendance.entries.length > 0 ? "lg:grid-cols-2" : ""}`}>
         <div className="flex flex-col gap-3 border-[1.5px] border-line p-5">
-          <XpBar xp={member.xp} />
+          <XpBar xp={xp.total} facts={xp.facts} own />
           <div className="flex flex-wrap items-center gap-2">
             {badges.map((b) => (
               <BadgeChip key={b.id} badge={b} />

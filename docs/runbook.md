@@ -160,6 +160,7 @@ outros produtos, se houver).
 | a cada 2 min | `deliveries.sh` | `/api/cron/deliveries` (fila de avisos por e-mail/zap + pesquisa pós-edição) |
 | a cada 5 min | `submissions.sh` | `/api/cron/submissions` (lembretes e trava da entrega) |
 | a cada 15 min | `rsvp.sh` | `/api/cron/rsvp` |
+| de hora em hora (:11 prod, :41 stage) | `xp.sh` | `/api/cron/xp` (recalcula o nível pelos fatos verificados) |
 | a cada 10 min | `disk-guard.sh` | — |
 
 As rotas `/api/cron/*` passam pelo `cron-call.sh`, que grava uma linha por

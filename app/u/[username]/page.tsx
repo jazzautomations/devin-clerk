@@ -5,7 +5,7 @@ import { getMemberByUsername, resolveUsernameRedirect } from "@/lib/members";
 import { absoluteUrl } from "@/lib/seo";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getHackathon } from "@/lib/hackathons";
-import { getMemberBadges, getMemberCards } from "@/lib/xp";
+import { computeXp, getMemberBadges, getMemberCards } from "@/lib/xp";
 import { getMemberArc, getMemberProjects } from "@/lib/archive";
 import type { MemberArcEntry } from "@/lib/archive";
 import { levelFor } from "@/lib/game";
@@ -142,7 +142,8 @@ export default async function PublicProfilePage({
     (e) => e.placement >= 1 && e.placement <= 3,
   ).length;
   const delivered = arc.filter((e) => e.hasProject).length;
-  const { level } = levelFor(member.xp);
+  const xp = await computeXp(member.id);
+  const { level } = levelFor(xp.total);
   const socialLinks: [string, string][] = [];
   for (const [label, href] of [
     ["github", profileUrl("github", member.github)],
@@ -263,7 +264,7 @@ export default async function PublicProfilePage({
       )}
 
       <div className="border border-line bg-surface p-4">
-        <XpBar xp={member.xp} />
+        <XpBar xp={xp.total} facts={xp.facts} own={own} />
       </div>
 
       {badges.length > 0 && (

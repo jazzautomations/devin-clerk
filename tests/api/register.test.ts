@@ -36,7 +36,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
     await makeMember();
   });
 
-  it("inscreve, paga +50xp, minta a carta №001 e concede badges", async () => {
+  it("inscreve, minta a carta №001 e concede badges (xp \"+0\" desde a spec 046)", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/register/route");
     const res = await POST(consentReq(), {
       params,
@@ -44,7 +44,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.registered).toBe(true);
-    expect(data.xp).toBe("+50");
+    expect(data.xp).toBe("+0");
     expect(data.cardSerial).toBe(1);
     expect(data.newBadges).toContain("1ª campanha"); // nome, não o id
     expect(data.newBadges).toContain("pioneiro");
@@ -104,7 +104,7 @@ describe("POST /api/hackathons/[id]/register — BDD do reward", () => {
 });
 
 describe("POST /api/posts — recompensa de criação", () => {
-  it("cria post e paga +10xp; rejeita post vazio e link inválido", async () => {
+  it("cria post; rejeita post vazio e link inválido", async () => {
     await makeMember();
     const { POST } = await import("@/app/api/posts/route");
     const ok = await POST(

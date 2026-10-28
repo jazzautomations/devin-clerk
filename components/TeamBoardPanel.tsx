@@ -265,7 +265,7 @@ export function TeamBoardPanel({
               disabled={busy || !need.trim()}
               className="border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
             >
-              {busy ? "…" : mine ? "atualizar →" : "anunciar → +10xp"}
+              {busy ? "…" : mine ? "atualizar →" : "anunciar →"}
             </button>
             <button
               type="button"

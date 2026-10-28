@@ -182,7 +182,7 @@ describe("submitRegistration — consentimento + respostas numa transação", ()
     if (r.ok) {
       expect(r.status).toBe("approved");
       expect(r.created).toBe(true);
-      expect(r.reward?.xp).toBe("+50");
+      expect(r.reward?.cardSerial).toBeGreaterThan(0); // XP por inscrição acabou (spec 046)
     }
     const c = await db
       .prepare("SELECT termsVersion, purpose, ip, acceptedAt FROM consents WHERE memberId = ? AND hackathonId = ?")
@@ -297,7 +297,7 @@ describe("vagas + fila de espera", () => {
     expect(await getRegistrationStatus(b, ED)).toBe("approved");
     expect(await getRegistrationStatus(c, ED)).toBe("waitlist");
     expect(await getWaitlistPosition(c, ED)).toBe(1);
-    expect(await xpOf(b)).toBe(50);
+    expect(await xpOf(b)).toBe(0); // recompensa = carta; XP por inscrição acabou (spec 046)
     expect(await getMemberCard(b, ED)).not.toBeNull();
     const hook = await listPromotions(ED);
     expect(hook).toEqual([expect.objectContaining({ memberId: b, promotedAt: expect.any(String) })]);
@@ -349,7 +349,7 @@ describe("vagas + fila de espera", () => {
     expect(await xpOf(b)).toBe(0);
     await unregister(a, CURATED);
     expect(await getRegistrationStatus(b, CURATED)).toBe("approved");
-    expect(await xpOf(b)).toBe(50);
+    expect(await xpOf(b)).toBe(0); // recompensa = carta; XP por inscrição acabou (spec 046)
   });
 
   it("revogar (reject) um aprovado libera a vaga pra fila", async () => {
