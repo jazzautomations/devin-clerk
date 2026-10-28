@@ -49,6 +49,8 @@ const GROUPS: { label: string; tabs: Tab[] }[] = [
     tabs: [
       { href: "/entregas", label: "entregas", roles: ["organizador", "staff"] },
       { href: "/juri", label: "júri", roles: ["organizador", "jurado"] },
+      // dossiê de evidência (migration 029): só organização — sinaliza, não julga
+      { href: "/dossie", label: "dossiê", roles: ["organizador"] },
     ],
   },
   {

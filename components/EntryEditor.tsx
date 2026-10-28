@@ -37,6 +37,8 @@ type Form = {
   socialPosts: string;
   aiUsage: string;
   challengeIds: string[];
+  priorExisted: boolean | null;
+  usedAi: boolean | null;
 };
 
 function toForm(f: EntryFields | null, rubric: string[]): Form {
@@ -56,6 +58,8 @@ function toForm(f: EntryFields | null, rubric: string[]): Form {
     socialPosts: (f?.socialPosts ?? []).join("\n"),
     aiUsage: f?.aiUsage ?? "",
     challengeIds: f?.challengeIds ?? [],
+    priorExisted: f?.priorExisted ?? null,
+    usedAi: f?.usedAi ?? null,
   };
 }
 
@@ -75,6 +79,8 @@ function toPayload(f: Form) {
     socialPosts: f.socialPosts.split("\n").map((s) => s.trim()).filter(Boolean),
     aiUsage: f.aiUsage,
     challengeIds: f.challengeIds,
+    priorExisted: f.priorExisted,
+    usedAi: f.usedAi,
   };
 }
 
@@ -182,21 +188,30 @@ export function EntryEditor({
     if (!window.confirm(`Enviar a versão ${entry.versions.length + 1}? O júri avalia a última versão enviada até o prazo.`)) return;
     setBusy(true);
     setSubmitMsg("");
-    if (dirtyRef.current && form.title.trim()) {
-      const ok = await patch(toPayload(form));
-      if (!ok) {
-        setBusy(false);
-        return;
-      }
-      dirtyRef.current = false;
+    // campos ainda não salvos vão junto no envio: o envio não depende do autosave
+    const pending = dirtyRef.current && form.title.trim() ? toPayload(form) : null;
+    let res: Response;
+    try {
+      res = await fetch(`/api/hackathons/${hackathonId}/entry`, {
+        method: "POST",
+        ...(pending ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(pending) } : {}),
+      });
+    } catch {
+      setBusy(false);
+      setErr("sem conexão: a versão não foi enviada. Tente de novo.");
+      return;
     }
-    const res = await fetch(`/api/hackathons/${hackathonId}/entry`, { method: "POST" });
+    if (res.status === 401) {
+      router.push("/sign-in");
+      return;
+    }
     const data = await res.json().catch(() => null);
     setBusy(false);
     if (!res.ok) {
       setErr(data?.error ?? "erro ao enviar");
       return;
     }
+    if (pending) dirtyRef.current = false;
     setEntry(data.entry);
     setErr("");
     setSubmitMsg(`versão ${data.version} enviada — o time recebeu a confirmação`);
@@ -293,8 +308,18 @@ export function EntryEditor({
             className={`${input} font-mono text-[14px]`}
           />
         </label>
+        <YesNo
+          name="priorExisted"
+          legend="já existia algo do projeto antes do evento?"
+          value={form.priorExisted}
+          onChange={(v) => set("priorExisted", v)}
+        />
         <label className="flex flex-col gap-1.5">
-          <span className={label}>trabalho anterior * — o que já existia antes do evento (ou &quot;nada&quot;)</span>
+          <span className={label}>
+            {form.priorExisted === false
+              ? "trabalho anterior (opcional)"
+              : "trabalho anterior * — o que já existia antes do evento (ou \"nada\")"}
+          </span>
           <textarea
             value={form.priorWork}
             onChange={(e) => set("priorWork", e.target.value)}
@@ -396,8 +421,9 @@ export function EntryEditor({
             className={input}
           />
         </label>
+        <YesNo name="usedAi" legend="usou IA no projeto?" value={form.usedAi} onChange={(v) => set("usedAi", v)} />
         <label className="flex flex-col gap-1.5">
-          <span className={label}>uso de IA{s.requireAiUsage ? " *" : ""} — o que foi feito com IA e onde</span>
+          <span className={label}>uso de IA{s.requireAiUsage ? " *" : ""} — como: o que foi feito com IA e onde</span>
           <textarea
             value={form.aiUsage}
             onChange={(e) => set("aiUsage", e.target.value)}
@@ -484,5 +510,36 @@ export function EntryEditor({
         {locked && submitMsg && <p className="font-mono text-[13px] text-accent">{submitMsg}</p>}
       </section>
     </div>
+  );
+}
+
+/** sim / não (nenhum marcado = não respondeu) — declaração do time (dossiê, migration 029) */
+function YesNo({
+  name,
+  legend,
+  value,
+  onChange,
+}: {
+  name: string;
+  legend: string;
+  value: boolean | null;
+  onChange: (v: boolean) => void;
+}) {
+  const opts: [string, boolean][] = [
+    ["sim", true],
+    ["não", false],
+  ];
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-1.5" data-testid={`decl-${name}`}>
+      <legend className={`${label} mb-1.5`}>{legend} (opcional)</legend>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {opts.map(([text, v]) => (
+          <label key={text} className="flex min-h-[44px] items-center gap-2 text-[15px] sm:min-h-0">
+            <input type="radio" name={name} checked={value === v} onChange={() => onChange(v)} />
+            {text}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
