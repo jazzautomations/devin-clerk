@@ -8,6 +8,7 @@ import {
   verifyDigestToken,
 } from "@/lib/digest";
 import { groupedText, listNotificationsGrouped, notify } from "@/lib/notifications";
+import { notifyNewFollower } from "@/lib/memberFollows";
 
 // Resumo semanal e agrupamento (migration 040). Banco PGlite por arquivo.
 // `now` fixo bem longe do seed (2031) pra o radar do seed não entrar.
@@ -54,15 +55,6 @@ async function community(slug: string) {
     .prepare("INSERT INTO communities (slug, name) VALUES (?, ?) RETURNING id")
     .get<{ id: number }>(slug, `Comunidade ${slug}`);
   return c!.id;
-}
-
-// seguir pessoa é da onda 1; o digest lê a tabela quando ela existe
-async function ensureFollows() {
-  await db.exec(`CREATE TABLE IF NOT EXISTS member_follows (
-    "memberId" INTEGER NOT NULL REFERENCES members("id") ON DELETE CASCADE,
-    "followedId" INTEGER NOT NULL REFERENCES members("id") ON DELETE CASCADE,
-    "createdAt" TEXT NOT NULL DEFAULT sqlite_now(),
-    PRIMARY KEY ("memberId", "followedId"))`);
 }
 
 describe("isoWeekBrt", () => {
@@ -142,6 +134,48 @@ describe("listNotificationsGrouped", () => {
     expect((await listNotificationsGrouped(ana.id, null, 30, { now: later })).items).toHaveLength(3);
   });
 
+  it("seguidores novos do dia viram uma linha, mesmo com href por pessoa", async () => {
+    const ana = await member();
+    const people = await Promise.all([1, 2, 3, 4, 5, 6].map(() => member()));
+    for (const p of people) expect(await notifyNewFollower(p, ana.id)).toBe(true);
+    const { items } = await listNotificationsGrouped(ana.id);
+    expect(items).toHaveLength(1);
+    expect(items[0].total).toBe(6);
+    expect(items[0].text).toBe(`@${people[5].username}, @${people[4].username} e mais 4 começaram a seguir você`);
+    expect(items[0].href).toBe("/perfil/seguidores");
+  });
+
+  it("um seguidor só mantém o link pro perfil dele", async () => {
+    const ana = await member();
+    const bia = await member();
+    await notifyNewFollower(bia, ana.id);
+    const { items } = await listNotificationsGrouped(ana.id);
+    expect(items[0].href).toBe(`/u/${bia.username}`);
+    expect(items[0].text).toBe(`@${bia.username} começou a seguir você`);
+  });
+
+  it("comentários e respostas agrupam pelo post, sem o #c-", async () => {
+    const ana = await member();
+    const people = await Promise.all([1, 2, 3, 4, 5].map(() => member()));
+    let c = 100;
+    for (const p of people) {
+      await notify(ana.id, { type: "comment", actorId: p.id, actorUsername: p.username, text: "comentou", href: `/post/7#c-${c++}` });
+    }
+    await notify(ana.id, { type: "comment", actorId: people[0].id, text: "comentou", href: `/post/8#c-${c++}` });
+    await notify(ana.id, { type: "reply", actorId: people[0].id, actorUsername: people[0].username, text: "respondeu", href: `/post/7#c-${c++}` });
+    await notify(ana.id, { type: "reply", actorId: people[1].id, actorUsername: people[1].username, text: "respondeu", href: `/post/9#c-${c++}` });
+    await notify(ana.id, { type: "reply", actorId: people[2].id, actorUsername: people[2].username, text: "respondeu", href: `/post/7#c-${c++}` });
+    const { items } = await listNotificationsGrouped(ana.id);
+    const post7 = items.find((i) => i.type === "comment" && i.total > 1)!;
+    expect(post7.total).toBe(5);
+    expect(post7.text).toBe(`@${people[4].username}, @${people[3].username} e mais 3 comentaram no seu post`);
+    expect(post7.href).toBe(`/post/7#c-104`); // a mais recente
+    const replies7 = items.find((i) => i.type === "reply" && i.total > 1)!;
+    expect(replies7.total).toBe(2);
+    expect(replies7.text).toBe(`@${people[2].username} e @${people[0].username} responderam você`);
+    expect(items.map((i) => i.total).sort()).toEqual([1, 1, 2, 5]);
+  });
+
   it("cursor: páginas sem repetir e sem partir grupo", async () => {
     const ana = await member();
     const others = await Promise.all([1, 2, 3].map(() => member()));
@@ -176,7 +210,6 @@ describe("buildDigest", () => {
   });
 
   it("monta as quatro seções com dados reais da janela", async () => {
-    await ensureFollows();
     const ana = await member("Ana Souza");
     const bia = await member();
     const caio = await member();
@@ -223,7 +256,6 @@ describe("buildDigest", () => {
   });
 
   it("quem eu silenciei não aparece no 'quem você segue entregou'", async () => {
-    await ensureFollows();
     const ana = await member();
     const bia = await member();
     await db.prepare("INSERT INTO member_follows (memberId, followedId) VALUES (?, ?)").run(ana.id, bia.id);

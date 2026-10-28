@@ -6,6 +6,7 @@ import { getPrefs, listNotifications, notify, setPref, unreadCount } from "@/lib
 import type { Driver, EmailMessage, SendOutcome } from "@/lib/notify/types";
 import { resetRateLimits } from "@/lib/ratelimit";
 import { isPublicApi } from "@/lib/access";
+import { notifyNewFollower } from "@/lib/memberFollows";
 
 // Notificações boas (migration 040): preferências por grupo, notify que
 // respeita preferência e silêncio, abrir marca o grupo, API das
@@ -151,6 +152,44 @@ describe("abrir e marcar lida pega o grupo", () => {
     expect(await unreadCount(ana.id)).toBe(5);
     expect((await POST(json("POST", { id: likes.id, group: true }))).status).toBe(200);
     expect(await unreadCount(ana.id)).toBe(1);
+  });
+
+  it("open do grupo de seguidores vai pra lista de seguidores e marca todos", async () => {
+    const ana = await member();
+    const people = await Promise.all([1, 2, 3].map(() => member()));
+    for (const p of people) await notifyNewFollower(p, ana.id);
+    const solo = await member();
+    clerk.uid = ana.clerkId;
+    const { GET } = await import("@/app/api/notifications/route");
+    const body = await (await GET(new Request("http://t/api/notifications"))).json();
+    expect(body.groups).toHaveLength(1);
+    expect(body.groups[0].href).toBe("/perfil/seguidores");
+    const { GET: OPEN } = await import("@/app/api/notifications/[id]/open/route");
+    const res = await OPEN(new Request("http://t/x"), { params: Promise.resolve({ id: String(body.groups[0].id) }) });
+    expect(res.headers.get("location")).toBe("http://t/perfil/seguidores");
+    expect(await unreadCount(ana.id)).toBe(0);
+
+    // seguidor sozinho abre o perfil dele
+    await notifyNewFollower(solo, ana.id);
+    const one = await (await GET(new Request("http://t/api/notifications"))).json();
+    const res2 = await OPEN(new Request("http://t/x"), { params: Promise.resolve({ id: String(one.groups[0].id) }) });
+    expect(res2.headers.get("location")).toBe(`http://t/u/${solo.username}`);
+  });
+
+  it("5 comentários no mesmo post: open marca o grupo inteiro", async () => {
+    const ana = await member();
+    const people = await Promise.all([1, 2, 3, 4, 5].map(() => member()));
+    let c = 1;
+    for (const p of people) await notify(ana.id, { type: "comment", actorId: p.id, text: "comentou", href: `/post/3#c-${c++}` });
+    clerk.uid = ana.clerkId;
+    const { GET } = await import("@/app/api/notifications/route");
+    const body = await (await GET(new Request("http://t/api/notifications"))).json();
+    expect(body.groups).toHaveLength(1);
+    expect(body.groups[0].total).toBe(5);
+    const { GET: OPEN } = await import("@/app/api/notifications/[id]/open/route");
+    const res = await OPEN(new Request("http://t/x"), { params: Promise.resolve({ id: String(body.groups[0].id) }) });
+    expect(res.headers.get("location")).toBe("http://t/post/3#c-5");
+    expect(await unreadCount(ana.id)).toBe(0);
   });
 
   it("GET com cursor e aba", async () => {

@@ -27,11 +27,6 @@ export type DigestSectionKey = "fecha" | "entregou" | "comunidades" | "naoLidas"
 export type DigestSection = { key: DigestSectionKey; title: string; items: DigestItem[]; href: string | null };
 export type Digest = { sections: DigestSection[]; empty: boolean };
 
-async function tableExists(name: string): Promise<boolean> {
-  const row = await db.prepare("SELECT to_regclass(?::text) IS NOT NULL AS ok").get<{ ok: boolean }>(name);
-  return Boolean(row?.ok);
-}
-
 const shortDate = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
   day: "2-digit",
@@ -85,33 +80,29 @@ export async function buildDigest(memberId: number, now: Date = new Date()): Pro
     items: closing.map((h) => ({ title: h.name, detail: closesLabel(h.registrationDeadline), href: `/h/${h.id}` })),
   });
 
-  // 2. times de quem você segue que entregaram na semana (seguir pessoa é
-  //    da onda 1: sem a tabela, a seção só fica vazia)
-  let delivered: { teamId: number; title: string; edition: string; username: string }[] = [];
-  if (await tableExists("member_follows")) {
-    delivered = await db
-      .prepare(
-        `SELECT * FROM (
-         SELECT DISTINCT ON (t.id) t.id AS "teamId", COALESCE(tp.title, t.name) AS title, h.name AS edition,
-                m.username, to_ts(ps.submittedAt) AS at
-         FROM member_follows f
-         JOIN members m ON m.id = f.followedId AND m.clerkId NOT LIKE 'deleted:%'
-         JOIN team_members tm ON tm.username = m.username
-         JOIN teams t ON t.id = tm.teamId
-         JOIN hackathons h ON h.id = t.hackathonId
-         LEFT JOIN communities c ON c.id = h.communityId
-         LEFT JOIN team_projects tp ON tp.teamId = t.id
-         JOIN project_submissions ps ON ps.teamId = t.id
-         WHERE f.memberId = @me AND COALESCE(c.hidden, 0) = 0
-           AND to_ts(ps.submittedAt) >= @from::timestamptz AND to_ts(ps.submittedAt) < @to::timestamptz
-           AND NOT EXISTS (SELECT 1 FROM member_blocks b
-             WHERE (b.memberId = @me AND b.blockedId = m.id) OR (b.memberId = m.id AND b.blockedId = @me))
-           AND NOT EXISTS (SELECT 1 FROM member_mutes x WHERE x.memberId = @me AND x.mutedId = m.id)
-         ORDER BY t.id, to_ts(ps.submittedAt) DESC
-         ) x ORDER BY x.at DESC, x."teamId" DESC LIMIT 5`,
-      )
-      .all<{ teamId: number; title: string; edition: string; username: string }>({ me: memberId, from, to });
-  }
+  // 2. times de quem você segue que entregaram na semana
+  const delivered = await db
+    .prepare(
+      `SELECT * FROM (
+       SELECT DISTINCT ON (t.id) t.id AS "teamId", COALESCE(tp.title, t.name) AS title, h.name AS edition,
+              m.username, to_ts(ps.submittedAt) AS at
+       FROM member_follows f
+       JOIN members m ON m.id = f.followedId AND m.clerkId NOT LIKE 'deleted:%'
+       JOIN team_members tm ON tm.username = m.username
+       JOIN teams t ON t.id = tm.teamId
+       JOIN hackathons h ON h.id = t.hackathonId
+       LEFT JOIN communities c ON c.id = h.communityId
+       LEFT JOIN team_projects tp ON tp.teamId = t.id
+       JOIN project_submissions ps ON ps.teamId = t.id
+       WHERE f.memberId = @me AND COALESCE(c.hidden, 0) = 0
+         AND to_ts(ps.submittedAt) >= @from::timestamptz AND to_ts(ps.submittedAt) < @to::timestamptz
+         AND NOT EXISTS (SELECT 1 FROM member_blocks b
+           WHERE (b.memberId = @me AND b.blockedId = m.id) OR (b.memberId = m.id AND b.blockedId = @me))
+         AND NOT EXISTS (SELECT 1 FROM member_mutes x WHERE x.memberId = @me AND x.mutedId = m.id)
+       ORDER BY t.id, to_ts(ps.submittedAt) DESC
+       ) x ORDER BY x.at DESC, x."teamId" DESC LIMIT 5`,
+    )
+    .all<{ teamId: number; title: string; edition: string; username: string }>({ me: memberId, from, to });
   sections.push({
     key: "entregou",
     title: "Quem você segue entregou",

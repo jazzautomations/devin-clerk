@@ -262,11 +262,12 @@ export function safeHref(href: string | null): string {
  * notificação não é do membro (não vaza nem o href de outra pessoa).
  */
 export async function openNotification(id: number, memberId: number, now = new Date()): Promise<string | null> {
-  await markGroupSiblingsRead(id, memberId, now);
+  const siblings = await markGroupSiblingsRead(id, memberId, now);
   const row = await db
-    .prepare("UPDATE notifications SET read = 1 WHERE id = ? AND memberId = ? RETURNING href")
-    .get<{ href: string | null }>(id, memberId);
-  return row ? safeHref(row.href) : null;
+    .prepare("UPDATE notifications SET read = 1 WHERE id = ? AND memberId = ? RETURNING type, href")
+    .get<{ type: string; href: string | null }>(id, memberId);
+  if (!row) return null;
+  return safeHref(siblings > 0 ? (groupHref(row.type) ?? row.href) : row.href);
 }
 
 /**
@@ -286,17 +287,18 @@ export async function markRead(
   ).run(id, memberId);
 }
 
-async function markGroupSiblingsRead(id: number, memberId: number, now: Date): Promise<void> {
-  await db
+async function markGroupSiblingsRead(id: number, memberId: number, now: Date): Promise<number> {
+  const res = await db
     .prepare(
       `UPDATE notifications s SET read = 1
        FROM notifications h
        WHERE h.id = @id AND h.memberId = @me AND s.memberId = @me AND s.read = 0 AND s.id < h.id
-         AND s.type = h.type AND s.href IS NOT DISTINCT FROM h.href
+         AND s.type = h.type AND ${groupTarget("s")} = ${groupTarget("h")}
          AND s.type = ANY(@groupable::text[])
          AND to_ts(s.createdAt) >= @cutoff::timestamptz`,
     )
     .run({ id, me: memberId, groupable: pgArray(GROUPABLE_TYPES), cutoff: groupCutoff(now) });
+  return res.changes;
 }
 
 // ---------- lista agrupada (migration 040) ----------
@@ -322,6 +324,23 @@ const PLURAL: Record<string, string> = {
 export const GROUPABLE_TYPES = Object.keys(PLURAL);
 /** aba "menções" do /notificacoes */
 export const MENTION_TYPES = ["mention"];
+
+/**
+ * O "destino" que junta notificações do mesmo tipo num grupo, em SQL. O href
+ * de algumas é único por evento e não serve de chave:
+ * - follow: /u/<quem seguiu>. Todo seguidor novo do dia vira um grupo só.
+ * - comment, reply: /post/<id>#c-<comentário>. Agrupa pelo post, sem o #.
+ * - o resto: o href inteiro.
+ */
+function groupTarget(alias: string): string {
+  return `CASE WHEN ${alias}.type = 'follow' THEN ''
+    WHEN ${alias}.type IN ('comment', 'reply') THEN split_part(COALESCE(${alias}.href, ''), '#', 1)
+    ELSE COALESCE(${alias}.href, '') END`;
+}
+
+/** destino da linha agrupada quando o href de cada uma aponta pra uma pessoa só */
+const GROUP_HREF: Record<string, string> = { follow: "/perfil/seguidores" };
+const groupHref = (type: string): string | null => GROUP_HREF[type] ?? null;
 
 /** janela do agrupamento: não lidas das últimas 24h */
 export const GROUP_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -392,7 +411,7 @@ export async function listNotificationsGrouped(
       `WITH base AS (
          SELECT id, CASE
              WHEN read = 0 AND type = ANY(@groupable::text[]) AND to_ts(createdAt) >= @cutoff::timestamptz
-             THEN 'g:' || type || ':' || COALESCE(href, '')
+             THEN 'g:' || type || ':' || ${groupTarget("notifications")}
              ELSE 'n:' || id END AS gkey
          FROM notifications
          WHERE memberId = @me AND ${NOT_HIDDEN}
@@ -449,7 +468,7 @@ export async function listNotificationsGrouped(
       type: head.type,
       group: groupOf(head.type),
       text: groupedText(head.type, actors.map((a) => a.username), seen.size, head.text),
-      href: head.href,
+      href: ids.length > 1 ? (groupHref(head.type) ?? head.href) : head.href,
       read: Boolean(head.read),
       createdAt: head.createdAt,
       actors,
