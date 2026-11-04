@@ -29,7 +29,8 @@ export default async function DenunciasEdicaoPage({ params, searchParams }: Page
         </Link>
       </div>
       <p className="max-w-2xl text-[14px] text-muted">
-        Posts e comentários do mural da edição que alguém denunciou. Durante o evento, cada uma também abre um incidente.
+        Posts e comentários do mural da edição e depoimentos de time que alguém denunciou. Durante o evento, cada uma
+        também abre um incidente.
         O nome de quem denunciou não aparece.
       </p>
       <ReportQueue

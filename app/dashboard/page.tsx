@@ -22,6 +22,7 @@ import { ProfileReminder } from "@/components/ProfileReminder";
 import { communityNextStep, listMyCommunities } from "@/lib/communities";
 import { listCommunityUpdates } from "@/lib/follows";
 import { CommunityUpdates } from "@/components/CommunityUpdates";
+import { joinHandles, teammatesToWrite } from "@/lib/testimonials";
 
 // spec 039 — o painel é "meu próximo passo": primeiro o que a pessoa tem
 // que fazer em cada edição ativa, depois a equipe, os certificados, o
@@ -49,8 +50,7 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 
-  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates, xp] = await Promise.all([
-    listMyActiveEditions(member.id, now),
+  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates, xp, toWrite] = await Promise.all([    listMyActiveEditions(member.id, now),
     listMyEditionRoles(member.id),
     getOpenHackathons(now),
     getRegistrationIds(member.id),
@@ -63,7 +63,10 @@ export default async function DashboardPage() {
     listCommunityUpdates(member.id, { limit: 3 }),
     // o próprio painel já recalcula (não espera o cron da hora cheia)
     recomputeXp(member.id),
+    teammatesToWrite(member.id, 1),
   ]);
+  // depoimento de time (migration 037): o time mais recente que ainda tem colega sem depoimento
+  const write = toWrite[0] ?? null;
   const steps = await Promise.all(active.map(async (h) => ({ h, step: await getNextStep(h, member, now) })));
   // abertos: edições do HackaHub primeiro, depois Brasil com a cidade/UF do perfil na
   // frente; sem repetir o que já está nos próximos passos
@@ -88,6 +91,9 @@ export default async function DashboardPage() {
           </Link>
           <Link href="/perfil" className="text-accent underline-offset-4 hover:underline">
             editar perfil →
+          </Link>
+          <Link href="/perfil/depoimentos" className="text-accent underline-offset-4 hover:underline">
+            depoimentos →
           </Link>
           {member.role === "admin" && (
             <Link href="/admin" className="text-accent underline-offset-4 hover:underline">
@@ -139,6 +145,22 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* depoimento de time: só quando tem colega de edição encerrada sem depoimento */}
+      {write && (
+        <aside
+          aria-label="Depoimento de time"
+          className="flex flex-col gap-3 border-[1.5px] border-line bg-mint p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+          data-testid="dashboard-testimonial"
+        >
+          <p className="min-w-0 text-[16px] leading-snug font-bold [overflow-wrap:anywhere]">
+            Você fez time com {joinHandles(write.people, 3)} no {write.hackathonName}. Escreva um depoimento.
+          </p>
+          <Link href="/perfil/depoimentos?aba=escrever" className="btn-ghost min-h-[44px]! shrink-0 rounded-[6px] text-[14px]!">
+            escrever →
+          </Link>
+        </aside>
+      )}
 
       {/* suas comunidades — um próximo passo por comunidade */}
       <section aria-labelledby="comunidades-title" className="flex flex-col gap-4" data-testid="dashboard-communities">

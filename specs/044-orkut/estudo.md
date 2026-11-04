@@ -68,6 +68,10 @@ Ainda não existem:
   - **depoimento aceito que for editado volta pra pendente**, pra ninguém trocar o texto depois de aprovado;
   - ao aceitar, o app sugere uma vez "Quer escrever sobre @x também?". É a reciprocidade do Orkut sem cobrança.
 - **Anti-spam**: 5 por dia. Como só colega de time pode escrever, o depoimento quase não serve de DM, que foi a gambiarra do Orkut.
+  - O aviso "escreveu sobre você" sai uma vez por par a cada 30 dias. Apagar o recusado e reescrever não avisa de novo.
+  - Aceitar leva o texto que a tela mostrou. Se o autor trocou no meio, dá 409 e a pessoa relê.
+- **Edição fora da regra antifarm** (menos de 15 check-ins ou comunidade não verificada, `eligibleEdition` em `lib/evidence.ts`): o depoimento pode ser escrito e aparece no perfil, mas não entra na contagem (`countAccepted`), que é o número do `/talento`, do cartão e do bicho.
+- **Moderação**: a denúncia vai pra organização da edição. Quem trata a denúncia, ou o admin, tira do ar pela fila (status `removido`). O dono não traz de volta e o autor não reescreve.
 - **Onde aparece**: no `/u` só os aceitos. No `/talento`, a contagem e o primeiro trecho. No cartão de quem não está logado, só "3 depoimentos de time". Os aceitos ganham botão "denunciar".
 - **Estado vazio**:
   - pro dono: "Depoimento aqui só vem de quem fez time com você." e a lista "Você fez time com @a e @b no X. Escreva sobre eles.";

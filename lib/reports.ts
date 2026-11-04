@@ -17,6 +17,10 @@ import { notify } from "@/lib/notifications";
 //
 // Desafio aberto e entrega (053) vão pra comunidade do desafio.
 // Tipo novo (depoimento, dm, encontro) entra com um `case` em resolveTarget:
+// Depoimento: quem trata a denúncia também tira do ar pela fila
+// (takeDownTestimonial em lib/testimonials.ts, POST /api/reports/[id]/takedown).
+//
+// Tipo novo (dm, encontro) entra com um `case` em resolveTarget:
 // devolva o autor, o texto pro snapshot e o espaço (communityId/hackathonId).
 // Enquanto o tipo não tem case, a denúncia dá 404.
 //
@@ -182,6 +186,27 @@ async function resolveTarget(type: ReportTarget, id: string, viewerRole: string 
         hackathonId: null,
       };
     }
+    case "depoimento": {
+      // depoimento de time (migration 037): só o aceito é público. Vai pra
+      // quem trata incidentes da edição em que o time existiu.
+      if (num === null) return null;
+      const r = await db
+        .prepare(
+          `SELECT t.authorId, a.username, a.role, m.username AS "memberUsername", t.body, t.hackathonId
+           FROM team_testimonials t JOIN members a ON a.id = t.authorId JOIN members m ON m.id = t.memberId
+           WHERE t.id = ? AND t.status = 'aceito'`,
+        )
+        .get<{ authorId: number; username: string; role: string; memberUsername: string; body: string; hackathonId: string }>(num);
+      if (!r) return null;
+      return {
+        authorId: r.authorId,
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: `@${r.username} sobre @${r.memberUsername}: ${r.body}`,
+        communityId: null,
+        hackathonId: r.hackathonId,
+      };
+    }
     default:
       return null;
   }
@@ -293,7 +318,7 @@ export async function createReport(input: CreateReportInput): Promise<CreateRepo
         target.hackathonId,
         {
           kind: "outro",
-          description: `Denúncia de ${label} no mural da edição.\nMotivo: ${reason}\n\nTexto denunciado:\n${clip(target.snapshot, 1500)}\n\nFila: /admin/h/${target.hackathonId}/denuncias`,
+          description: `Denúncia de ${label}${type === "depoimento" ? " de time" : " no mural da edição"}.\nMotivo: ${reason}\n\nTexto denunciado:\n${clip(target.snapshot, 1500)}\n\nFila: /admin/h/${target.hackathonId}/denuncias`,
           location: null,
           occurredAt: null,
           contact: null,
@@ -355,20 +380,24 @@ type ReportRow = Omit<Report, "href" | "routedTo"> & {
   targetUsername: string | null;
   targetCommunitySlug: string | null;
   targetChallengeId: number | null;
+  /** depoimento: @ de quem recebeu (o texto mora no perfil dela) */
+  testimonialOwner: string | null;
 };
 
 const SELECT = `SELECT r.id, r.targetType, r.targetId, r.reporterId, r.targetMemberId, r.reason, r.snapshot,
     r.communityId, co.name AS communityName, co.slug AS communitySlug,
     r.hackathonId, h.name AS hackathonName,
     r.createdAt, r.resolvedAt, r.resolvedBy, rb.username AS resolvedByUsername, r.resolution,
-    tm.username AS targetUsername, tc.slug AS targetCommunitySlug, te.challengeId AS targetChallengeId
+    tm.username AS targetUsername, tc.slug AS targetCommunitySlug, te.challengeId AS targetChallengeId, tdm.username AS "testimonialOwner"
   FROM reports r
   LEFT JOIN communities co ON co.id = r.communityId
   LEFT JOIN hackathons h ON h.id = r.hackathonId
   LEFT JOIN members rb ON rb.id = r.resolvedBy
   LEFT JOIN members tm ON r.targetType = 'member' AND tm.id::text = r.targetId
   LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId
-  LEFT JOIN open_challenge_entries te ON r.targetType = 'desafio_entrega' AND te.id::text = r.targetId`;
+  LEFT JOIN open_challenge_entries te ON r.targetType = desafio_entrega AND te.id::text = r.targetId
+  LEFT JOIN team_testimonials tt ON r.targetType = depoimento AND tt.id::text = r.targetId
+  LEFT JOIN members tdm ON tdm.id = tt.memberId`;
 
 function toReport(r: ReportRow): Report {
   let href: string | null = null;
@@ -382,6 +411,8 @@ function toReport(r: ReportRow): Report {
     href = `/desafios/${r.targetId}`;
   } else if (r.targetType === "desafio_entrega" && r.targetChallengeId) {
     href = `/desafios/${r.targetChallengeId}#entrega-${r.targetId}`;
+  } else if (r.targetType === "depoimento" && r.testimonialOwner) {
+    href = `/u/${r.testimonialOwner}`;
   }
   const routedTo = r.communityName
     ? `comunidade ${r.communityName}`
