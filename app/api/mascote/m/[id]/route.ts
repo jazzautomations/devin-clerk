@@ -1,3 +1,4 @@
+import { parseId } from "@/lib/ids";
 import { svgDoBicho } from "@/lib/mascote/isometrico";
 import { mascotePublico } from "@/lib/mascote/store";
 
@@ -11,8 +12,7 @@ import { mascotePublico } from "@/lib/mascote/store";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, { params }: Ctx) {
-  const raw = (await params).id;
-  const id = /^\d{1,12}$/.test(raw) ? Number(raw) : 0;
+  const id = parseId((await params).id) ?? 0;
   const config = await mascotePublico(id);
   const { svg, hash } = svgDoBicho(config, { titulo: config.nome });
   const v = new URL(req.url).searchParams.get("v");

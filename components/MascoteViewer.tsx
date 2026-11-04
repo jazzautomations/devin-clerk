@@ -98,7 +98,7 @@ export function MascoteViewer({ config, itens, estagio, extras, tamanho = 320, g
   return (
     <div
       ref={caixa}
-      className={`relative aspect-square w-full touch-none select-none ${className}`}
+      className={`relative aspect-square w-full touch-pan-y select-none ${className}`}
       style={{ maxWidth: lado }}
       data-testid="mascote-viewer"
       data-modo={modo}

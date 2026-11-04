@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { canNetwork } from "@/lib/network";
 import { hashMascote, mascoteSrc } from "@/lib/mascote/isometrico";
 import { configFromSeed, resolveMascote } from "@/lib/mascote/semente";
 import { lerMascoteSalvo } from "@/lib/mascote/validar";
@@ -40,7 +41,7 @@ export async function mascoteDoMembro(memberId: number): Promise<MascoteDoMembro
 export async function mascotePublico(memberId: number): Promise<MascoteConfig> {
   if (!Number.isSafeInteger(memberId) || memberId <= 0) return configFromSeed(0);
   const r = await linha(memberId);
-  if (!r || r.clerkId.startsWith("deleted:")) return configFromSeed(0);
+  if (!r || !(await canNetwork(r.id))) return configFromSeed(0);
   return resolveMascote({ id: r.id, mascote: r.mascote });
 }
 

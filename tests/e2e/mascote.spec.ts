@@ -198,7 +198,7 @@ test.describe("bicho do builder", () => {
     }
   });
 
-  test("/bem-vindo: o passo final monta o bicho e o fim mostra comunidades", async ({ memberPage: page }) => {
+  test("/bem-vindo: o passo final monta o bicho e conclui o onboarding", async ({ memberPage: page }) => {
     await limpar();
     await page.goto("/bem-vindo?refazer=1");
     await page.getByRole("button", { name: "participar de hackathon" }).click();
