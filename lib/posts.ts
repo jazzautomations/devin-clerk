@@ -5,6 +5,7 @@ import { canManageCommunity } from "@/lib/communities";
 import { canManageEdition, hasEditionRole } from "@/lib/roles";
 import { resolveInternalLink, type LinkCard } from "@/lib/linkCard";
 import { REACTION_KINDS, REACTION_LABEL, isReactionKind, type ReactionKind } from "@/lib/reactions";
+import { syncMentionsAndTags } from "@/lib/tags";
 
 // Posts (spec 046, conversa no post, migration 034).
 //
@@ -62,6 +63,8 @@ export type Post = {
   commentCount: number;
   /** card do link interno (/p, /h, /u, /comunidade) quando visível pra quem lê */
   linkCard: LinkCard | null;
+  /** @ que existem de verdade no corpo do post (migration 039) — viram link */
+  mentionedUsernames: string[];
   /** quem lê pode apagar (canModeratePost) */
   canModerate: boolean;
 };
@@ -86,9 +89,15 @@ const emptyReactions = (): Record<ReactionKind, number> => ({ curti: 0, ajudou: 
 
 // post visível = o espaço dele está no ar. Post de mural de edição tem
 // communityId NULL: a comunidade dele é a da edição (hackathons.communityId).
-const SPACE_UP_SQL = `NOT EXISTS (SELECT 1 FROM communities co WHERE co.id = p.communityId AND co.hidden = 1)
+// Exportado pra quem escreve a própria query de ids (tag, lib/tags.ts): a
+// regra de visibilidade é uma só.
+export function spaceUpSql(alias = "p"): string {
+  return `NOT EXISTS (SELECT 1 FROM communities co WHERE co.id = ${alias}.communityId AND co.hidden = 1)
   AND NOT EXISTS (SELECT 1 FROM hackathons hh LEFT JOIN communities hc ON hc.id = hh.communityId
-    WHERE hh.id = p.hackathonId AND (hh.active = 0 OR hc.hidden = 1))`;
+    WHERE hh.id = ${alias}.hackathonId AND (hh.active = 0 OR hc.hidden = 1))`;
+}
+
+const SPACE_UP_SQL = spaceUpSql();
 
 export type ListOpts = { antes?: number | null; limit?: number; includeHidden?: boolean };
 
@@ -131,6 +140,7 @@ export async function listPostIds(scope: ScopeArg, meId: number | null, opts: Li
 
 type PostRow = Omit<Post, "reactions" | "myReaction" | "likeCount" | "likedByMe" | "linkCard" | "canModerate"> & {
   myReaction: string | null;
+  mentionedUsernames: string[] | string | null;
 };
 
 const SELECT = `SELECT p.id, p.memberId, p.body, p.link, p.createdAt, p.editedAt, p.hackathonId,
@@ -138,10 +148,26 @@ const SELECT = `SELECT p.id, p.memberId, p.body, p.link, p.createdAt, p.editedAt
        m.username, m.name, m.avatarUrl, m.headline, m.persona, m.xp,
        (SELECT l.kind FROM likes l WHERE l.postId = p.id AND l.memberId = @me) AS "myReaction",
        (SELECT COUNT(*) FROM post_comments c WHERE c.postId = p.id AND ${hiddenAuthorSql("c.memberId")}
-          AND (c.parentId IS NULL OR EXISTS (SELECT 1 FROM post_comments pc WHERE pc.id = c.parentId AND ${hiddenAuthorSql("pc.memberId")}))) AS "commentCount"
+          AND (c.parentId IS NULL OR EXISTS (SELECT 1 FROM post_comments pc WHERE pc.id = c.parentId AND ${hiddenAuthorSql("pc.memberId")}))) AS "commentCount",
+       -- menção do corpo do post (migration 039): só as de gente que quem lê
+       -- ainda vê. Menção de bloqueado/silenciado fica texto, não link.
+       COALESCE((SELECT array_agg(mt.username ORDER BY mt.username)
+         FROM post_mentions pm JOIN members mt ON mt.id = pm.memberId
+         WHERE pm.postId = p.id AND pm.commentId IS NULL AND ${hiddenAuthorSql("mt.id")}), '{}') AS "mentionedUsernames"
        FROM posts p JOIN members m ON m.id = p.memberId
        LEFT JOIN hackathons h ON h.id = p.hackathonId
        LEFT JOIN communities co ON co.id = p.communityId`;
+
+/** text[] do Postgres em array de JS, venha ele como array ou como literal "{a,b}" */
+export function textArray(v: string[] | string | null | undefined): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v !== "string" || !v) return [];
+  return v
+    .replace(/^\{|\}$/g, "")
+    .split(",")
+    .map((s) => s.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+}
 
 type Viewer = { id: number; role: string } | null;
 
@@ -205,6 +231,7 @@ export async function hydratePosts(ids: number[], meId: number | null): Promise<
         id: Number(row.id),
         memberId: Number(row.memberId),
         commentCount: Number(row.commentCount),
+        mentionedUsernames: textArray(row.mentionedUsernames),
         reactions,
         myReaction,
         likeCount,
@@ -296,7 +323,14 @@ export async function createPost(
   const row = await db
     .prepare("INSERT INTO posts (memberId, body, link, hackathonId, communityId) VALUES (?, ?, ?, ?, ?) RETURNING id")
     .get<{ id: number }>(memberId, v.body, v.link, hackathonId?.trim() || null, communityId ?? null);
+  await syncMentionsAndTags(row!.id, null, v.body, await actorOf(memberId));
   return (await hydratePosts([row!.id], memberId))[0];
+}
+
+/** @ e id de quem escreveu, pro aviso de menção e pro filtro de bloqueio */
+async function actorOf(memberId: number): Promise<{ id: number; username: string }> {
+  const row = await db.prepare("SELECT username FROM members WHERE id = ?").get<{ username: string }>(memberId);
+  return { id: memberId, username: row?.username ?? "" };
 }
 
 /**
@@ -317,6 +351,8 @@ export async function updatePost(
   await db
     .prepare(`UPDATE posts SET body = ?, link = ?, "editedAt" = datetime('now') WHERE id = ?`)
     .run(v.body, v.link, postId);
+  // editar reescreve menções e tags; quem já estava mencionado não é avisado de novo
+  await syncMentionsAndTags(postId, null, v.body, await actorOf(member.id));
   return (await hydratePosts([postId], member.id))[0] ?? null;
 }
 

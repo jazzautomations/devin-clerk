@@ -65,6 +65,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // timeline (migration 038): leitura barata, mas o TimelineList pede a cada
   // 60s pra checar post novo — 600/h cobre uma aba aberta o dia inteiro
   feed: { limit: 600, windowMs: HOUR }, // GET /api/feed — membro
+  // autocomplete de @ (migration 039): uma consulta a cada 200ms de pausa na
+  // digitação; 120/h cobre quem escreve bastante e freia script
+  suggest: { limit: 120, windowMs: HOUR }, // GET /api/members/suggest — membro
   // depoimento de time (migration 037): escrever é forte (5 por dia por
   // membro); editar, apagar, aceitar, recusar e esconder dividem um balde por hora
   testimonials: { limit: 5, windowMs: DAY }, // POST /api/testimonials — membro
