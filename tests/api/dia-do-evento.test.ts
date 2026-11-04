@@ -263,8 +263,11 @@ describe("walk-in", () => {
     expect(await db.prepare("SELECT status FROM ticket_emails WHERE registrationId = ?").get(rw)).toEqual({
       status: "queued",
     });
-    const xp = await db.prepare("SELECT xp FROM members WHERE clerkId = 'clerk_a'").get<{ xp: number }>();
-    expect(xp!.xp).toBeGreaterThan(0);
+    // a recompensa é a carta (XP por inscrição acabou, spec 046)
+    const card = await db
+      .prepare("SELECT mc.serial FROM member_cards mc JOIN members m ON m.id = mc.memberId WHERE m.clerkId = 'clerk_a' AND mc.hackathonId = ?")
+      .get<{ serial: number }>(H);
+    expect(card!.serial).toBeGreaterThan(0);
   });
 
   it("respeita a capacidade da sala: presentes >= capacidade → full", async () => {

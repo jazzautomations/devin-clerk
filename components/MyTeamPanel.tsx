@@ -116,7 +116,6 @@ export function MyTeamPanel({
     const badges = (data.newBadges as string[] | undefined) ?? [];
     setNote(
       [
-        data.xp ? `${data.xp} xp` : null,
         invited.length ? `convite enviado: ${invited.map((u) => `@${u}`).join(", ")}. Entram quando aceitarem` : null,
         ignoredText(data.ignored as IgnoredInvite[] | undefined),
         badges.length ? `conquista nova: ${badges.join(", ")}` : null,
@@ -328,7 +327,7 @@ export function MyTeamPanel({
               disabled={busy || !name.trim()}
               className="min-h-11 border-[1.5px] border-line bg-foreground px-5 py-2 text-[13px] font-semibold text-background transition hover:border-accent hover:bg-accent disabled:opacity-50"
             >
-              {busy ? "…" : "criar time → +15xp"}
+              {busy ? "…" : "criar time →"}
             </button>
             <button type="button" onClick={() => setOpen(false)} className={quiet}>
               cancelar

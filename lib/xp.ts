@@ -1,15 +1,97 @@
 import db from "@/lib/db";
-import { BADGES, XP, type Badge, type Rarity } from "@/lib/game";
+import { countFacts, eligibleEditionsSql, FACT_KINDS, type FactKind, type FactWindow } from "@/lib/evidence";
+import { BADGES, FACT_XP, factLabel, type Badge, type Rarity } from "@/lib/game";
 
 // spec 032 — badges de inscrição (debut/veterano) contam só status
 // 'approved': pedido pendente não é campanha. Guarda própria do ALTER
 // (dona: lib/registrations) pra quem importa xp.ts direto.
+//
+// spec 046 (nivel-por-entrega, migration 035): members.xp é DERIVADO dos
+// fatos de lib/evidence.ts (FACT_XP em lib/game.ts) e recalculado pelo cron
+// /api/cron/xp de hora em hora. O valor de antes ficou em members.xpLegado
+// (auditoria e rollback, não aparece na UI).
 
+/**
+ * Legado: soma direto em members.xp. As rotas antigas ainda chamam com
+ * XP.<ação> = 0, então hoje não muda nada; e qualquer valor que alguém somar
+ * some no próximo recompute (recomputeXp/recomputeAll sobrescrevem o xp com a
+ * soma dos fatos). Não use em código novo.
+ */
 export async function awardXp(memberId: number, amount: number): Promise<void> {
+  if (!amount) return;
   await db.prepare("UPDATE members SET xp = xp + ? WHERE id = ?").run(
     amount,
     memberId,
   );
+}
+
+export type XpFact = { kind: FactKind; label: string; count: number; xp: number };
+export type XpBreakdown = { total: number; facts: XpFact[] };
+
+/**
+ * XP do membro pela soma dos fatos verificados. facts traz só os tipos com
+ * contagem > 0, na ordem de FACT_KINDS. opts recorta por data (a liga usa).
+ */
+export async function computeXp(memberId: number, opts: FactWindow = {}): Promise<XpBreakdown> {
+  const counts = await countFacts(memberId, opts);
+  const facts: XpFact[] = FACT_KINDS.filter((k) => counts[k] > 0).map((kind) => ({
+    kind,
+    label: factLabel(kind, counts[kind]),
+    count: counts[kind],
+    xp: counts[kind] * FACT_XP[kind].xp,
+  }));
+  return { total: facts.reduce((s, f) => s + f.xp, 0), facts };
+}
+
+/** recalcula e grava members.xp; idempotente (só escreve se mudou) */
+export async function recomputeXp(memberId: number): Promise<XpBreakdown & { changed: boolean }> {
+  const b = await computeXp(memberId);
+  const res = await db
+    .prepare("UPDATE members SET xp = ? WHERE id = ? AND xp IS DISTINCT FROM ?")
+    .run(b.total, memberId, b.total);
+  return { ...b, changed: res.changes > 0 };
+}
+
+export const RECOMPUTE_BATCH = 200;
+
+/**
+ * Recalcula o xp de todo mundo. Quem não tem nenhum vínculo com edição
+ * elegível (inscrição, time, papel ou resposta) não pode ter fato: zera num
+ * UPDATE só. O resto passa por recomputeXp em lotes de RECOMPUTE_BATCH ids.
+ * updated = linhas cujo xp mudou (rodar de novo dá 0).
+ */
+export async function recomputeAll(batch = RECOMPUTE_BATCH): Promise<{ updated: number; scanned: number }> {
+  const candidates = `
+    SELECT r.memberId AS id FROM registrations r WHERE r.hackathonId IN (SELECT id FROM eligible)
+    UNION SELECT m.id FROM team_members tm JOIN teams t ON t.id = tm.teamId JOIN members m ON m.username = tm.username
+      WHERE t.hackathonId IN (SELECT id FROM eligible)
+    UNION SELECT er.memberId FROM edition_roles er WHERE er.hackathonId IN (SELECT id FROM eligible)
+    UNION SELECT a.memberId FROM answers a JOIN questions q ON q.id = a.questionId WHERE q.hackathonId IN (SELECT id FROM eligible)`;
+  const zeroed = await db
+    .prepare(
+      `WITH eligible AS (${eligibleEditionsSql})
+       UPDATE members SET xp = 0
+       WHERE xp <> 0 AND id NOT IN (SELECT c.id FROM (${candidates}) c WHERE c.id IS NOT NULL)`,
+    )
+    .run();
+  let updated = zeroed.changes;
+  let scanned = 0;
+  let after = 0;
+  for (;;) {
+    const ids = await db
+      .prepare(
+        `WITH eligible AS (${eligibleEditionsSql})
+         SELECT c.id AS "id" FROM (${candidates}) c WHERE c.id > ? ORDER BY c.id LIMIT ?`,
+      )
+      .all<{ id: number }>(after, batch);
+    if (!ids.length) break;
+    for (const { id } of ids) {
+      if ((await recomputeXp(id)).changed) updated++;
+    }
+    scanned += ids.length;
+    after = ids[ids.length - 1].id;
+  }
+  return { updated, scanned };
 }
 
 export async function getMemberBadges(memberId: number): Promise<Badge[]> {
@@ -18,7 +100,8 @@ export async function getMemberBadges(memberId: number): Promise<Badge[]> {
       "SELECT badgeId FROM member_badges WHERE memberId = ? ORDER BY awardedAt",
     )
     .all(memberId) as { badgeId: string }[];
-  return rows.map((r) => BADGES[r.badgeId]).filter(Boolean);
+  // aposentadas (criador, influente) somem da tela; as linhas ficam
+  return rows.map((r) => BADGES[r.badgeId]).filter((b) => b && !b.retired);
 }
 
 export type CollectedCard = {
@@ -109,11 +192,6 @@ export async function checkBadges(memberId: number): Promise<Badge[]> {
       `SELECT COUNT(*) n FROM registrations
        WHERE memberId = ? AND status = 'approved'`,
     ),
-    posts: await count("SELECT COUNT(*) n FROM posts WHERE memberId = ?"),
-    likesReceived: await count(
-      `SELECT COUNT(*) n FROM likes l
-       JOIN posts p ON p.id = l.postId WHERE p.memberId = ?`,
-    ),
     cards: await count("SELECT COUNT(*) n FROM member_cards WHERE memberId = ?"),
   };
 
@@ -123,8 +201,8 @@ export async function checkBadges(memberId: number): Promise<Badge[]> {
     earned.push("identidade");
   if (stats.regs >= 1) earned.push("debut");
   if (stats.regs >= 3) earned.push("veterano");
-  if (stats.posts >= 5) earned.push("criador");
-  if (stats.likesReceived >= 10) earned.push("influente");
+  // criador (posts) e influente (curtidas) aposentadas: post e like não
+  // rendem nada (spec 046)
   if (stats.cards >= 5) earned.push("colecionador");
   if (m.role === "admin") earned.push("organizador");
 
@@ -134,10 +212,7 @@ export async function checkBadges(memberId: number): Promise<Badge[]> {
   const fresh: Badge[] = [];
   for (const id of earned) {
     const res = await insert.run(memberId, id);
-    if (res.changes > 0) {
-      fresh.push(BADGES[id]);
-      if (id === "identidade") await awardXp(memberId, XP.identidade);
-    }
+    if (res.changes > 0) fresh.push(BADGES[id]);
   }
   return fresh;
 }

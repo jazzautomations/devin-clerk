@@ -56,6 +56,17 @@ describe("listLeaderboard", () => {
     expect(m.cards).toBe(1);
   });
 
+  it("badge aposentado (criador, influente) não entra no contador", async () => {
+    const id = await makeMember("lb-retired", { xp: 5 });
+    for (const b of ["debut", "criador", "influente"]) {
+      await db.prepare(
+        "INSERT INTO member_badges (memberId, badgeId) VALUES (?, ?)",
+      ).run(id, b);
+    }
+    const m = (await listLeaderboard()).find((x) => x.id === id)!;
+    expect(m.badges).toBe(1);
+  });
+
   it("sort=recent põe quem entrou por último no topo", async () => {
     await makeMember("lb-old", { createdAt: "2020-01-01 00:00:00" });
     await makeMember("lb-new", { createdAt: "2030-01-01 00:00:00" });

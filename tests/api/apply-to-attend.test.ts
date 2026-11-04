@@ -114,7 +114,7 @@ describe("POST /api/hackathons/[id]/register — edição curada", () => {
     const data = await res.json();
     expect(data.registered).toBe(true);
     expect(data.status).toBe("approved");
-    expect(data.xp).toBe("+50");
+    expect(data.xp).toBe("+0"); // XP por inscrição acabou (spec 046): campo fica pelo contrato
     expect(data.cardSerial).toBeGreaterThan(0);
   });
 
@@ -163,7 +163,7 @@ describe("PATCH /api/admin/hackathons/[id]/registrations/[memberId]", () => {
     expect(data.rewarded).toBe(true);
     expect(data.cardSerial).toBeGreaterThan(0);
     expect(await getRegistrationStatus(mid, CURATED)).toBe("approved");
-    expect(await xpOf(mid)).toBe(50);
+    expect(await xpOf(mid)).toBe(0); // nível vem de fato verificado (spec 046)
     expect(await getMemberCard(mid, CURATED)).not.toBeNull();
   });
 

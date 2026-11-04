@@ -161,6 +161,7 @@ outros produtos, se houver).
 | a cada 5 min | `submissions.sh` | `/api/cron/submissions` (lembretes e trava da entrega) |
 | a cada 15 min | `rsvp.sh` | `/api/cron/rsvp` |
 | seg 12:00–17:00, de hora em hora (stage :30) | `digest.sh` | `/api/cron/digest` (resumo semanal; a 1ª manda, as outras só tentam de novo quem falhou) |
+| de hora em hora (:11 prod, :41 stage) | `xp.sh` | `/api/cron/xp` (recalcula o nível pelos fatos verificados) |
 | a cada 10 min | `disk-guard.sh` | — |
 
 As rotas `/api/cron/*` passam pelo `cron-call.sh`, que grava uma linha por

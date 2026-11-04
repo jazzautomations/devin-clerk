@@ -76,7 +76,7 @@ export const ANONYMIZE: Record<string, AnonValue> = {
 };
 
 /** colunas de members que ficam como estão na exclusão (não são pessoais) */
-export const KEEP_ON_ANONYMIZE = new Set(["id", "createdAt", "xp"]);
+export const KEEP_ON_ANONYMIZE = new Set(["id", "createdAt", "xp", "xpLegado"]);
 // mantidas (anonimizadas pela linha de members) pra não distorcer o agregado:
 // a nota do júri e o voto do público seguem no ranking publicado, a resposta
 // do NPS na média e o certificado continua verificável pelo código. O texto

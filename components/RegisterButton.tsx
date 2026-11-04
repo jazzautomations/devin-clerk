@@ -74,7 +74,8 @@ export function RegisterButton({
         setStatus(next);
         setPosition(typeof data.position === "number" ? data.position : null);
         if (next === "approved") {
-          const parts = [data.xp && data.xp !== "+0" ? `${data.xp} xp` : null]
+          // XP por inscrição acabou (nível vem de fato verificado): sem "+N xp"
+          const parts = ([] as (string | null)[])
             .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
             .concat(data.newBadges?.length ? [`conquista nova: ${data.newBadges.join(", ")}`] : [])
             .filter(Boolean);

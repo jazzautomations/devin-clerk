@@ -91,7 +91,8 @@ export function HackathonCard({
         const next: Status = data.status ?? null;
         setStatus(next);
         if (next === "approved") {
-          const parts = [data.xp ? `${data.xp} xp` : null]
+          // XP por inscrição acabou (nível vem de fato verificado): sem "+N xp"
+          const parts = ([] as (string | null)[])
             .concat(data.cardSerial ? [`carta №${String(data.cardSerial).padStart(3, "0")} mintada`] : [])
             .concat(
               data.newBadges?.length

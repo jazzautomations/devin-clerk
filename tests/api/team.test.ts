@@ -89,7 +89,7 @@ describe("GET /api/hackathons/[id]/team — meu time na edição", () => {
 });
 
 describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
-  it("201 — cria time placement 0, autor dentro, +15xp, colegas inscritos", async () => {
+  it("201 — cria time placement 0, autor dentro, sem xp, colegas inscritos", async () => {
     const { POST } = await import("@/app/api/hackathons/[id]/team/route");
     const mid = await memberId("clerk_capitao", "capitao");
     await registerMember(mid);
@@ -125,14 +125,14 @@ describe("POST /api/hackathons/[id]/team — submissão do inscrito", () => {
     expect(data.ignoredUsernames).toEqual(
       expect.arrayContaining(["sem_inscricao", "nao_existe"]),
     );
-    expect(data.xp).toBe("+15");
+    expect(data.xp).toBe("+0"); // XP por envio de time acabou (spec 046)
 
     const after = (
       await db.prepare("SELECT xp FROM members WHERE id = ?").get(mid) as {
         xp: number;
       }
     ).xp;
-    expect(after - before).toBe(15);
+    expect(after - before).toBe(0);
   });
 
   it("201 — aceita videoUrl/logoUrl; 400 quando não-http(s) (spec 030)", async () => {

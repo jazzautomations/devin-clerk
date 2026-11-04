@@ -1,14 +1,20 @@
 import { levelFor } from "@/lib/game";
+import type { XpFact } from "@/lib/xp";
 
 const SEGMENTS = 24;
 
-export function XpBar({ xp }: { xp: number }) {
+/**
+ * Barra de nível. Com `facts` (de computeXp em lib/xp.ts) mostra "de onde
+ * vem" expansível; `own` troca a copy pra segunda pessoa (painel e o próprio
+ * perfil). Sem `facts` (listas como /membros) fica só a barra.
+ */
+export function XpBar({ xp, facts, own = false }: { xp: number; facts?: XpFact[]; own?: boolean }) {
   const { level, next, progress } = levelFor(xp);
   const filled = Math.round(progress * SEGMENTS);
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between font-mono text-xs">
+      <div className="flex items-baseline justify-between gap-3 font-mono text-xs">
         <span className="text-foreground">
           <span className="text-accent">LV{level.n}</span>{" "}
           {level.name.toUpperCase()}
@@ -32,6 +38,33 @@ export function XpBar({ xp }: { xp: number }) {
           />
         ))}
       </div>
+      {facts && facts.length > 0 && (
+        <details className="group font-mono text-xs" data-testid="xp-origem">
+          <summary className="flex cursor-pointer list-none items-baseline gap-2 text-muted transition hover:text-accent [&::-webkit-details-marker]:hidden">
+            <span className="shrink-0 text-accent">
+              <span className="inline-block transition group-open:rotate-90" aria-hidden="true">
+                ›
+              </span>{" "}
+              de onde vem
+            </span>
+            <span className="min-w-0 break-words">{facts.map((f) => f.label).join(" · ")}</span>
+          </summary>
+          <ul className="mt-2 flex flex-col border-t border-line">
+            {facts.map((f) => (
+              <li key={f.kind} className="flex items-baseline justify-between gap-3 border-b border-line py-1.5">
+                <span className="min-w-0 text-foreground">{f.label}</span>
+                <span className="shrink-0 text-muted">{f.xp} xp</span>
+              </li>
+            ))}
+          </ul>
+          {own && <p className="mt-2 text-muted">Seu nível sobe com o que você entrega nos hackathons.</p>}
+        </details>
+      )}
+      {facts && facts.length === 0 && own && (
+        <p className="font-mono text-xs text-muted" data-testid="xp-origem-vazio">
+          Seu primeiro fato conta quando você fizer check-in num hackathon.
+        </p>
+      )}
     </div>
   );
 }

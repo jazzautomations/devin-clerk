@@ -128,7 +128,7 @@ describe("badges", () => {
     expect((await checkBadges(id)).map((b) => b.id)).toContain("veterano");
   });
 
-  it("identidade exige bio+headline+skills e paga +25xp uma vez", async () => {
+  it("identidade exige bio+headline+skills e não rende xp (spec 046)", async () => {
     const id = await makeMember("b3", {
       bio: "dev",
       headline: "eng",
@@ -137,10 +137,10 @@ describe("badges", () => {
     const badges = (await checkBadges(id)).map((b) => b.id);
     expect(badges).toContain("identidade");
     const xp1 = (await db.prepare("SELECT xp FROM members WHERE id=?").get(id) as { xp: number }).xp;
-    expect(xp1).toBe(25);
+    expect(xp1).toBe(0);
     await checkBadges(id);
     const xp2 = (await db.prepare("SELECT xp FROM members WHERE id=?").get(id) as { xp: number }).xp;
-    expect(xp2).toBe(25);
+    expect(xp2).toBe(0);
   });
 
   it("admin ganha organizador", async () => {

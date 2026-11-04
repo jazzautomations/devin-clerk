@@ -81,7 +81,7 @@ describe("GET /api/hackathons/[id]/team-board — público", () => {
 });
 
 describe("POST /api/hackathons/[id]/team-board", () => {
-  it("201 — primeiro anúncio paga +10xp uma vez", async () => {
+  it("201 — primeiro anúncio cria; não rende xp (spec 046)", async () => {
     const { POST } = await import(
       "@/app/api/hackathons/[id]/team-board/route"
     );
@@ -108,7 +108,7 @@ describe("POST /api/hackathons/[id]/team-board", () => {
         xp: number;
       }
     ).xp;
-    expect(after - before).toBe(10);
+    expect(after - before).toBe(0);
 
     // re-anunciar = update, 200, sem XP de novo
     const res2 = await POST(req("POST", { need: "agora front" }), ctx());
