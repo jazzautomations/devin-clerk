@@ -49,6 +49,11 @@ H=/home/ubuntu/hackahub
 0 7 1 * *     bash $H/ops/continuidade.sh prod >> $H/logs/cron-stderr.log 2>&1
 30 7 1 * *    bash $H/ops/continuidade.sh stage >> $H/logs/cron-stderr.log 2>&1
 
+# 4 semanas depois (migration 052): materializa as semanas, lembra o time na
+# quinta (07:15 BRT) e concede o selo no fim. Stage meia hora depois.
+15 10 * * *   bash $H/ops/quatro-semanas.sh prod >> $H/logs/cron-stderr.log 2>&1
+45 10 * * *   bash $H/ops/quatro-semanas.sh stage >> $H/logs/cron-stderr.log 2>&1
+
 # guarda de disco: alerta em 85%, limpa sobras do HackaHub em 90%
 */10 * * * *  bash $H/ops/disk-guard.sh >> $H/logs/disk.log 2>&1
 
