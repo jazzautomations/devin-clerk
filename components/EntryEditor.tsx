@@ -47,6 +47,8 @@ type Form = {
   challengeIds: string[];
   priorExisted: boolean | null;
   usedAi: boolean | null;
+  /** continuação entre edições (migration 044): time anterior ou null */
+  continuesTeamId: number | null;
 };
 
 function toForm(f: EntryFields | null, rubric: string[]): Form {
@@ -68,6 +70,7 @@ function toForm(f: EntryFields | null, rubric: string[]): Form {
     challengeIds: f?.challengeIds ?? [],
     priorExisted: f?.priorExisted ?? null,
     usedAi: f?.usedAi ?? null,
+    continuesTeamId: f?.continuesTeamId ?? null,
   };
 }
 
@@ -89,6 +92,7 @@ function toPayload(f: Form) {
     challengeIds: f.challengeIds,
     priorExisted: f.priorExisted,
     usedAi: f.usedAi,
+    continuesTeamId: f.continuesTeamId,
   };
 }
 
@@ -127,6 +131,7 @@ export function EntryEditor({
   rubric,
   challenges,
   techSuggestions,
+  previousProjects = [],
 }: {
   hackathonId: string;
   initial: Entry;
@@ -136,11 +141,12 @@ export function EntryEditor({
   challenges: { id: string; title: string; sponsor: string }[];
   /** tags (normalizadas) pro autocompletar de "Feito com" */
   techSuggestions: string[];
+  /** projetos de outras edições em que a pessoa fez parte (continuação, 044) */
+  previousProjects?: { teamId: number; title: string; hackathonName: string }[];
 }) {
   const router = useRouter();
   const [entry, setEntry] = useState(initial);
   const [form, setForm] = useState<Form>(() => toForm(initial.fields, rubric));
-  const [afterNotes, setAfterNotes] = useState(initial.afterNotes ?? "");
   const [save, setSave] = useState<"idle" | "pending" | "saving" | "error">("idle");
   const [err, setErr] = useState("");
   const [submitMsg, setSubmitMsg] = useState("");
@@ -286,13 +292,6 @@ export function EntryEditor({
     router.refresh();
   }
 
-  async function saveAfter() {
-    setBusy(true);
-    const ok = await patch({ afterNotes });
-    setBusy(false);
-    if (ok) setSubmitMsg("\"depois do hackathon\" salvo");
-  }
-
   const lastVersion = entry.versions.at(-1);
   const missing = entry.missing;
   const needsTitle = !form.title.trim();
@@ -380,17 +379,41 @@ export function EntryEditor({
           value={form.priorExisted}
           onChange={(v) => set("priorExisted", v)}
         />
+        {previousProjects.length > 0 && (
+          <label className="flex flex-col gap-1.5" data-testid="continues-select">
+            <span className={label}>este projeto continua um projeto seu de outra edição? (opcional)</span>
+            <select
+              value={form.continuesTeamId === null ? "" : String(form.continuesTeamId)}
+              onChange={(e) => set("continuesTeamId", e.target.value ? Number(e.target.value) : null)}
+              className={input}
+            >
+              <option value="">não, é projeto novo</option>
+              {previousProjects.map((p) => (
+                <option key={p.teamId} value={p.teamId}>
+                  {`${p.title} · ${p.hackathonName}`}
+                </option>
+              ))}
+            </select>
+            {form.continuesTeamId !== null && (
+              <span className="font-mono text-[12px] text-accent">
+                continuação: conte no trabalho anterior o que já existia antes do evento (mín. 20 caracteres)
+              </span>
+            )}
+          </label>
+        )}
         <label className="flex flex-col gap-1.5">
           <span className={label}>
             {form.priorExisted === false
               ? "trabalho anterior (opcional)"
-              : "trabalho anterior * — o que já existia antes do evento (ou \"nada\")"}
+              : form.continuesTeamId !== null
+                ? "o que já existia antes do evento * (mín. 20 caracteres)"
+                : "trabalho anterior * — o que já existia antes do evento (ou \"nada\")"}
           </span>
           <textarea
             value={form.priorWork}
             onChange={(e) => set("priorWork", e.target.value)}
             rows={3}
-            maxLength={2000}
+            maxLength={form.continuesTeamId !== null ? 1000 : 2000}
             className={input}
           />
         </label>
@@ -662,28 +685,15 @@ export function EntryEditor({
         )}
       </section>
 
-      <section className="flex flex-col gap-3 border-[1.5px] border-line bg-mint p-4">
-        <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">depois do hackathon · não é julgado</h2>
+      <section className="flex flex-col gap-3 border-[1.5px] border-line bg-mint p-4" data-testid="diary-hint">
+        <h2 className="font-mono text-[12px] tracking-widest text-muted uppercase">depois do evento · o diário do projeto</h2>
         <p className="text-[14px] text-muted">
-          O que aconteceu depois: piloto, prêmio, deploy novo, startup. Fica aberto mesmo depois da trava.
+          O que aconteceu depois da entrega virou o diário do projeto: piloto, prêmio, deploy novo, próxima versão. Fica
+          aberto mesmo depois da trava, no lugar de sempre.
         </p>
-        <textarea
-          aria-label="depois do hackathon"
-          value={afterNotes}
-          onChange={(e) => setAfterNotes(e.target.value)}
-          rows={3}
-          maxLength={4000}
-          className={input}
-        />
-        <button type="button" onClick={saveAfter} disabled={busy || !entry.fields} className="btn w-fit disabled:opacity-50">
-          salvar
-        </button>
-        {locked && err && (
-          <p role="alert" className="font-mono text-[13px] text-orange">
-            {err}
-          </p>
-        )}
-        {locked && submitMsg && <p className="font-mono text-[13px] text-accent">{submitMsg}</p>}
+        <Link href={`/p/${entry.teamId}`} className="btn w-fit">
+          escrever no diário →
+        </Link>
       </section>
     </div>
   );

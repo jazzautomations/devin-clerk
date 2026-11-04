@@ -16,6 +16,7 @@ import {
   type ShowcaseFields,
 } from "@/lib/entries";
 import { canNetwork } from "@/lib/network";
+import { continuesOf } from "@/lib/continuity";
 import { parseTechEntries, type TechEntry } from "@/lib/techTags";
 import { isPublished } from "@/lib/jury";
 import { listWinners, type PrizeKind } from "@/lib/prizes";
@@ -277,7 +278,10 @@ export type ProjectView = {
   fields: EntryFields | null;
   title: string;
   judged: Pick<JudgedVersion, "version" | "submittedAt"> | null;
-  afterNotes: string | null;
+  /** selo "continuou" (migration 044): data do commit que continuou o projeto */
+  continuedAt: string | null;
+  /** continuação entre edições (migration 044): o projeto anterior */
+  continues: { teamId: number; title: string; hackathonId: string; hackathonName: string } | null;
   stageVideoUrl: string | null;
   awards: string[];
   challenges: { id: string; title: string; sponsor: string }[];
@@ -319,12 +323,18 @@ export async function getProjectView(
     phaseOf(entry.hackathonId, now),
     db
       .prepare(
-        `SELECT h.name, h.startsAt, h.active, h.publishedAt, t.placement
-         FROM teams t JOIN hackathons h ON h.id = t.hackathonId WHERE t.id = ?`,
+        `SELECT h.name, h.startsAt, h.active, h.publishedAt, t.placement, tp."continuedAt"
+         FROM teams t JOIN hackathons h ON h.id = t.hackathonId
+         LEFT JOIN team_projects tp ON tp.teamId = t.id WHERE t.id = ?`,
       )
-      .get<{ name: string; startsAt: string | null; active: number; publishedAt: string | null; placement: number }>(
-        teamId,
-      ),
+      .get<{
+        name: string;
+        startsAt: string | null;
+        active: number;
+        publishedAt: string | null;
+        placement: number;
+        continuedAt: string | null;
+      }>(teamId),
     judgedVersions(entry.hackathonId),
     listWinners(entry.hackathonId),
     db
@@ -411,7 +421,8 @@ export async function getProjectView(
     fields,
     title: fields?.title ?? judged?.snapshot.title ?? entry.fields.title,
     judged: judged ? { version: judged.version, submittedAt: judged.submittedAt } : null,
-    afterNotes: entry.afterNotes,
+    continuedAt: h?.continuedAt ?? null,
+    continues: await continuesOf(teamId),
     stageVideoUrl: published || isStaff ? entry.stageVideoUrl : null,
     awards: winners.filter((w) => w.teamId === teamId).map((w) => `${w.place}º lugar · ${w.categoryName}`),
     challenges,

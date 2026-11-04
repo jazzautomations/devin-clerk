@@ -163,7 +163,7 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await expect(showcase.getByText("Planilha Viva")).toHaveCount(0);
   });
 
-  test("ficha /p na ordem da spec: tagline, selos, vídeos, versão avaliada, depois do hackathon", async ({ memberPage: page }) => {
+  test("ficha /p na ordem da spec: tagline, selos, vídeos, versão avaliada e o diário", async ({ memberPage: page }) => {
     await page.goto(`/p/${ids.campeao}`);
     await expect(page.getByRole("heading", { name: "Fila Zero", exact: true })).toBeVisible();
     await expect(page.getByText("fila do posto de saúde em tempo real")).toBeVisible();
@@ -172,11 +172,13 @@ test.describe("projetos da edição — matriz de visibilidade", () => {
     await expect(page.getByRole("link", { name: /apresentação no palco/ })).toHaveAttribute("href", "https://youtu.be/e2e034-palco");
     await expect(page.getByText("protótipo no Figma antes do evento")).toBeVisible();
     await expect(page.getByTestId("judged-version")).toContainText("v1");
-    await expect(page.getByText("piloto com a prefeitura em novembro")).toBeVisible();
-    // ordem: vídeo antes da descrição; versão avaliada antes do "depois do hackathon"
+    // migration 044 — o "depois do hackathon" virou o diário do projeto
+    await expect(page.getByText("piloto com a prefeitura em novembro")).toHaveCount(0);
+    await expect(page.getByTestId("project-diary")).toBeVisible();
+    // ordem: vídeo antes da descrição; versão avaliada antes do diário
     const text = await page.getByTestId("project-page").innerText();
     expect(text.indexOf("vídeo do time")).toBeLessThan(text.indexOf("Problema: fila"));
-    expect(text.indexOf("versão avaliada")).toBeLessThan(text.indexOf("piloto com a prefeitura"));
+    expect(text.indexOf("versão avaliada")).toBeLessThan(text.indexOf("Diário do projeto"));
     await noOverflow(page, "ficha-projeto-390");
   });
 });

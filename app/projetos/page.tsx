@@ -21,6 +21,7 @@ function hrefFor(f: {
   q?: string;
   sort?: string;
   tech?: string;
+  continuou?: boolean;
   page?: number;
 }): string {
   const params = new URLSearchParams();
@@ -29,6 +30,7 @@ function hrefFor(f: {
   if (f.q) params.set("q", f.q);
   if (f.sort === "votes") params.set("sort", "votes");
   if (f.tech) params.set("tech", f.tech);
+  if (f.continuou) params.set("continuou", "1");
   if (f.page && f.page > 1) params.set("pagina", String(f.page));
   const qs = params.toString();
   return qs ? `/projetos?${qs}` : "/projetos";
@@ -43,12 +45,15 @@ export default async function ProjetosPage({
     q?: string;
     sort?: string;
     tech?: string;
+    continuou?: string;
     pagina?: string;
   }>;
 }) {
-  const { h, live, q: rawQ, sort, tech: rawTech, pagina } = await searchParams;
+  const { h, live, q: rawQ, sort, tech: rawTech, continuou, pagina } = await searchParams;
   const hackathonId = h?.trim() || undefined;
   const liveOnly = live === "1";
+  // migration 044 — só projeto com o selo "continuou"
+  const onlyContinued = continuou === "1";
   const q = rawQ?.trim() ?? "";
   const sortVotes = sort === "votes"; // escolha do povo — spec 025
   // spec 046 — filtro por tecnologia (project_tech) e paginação real
@@ -68,6 +73,7 @@ export default async function ProjetosPage({
       sort: sortVotes ? "votes" : "jury",
       meId: member?.id ?? null,
       tech: tech || undefined,
+      continued: onlyContinued,
       limit: PROJECTS_PAGE_SIZE + 1,
       offset: (pageNum - 1) * PROJECTS_PAGE_SIZE,
     }),
@@ -77,8 +83,8 @@ export default async function ProjetosPage({
   const projects = page.slice(0, PROJECTS_PAGE_SIZE);
   const hasNext = page.length > PROJECTS_PAGE_SIZE;
   const hasPrev = pageNum > 1;
-  const filtering = !!hackathonId || liveOnly || !!q || !!tech;
-  const base = { h: hackathonId, live: liveOnly, q, sort, tech: tech || undefined };
+  const filtering = !!hackathonId || liveOnly || !!q || !!tech || onlyContinued;
+  const base = { h: hackathonId, live: liveOnly, q, sort, tech: tech || undefined, continuou: onlyContinued };
   // a tag filtrada aparece nos chips mesmo fora das 20 mais usadas
   const techChips = tech && !topTech.some((t) => t.tag === tech) ? [{ tag: tech, count: 0 }, ...topTech] : topTech;
 
@@ -151,6 +157,14 @@ export default async function ProjetosPage({
             className={chip(liveOnly)}
           >
             só ao vivo
+          </Link>
+          <Link
+            href={hrefFor({ ...base, continuou: !onlyContinued })}
+            aria-current={onlyContinued ? "page" : undefined}
+            className={chip(onlyContinued)}
+            data-testid="filter-continuou"
+          >
+            continuou depois do evento
           </Link>
           <Link
             href={hrefFor({ ...base, sort: sortVotes ? undefined : "votes" })}
@@ -265,6 +279,15 @@ export default async function ProjetosPage({
               )}
 
               <div className="mt-auto flex flex-wrap items-center gap-3 font-mono text-xs">
+                {c.continuedAt && (
+                  <span
+                    title="o time seguiu commitando depois do evento"
+                    data-testid={`continuou-${c.teamId}`}
+                    className="border border-accent bg-mint px-1.5 text-accent"
+                  >
+                    continuou
+                  </span>
+                )}
                 <span
                   title="escolha do povo — votos da comunidade"
                   aria-label={`${c.voteCount} votos da comunidade`}
@@ -301,9 +324,11 @@ export default async function ProjetosPage({
             ? "acabou a lista nessa página"
             : tech
               ? `nenhum projeto feito com ${techLabel(tech)} ainda`
-              : filtering
-                ? "nenhum projeto nesse filtro — limpa pra ver o acervo todo"
-                : "nenhum projeto entregue ainda — o primeiro tá saindo do forno"}
+              : onlyContinued
+                ? "nenhum projeto continuou depois do evento ainda — o time que segue commitando ganha o selo"
+                : filtering
+                  ? "nenhum projeto nesse filtro — limpa pra ver o acervo todo"
+                  : "nenhum projeto entregue ainda — o primeiro tá saindo do forno"}
         </p>
       )}
 

@@ -27,6 +27,10 @@ import { syncMentionsAndTags } from "@/lib/tags";
 //   comentário: autor, admin global, dono ou organizador da comunidade do
 //   post e organizador ou staff da edição do post.
 // - components/PostCard.tsx é o único lugar que renderiza post.
+// - O escopo `team` (migration 044) é o diário do projeto: projeto vivo lista
+//   por listPostIds({kind:"team"}) + hydratePosts e cria por createPost(...,
+//   teamId). Post do diário não tem mural (hackathonId/communityId nulos): o
+//   espaço dele é a página do projeto.
 //
 // Like não dá XP nem badge (plano 046, naoFazer): reação é conversa.
 
@@ -78,14 +82,16 @@ export type Post = {
  * (migration 041). `solto` é só o post sem edição nem comunidade.
  *
  * Recado nunca entra em `global`, `member` nem `solto`: quem lista recado
- * pede o escopo `profile`.
+ * pede o escopo `profile`. `team` é o diário do projeto (migration 044):
+ * o post não tem mural, o espaço dele é o projeto em /p/[teamId].
  */
 export type PostScope =
   | { kind: "global" }
   | { kind: "hackathon"; id: string }
   | { kind: "community"; id: number }
   | { kind: "member"; id: number }
-  | { kind: "profile"; id: number };
+  | { kind: "profile"; id: number }
+  | { kind: "team"; id: number };
 
 /** escopo do listPosts antigo (spec 028), mantido pra quem já chama */
 export type LegacyPostScope = { hackathonId: string } | { communityId: number } | { global: true };
@@ -131,8 +137,12 @@ export async function listPostIds(scope: ScopeArg, meId: number | null, opts: Li
       where.push("p.profileId = @scopeP");
       params.scopeP = scope.id;
       break;
+    case "team":
+      where.push("p.teamId = @scopeT");
+      params.scopeT = scope.id;
+      break;
     case "solto":
-      where.push("p.hackathonId IS NULL AND p.communityId IS NULL");
+      where.push("p.hackathonId IS NULL AND p.communityId IS NULL AND p.teamId IS NULL");
       break;
   }
   // recado (migration 041) só aparece no escopo do perfil: fora dele é como
@@ -338,6 +348,8 @@ export async function createPost(
   hackathonId?: string | null,
   communityId?: number | null,
   profileId?: number | null,
+  /** diário do projeto (migration 044); o time é validado na rota */
+  teamId?: number | null,
 ): Promise<Post> {
   const v = validatePostInput(body, link);
   // escopo é só persistido aqui — edição existe/ativa e inscrição do membro
@@ -345,9 +357,9 @@ export async function createPost(
   // (profileId) passa por lib/recados.ts, que valida antes de chamar.
   const row = await db
     .prepare(
-      "INSERT INTO posts (memberId, body, link, hackathonId, communityId, profileId) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+      "INSERT INTO posts (memberId, body, link, hackathonId, communityId, profileId, teamId) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
-    .get<{ id: number }>(memberId, v.body, v.link, hackathonId?.trim() || null, communityId ?? null, profileId ?? null);
+    .get<{ id: number }>(memberId, v.body, v.link, hackathonId?.trim() || null, communityId ?? null, profileId ?? null, teamId ?? null);
   await syncMentionsAndTags(row!.id, null, v.body, await actorOf(memberId));
   return (await hydratePosts([row!.id], memberId))[0];
 }

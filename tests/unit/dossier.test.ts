@@ -236,6 +236,7 @@ describe("declaração na entrega", () => {
     challengeIds: [],
     priorExisted: null,
     usedAi: null,
+    continuesTeamId: null,
   };
 
   it("valida sim/não/nulo", () => {

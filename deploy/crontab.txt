@@ -44,6 +44,10 @@ H=/home/ubuntu/hackahub
 # nível pelos fatos verificados (members.xp): de hora em hora
 11 * * * *    bash $H/ops/xp.sh prod >> $H/logs/cron-stderr.log 2>&1
 41 * * * *    bash $H/ops/xp.sh stage >> $H/logs/cron-stderr.log 2>&1
+# selo "continuou" do projeto (migration 044): dia 1 do mês, 07:00 UTC no prod
+# e 07:30 no stage. Re-coleta o dossiê de até 50 times por vez
+0 7 1 * *     bash $H/ops/continuidade.sh prod >> $H/logs/cron-stderr.log 2>&1
+30 7 1 * *    bash $H/ops/continuidade.sh stage >> $H/logs/cron-stderr.log 2>&1
 
 # guarda de disco: alerta em 85%, limpa sobras do HackaHub em 90%
 */10 * * * *  bash $H/ops/disk-guard.sh >> $H/logs/disk.log 2>&1

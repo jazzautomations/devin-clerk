@@ -5,6 +5,7 @@ import { followsAnyCommunity } from "@/lib/follows";
 import { hostedSql } from "@/lib/hackathons";
 import { followingIds } from "@/lib/memberFollows";
 import { hydratePosts, type Post } from "@/lib/posts";
+import { followsAnyProject } from "@/lib/projectUpdates";
 
 // Timeline (spec 046, onda 2, migration 038). O /feed vira a página social:
 // quatro abas cronológicas, cursor por id (nunca OFFSET) e um lugar pra abrir
@@ -19,7 +20,8 @@ import { hydratePosts, type Post } from "@/lib/posts";
 //   (hiddenAuthorSql = a forma SQL de hiddenIdsFor) e post de espaço fora do
 //   ar: comunidade escondida, edição inativa ou de comunidade escondida.
 // - "seguindo": quem eu sigo (followingIds), as comunidades em que sou membro
-//   ou que sigo, as edições com inscrição aprovada minha e os meus posts.
+//   ou que sigo, as edições com inscrição aprovada minha, os projetos que eu
+//   sigo (project_follows, migration 044) e os meus posts.
 //   "comunidades": o mural das minhas comunidades (a página usa
 //   communityUpdatesPage, que traz também aviso, hackathon e agenda).
 //   "ao-vivo": mural das edições que rodam no HackaHub agora (listLiveEditions).
@@ -114,6 +116,7 @@ async function scopeFor(meId: number | null, aba: TimelineTab, now: Date): Promi
       where.push(`(p.memberId = @me
         OR p.memberId = ANY(@following::int[])
         OR p.communityId IN (${MY_COMMUNITIES_SQL})
+        OR p.teamId IN (SELECT pf.teamId FROM project_follows pf WHERE pf.memberId = @me)
         OR p.hackathonId IN (SELECT r.hackathonId FROM registrations r WHERE r.memberId = @me AND r.status = 'approved'))`);
       break;
     }
@@ -177,11 +180,15 @@ export async function countNewPosts(
 }
 
 /**
- * Aba padrão do /feed: "seguindo" pra quem segue alguém ou alguma comunidade;
- * senão "tudo" (quem chega não cai numa tela vazia).
+ * Aba padrão do /feed: "seguindo" pra quem segue alguém, alguma comunidade ou
+ * algum projeto; senão "tudo" (quem chega não cai numa tela vazia).
  */
 export async function timelineDefaultTab(meId: number | null): Promise<TimelineTab> {
   if (!meId) return "tudo";
-  const [following, communities] = await Promise.all([followingIds(meId), followsAnyCommunity(meId)]);
-  return following.length > 0 || communities ? "seguindo" : "tudo";
+  const [following, communities, projects] = await Promise.all([
+    followingIds(meId),
+    followsAnyCommunity(meId),
+    followsAnyProject(meId),
+  ]);
+  return following.length > 0 || communities || projects ? "seguindo" : "tudo";
 }

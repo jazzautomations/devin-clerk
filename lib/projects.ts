@@ -23,6 +23,12 @@ export type ProjectCard = {
   project: TeamProject;
   /** até 3 tecnologias do projeto, na ordem do time (chips do card) */
   tech: TechEntry[];
+  /**
+   * selo "continuou" (migration 044): data do primeiro commit depois do fim
+   * da edição + 30 dias, derivada do dossiê pelo cron. null = não continuou
+   * (ou o dossiê ainda não foi lido).
+   */
+  continuedAt: string | null;
 };
 
 /** cards por página em /projetos */
@@ -46,6 +52,8 @@ export type ProjectFilter = {
   meId?: number | null;
   /** ?tech= — tag normalizada de project_tech (migration 036) */
   tech?: string;
+  /** ?continuou=1 — só projeto com o selo "continuou" (migration 044) */
+  continued?: boolean;
   /** paginação opcional (a vitrine é pública e cresce com o acervo) */
   limit?: number;
   offset?: number;
@@ -68,6 +76,7 @@ type Row = {
   videoUrl: string | null;
   logoUrl: string | null;
   technologies: string | null;
+  continuedAt: string | null;
 };
 
 const techList = (v: string | null): unknown[] => {
@@ -109,7 +118,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
       `SELECT t.id AS teamId, t.name AS teamName, t.placement,
               t.hackathonId, h.name AS hackathonName,
               tp.title, tp.description, tp.repoUrl, tp.demoUrl,
-              tp.videoUrl, tp.logoUrl, tp.technologies,
+              tp.videoUrl, tp.logoUrl, tp.technologies, tp."continuedAt",
               (SELECT COUNT(*) FROM team_members tm WHERE tm.teamId = t.id)
                 AS memberCount,
               (SELECT COUNT(*) FROM votes v WHERE v.teamId = t.id)
@@ -130,6 +139,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
          AND ${projectVisibleSql("t", "h")}
          AND (@tech::text IS NULL
               OR EXISTS (SELECT 1 FROM project_tech pt WHERE pt.teamId = t.id AND pt.tag = @tech))
+         AND (@continuou::int = 0 OR tp."continuedAt" IS NOT NULL)
          AND (@q::text IS NULL
               OR tp.title LIKE @q ESCAPE '\\'
               OR tp.description LIKE @q ESCAPE '\\'
@@ -143,6 +153,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
       me: filter.meId ?? -1,
       live: filter.liveOnly ? 1 : 0,
       tech: filter.tech ? (normalizeTech(filter.tech) ?? "!") : null,
+      continuou: filter.continued ? 1 : 0,
       limit: filter.limit ?? null,
       offset: filter.offset ?? 0,
     }) as Row[];
@@ -167,6 +178,7 @@ export async function listProjects(filter: ProjectFilter = {}): Promise<ProjectC
         logoUrl: r.logoUrl,
       },
       tech: parseTechEntries(techList(r.technologies)).slice(0, 3),
+      continuedAt: r.continuedAt ?? null,
     };
   });
 }

@@ -239,6 +239,13 @@ export type EntryFields = {
   priorExisted: boolean | null;
   /** declaração (migration 029): usou IA? null = não respondeu */
   usedAi: boolean | null;
+  /**
+   * continuação entre edições (migration 044): o time desta entrega diz que o
+   * projeto continua um projeto anterior de que fez parte. null = projeto
+   * novo. Com isto preenchido, priorExisted = true e priorWork passa a ser
+   * obrigatório (o que já existia antes do evento).
+   */
+  continuesTeamId: number | null;
 };
 
 /** galeria do projeto (project_media): URL https + legenda, até 6 */
@@ -270,6 +277,9 @@ export const AFTER_LOCK_KEYS = new Set([
 export const STORY_KEYS = ["inspiration", "howBuilt", "challenges", "learned"] as const;
 
 export const TAGLINE_MAX = 140;
+/** continuação (migration 044): o "o que já existia" vale uma frase */
+export const CONTINUES_PRIOR_WORK_MIN = 20;
+export const CONTINUES_PRIOR_WORK_MAX = 1000;
 /** itens aceitos em technologies no PATCH (só 12 ficam; acima disso é 400) */
 export const TECH_INPUT_MAX = 50;
 
@@ -281,12 +291,21 @@ const httpUrl = (u: string) => /^https?:\/\/\S+$/i.test(u);
 const EVALUATED = [
   "title", "tagline", "description", "repoUrl", "demoUrl", "videoUrl", "slidesUrl", "logoUrl",
   "priorWork", "technologies", "links", "socialPosts", "aiUsage", "challengeIds", "priorExisted", "usedAi",
+  "continuesTeamId",
 ] as const;
 
 function optBool(v: unknown, key: string): boolean | null {
   if (v === null) return null;
   if (typeof v !== "boolean") throw new EntryError(`${key} precisa ser true, false ou null`);
   return v;
+}
+
+/** id de time opcional (continuesTeamId): inteiro positivo ou null */
+function optTeamId(v: unknown): number | null {
+  if (v === null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new EntryError("continuesTeamId inválido");
+  return n;
 }
 
 function optText(v: unknown, key: string, max: number): string | null {
@@ -340,6 +359,7 @@ export function validateDraftPatch(raw: Record<string, unknown>): DraftPatch {
   if (raw.aiUsage !== undefined) out.aiUsage = optText(raw.aiUsage, "aiUsage", 2_000);
   if (raw.priorExisted !== undefined) out.priorExisted = optBool(raw.priorExisted, "priorExisted");
   if (raw.usedAi !== undefined) out.usedAi = optBool(raw.usedAi, "usedAi");
+  if (raw.continuesTeamId !== undefined) out.continuesTeamId = optTeamId(raw.continuesTeamId);
   for (const k of ["repoUrl", "demoUrl", "videoUrl", "slidesUrl", "logoUrl"] as const) {
     if (raw[k] !== undefined) out[k] = optUrl(raw[k], k);
   }
@@ -401,8 +421,16 @@ export function missingRequired(f: EntryFields, s: SubmissionSettings | null): s
   if (!f.title?.trim()) miss.push("título");
   if (!f.tagline?.trim()) miss.push("tagline");
   if (!f.description?.trim()) miss.push("o que faz");
-  // "não existia nada antes" já responde a pergunta do trabalho anterior
-  if (!f.priorWork?.trim() && f.priorExisted !== false) miss.push("trabalho anterior");
+  // continuação entre edições (migration 044): o que já existia antes do
+  // evento é obrigatório e vale uma frase, não um "sim"
+  if (f.continuesTeamId) {
+    if ((f.priorWork ?? "").trim().length < CONTINUES_PRIOR_WORK_MIN) {
+      miss.push("o que já existia antes do evento");
+    }
+  } else if (!f.priorWork?.trim() && f.priorExisted !== false) {
+    // "não existia nada antes" já responde a pergunta do trabalho anterior
+    miss.push("trabalho anterior");
+  }
   if (f.technologies.length === 0) miss.push("tecnologias");
   if (s?.requireRepo && !f.repoUrl) miss.push("repositório");
   if (s?.requireVideo && !f.videoUrl) miss.push("vídeo");
@@ -444,6 +472,7 @@ type ProjectRow = {
   aiUsage: string | null;
   priorExisted: number | null;
   usedAi: number | null;
+  continuesTeamId: number | null;
   stageVideoUrl: string | null;
   afterNotes: string | null;
   lastSavedAt: string | null;
@@ -481,6 +510,7 @@ function fieldsFrom(p: ProjectRow, challengeIds: string[]): EntryFields {
     challengeIds,
     priorExisted: p.priorExisted === null || p.priorExisted === undefined ? null : p.priorExisted === 1,
     usedAi: p.usedAi === null || p.usedAi === undefined ? null : p.usedAi === 1,
+    continuesTeamId: p.continuesTeamId == null ? null : Number(p.continuesTeamId),
   };
 }
 
@@ -514,6 +544,8 @@ export function parseSnapshot(text: string): Snapshot {
     challengeIds: s.challengeIds ?? [],
     priorExisted: typeof s.priorExisted === "boolean" ? s.priorExisted : null,
     usedAi: typeof s.usedAi === "boolean" ? s.usedAi : null,
+    // versão enviada antes da 044 não tem continuação: vale como projeto novo
+    continuesTeamId: typeof s.continuesTeamId === "number" ? s.continuesTeamId : null,
     // versão enviada antes da 036 não tem vitrine: vale como vazia
     inspiration: s.inspiration ?? null,
     howBuilt: s.howBuilt ?? null,
@@ -689,6 +721,23 @@ export async function myEntry(hackathonId: string, username: string, now = new D
   return row ? getEntry(row.id, now) : null;
 }
 
+/**
+ * O projeto anterior da continuação (migration 044) é válido pra essa pessoa?
+ * Precisa existir, ter projeto, ser de outra edição e a pessoa precisa ter
+ * feito parte do time dele.
+ */
+async function continuesProjectOf(prevTeamId: number, username: string, hackathonId: string): Promise<boolean> {
+  if (!Number.isSafeInteger(prevTeamId) || prevTeamId <= 0) return false;
+  return !!(await db
+    .prepare(
+      `SELECT 1 AS ok FROM teams t
+       JOIN team_projects tp ON tp.teamId = t.id
+       JOIN team_members tm ON tm.teamId = t.id AND tm.username = ?
+       WHERE t.id = ? AND t.hackathonId <> ?`,
+    )
+    .get(username, prevTeamId, hackathonId));
+}
+
 async function requireTeamMember(teamId: number, username: string) {
   const team = await db
     .prepare("SELECT id, hackathonId, reopenedUntil FROM teams WHERE id = ?")
@@ -745,6 +794,32 @@ export async function saveDraft(
       ).map((r) => r.id),
     );
     if (patch.challengeIds.some((c) => !valid.has(c))) throw new EntryError("desafio não é desta edição");
+  }
+
+  // continuação entre edições (migration 044): o projeto anterior precisa ser
+  // de OUTRA edição e a pessoa precisa ter feito parte dele. Continuação é
+  // declaração de trabalho anterior, então priorExisted vira true e o texto
+  // do "o que já existia" vale uma frase (máx. 1000).
+  if (patch.continuesTeamId !== undefined || patch.priorWork !== undefined) {
+    const cur = await db
+      .prepare("SELECT continuesTeamId, priorWork FROM team_projects WHERE teamId = ?")
+      .get<{ continuesTeamId: number | null; priorWork: string | null }>(teamId);
+    if (patch.continuesTeamId !== undefined) {
+      if (patch.continuesTeamId === teamId) {
+        throw new EntryError("o projeto não pode continuar ele mesmo", 400);
+      }
+      if (patch.continuesTeamId !== null && !(await continuesProjectOf(patch.continuesTeamId, member.username, team.hackathonId))) {
+        throw new EntryError("escolha um projeto anterior de que você fez parte", 400);
+      }
+      if (patch.continuesTeamId !== null) patch.priorExisted = true;
+    }
+    const continua = patch.continuesTeamId !== undefined ? patch.continuesTeamId : (cur?.continuesTeamId ?? null);
+    if (continua !== null) {
+      const trabalho = (patch.priorWork !== undefined ? patch.priorWork : cur?.priorWork) ?? "";
+      if (trabalho.length > CONTINUES_PRIOR_WORK_MAX) {
+        throw new EntryError(`o que já existia antes do evento: máximo ${CONTINUES_PRIOR_WORK_MAX} caracteres`, 400);
+      }
+    }
   }
 
   const cols: { col: string; value: unknown }[] = [];

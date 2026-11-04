@@ -95,6 +95,10 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // perfis em 1 h é barrado em lib/recados.ts, que olha o banco.
   recados: { limit: 10, windowMs: HOUR }, // POST /api/members/[username]/recados
   "recado-target": { limit: 1, windowMs: MINUTE }, // idem, mesma pessoa
+  // diário do projeto (migration 044): atualização é mais rara que post do
+  // feed (o time conta o que mudou, não conversa). Seguir projeto divide o
+  // balde do seguir pessoa (member-follows)
+  "project-updates": { limit: 10, windowMs: DAY }, // POST …/projects/[teamId]/updates
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

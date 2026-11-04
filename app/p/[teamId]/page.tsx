@@ -17,16 +17,24 @@ import { absoluteUrl } from "@/lib/seo";
 import { renderUserMarkdown } from "@/lib/blog";
 import { sponsorLogosForChallenges } from "@/lib/editionSponsors";
 import { PublicCard } from "@/components/PublicCard";
+import { ProjectDiary } from "@/components/ProjectDiary";
+import { ProjectFollowButton } from "@/components/ProjectFollowButton";
 import { parseId } from "@/lib/ids";
 import { techHref } from "@/lib/techTags";
+import { buildWeeksLabel, buildWeeksTeam } from "@/lib/buildWeeks";
+import { isFollowingProject, projectDiary, projectFollowerCount, PROJECT_DIARY_PAGE_SIZE } from "@/lib/projectUpdates";
 
 // Vitrine do projeto (spec 046; base nas specs 010/030/034). A página
 // permanente que o time leva pro portfólio: capa, título, tagline, selos,
 // demo/repo/vídeo, galeria, a história em seções (O que faz, Inspiração,
-// Como foi feito, Desafios, O que aprendemos, Depois do hackathon), "Feito
-// com" navegável e "Quem fez". O que o júri avalia segue a matriz de
-// visibilidade da entrega (lib/entriesPublic); a história é a atual, e se
-// mudou depois da entrega a página avisa e mostra como foi entregue.
+// Como foi feito, Desafios, O que aprendemos), "Feito com" navegável e "Quem
+// fez". O que o júri avalia segue a matriz de visibilidade da entrega
+// (lib/entriesPublic); a história é a atual, e se mudou depois da entrega a
+// página avisa e mostra como foi entregue.
+// Projeto vivo (migration 044): o "depois do hackathon" virou o DIÁRIO do
+// projeto (post com teamId), o time pode seguir o projeto, a página conta as
+// semanas que o time constrói (cumulativo, nunca zera), mostra o selo
+// "continuou" e, quando é continuação, o projeto anterior.
 // Sem conta: página completa quando o projeto já está no arquivo da edição,
 // sem feedback do júri; antes disso, o cartão público.
 
@@ -98,7 +106,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     );
   }
 
-  const [deploy, voteCount, voted, showFeedback, sponsorLogos, audience] = await Promise.all([
+  const [deploy, voteCount, voted, showFeedback, sponsorLogos, audience, weeks, followers, following, diary] = await Promise.all([
     getLatestDeployForTeam(data.teamId),
     voteCountFor(data.teamId),
     member ? hasVoted(member.id, data.teamId) : Promise.resolve(false),
@@ -109,6 +117,12 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     // modo palco: nota do público na final ao vivo — selo separado do voto
     // da comunidade (025), só depois da final encerrada
     getAudienceResult(data.teamId),
+    // migration 044 — semanas construindo (cumulativo, nunca zera) e o
+    // seguir projeto; a contagem de seguidores é só do time
+    buildWeeksTeam(data.teamId),
+    projectFollowerCount(data.teamId),
+    member ? isFollowingProject(member.id, data.teamId) : Promise.resolve(false),
+    projectDiary(data.teamId, member?.id ?? null),
   ]);
   const live = deploy?.status === "running" ? deploy : null;
   const f = data.fields;
@@ -125,7 +139,10 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     ...(data.finalist && data.phase === "publicado" ? [{ text: "finalista", gold: false }] : []),
     ...(audience && audience.position === 1 && !audience.tied ? [{ text: "escolha do público", gold: false }] : []),
     ...(data.phase !== "legado" && data.status === "travado" ? [{ text: "entregue no prazo", gold: false }] : []),
+    // migration 044 — o time seguiu commitando depois do evento
+    ...(data.continuedAt ? [{ text: "continuou", gold: false }] : []),
   ];
+  const weeksLabel = buildWeeksLabel(weeks);
   const ytId = youtubeId(f?.videoUrl);
   const started = parseDbTime(data.editionStartsAt);
   const hasLinks = !!f && (f.repoUrl || f.demoUrl || f.videoUrl || data.stageVideoUrl || live);
@@ -164,6 +181,11 @@ export default async function ProjectPage({ params, searchParams }: Props) {
           {" · "}
           {data.teamName}
         </p>
+        {weeksLabel && (
+          <p className="font-mono text-xs text-accent" data-testid="build-weeks">
+            {weeksLabel}
+          </p>
+        )}
         {badges.length > 0 && (
           <div className="flex flex-wrap gap-2" data-testid="project-badges">
             {badges.map((b) => (
@@ -188,6 +210,19 @@ export default async function ProjectPage({ params, searchParams }: Props) {
           text={`${data.title} — projeto do time ${data.teamName} no ${data.hackathonName}`}
           label="compartilhar projeto"
         />
+        {data.isMember ? (
+          <p className="font-mono text-[12px] text-muted" data-testid="project-followers">
+            {followers === 1 ? "1 pessoa acompanha o projeto" : `${followers} pessoas acompanham o projeto`}
+          </p>
+        ) : member ? (
+          <ProjectFollowButton teamId={data.teamId} following={following} followers={followers} showCount={false} />
+        ) : (
+          <p className="font-mono text-sm" data-testid="anon-follow">
+            <Link href={`/sign-up?redirect_url=${encodeURIComponent(path)}`} className="text-accent hover:underline">
+              crie sua conta pra seguir o projeto →
+            </Link>
+          </p>
+        )}
       </header>
 
       {data.isDraftPreview && (
@@ -312,12 +347,27 @@ export default async function ProjectPage({ params, searchParams }: Props) {
         </>
       )}
 
-      {data.showContent && data.afterNotes?.trim() && (
-        <section className="flex flex-col gap-2 border-[1.5px] border-line bg-mint p-4" data-testid="story-depois">
-          <h2 className="font-display text-[22px] leading-tight font-extrabold tracking-[-0.02em]">Depois do hackathon</h2>
-          <p className="whitespace-pre-line break-words">{data.afterNotes}</p>
+      {data.showContent && data.continues && (
+        <section className="flex flex-col gap-2 border-[1.5px] border-line bg-mint p-4" data-testid="project-continues">
+          <h2 className="font-display text-[22px] leading-tight font-extrabold tracking-[-0.02em]">Continua um projeto</h2>
+          <p className="break-words">
+            <Link href={`/p/${data.continues.teamId}`} className="text-accent hover:underline">
+              {data.continues.title}
+            </Link>
+            {` · ${data.continues.hackathonName}`}
+          </p>
+          {f?.priorWork && <p className="whitespace-pre-line break-words text-muted">{f.priorWork}</p>}
         </section>
       )}
+
+      <ProjectDiary
+        teamId={data.teamId}
+        me={member ? { id: member.id, username: member.username, role: member.role } : null}
+        canPost={data.isMember}
+        initialPosts={diary.posts}
+        initialNext={diary.next}
+        pageSize={PROJECT_DIARY_PAGE_SIZE}
+      />
 
       {f && (
         <>
@@ -358,7 +408,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
             </section>
           )}
 
-          {f.priorWork && (
+          {f.priorWork && !data.continues && (
             <section className="flex flex-col gap-2">
               <h2 className={h2}>trabalho anterior ao evento</h2>
               <p className="whitespace-pre-line break-words text-muted">{f.priorWork}</p>

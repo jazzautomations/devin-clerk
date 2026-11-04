@@ -192,7 +192,7 @@ test.describe("vitrine do projeto", () => {
     await page.goto(`/p/${ids.team}`);
     const body = page.getByTestId("project-page");
     const text = await body.innerText();
-    const order = ["O que faz", "Inspiração", "Como foi feito", "Desafios", "O que aprendemos", "Depois do hackathon"].map((s) =>
+    const order = ["O que faz", "Inspiração", "Como foi feito", "Desafios", "O que aprendemos", "Diário do projeto"].map((s) =>
       text.indexOf(s),
     );
     expect(order.every((i) => i >= 0)).toBe(true);
@@ -221,7 +221,9 @@ test.describe("vitrine do projeto", () => {
     await expect(page.getByTestId("public-card")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Feira Viva E2E", exact: true })).toBeVisible();
     await expect(page.getByTestId("story-inspiracao")).toContainText("a feira some do mapa toda semana");
-    await expect(page.getByTestId("story-depois")).toContainText("virou piloto com a subprefeitura");
+    // migration 044 — "Depois do hackathon" virou o diário do projeto
+    await expect(page.getByTestId("story-depois")).toHaveCount(0);
+    await expect(page.getByTestId("project-diary")).toBeVisible();
     await expect(page.getByRole("link", { name: /repositório/ })).toHaveAttribute("href", "https://gitlab.com/e2e/feira-viva");
     await expect(page.getByTestId("feedback-link")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /escolha do povo/i })).toHaveCount(0);
