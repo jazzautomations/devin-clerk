@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { notify } from "@/lib/notifications";
 import { deactivateBoardEntry } from "@/lib/teamboard";
+import { markOpeningFilledForInvite, withdrawApplicationForDeclinedInvite } from "@/lib/teamOpenings";
 import { assertFormationOpen, lockMemberInEdition, memberTeamFor, TeamError } from "@/lib/teams";
 
 // Frente N #4 — aceite de membro de time (migration 016). Pôr alguém num
@@ -70,6 +71,7 @@ export async function createInvites(
     invited.push(username);
     await notify(m.id, {
       type: "team_invite",
+      actorId: inviter?.id ?? undefined,
       actorUsername: inviterUsername,
       text: `@${inviterUsername} convidou você pro time "${teamName}". Aceite ou recuse na página da edição.`,
       href: inviteHref(hackathonId),
@@ -195,11 +197,15 @@ export async function respondInvite(
       if (inv.invitedBy) {
         await notify(inv.invitedBy, {
           type: "team_invite_declined",
+          actorId: member.id,
           actorUsername: member.username,
           text: `@${member.username} recusou o convite pro time "${inv.teamName}"`,
           href: inviteHref(inv.hackathonId),
         });
       }
+      // vaga de time (migration 045): recusou o convite, a candidatura sai
+      // e a vaga continua aberta pra outra pessoa
+      await withdrawApplicationForDeclinedInvite(inv.teamId, member.id);
       return { status: "declined" as const, teamId: inv.teamId, hackathonId: inv.hackathonId };
     }
 
@@ -227,9 +233,13 @@ export async function respondInvite(
       .run(member.id, inv.hackathonId, inv.id);
     // achou time: o anúncio "procuro time" sai do ar
     await deactivateBoardEntry(member.id, inv.hackathonId);
+    // vaga de time (migration 045): o convite aceito preenche a vaga que o
+    // originou — a candidatura aceita pelo time vira entrada de verdade aqui
+    await markOpeningFilledForInvite(inv.teamId, member.id);
     if (inv.invitedBy) {
       await notify(inv.invitedBy, {
         type: "team_invite_accepted",
+        actorId: member.id,
         actorUsername: member.username,
         text: `@${member.username} aceitou e entrou no time "${inv.teamName}"`,
         href: inviteHref(inv.hackathonId),

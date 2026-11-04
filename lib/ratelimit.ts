@@ -95,6 +95,10 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // perfis em 1 h é barrado em lib/recados.ts, que olha o banco.
   recados: { limit: 10, windowMs: HOUR }, // POST /api/members/[username]/recados
   "recado-target": { limit: 1, windowMs: MINUTE }, // idem, mesma pessoa
+  // vagas de time (migration 045): abrir vaga, candidatar, aceitar/recusar e
+  // o "bora fazer junto" dividem o balde. 20/h cobre um time fechando o time
+  // no meio do evento e freia script martelando convite
+  openings: { limit: 20, windowMs: HOUR }, // POST /api/openings, …/[id]/applications, /api/team-up
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

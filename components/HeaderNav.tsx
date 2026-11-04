@@ -17,6 +17,8 @@ const NAV_IN: NavLink[] = [
   { href: "/desafios", label: "desafios", match: ["/desafios"] },
   { href: "/comunidades", label: "comunidades", match: ["/comunidades", "/comunidade/"] },
   { href: "/projetos", label: "projetos", match: ["/projetos", "/p/"] },
+  // spec 046 onda 3: vagas de time e quem procura time
+  { href: "/times", label: "times", match: ["/times"] },
   { href: "/membros", label: "pessoas", match: ["/membros", "/u/"] },
   { href: "/organizar", label: "organizar", match: ["/organizar"] },
   { href: "/busca", label: "buscar", match: ["/busca"] },

@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { getHackathon, isOver } from "@/lib/hackathons";
 import { getMemberByClerkId } from "@/lib/members";
+import { hasEditionRole } from "@/lib/roles";
 import { getRegistrationIds } from "@/lib/registrations";
 import {
   deactivateBoardEntry,
@@ -115,7 +116,9 @@ export async function DELETE(
   return Response.json({ active: false });
 }
 
-// moderação admin (FR-008): esconde/reativa qualquer anúncio da edição
+// moderação do board (FR-008): esconde/reativa qualquer anúncio da edição.
+// Admin global e organizador da edição (hasEditionRole) — a moderação nova
+// não fica só na mão do admin (spec 046 onda 3).
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -125,13 +128,13 @@ export async function PATCH(
   if (!member) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (member.role !== "admin") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
   const { id } = await params;
   const h = await getHackathon(id);
   if (!h) {
     return Response.json({ error: "Not found" }, { status: 404 });
+  }
+  if (!(await hasEditionRole(member, h.id, "organizador"))) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const b = await req.json().catch(() => null);
   const entryId =
