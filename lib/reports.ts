@@ -29,7 +29,7 @@ import { notify } from "@/lib/notifications";
 // direto pro admin (sem aviso pro autor nem incidente). E quem é o autor
 // (targetMemberId) nunca lê nem resolve a denúncia, nem se virar moderador depois.
 
-export const REPORT_TARGETS = ["post", "comment", "member", "community", "depoimento", "dm", "encontro", "desafio", "desafio_entrega"] as const;
+export const REPORT_TARGETS = ["post", "comment", "member", "community", "depoimento", "dm", "encontro", "desafio", "desafio_entrega", "topic", "topic_reply"] as const;
 export type ReportTarget = (typeof REPORT_TARGETS)[number];
 
 export const REPORT_TARGET_LABEL: Record<ReportTarget, string> = {
@@ -42,6 +42,8 @@ export const REPORT_TARGET_LABEL: Record<ReportTarget, string> = {
   encontro: "encontro",
   desafio: "desafio",
   desafio_entrega: "entrega de desafio",
+  topic: "tópico",
+  topic_reply: "resposta de tópico",
 };
 
 export const REPORT_LIMITS = { reasonMin: 5, reason: 500, snapshot: 2000, resolution: 300 } as const;
@@ -183,6 +185,32 @@ async function resolveTarget(type: ReportTarget, id: string, viewerRole: string 
         authorRole: r.role,
         snapshot: [`@${r.username} no desafio "${r.title}": ${r.summary}`, r.repoUrl, r.demoUrl].filter(Boolean).join("\n"),
         communityId: r.communityId,
+        hackathonId: null,
+      };
+    }
+    // tópicos da comunidade (migration 058): vão pra quem modera a comunidade
+    case "topic":
+    case "topic_reply": {
+      if (num === null) return null;
+      const sql =
+        type === "topic"
+          ? `SELECT t.memberId, m.username, m.role, t.title || E'\\n' || t.body AS text, t.communityId, co.hidden
+             FROM community_topics t JOIN communities co ON co.id = t.communityId LEFT JOIN members m ON m.id = t.memberId
+             WHERE t.id = ? AND t.deletedAt IS NULL`
+          : `SELECT r.memberId, m.username, m.role, r.body AS text, t.communityId, co.hidden
+             FROM topic_replies r JOIN community_topics t ON t.id = r.topicId JOIN communities co ON co.id = t.communityId
+             LEFT JOIN members m ON m.id = r.memberId
+             WHERE r.id = ? AND r.deletedAt IS NULL`;
+      const r = await db
+        .prepare(sql)
+        .get<{ memberId: number | null; username: string | null; role: string | null; text: string; communityId: number; hidden: number }>(num);
+      if (!r || (Number(r.hidden) && !seesHidden)) return null;
+      return {
+        authorId: r.memberId === null ? null : Number(r.memberId),
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: `${r.username ? `@${r.username}: ` : ""}${r.text}`,
+        communityId: Number(r.communityId),
         hackathonId: null,
       };
     }
@@ -380,6 +408,9 @@ type ReportRow = Omit<Report, "href" | "routedTo"> & {
   targetUsername: string | null;
   targetCommunitySlug: string | null;
   targetChallengeId: number | null;
+  targetTopicId: number | null;
+  targetReplyId: number | null;
+  targetTopicSlug: string | null;
   /** depoimento: @ de quem recebeu (o texto mora no perfil dela) */
   testimonialOwner: string | null;
 };
@@ -388,16 +419,20 @@ const SELECT = `SELECT r.id, r.targetType, r.targetId, r.reporterId, r.targetMem
     r.communityId, co.name AS communityName, co.slug AS communitySlug,
     r.hackathonId, h.name AS hackathonName,
     r.createdAt, r.resolvedAt, r.resolvedBy, rb.username AS resolvedByUsername, r.resolution,
-    tm.username AS targetUsername, tc.slug AS targetCommunitySlug, te.challengeId AS targetChallengeId, tdm.username AS "testimonialOwner"
+    tm.username AS targetUsername, tc.slug AS targetCommunitySlug, te.challengeId AS targetChallengeId, tdm.username AS "testimonialOwner",
+    ct.id AS targetTopicId, tr.id AS targetReplyId, ctc.slug AS targetTopicSlug
   FROM reports r
   LEFT JOIN communities co ON co.id = r.communityId
   LEFT JOIN hackathons h ON h.id = r.hackathonId
   LEFT JOIN members rb ON rb.id = r.resolvedBy
   LEFT JOIN members tm ON r.targetType = 'member' AND tm.id::text = r.targetId
   LEFT JOIN communities tc ON r.targetType = 'community' AND tc.id::text = r.targetId
-  LEFT JOIN open_challenge_entries te ON r.targetType = desafio_entrega AND te.id::text = r.targetId
-  LEFT JOIN team_testimonials tt ON r.targetType = depoimento AND tt.id::text = r.targetId
-  LEFT JOIN members tdm ON tdm.id = tt.memberId`;
+  LEFT JOIN open_challenge_entries te ON r.targetType = 'desafio_entrega' AND te.id::text = r.targetId
+  LEFT JOIN team_testimonials tt ON r.targetType = 'depoimento' AND tt.id::text = r.targetId
+  LEFT JOIN members tdm ON tdm.id = tt.memberId
+  LEFT JOIN topic_replies tr ON r.targetType = 'topic_reply' AND tr.id::text = r.targetId
+  LEFT JOIN community_topics ct ON (r.targetType = 'topic' AND ct.id::text = r.targetId) OR ct.id = tr.topicId
+  LEFT JOIN communities ctc ON ctc.id = ct.communityId`;
 
 function toReport(r: ReportRow): Report {
   let href: string | null = null;
@@ -413,6 +448,8 @@ function toReport(r: ReportRow): Report {
     href = `/desafios/${r.targetChallengeId}#entrega-${r.targetId}`;
   } else if (r.targetType === "depoimento" && r.testimonialOwner) {
     href = `/u/${r.testimonialOwner}`;
+  } else if ((r.targetType === "topic" || r.targetType === "topic_reply") && r.targetTopicSlug && r.targetTopicId) {
+    href = `/comunidade/${r.targetTopicSlug}/t/${r.targetTopicId}${r.targetReplyId ? `#r-${r.targetReplyId}` : ""}`;
   }
   const routedTo = r.communityName
     ? `comunidade ${r.communityName}`

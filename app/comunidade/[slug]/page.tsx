@@ -7,6 +7,8 @@ import { CommunityLogo } from "@/components/CommunityLogo";
 import { communityPlace } from "@/components/CommunityRows";
 import { EditionRows } from "@/components/EditionRows";
 import { FeedSection } from "@/components/FeedSection";
+import { TopicList } from "@/components/TopicList";
+import { countTopics, hotTopics } from "@/lib/topics";
 import { MeetupRows } from "@/components/MeetupRows";
 import { PublicCard } from "@/components/PublicCard";
 import { FollowButton, JoinButton, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
@@ -71,6 +73,8 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
 
   // ---- sem conta: cartão mínimo ----
   if (!member) {
+    // tópicos exigem conta; o cartão só mostra quantos tem (migration 058)
+    const topicCount = await countTopics(c.id);
     return (
       <>
         <PublicCard
@@ -83,6 +87,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
             // zero não é prova de nada: a linha some até alguém entrar
             ...(c.members > 0 ? ([["membros", String(c.members)]] as [string, string][]) : []),
             ...(c.verified ? ([["selo", "verificada pelo HackaHub"]] as [string, string][]) : []),
+            ...(topicCount > 0 ? ([["tópicos", String(topicCount)]] as [string, string][]) : []),
           ]}
           extra={
             <>
@@ -120,6 +125,8 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   const role = await getMembership(c.id, member.id);
   const isAdmin = member.role === "admin";
   const canManage = isAdmin || role === "dono" || role === "organizador";
+  // bloco "Tópicos em alta" (migration 058)
+  const hot = await hotTopics(c.id, member.id, 5, now, canManage);
   const isOwner = isAdmin || role === "dono";
   const [members, notices, posts, podium, invites, registeredIds, following, supportLeads, reportCounts, agenda] = await Promise.all([
     listCommunityMembers(c.id),
@@ -324,6 +331,32 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
               <p className="border-[1.5px] border-line px-4 py-4 text-[15px] text-muted">
                 Nada marcado entre um hackathon e outro.
                 {canManage ? " Marque um meetup, uma live ou um demo day." : " Quem segue a comunidade recebe o aviso quando sair."}
+              </p>
+            )}
+          </section>
+
+          {/* tópicos em alta (migration 058) */}
+          <section id="topicos" aria-labelledby="topicos-title" className="flex scroll-mt-24 flex-col gap-4" data-testid="community-hot-topics">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h2 id="topicos-title" className="text-[clamp(1.5rem,3vw,2rem)] leading-none font-extrabold tracking-[-0.035em]">
+                Tópicos em alta
+              </h2>
+              <span className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[13px]">
+                {role && (
+                  <Link href={`/comunidade/${c.slug}/t/novo`} className="text-accent underline-offset-4 hover:underline" data-testid="community-topic-new">
+                    novo tópico
+                  </Link>
+                )}
+                <Link href={`/comunidade/${c.slug}/t`} className="text-accent underline-offset-4 hover:underline" data-testid="community-topics-all">
+                  ver todos →
+                </Link>
+              </span>
+            </div>
+            {hot.length > 0 ? (
+              <TopicList topics={hot} slug={c.slug} meId={member.id} canVote={!!role} variant="compact" now={now} testId="community-hot-list" />
+            ) : (
+              <p className="border-[1.5px] border-line px-4 py-4 text-[15px] text-muted">
+                Nenhum tópico ainda. Abra o primeiro: dúvida, ideia ou o que você está construindo.
               </p>
             )}
           </section>

@@ -50,7 +50,8 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 
-  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates, xp, toWrite] = await Promise.all([    listMyActiveEditions(member.id, now),
+  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates, xp, toWrite] = await Promise.all([
+    listMyActiveEditions(member.id, now),
     listMyEditionRoles(member.id),
     getOpenHackathons(now),
     getRegistrationIds(member.id),

@@ -76,6 +76,13 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   meetups: { limit: 10, windowMs: DAY }, // POST /api/meetups, PATCH /api/meetups/[id]
   // desafio aberto (migration 053): criar é forte como criar comunidade
   "open-challenges": { limit: 3, windowMs: DAY }, // POST /api/open-challenges — membro
+  // tópicos da comunidade (migration 058): abrir, responder e votar (voto em
+  // tópico, em resposta e em enquete dividem o balde); editar e apagar o
+  // próprio ou moderar caem em topic-edit
+  "topic-create": { limit: 10, windowMs: HOUR }, // POST …/communities/[slug]/topics
+  "topic-reply": { limit: 60, windowMs: HOUR }, // POST /api/topics/[id]/replies
+  "topic-vote": { limit: 300, windowMs: HOUR }, // POST /api/topics/[id]/vote, …/replies/[replyId]/vote, …/poll
+  "topic-edit": { limit: 60, windowMs: HOUR }, // PATCH/DELETE tópico e resposta, aceitar resposta
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
