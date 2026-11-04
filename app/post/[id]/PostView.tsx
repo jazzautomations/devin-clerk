@@ -8,8 +8,10 @@ import type { Comment } from "@/lib/comments";
 import { levelFor } from "@/lib/game";
 import type { Post } from "@/lib/posts";
 import { Avatar } from "@/components/Avatar";
+import { MentionField } from "@/components/MentionField";
 import { formatPostTime, PostCard, type PostCardMe } from "@/components/PostCard";
 import { ReportDialog } from "@/components/ReportDialog";
+import { RichText } from "@/components/RichText";
 
 // /post/[id]: o card e a conversa. Comentário de topo aceita resposta; a
 // resposta de uma resposta vai pro mesmo fio (1 nível só, com o @ na frente).
@@ -64,12 +66,12 @@ function Composer({
   }
   return (
     <form onSubmit={submit} className="flex flex-col gap-2" data-testid={testId}>
-      <textarea
+      <MentionField
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={setText}
         rows={2}
         maxLength={MAX}
-        aria-label={label}
+        ariaLabel={label}
         placeholder={placeholder}
         autoFocus={autoFocus}
         className={inputCls}
@@ -152,7 +154,7 @@ function CommentItem({
           }}
         />
       ) : (
-        <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">{c.body}</p>
+        <RichText body={c.body} mentioned={c.mentionedUsernames} />
       )}
       {!editing && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[12px] text-muted">

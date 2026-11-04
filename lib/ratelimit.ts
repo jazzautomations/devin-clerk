@@ -62,6 +62,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "member-follows": { limit: 60, windowMs: HOUR }, // POST/DELETE /api/members/[username]/follow
   // busca global (migration 042): /api/search e a página /busca dividem o balde
   search: { limit: 120, windowMs: HOUR }, // GET /api/search — membro
+  // autocomplete de @ (migration 039): uma consulta a cada 200ms de pausa na
+  // digitação; 120/h cobre quem escreve bastante e freia script
+  suggest: { limit: 120, windowMs: HOUR }, // GET /api/members/suggest — membro
   // depoimento de time (migration 037): escrever é forte (5 por dia por
   // membro); editar, apagar, aceitar, recusar e esconder dividem um balde por hora
   testimonials: { limit: 5, windowMs: DAY }, // POST /api/testimonials — membro

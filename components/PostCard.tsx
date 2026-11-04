@@ -9,12 +9,13 @@ import { REACTION_GLYPH, REACTION_KINDS, REACTION_LABEL, type ReactionKind } fro
 import { Avatar } from "@/components/Avatar";
 import { LinkCard } from "@/components/LinkCard";
 import { ReportDialog } from "@/components/ReportDialog";
+import { RichText } from "@/components/RichText";
 
 // O ÚNICO lugar que renderiza post (spec 046, migration 034). Feed, mural da
 // edição, mural da comunidade, /post/[id] e as próximas ondas (timeline,
-// perfil, projeto vivo) usam este card. O corpo mora em <div data-post-body>
-// (a onda 2 troca por RichText). O card guarda o próprio estado depois de
-// montado: quem lista passa key={post.id}.
+// perfil, projeto vivo) usam este card. O corpo é <RichText> (migration 039):
+// @ vira link de quem existe, # vira /tag/[tag], url abre fora. O card guarda
+// o próprio estado depois de montado: quem lista passa key={post.id}.
 
 export type PostCardMe = { id: number; username: string; role: string } | null;
 
@@ -275,9 +276,7 @@ export function PostCard({
         </form>
       ) : (
         <>
-          <div data-post-body className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">
-            {post.body}
-          </div>
+          <RichText body={post.body} mentioned={post.mentionedUsernames} />
           {post.linkCard ? (
             <LinkCard card={post.linkCard} />
           ) : (

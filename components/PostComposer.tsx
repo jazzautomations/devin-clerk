@@ -3,23 +3,29 @@
 import { useState } from "react";
 import { userMessage } from "@/lib/apiError";
 import type { Post } from "@/lib/posts";
+import { MentionField } from "@/components/MentionField";
 
 // Caixa de postar (migration 034): texto até 500 e link opcional. Com
 // hackathonId posta no mural da edição; com communitySlug, no da comunidade.
 // Link do próprio HackaHub (/p/12, /h/x, /u/x, /comunidade/x) vira card.
+// Menção @ (migration 039): digitar @ abre o autocomplete de quem existe;
+// # vira tag na leitura. initialBody é o atalho de /tag/[tag] ("#x ").
 
 export function PostComposer({
   hackathonId = null,
   communitySlug = null,
   editionLabel = null,
+  initialBody = "",
   onPosted,
 }: {
   hackathonId?: string | null;
   communitySlug?: string | null;
   editionLabel?: string | null;
+  /** texto já preenchido (página de tag: "#nextjs ") */
+  initialBody?: string;
   onPosted: (post: Post) => void;
 }) {
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(initialBody);
   const [link, setLink] = useState("");
   const [status, setStatus] = useState<"idle" | "posting" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -58,12 +64,12 @@ export function PostComposer({
           {editionLabel ?? hackathonId}
         </p>
       )}
-      <textarea
+      <MentionField
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={setBody}
         rows={3}
         maxLength={500}
-        aria-label="o que você está construindo"
+        ariaLabel="o que você está construindo"
         placeholder="O que você está construindo? Poste a demo, o que quebrou, o que aprendeu…"
         className="w-full resize-none border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none"
       />

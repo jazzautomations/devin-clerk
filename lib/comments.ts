@@ -1,9 +1,15 @@
 import db from "@/lib/db";
 import { hiddenAuthorSql } from "@/lib/blocks";
+import { textArray } from "@/lib/posts";
+import { syncMentionsAndTags } from "@/lib/tags";
 
 // Comentários de post (migration 034): respostas em 1 nível. Comentário de
 // topo tem parentId nulo; resposta aponta pra um comentário de topo do mesmo
 // post. listComments devolve os de topo com replies[] em ordem de conversa.
+//
+// Menção @ (migration 039): o comentário também notifica quem é mencionado e
+// devolve mentionedUsernames (só os @ que existem) pra virar link. Tag de
+// comentário não entra no índice de tags: a página é do post.
 export type Comment = {
   id: number;
   postId: number;
@@ -17,6 +23,8 @@ export type Comment = {
   avatarUrl: string | null;
   persona: string | null;
   xp: number;
+  /** @ que existem de verdade no corpo do comentário — viram link */
+  mentionedUsernames: string[];
   /** só nos de topo; resposta não tem resposta */
   replies?: Comment[];
 };
@@ -24,15 +32,23 @@ export type Comment = {
 export const COMMENT_MAX = 1000;
 
 const select = `SELECT c.id, c.postId, c.memberId, c.parentId, c.body, c.createdAt, c.editedAt,
-       m.username, m.name, m.avatarUrl, m.persona, m.xp
+       m.username, m.name, m.avatarUrl, m.persona, m.xp,
+       COALESCE((SELECT array_agg(mt.username ORDER BY mt.username)
+         FROM post_mentions pm JOIN members mt ON mt.id = pm.memberId
+         WHERE pm.commentId = c.id AND ${hiddenAuthorSql("mt.id")}), '{}') AS "mentionedUsernames"
        FROM post_comments c JOIN members m ON m.id = c.memberId`;
 
-const norm = (c: Comment): Comment => ({
+type CommentRow = Omit<Comment, "mentionedUsernames" | "replies"> & {
+  mentionedUsernames: string[] | string | null;
+};
+
+const norm = (c: CommentRow): Comment => ({
   ...c,
   id: Number(c.id),
   postId: Number(c.postId),
   memberId: Number(c.memberId),
   parentId: c.parentId === null ? null : Number(c.parentId),
+  mentionedUsernames: textArray(c.mentionedUsernames),
 });
 
 /**
@@ -43,7 +59,7 @@ export async function listComments(postId: number, meId: number | null = null): 
   const rows = (
     await db
       .prepare(`${select} WHERE c.postId = @post AND ${hiddenAuthorSql("c.memberId")} ORDER BY c.createdAt ASC, c.id ASC`)
-      .all<Comment>({ post: postId, me: meId ?? -1 })
+      .all<CommentRow>({ post: postId, me: meId ?? -1 })
   ).map(norm);
   const top: Comment[] = [];
   const byId = new Map<number, Comment>();
@@ -60,8 +76,9 @@ export async function listComments(postId: number, meId: number | null = null): 
   return top;
 }
 
-export async function getComment(id: number): Promise<Comment | null> {
-  const row = await db.prepare(`${select} WHERE c.id = ?`).get<Comment>(id);
+/** um comentário, ou null. meId só filtra as menções que quem lê ainda vê. */
+export async function getComment(id: number, meId: number | null = null): Promise<Comment | null> {
+  const row = await db.prepare(`${select} WHERE c.id = @id`).get<CommentRow>({ id, me: meId ?? -1 });
   return row ? norm(row) : null;
 }
 
@@ -92,7 +109,10 @@ export async function createComment(
   const row = await db
     .prepare("INSERT INTO post_comments (postId, memberId, body, parentId) VALUES (?, ?, ?, ?) RETURNING id")
     .get<{ id: number }>(postId, memberId, trimmed, parentId);
-  const c = (await getComment(row!.id))!;
+  const created = (await getComment(row!.id))!;
+  // menção do comentário: grava e avisa quem é mencionado pela primeira vez
+  await syncMentionsAndTags(postId, created.id, trimmed, { id: memberId, username: created.username });
+  const c = (await getComment(created.id))!;
   return parentId === null ? { ...c, replies: [] } : c;
 }
 
@@ -107,5 +127,7 @@ export async function updateComment(
   if (cur.memberId !== memberId) return "forbidden";
   const trimmed = validBody(body);
   await db.prepare(`UPDATE post_comments SET body = ?, "editedAt" = datetime('now') WHERE id = ?`).run(trimmed, commentId);
+  // editar reescreve as menções do comentário; ninguém é avisado de novo
+  await syncMentionsAndTags(cur.postId, commentId, trimmed, { id: memberId, username: cur.username });
   return getComment(commentId);
 }
