@@ -113,6 +113,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // responder "como foi" e apresentar dividem o balde. 30/h cobre um dia de
   // evento inteiro e freia script varrendo códigos
   encounters: { limit: 30, windowMs: HOUR }, // POST …/[id]/encounters e …/encounters/**
+  // 4 semanas depois (migration 052): abrir, entrar e encerrar dividem o
+  // balde. 30/h cobre o organizador e os times do mesmo escritório
+  "follow-through": { limit: 30, windowMs: HOUR }, // POST …/hackathons/[id]/quatro-semanas[/teams|/close]
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

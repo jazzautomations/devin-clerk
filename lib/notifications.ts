@@ -52,6 +52,12 @@ export const TYPE_GROUP: Record<string, NotificationGroupName> = {
   // item do bicho (migration 047): conquista pessoal, sem ator. Não desliga e
   // não agrupa — é o mesmo tratamento do resto de "essencial".
   mascote_item: "essencial",
+  // 4 semanas depois (migration 052): entrar com o time é vida do time
+  // (comunidade); o lembrete de quinta e o selo são essencial — o lembrete é
+  // sem culpa e não existe aviso de sequência.
+  follow_through_join: "comunidade",
+  follow_through_reminder: "essencial",
+  follow_through_badge: "essencial",
 };
 
 export function groupOf(type: string): NotificationGroupName {
