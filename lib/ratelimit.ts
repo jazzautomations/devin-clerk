@@ -119,6 +119,11 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // 4 semanas depois (migration 052): abrir, entrar e encerrar dividem o
   // balde. 30/h cobre o organizador e os times do mesmo escritório
   "follow-through": { limit: 30, windowMs: HOUR }, // POST …/hackathons/[id]/quatro-semanas[/teams|/close]
+  // DM com trava (migration 056): mensagem em conversa aberta é fluida
+  // (120/h cobre um papo de evento inteiro); pedido de conversa é forte —
+  // 5/dia segura spam frio sem estrangular quem conheceu gente no dia
+  dm: { limit: 120, windowMs: HOUR }, // POST /api/dm e …/[id]/messages — membro
+  "dm-requests": { limit: 5, windowMs: DAY }, // pedido de conversa — membro
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

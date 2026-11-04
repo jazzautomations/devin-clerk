@@ -18,10 +18,12 @@ import { profileUrl } from "@/lib/social";
 import { personaLabel } from "@/lib/personas";
 import { PublicCard } from "@/components/PublicCard";
 import { ProfileSafetyMenu } from "@/components/ProfileSafetyMenu";
+import { dmEntryPoint } from "@/lib/dm";
 import { currentMember } from "@/lib/session";
 import { isBlockedBy, relationTo } from "@/lib/blocks";
 import { followsMe, isFollowingMember, ownCounts } from "@/lib/memberFollows";
 import { sharedTeamsLabel } from "@/lib/evidence";
+import { DmStart } from "@/components/DmStart";
 import { FollowButton } from "@/components/FollowButton";
 import { MascoteViewer } from "@/components/MascoteViewer";
 import { bichoDoMembro, ESTAGIO_NOME } from "@/lib/mascote/evolucao";
@@ -470,11 +472,14 @@ export default async function PublicProfilePage({
   const relation = viewer && !own ? await relationTo(viewer.id, member.id) : null;
   // seguir pessoa (migration 033): visitante vê "segue você" e o time em
   // comum, nunca número. O dono vê os próprios números e as listas.
-  const [iFollow, followsViewer, teamLine, counts] = await Promise.all([
+  const [iFollow, followsViewer, teamLine, counts, dmEntry] = await Promise.all([
     viewer && !own ? isFollowingMember(viewer.id, member.id) : false,
     viewer && !own ? followsMe(viewer.id, member.id) : false,
     viewer && !own ? sharedTeamsLabel(viewer.id, member.id) : null,
     own ? ownCounts(member.id) : null,
+    // DM com trava (migration 056): o motivo vira texto ao lado do botão;
+    // bloqueio ou canNetwork falso devolve null e nada aparece
+    viewer && !own ? dmEntryPoint(viewer.id, member) : null,
   ]);
   const me = viewer ? { id: viewer.id, username: viewer.username, role: viewer.role } : null;
 
@@ -593,6 +598,7 @@ export default async function PublicProfilePage({
           <div className="flex flex-col gap-2 border-y border-line py-3" data-testid="profile-follow">
             <div className="flex flex-wrap items-center gap-3">
               <FollowButton username={member.username} following={iFollow} />
+              {dmEntry && <DmStart username={member.username} entry={dmEntry} />}
               {followsViewer && (
                 <span className="tag" data-testid="follows-you">
                   segue você

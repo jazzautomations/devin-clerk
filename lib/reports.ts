@@ -278,6 +278,54 @@ async function resolveTarget(
         hackathonId: r.hackathonId,
       };
     }
+    case "dm": {
+      // mensagem direta (migration 056): a denúncia é de UMA mensagem e a
+      // fila vê só o snapshot dela — ninguém lê a conversa (naoFazer: admin
+      // e organizador não leem DM). Só participante da thread denuncia;
+      // mensagem de conversa alheia é 404. Se os dois lados estão numa
+      // edição rolando, a denúncia vira incidente lá (createReport cuida);
+      // fora de evento fica com o admin.
+      if (num === null) return null;
+      const r = await db
+        .prepare(
+          `SELECT dm."memberId" AS "authorId", a.username, a.role, dm.body, t."memberId" AS "lowId", t."peerId" AS "highId"
+           FROM dm_messages dm
+           JOIN dm_threads t ON t.id = dm."threadId"
+           LEFT JOIN members a ON a.id = dm."memberId"
+           WHERE dm.id = @id AND (t."memberId" = @reporter OR t."peerId" = @reporter)`,
+        )
+        .get<{ authorId: number; username: string | null; role: string | null; body: string; lowId: number; highId: number }>({
+          id: num,
+          reporter: reporterId,
+        });
+      if (!r) return null;
+      // edição em andamento com os dois inscritos (approved): a denúncia é
+      // assunto de quem trata incidentes lá, não do admin global
+      const shared = await db
+        .prepare(
+          `SELECT r."hackathonId" FROM registrations r
+           JOIN registrations p ON p."hackathonId" = r."hackathonId" AND p."memberId" = @peer AND p.status = 'approved'
+           WHERE r."memberId" = @me AND r.status = 'approved'
+           ORDER BY r.id DESC`,
+      )
+      .all<{ hackathonId: string }>({ me: reporterId, peer: r.authorId });
+      let hackathonId: string | null = null;
+      for (const h of shared) {
+        const hh = await getHackathon(h.hackathonId);
+        if (hh && editionPhase(hh, new Date()) === "ongoing") {
+          hackathonId = h.hackathonId;
+          break;
+        }
+      }
+      return {
+        authorId: r.authorId,
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: `@${r.username ?? "removido"} (mensagem direta): ${r.body}`,
+        communityId: null,
+        hackathonId,
+      };
+    }
     default:
       return null;
   }

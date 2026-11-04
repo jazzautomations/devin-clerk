@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import { AuthShow } from "@/components/AuthShow";
 import { appConfig } from "@/app.config";
+import { MessagesLink } from "@/components/MessagesLink";
 import { NotificationBell } from "@/components/NotificationBell";
 import { DesktopNav, MobileMenu } from "@/components/HeaderNav";
 
@@ -48,6 +49,7 @@ export function Header() {
             >
               meu painel
             </Link>
+            <MessagesLink />
             <NotificationBell />
             <UserButton />
           </AuthShow>
