@@ -7,6 +7,7 @@ import { currentMember } from "@/lib/session";
 import { canModerateQuestions, canUseQuestions, listQuestions } from "@/lib/questions";
 import { formatDbTime } from "@/lib/format";
 import { QuestionThread } from "@/components/QuestionThread";
+import { CopilotBox } from "@/components/CopilotBox";
 
 export const metadata: Metadata = { title: "Dúvidas da edição", robots: { index: false } };
 
@@ -37,7 +38,15 @@ export default async function DuvidasPage({ params }: PageProps<"/h/[id]/duvidas
         </p>
       </header>
       {allowed ? (
-        <QuestionThread hackathonId={id} questions={withWhen} canAsk canModerate={canModerate} />
+        <>
+          <div className="flex flex-col gap-3 border-[1.5px] border-line p-5" data-testid="copilot-edicao">
+            <h2 className="font-mono text-[13px] font-medium tracking-[0.04em] text-accent uppercase">
+              pergunte ao arquivo da edição
+            </h2>
+            <CopilotBox hackathonId={id} />
+          </div>
+          <QuestionThread hackathonId={id} questions={withWhen} canAsk canModerate={canModerate} />
+        </>
       ) : (
         <div className="flex flex-col gap-3 border-[1.5px] border-line p-5">
           <p className="font-semibold">As dúvidas são só pra quem está inscrito nesta edição.</p>

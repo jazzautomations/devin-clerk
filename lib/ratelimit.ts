@@ -119,6 +119,12 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // 4 semanas depois (migration 052): abrir, entrar e encerrar dividem o
   // balde. 30/h cobre o organizador e os times do mesmo escritório
   "follow-through": { limit: 30, windowMs: HOUR }, // POST …/hackathons/[id]/quatro-semanas[/teams|/close]
+  // copilot do arquivo (migration 055): pergunta e voto dividem o balde;
+  // 30/h cobre uma sessão de pesquisa e freia script
+  copilot: { limit: 30, windowMs: HOUR }, // POST /api/copilot e /api/copilot/feedback
+  // cota própria do resumo via LLM (20/dia por membro): estourada, a
+  // pergunta segue respondida só com os fatos — o LLM nunca é obrigatório
+  "copilot-llm": { limit: 20, windowMs: DAY }, // resumo via LLM em /api/copilot
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
