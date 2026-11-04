@@ -16,6 +16,7 @@ import { Avatar } from "@/components/Avatar";
 import { absoluteUrl } from "@/lib/seo";
 import { renderUserMarkdown } from "@/lib/blog";
 import { sponsorLogosForChallenges } from "@/lib/editionSponsors";
+import { MascoteViewer } from "@/components/MascoteViewer";
 import { PublicCard } from "@/components/PublicCard";
 import { ProjectDiary } from "@/components/ProjectDiary";
 import { ProjectFollowButton } from "@/components/ProjectFollowButton";
@@ -23,6 +24,7 @@ import { parseId } from "@/lib/ids";
 import { techHref } from "@/lib/techTags";
 import { buildWeeksLabel, buildWeeksTeam } from "@/lib/buildWeeks";
 import { isFollowingProject, projectDiary, projectFollowerCount, PROJECT_DIARY_PAGE_SIZE } from "@/lib/projectUpdates";
+import { bichoDoTime } from "@/lib/mascote/time";
 
 // Vitrine do projeto (spec 046; base nas specs 010/030/034). A página
 // permanente que o time leva pro portfólio: capa, título, tagline, selos,
@@ -106,7 +108,8 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     );
   }
 
-  const [deploy, voteCount, voted, showFeedback, sponsorLogos, audience, weeks, followers, following, diary] = await Promise.all([
+  const [deploy, voteCount, voted, showFeedback, sponsorLogos, audience, weeks, followers, following, diary, timeBicho] =
+    await Promise.all([
     getLatestDeployForTeam(data.teamId),
     voteCountFor(data.teamId),
     member ? hasVoted(member.id, data.teamId) : Promise.resolve(false),
@@ -123,6 +126,9 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     projectFollowerCount(data.teamId),
     member ? isFollowingProject(member.id, data.teamId) : Promise.resolve(false),
     projectDiary(data.teamId, member?.id ?? null),
+    // spec 046 onda 4 — bicho do time: montado com uma parte do bicho de
+    // cada integrante, com a bandeira do time na mão (lib/mascote/time)
+    bichoDoTime(data.teamId),
   ]);
   const live = deploy?.status === "running" ? deploy : null;
   const f = data.fields;
@@ -169,10 +175,27 @@ export default async function ProjectPage({ params, searchParams }: Props) {
           )}
           <p className="tag uppercase">{"projeto"}</p>
         </div>
-        <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] leading-[0.95] font-extrabold tracking-[-0.035em] break-words">
-          {data.title}
-        </h1>
-        {f?.tagline && <p className="text-[19px] leading-snug break-words">{f.tagline}</p>}
+        <div className="flex flex-wrap items-start gap-x-5 gap-y-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <h1 className="font-display text-[clamp(2.4rem,6vw,3.75rem)] leading-[0.95] font-extrabold tracking-[-0.035em] break-words">
+              {data.title}
+            </h1>
+            {f?.tagline && <p className="text-[19px] leading-snug break-words">{f.tagline}</p>}
+          </div>
+          {timeBicho && timeBicho.integrantes > 0 && (
+            <figure className="flex w-24 shrink-0 flex-col gap-1 sm:w-28" data-testid="project-team-bicho">
+              <MascoteViewer
+                config={timeBicho.config}
+                extras={timeBicho.extras}
+                tamanho={112}
+                rotulo={`bicho do time ${data.teamName}`}
+              />
+              <figcaption className="font-mono text-[11px] leading-tight text-muted">
+                bicho do time · montado com uma parte do bicho de cada integrante
+              </figcaption>
+            </figure>
+          )}
+        </div>
         <p className="font-mono text-sm break-words text-muted">
           <Link href={`/h/${data.hackathonId}`} className="text-accent hover:underline">
             {data.hackathonName}

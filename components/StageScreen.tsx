@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from "react";
 import type { RankingEntry, StageSnapshot } from "@/lib/stage";
+import type { Salao } from "@/lib/salao";
 import { fmtAvg, StageTimer, useStageStream } from "@/components/StageLive";
+import { TelaoSalao } from "@/components/TelaoSalao";
 
 // Modo palco — o telão. Pensado pra projetor em 1920×1080 visto do fundo
 // do auditório: tamanhos em vw, contraste máximo, nada menor que ~22px.
 // Três atos: espera (QR + ordem), pitch (projeto, tempo, voto, placar) e
 // resultado (ranking revelado de baixo pra cima).
+//
+// Salão (spec 046, onda 4): quando o controle troca a tela, o mesmo telão
+// desenha a ilha com os bichos de quem está presente — a final continua
+// montada por trás, só sai do ar até alguém voltar pra 'palco'.
 
 function Win({
   title,
@@ -185,21 +191,25 @@ export function StageScreen({
   voteUrl,
   qrSvg,
   initial,
+  salaoInicial = null,
 }: {
   hackathonId: string;
   editionName: string;
   voteUrl: string;
   qrSvg: string;
   initial: StageSnapshot;
+  salaoInicial?: Salao | null;
 }) {
   const { snap, conn } = useStageStream(hackathonId, initial);
   const fs = useFullscreen();
   const cur = snap.current;
+  const salao = snap.screen === "salao";
 
   return (
     <div
       data-testid="stage-screen"
       data-status={snap.status}
+      data-screen={snap.screen}
       className="desk fixed inset-0 z-[70] flex flex-col overflow-hidden border-0!"
     >
       <style>{`
@@ -209,15 +219,17 @@ export function StageScreen({
         .stage-grow { transform-origin: left; animation: stage-grow 1.1s cubic-bezier(.12,.23,.5,1) both }
       `}</style>
       <header className="strip flex items-center gap-[1.6vw] px-[1.6vw] py-[0.4vw] text-[clamp(18px,1.6vw,40px)]!">
-        <span>HACKAHUB ▸ {snap.status === "ended" ? "RESULTADO" : "FINAL AO VIVO"}</span>
+        <span>
+          HACKAHUB ▸ {salao ? "SALÃO" : snap.status === "ended" ? "RESULTADO" : "FINAL AO VIVO"}
+        </span>
         <span className="min-w-0 flex-1 truncate text-background">{editionName}</span>
-        {cur && (
+        {cur && !salao && (
           <span data-testid="stage-position">
             PITCH {cur.position}/{snap.total}
           </span>
         )}
         <span className={conn === "ao vivo" ? "" : "text-[#f2b880]"} title="conexão com o servidor">
-          ● {snap.status === "ended" ? "ENCERRADA" : conn.toUpperCase()}
+          ● {salao ? conn.toUpperCase() : snap.status === "ended" ? "ENCERRADA" : conn.toUpperCase()}
         </span>
         {!fs && (
           <button
@@ -231,7 +243,9 @@ export function StageScreen({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-[1.4vw] p-[1.8vw]">
-        {snap.status === "ended" && snap.ranking ? (
+        {salao ? (
+          <TelaoSalao hackathonId={hackathonId} initial={salaoInicial} />
+        ) : snap.status === "ended" && snap.ranking ? (
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,0.36fr)] gap-[1.6vw]">
             <Win title="ESCOLHA_DO_PUBLICO.exe" testId="stage-result">
               <h1 className="mb-[1vw] text-[3.4vw] leading-none font-extrabold tracking-[-0.035em]">

@@ -91,6 +91,37 @@ export function StageControl({ hackathonId, initial }: { hackathonId: string; in
         </p>
       )}
 
+      {/* tela do telão (spec 046, onda 4): palco da final ou salão dos bichos */}
+      <div className="flex flex-wrap items-center gap-2 border-[1.5px] border-line p-3" data-testid="stage-screen-pick">
+        <span className="basis-full font-mono text-[12px] tracking-widest text-muted uppercase">tela do telão</span>
+        <div className="grid flex-1 grid-cols-2 gap-2">
+          {(
+            [
+              ["palco", "palco", "a final ao vivo"],
+              ["salao", "salão", "bichos de quem está aqui"],
+            ] as const
+          ).map(([valor, rotulo, dica]) => (
+            <button
+              key={valor}
+              type="button"
+              disabled={!!busy}
+              aria-pressed={snap.screen === valor}
+              data-testid={`stage-screen-${valor}`}
+              onClick={() => act("screen", { value: valor })}
+              className={`min-h-14 rounded-[6px] border-[1.5px] px-2 py-1 text-left ${
+                snap.screen === valor ? "border-accent bg-mint text-accent" : "border-line hover:bg-mint"
+              }`}
+            >
+              <span className="block text-[15px] font-semibold">{rotulo}</span>
+              <span className="block font-mono text-[11px] text-muted">{dica}</span>
+            </button>
+          ))}
+        </div>
+        <p className="basis-full font-mono text-[11px] text-muted">
+          todo telão aberto acompanha em até 10s. A final continua montada no palco.
+        </p>
+      </div>
+
       {/* AGORA: quem está no palco + cronômetro */}
       <div className="window dark hard">
         <div className="tbar">

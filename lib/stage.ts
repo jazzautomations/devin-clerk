@@ -24,6 +24,14 @@ export class StageError extends Error {
 
 export type StageStatus = "idle" | "live" | "ended";
 
+/**
+ * Qual tela o telão mostra (migration 048): 'palco' é a final ao vivo de
+ * sempre; 'salao' é a ilha com os bichos de quem está presente. É estado
+ * do evento, não do navegador — o controle troca e todo telão segue.
+ */
+export const STAGE_SCREENS = ["palco", "salao"] as const;
+export type StageScreen = (typeof STAGE_SCREENS)[number];
+
 type SessionRow = {
   hackathonId: string;
   status: StageStatus;
@@ -32,6 +40,7 @@ type SessionRow = {
   pitchStartedAt: string | null;
   pitchElapsedMs: number;
   votingOpen: number;
+  screen: StageScreen;
   updatedAt: string;
 };
 
@@ -43,6 +52,7 @@ export type StageSession = {
   pitchStartedAt: string | null;
   pitchElapsedMs: number;
   votingOpen: boolean;
+  screen: StageScreen;
 };
 
 export type StageTeam = {
@@ -72,6 +82,8 @@ export type RankingEntry = {
 export type StageSnapshot = {
   hackathonId: string;
   status: StageStatus;
+  /** 'palco' | 'salao' — o telão escolhe o que desenhar por aqui */
+  screen: StageScreen;
   current: (StageTeam & { position: number }) | null;
   total: number;
   upNext: { teamId: number; teamName: string; title: string }[];
@@ -102,6 +114,7 @@ const DEFAULT_SESSION = (hackathonId: string): StageSession => ({
   pitchStartedAt: null,
   pitchElapsedMs: 0,
   votingOpen: false,
+  screen: "palco",
 });
 
 // datas com milissegundo — o cronômetro pausa/retoma várias vezes e
@@ -122,6 +135,7 @@ function toSession(r: SessionRow): StageSession {
     pitchStartedAt: r.pitchStartedAt,
     pitchElapsedMs: Number(r.pitchElapsedMs),
     votingOpen: Number(r.votingOpen) === 1,
+    screen: r.screen === "salao" ? "salao" : "palco",
   };
 }
 
@@ -155,7 +169,8 @@ async function mutate(
       .prepare(
         `UPDATE stage_sessions SET status = @status, currentTeamId = @currentTeamId,
            pitchSeconds = @pitchSeconds, pitchStartedAt = @pitchStartedAt,
-           pitchElapsedMs = @pitchElapsedMs, votingOpen = @votingOpen, updatedAt = @updatedAt
+           pitchElapsedMs = @pitchElapsedMs, votingOpen = @votingOpen, screen = @screen,
+           updatedAt = @updatedAt
          WHERE hackathonId = @hackathonId`,
       )
       .run({
@@ -166,6 +181,7 @@ async function mutate(
         pitchStartedAt: next.pitchStartedAt,
         pitchElapsedMs: Math.round(next.pitchElapsedMs),
         votingOpen: next.votingOpen ? 1 : 0,
+        screen: next.screen,
         updatedAt: stamp(new Date()),
       });
     return next;
@@ -312,6 +328,20 @@ export async function setPitchSeconds(hackathonId: string, seconds: unknown): Pr
     throw new StageError(`tempo de pitch entre ${PITCH_MIN}s e ${PITCH_MAX / 60}min`, 400);
   }
   return mutate(hackathonId, () => ({ pitchSeconds: seconds as number }));
+}
+
+// ---------- tela do telão (migration 048) ----------
+
+/**
+ * Troca o que o telão mostra: 'palco' (final) ou 'salao' (bichos de quem
+ * está presente). Vale em qualquer status — o salão é a recepção do evento,
+ * antes e durante a final. Idempotente.
+ */
+export async function setScreen(hackathonId: string, value: unknown): Promise<StageSession> {
+  if (typeof value !== "string" || !(STAGE_SCREENS as readonly string[]).includes(value)) {
+    throw new StageError(`tela inválida — use ${STAGE_SCREENS.join(" ou ")}`, 400);
+  }
+  return mutate(hackathonId, (s) => (s.screen === value ? null : { screen: value as StageScreen }));
 }
 
 // ---------- votação ----------
@@ -585,6 +615,7 @@ export async function getStageSnapshot(hackathonId: string, now = new Date()): P
   return {
     hackathonId,
     status: s.status,
+    screen: s.screen,
     current: cur ? { ...cur, position: idx + 1 } : null,
     total: queue.length,
     upNext: queue
@@ -644,6 +675,7 @@ export const STAGE_ACTIONS = [
   "end",
   "reopen",
   "min-votes",
+  "screen",
 ] as const;
 export type StageAction = (typeof STAGE_ACTIONS)[number];
 
@@ -699,6 +731,9 @@ export async function runStageAction(hackathonId: string, body: Record<string, u
       return;
     case "min-votes":
       await setAudienceMinVotes(hackathonId, body.value);
+      return;
+    case "screen":
+      await setScreen(hackathonId, body.value);
       return;
   }
 }

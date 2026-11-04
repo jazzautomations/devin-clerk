@@ -42,6 +42,7 @@ export const PUBLIC_APIS: RegExp[] = [
   new RegExp(`^/api/notifications/digest/sair/${SEG}$`), // "parar de receber" do resumo semanal, token assinado
   new RegExp(`^/api/hackathons/${SEG}/incidents$`), // relato anônimo
   new RegExp(`^/api/hackathons/${SEG}/stage(/stream)?$`), // estado do telão
+  new RegExp(`^/api/hackathons/${SEG}/salao$`), // salão do telão: bichos de quem está presente (migration 048)
   /^\/api\/mascote\/.+$/, // SVG do bicho (migration 043): avatar em lista, OG e telão
 ];
 
