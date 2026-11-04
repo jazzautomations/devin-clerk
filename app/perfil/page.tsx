@@ -17,6 +17,8 @@ import { MascoteViewer } from "@/components/MascoteViewer";
 import { mascoteDoMembro } from "@/lib/mascote/store";
 import { ESPECIE_DEFS } from "@/lib/mascote/especies";
 import { COPY_CRESCE } from "@/lib/mascote/tipos";
+import { getMemberProjects } from "@/lib/archive";
+import { listPins } from "@/lib/profileFacts";
 
 export default async function PerfilPage() {
   const { userId } = await auth();
@@ -39,6 +41,8 @@ export default async function PerfilPage() {
     listMyContactShares(member.id),
     mascoteDoMembro(member.id),
   ]);
+  // perfil rico (migration 041): fixados e as opções de projeto
+  const [projects, pins] = await Promise.all([getMemberProjects(member.username), listPins(member.id)]);
   const channels = channelsEnabled();
 
   return (
@@ -90,7 +94,17 @@ export default async function PerfilPage() {
         </div>
       </section>
       <ProfileReminder member={member} href="/bem-vindo?refazer=1" />
-      <ProfileForm member={member} openTo={openTo} contact={contact} channels={channels} />
+      <ProfileForm
+        member={member}
+        openTo={openTo}
+        contact={contact}
+        channels={channels}
+        projects={projects.map((p) => ({
+          teamId: p.teamId,
+          label: p.project?.title ? `${p.project.title} · ${p.hackathonName}` : `${p.teamName} · ${p.hackathonName}`,
+        }))}
+        pins={pins}
+      />
       {images.length > 0 && (
         <section id="imagem" className="flex flex-col gap-3 border-t-2 border-line pt-6" data-testid="image-consents">
           <h2 className="text-xl font-extrabold tracking-[-0.03em]">Uso de imagem</h2>

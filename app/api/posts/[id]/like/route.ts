@@ -19,6 +19,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // post de quem me bloqueou (ou que eu bloqueei) não existe pra mim
   const post = postId === null ? null : await getPost(postId, member.id);
   if (!post) return Response.json({ error: "Not found" }, { status: 404 });
+  // recado no perfil (migration 041) não tem reação: o recado é conversa, não
+  // post de mural (estudo 044 §1.4)
+  if (post.profileId !== null) {
+    return Response.json({ error: "Recado não tem reação." }, { status: 400 });
+  }
   if (post.memberId === member.id) {
     return Response.json({ error: "Você não pode reagir ao próprio post" }, { status: 400 });
   }

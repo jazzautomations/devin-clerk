@@ -4,6 +4,8 @@ import { claimSponsorInvites } from "@/lib/editionSponsors";
 import { claimCommunityInvites } from "@/lib/communities";
 import { toLikePattern } from "@/lib/search";
 import { RETIRED_BADGE_IDS } from "@/lib/game";
+import { areasFromJson, type AreaKey } from "@/lib/areas";
+import { isRecadosFrom, type RecadosFrom } from "@/lib/recados";
 
 // badge aposentado (criador, influente) não entra no contador "N badges".
 // ids são constantes do código, sem entrada de usuário.
@@ -40,9 +42,21 @@ export type Member = {
   city?: string | null;
   institution?: string | null;
   course?: string | null;
+  // perfil rico (migration 041): áreas de ajuda, perfil aberto e quem deixa recado
+  helpOffer?: AreaKey[];
+  helpWant?: AreaKey[];
+  publicProfile?: number;
+  recadosFrom?: RecadosFrom;
 };
 
-type MemberRow = Omit<Member, "skills" | "personas" | "intents"> & { skills: string; personas: string; intents?: string };
+type MemberRow = Omit<Member, "skills" | "personas" | "intents" | "helpOffer" | "helpWant" | "recadosFrom"> & {
+  skills: string;
+  personas: string;
+  intents?: string;
+  helpOffer?: string;
+  helpWant?: string;
+  recadosFrom?: string;
+};
 
 function toMember(row: MemberRow): Member {
   return {
@@ -50,6 +64,10 @@ function toMember(row: MemberRow): Member {
     skills: JSON.parse(row.skills),
     personas: JSON.parse(row.personas ?? "[]"),
     intents: JSON.parse(row.intents ?? "[]"),
+    helpOffer: areasFromJson(row.helpOffer),
+    helpWant: areasFromJson(row.helpWant),
+    publicProfile: Number(row.publicProfile ?? 0),
+    recadosFrom: isRecadosFrom(row.recadosFrom) ? row.recadosFrom : "conexoes",
   };
 }
 
@@ -278,10 +296,24 @@ export type LeaderboardSort = "xp" | "recent";
 
 // ranking público: xp desc com desempate determinístico por username;
 // "recent" ordena por entrada — ordem cronológica não é mérito
+export type MemberFilter = {
+  /** área de "posso ajudar com" (lib/areas.ts) */
+  oferece?: string | null;
+  /** área de "quero ajuda com" */
+  quer?: string | null;
+  cidade?: string | null;
+  /** instituição de ensino (a UI chama de faculdade) */
+  faculdade?: string | null;
+};
+
+// filtro de área: a chave mora num JSON de strings ('["dev","design"]'), então
+// o casamento é pelo literal entre aspas. A chave é validada antes (lib/areas).
+
 export async function listLeaderboard(
   sort: LeaderboardSort = "xp",
   limit = 100,
   q?: string,
+  filter: MemberFilter = {},
 ): Promise<Member[]> {
   const orderBy =
     sort === "recent"
@@ -302,10 +334,27 @@ export async function listLeaderboard(
               OR m.name LIKE @q ESCAPE '\\'
               OR m.headline LIKE @q ESCAPE '\\'
               OR m.skills LIKE @q ESCAPE '\\')
+         AND (@oferece::text IS NULL OR m.helpOffer LIKE @oferece)
+         AND (@quer::text IS NULL OR m.helpWant LIKE @quer)
+         AND (@cidade::text IS NULL OR m.city LIKE @cidade ESCAPE '\\')
+         AND (@faculdade::text IS NULL OR m.institution LIKE @faculdade ESCAPE '\\')
        ORDER BY ${orderBy} LIMIT @limit`,
     )
-    .all({ q: toLikePattern(q), limit }) as MemberRow[];
+    .all({
+      q: toLikePattern(q),
+      oferece: areaKeyPattern(filter.oferece),
+      quer: areaKeyPattern(filter.quer),
+      cidade: toLikePattern(filter.cidade),
+      faculdade: toLikePattern(filter.faculdade),
+      limit,
+    }) as MemberRow[];
   return rows.map(toMember);
+}
+
+/** `design` → `%"design"%` (chave exata dentro do JSON); inválida vira null */
+function areaKeyPattern(key: string | null | undefined): string | null {
+  const clean = typeof key === "string" ? key.trim() : "";
+  return clean ? `%"${clean.replace(/[^a-z_]/g, "")}"%` : null;
 }
 
 export async function getMemberByClerkId(clerkId: string): Promise<Member | null> {
@@ -328,6 +377,11 @@ export async function updateMemberProfile(
     headline?: string;
     persona?: string;
     personas?: string[];
+    // perfil rico (migration 041)
+    helpOffer?: AreaKey[];
+    helpWant?: AreaKey[];
+    publicProfile?: boolean;
+    recadosFrom?: RecadosFrom;
   },
 ): Promise<void> {
   await db.prepare(
@@ -341,7 +395,11 @@ export async function updateMemberProfile(
        website = COALESCE(@website, website),
        headline = COALESCE(@headline, headline),
        persona = CASE WHEN @personasSet::int = 1 THEN @primary ELSE COALESCE(@persona, persona) END,
-       personas = COALESCE(@personas, personas)
+       personas = COALESCE(@personas, personas),
+       helpOffer = COALESCE(@helpOffer, helpOffer),
+       helpWant = COALESCE(@helpWant, helpWant),
+       publicProfile = COALESCE(@publicProfile::int, publicProfile),
+       recadosFrom = COALESCE(@recadosFrom, recadosFrom)
      WHERE clerkId = @clerkId`,
   ).run({
     clerkId,
@@ -357,6 +415,10 @@ export async function updateMemberProfile(
     personasSet: patch.personas ? 1 : 0,
     primary: patch.personas?.[0] ?? null,
     personas: patch.personas ? JSON.stringify(patch.personas) : null,
+    helpOffer: patch.helpOffer ? JSON.stringify(patch.helpOffer) : null,
+    helpWant: patch.helpWant ? JSON.stringify(patch.helpWant) : null,
+    publicProfile: patch.publicProfile === undefined ? null : patch.publicProfile ? 1 : 0,
+    recadosFrom: patch.recadosFrom ?? null,
   });
 }
 

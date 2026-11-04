@@ -7,18 +7,38 @@ import { OPEN_TO, openToLabel } from "@/lib/openTo";
 import { formatBrPhone } from "@/lib/notify/phone";
 import type { ChannelsEnabled } from "@/lib/notify/reach";
 import { userMessage } from "@/lib/apiError";
+import { AREA_KEYS, MAX_AREAS, areaLabel } from "@/lib/areas";
+// só o vocabulário puro: lib/recados fala com o banco e não pode entrar no bundle
+import type { RecadosFrom } from "@/lib/recadosText";
+
+// Perfil (spec 039 + perfil rico, migration 041): cidade e faculdade,
+// "posso ajudar com" / "quero ajuda com" (chips de lib/areas), projetos
+// fixados (até 3), perfil aberto pra quem não tem conta e quem pode deixar
+// recado. A validação de verdade mora na API (PATCH /api/members/me).
+
+const RECADOS_LABEL: Record<RecadosFrom, string> = {
+  conexoes: "quem tem laço comigo (time, edição, comunidade, seguir mútuo)",
+  todos: "qualquer pessoa do HackaHub",
+  ninguem: "ninguém",
+};
+const RECADOS_ORDER: RecadosFrom[] = ["conexoes", "todos", "ninguem"];
 
 export function ProfileForm({
   member,
   openTo: initialOpenTo = [],
   contact,
   channels = { email: false, whatsapp: false },
+  projects = [],
+  pins: initialPins = [],
 }: {
   member: Member;
   openTo?: string[];
   contact?: { phone: string | null; whatsappOptIn: boolean };
   /** canais que saem de verdade neste ambiente: a copy só promete o que existe */
   channels?: ChannelsEnabled;
+  /** meus projetos (time + título) pra escolher os fixados */
+  projects?: { teamId: number; label: string }[];
+  pins?: number[];
 }) {
   const [name, setName] = useState(member.name ?? "");
   const [openTo, setOpenTo] = useState<string[]>(initialOpenTo);
@@ -37,6 +57,11 @@ export function ProfileForm({
   );
   const [phone, setPhone] = useState(contact?.phone ? formatBrPhone(contact.phone) : "");
   const [whatsappOptIn, setWhatsappOptIn] = useState(contact?.whatsappOptIn ?? false);
+  const [helpOffer, setHelpOffer] = useState<string[]>(member.helpOffer ?? []);
+  const [helpWant, setHelpWant] = useState<string[]>(member.helpWant ?? []);
+  const [publicProfile, setPublicProfile] = useState(member.publicProfile === 1);
+  const [recadosFrom, setRecadosFrom] = useState<RecadosFrom>(member.recadosFrom ?? "conexoes");
+  const [pins, setPins] = useState<number[]>(initialPins);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
@@ -62,6 +87,11 @@ export function ProfileForm({
         openTo,
         phone,
         whatsappOptIn,
+        helpOffer,
+        helpWant,
+        publicProfile,
+        recadosFrom,
+        pins,
         skills: skills
           .split(",")
           .map((s) => s.trim())
@@ -74,6 +104,35 @@ export function ProfileForm({
     }
     setStatus(res.ok ? "saved" : "error");
   }
+
+  // chip de área: oferece e quer são listas independentes, até MAX_AREAS cada
+  const areaChips = (keys: string[], setKeys: (next: string[]) => void, label: string, testId: string) => (
+    <fieldset className="flex flex-col gap-1.5" data-testid={testId}>
+      <legend className="font-mono text-xs text-muted">
+        {label}: até {MAX_AREAS}
+      </legend>
+      <div className="flex flex-wrap gap-2">
+        {AREA_KEYS.map((k) => {
+          const on = keys.includes(k);
+          const full = !on && keys.length >= MAX_AREAS;
+          return (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={on}
+              disabled={full}
+              onClick={() => setKeys(on ? keys.filter((x) => x !== k) : [...keys, k])}
+              className={`min-h-[44px] border-[1.5px] px-2.5 font-mono text-[12px] disabled:opacity-40 ${
+                on ? "border-accent bg-mint text-accent" : "border-line text-foreground hover:border-accent"
+              }`}
+            >
+              {areaLabel(k)}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 
   const input =
     "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
@@ -90,7 +149,7 @@ export function ProfileForm({
           <input className={input} value={city} onChange={(e) => setCity(e.target.value)} placeholder="Sorocaba, SP" />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="font-mono text-xs text-muted">instituição</span>
+          <span className="font-mono text-xs text-muted">faculdade</span>
           <input className={input} value={institution} onChange={(e) => setInstitution(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1.5">
@@ -223,6 +282,66 @@ export function ProfileForm({
           />
         </label>
       </div>
+      {/* perfil rico (migration 041): áreas de ajuda, fixados, perfil aberto
+          e quem pode deixar recado */}
+      {areaChips(helpOffer, setHelpOffer, "posso ajudar com", "help-offer")}
+      {areaChips(helpWant, setHelpWant, "quero ajuda com", "help-want")}
+      {projects.length > 0 && (
+        <fieldset className="flex flex-col gap-1.5" data-testid="pins">
+          <legend className="font-mono text-xs text-muted">
+            projetos fixados: até 3, na ordem do clique (o perfil mostra no topo)
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {projects.map((p) => {
+              const on = pins.includes(p.teamId);
+              const full = !on && pins.length >= 3;
+              return (
+                <button
+                  key={p.teamId}
+                  type="button"
+                  aria-pressed={on}
+                  disabled={full}
+                  onClick={() => setPins(on ? pins.filter((id) => id !== p.teamId) : [...pins, p.teamId])}
+                  className={`min-h-[44px] max-w-full border-[1.5px] px-2.5 font-mono text-[12px] break-words disabled:opacity-40 ${
+                    on ? "border-accent bg-mint text-accent" : "border-line text-foreground hover:border-accent"
+                  }`}
+                >
+                  {on ? `${pins.indexOf(p.teamId) + 1}. ` : ""}
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+      <label className="flex items-start gap-2.5 text-[14px]" data-testid="public-profile">
+        <input
+          type="checkbox"
+          className="mt-1 size-4 accent-[var(--accent)]"
+          checked={publicProfile}
+          onChange={(e) => setPublicProfile(e.target.checked)}
+        />
+        <span>
+          Perfil aberto: quem não tem conta vê sua trajetória, seus projetos e seus números.
+          <span className="mt-1 block font-mono text-[12px] text-muted">
+            Sem atividade, sem recado e sem seus links. Dá pra desligar quando quiser.
+          </span>
+        </span>
+      </label>
+      <label className="flex flex-col gap-1.5" data-testid="recados-from">
+        <span className="font-mono text-xs text-muted">quem pode deixar recado no seu perfil</span>
+        <select
+          className={input}
+          value={recadosFrom}
+          onChange={(e) => setRecadosFrom(e.target.value as RecadosFrom)}
+        >
+          {RECADOS_ORDER.map((v) => (
+            <option key={v} value={v}>
+              {RECADOS_LABEL[v]}
+            </option>
+          ))}
+        </select>
+      </label>
       {/* spec 033 FR-010 — telefone + opt-in de WhatsApp, separado do e-mail */}
       <fieldset id="contato" className="flex scroll-mt-24 flex-col gap-3 border-t border-line pt-4">
         <legend className="sr-only">contato para avisos</legend>

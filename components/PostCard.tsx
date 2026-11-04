@@ -295,35 +295,38 @@ export function PostCard({
       )}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div role="group" aria-label="reações" className="flex flex-wrap gap-1.5">
-          {REACTION_KINDS.map((k) => {
-            const n = post.reactions[k];
-            const on = post.myReaction === k;
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => react(k)}
-                disabled={!me || mine}
-                aria-pressed={on}
-                aria-label={`${REACTION_LABEL[k]}${n ? `, ${n}` : ""}`}
-                title={mine ? "reações de quem leu seu post" : REACTION_LABEL[k]}
-                data-testid={`reaction-${k}`}
-                className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-[6px] border-[1.5px] px-2 font-mono text-[12px] transition disabled:cursor-default ${
-                  on
-                    ? "border-accent bg-mint text-accent"
-                    : "border-line-soft text-muted enabled:hover:border-foreground enabled:hover:text-foreground"
-                }`}
-              >
-                <span aria-hidden className="font-bold">
-                  {REACTION_GLYPH[k]}
-                </span>
-                <span>{REACTION_LABEL[k]}</span>
-                {n > 0 && <span className={on ? "text-accent" : "text-foreground"}>{n}</span>}
-              </button>
-            );
-          })}
-        </div>
+        {/* recado no perfil (migration 041): reação desligada, sobra a resposta */}
+        {post.profileId === null && (
+          <div role="group" aria-label="reações" className="flex flex-wrap gap-1.5">
+            {REACTION_KINDS.map((k) => {
+              const n = post.reactions[k];
+              const on = post.myReaction === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => react(k)}
+                  disabled={!me || mine}
+                  aria-pressed={on}
+                  aria-label={`${REACTION_LABEL[k]}${n ? `, ${n}` : ""}`}
+                  title={mine ? "reações de quem leu seu post" : REACTION_LABEL[k]}
+                  data-testid={`reaction-${k}`}
+                  className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-[6px] border-[1.5px] px-2 font-mono text-[12px] transition disabled:cursor-default ${
+                    on
+                      ? "border-accent bg-mint text-accent"
+                      : "border-line-soft text-muted enabled:hover:border-foreground enabled:hover:text-foreground"
+                  }`}
+                >
+                  <span aria-hidden className="font-bold">
+                    {REACTION_GLYPH[k]}
+                  </span>
+                  <span>{REACTION_LABEL[k]}</span>
+                  {n > 0 && <span className={on ? "text-accent" : "text-foreground"}>{n}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-3 font-mono text-[12px] text-muted">
           {showThreadLink && (
             <Link href={permalink} className="transition hover:text-accent" data-testid="post-comments-link">

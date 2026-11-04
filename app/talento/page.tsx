@@ -3,10 +3,16 @@ import type { Metadata } from "next";
 import { listTalent } from "@/lib/talent";
 import { levelFor } from "@/lib/game";
 import { Avatar } from "@/components/Avatar";
+import { MemberFilters } from "@/components/MemberFilters";
 import { openToLabel } from "@/lib/openTo";
+import { isAreaKey } from "@/lib/areas";
 
 // diretório público "disponível para" (open to) — spec 014. Participante nunca paga: a vitrine
 // é pra empresa que quer alcançar quem prova em hackathon.
+//
+// Perfil rico (migration 041): os mesmos filtros de /membros e a contagem de
+// depoimentos de time com o primeiro trecho, que é a prova social que a 044
+// pede no cartão.
 
 export const metadata: Metadata = {
   title: "talento",
@@ -15,8 +21,24 @@ export const metadata: Metadata = {
   alternates: { canonical: "/talento" },
 };
 
-export default async function TalentoPage() {
-  const talent = await listTalent(100);
+const areaParam = (v: string | undefined) => (isAreaKey(v) ? v : undefined);
+const textParam = (v: string | undefined) => v?.trim() || undefined;
+
+export default async function TalentoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; oferece?: string; quer?: string; cidade?: string; faculdade?: string }>;
+}) {
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const filter = {
+    oferece: areaParam(sp.oferece),
+    quer: areaParam(sp.quer),
+    cidade: textParam(sp.cidade),
+    faculdade: textParam(sp.faculdade),
+  };
+  const talent = await listTalent(100, q, filter);
+  const filtered = !!(q || filter.oferece || filter.quer || filter.cidade || filter.faculdade);
 
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6">
@@ -36,6 +58,8 @@ export default async function TalentoPage() {
           </p>
         )}
       </div>
+
+      <MemberFilters action="/talento" values={{ q, ...filter }} />
 
       <ul className="flex flex-col gap-2">
         {talent.map((t) => {
@@ -103,6 +127,14 @@ export default async function TalentoPage() {
                       ))}
                     </div>
                   )}
+                  {t.testimonial && (
+                    <p
+                      className="border-l-[3px] border-accent pl-3 text-[14px] leading-snug text-muted [overflow-wrap:anywhere]"
+                      data-testid="talent-testimonial"
+                    >
+                      {t.testimonial.length > 180 ? `${t.testimonial.slice(0, 179)}…` : t.testimonial}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-col gap-1.5 sm:items-end sm:text-right">
                   <span className="font-mono text-xs">
@@ -115,6 +147,12 @@ export default async function TalentoPage() {
                     {t.projects}{" "}
                     {t.projects === 1 ? "projeto entregue" : "projetos entregues"}
                   </span>
+                  {t.testimonials > 0 && (
+                    <span className="font-mono text-[12px] text-muted" data-testid="talent-testimonials">
+                      {t.testimonials}{" "}
+                      {t.testimonials === 1 ? "depoimento de time" : "depoimentos de time"}
+                    </span>
+                  )}
                   {t.best && (
                     <Link
                       href={`/h/${t.best.hackathonId}`}
@@ -127,7 +165,7 @@ export default async function TalentoPage() {
                     <a
                       href={`https://github.com/${t.github.replace(/^@/, "")}`}
                       target="_blank"
-                      rel="noopener"
+                      rel="noopener nofollow"
                       className="font-mono text-xs text-accent hover:underline"
                     >
                       github/{t.github.replace(/^@/, "")} →
@@ -142,11 +180,17 @@ export default async function TalentoPage() {
 
       {talent.length === 0 && (
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          ninguém se marcou como disponível ainda. Se você constrói em hackathon, marque no{" "}
-          <Link href="/perfil" className="link-inline">
-            seu perfil
-          </Link>{" "}
-          e entre na vitrine.
+          {filtered ? (
+            "Ninguém com esses filtros ainda."
+          ) : (
+            <>
+              ninguém se marcou como disponível ainda. Se você constrói em hackathon, marque no{" "}
+              <Link href="/perfil" className="link-inline">
+                seu perfil
+              </Link>{" "}
+              e entre na vitrine.
+            </>
+          )}
         </p>
       )}
     </section>

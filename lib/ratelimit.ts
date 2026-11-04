@@ -10,6 +10,7 @@ export type RateLimitResult = { ok: boolean; retryAfterSec: number };
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+const MINUTE = 60 * 1000;
 
 // Tabela única de limites (requisições por janela de 1h). Rotas públicas
 // são chaveadas por IP; autenticadas por member.id (a rota passa a key).
@@ -89,6 +90,11 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "topic-reply": { limit: 60, windowMs: HOUR }, // POST /api/topics/[id]/replies
   "topic-vote": { limit: 300, windowMs: HOUR }, // POST /api/topics/[id]/vote, …/replies/[replyId]/vote, …/poll
   "topic-edit": { limit: 60, windowMs: HOUR }, // PATCH/DELETE tópico e resposta, aceitar resposta
+  // recado no perfil (migration 041): 10 por hora e 1 por minuto pra mesma
+  // pessoa (a chave do segundo é autor:perfil). O mesmo texto pra mais de 5
+  // perfis em 1 h é barrado em lib/recados.ts, que olha o banco.
+  recados: { limit: 10, windowMs: HOUR }, // POST /api/members/[username]/recados
+  "recado-target": { limit: 1, windowMs: MINUTE }, // idem, mesma pessoa
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };
