@@ -36,7 +36,17 @@ type MemberRef = { table: string; column: string };
 // apontando pra linha anonimizada.
 const OWNER_COLUMNS = new Set(["memberId", "judgeMemberId"]);
 /** o "outro lado" de uma relação entre duas pessoas: apagada se qualquer lado sai */
-export const PEER_COLUMNS = new Set(["followedId", "peerId", "recipientId", "blockedId", "mutedId", "authorId"]);
+export const PEER_COLUMNS = new Set([
+  "followedId",
+  "peerId",
+  "recipientId",
+  "blockedId",
+  "mutedId",
+  "authorId",
+  // recado no perfil (migration 041): o texto mora em posts, com o autor em
+  // memberId e quem recebe em profileId. Saiu um dos dois, o recado sai.
+  "profileId",
+]);
 /** quem denunciou: anonimizado (SET NULL), a denúncia fica */
 const REPORTER_COLUMNS = new Set(["reporterId"]);
 
@@ -77,6 +87,12 @@ export const ANONYMIZE: Record<string, AnonValue> = {
   // bicho (migration 043): config e data da última troca
   mascote: null,
   mascoteUpdatedAt: null,
+  // perfil rico (migration 041): áreas de ajuda, perfil aberto e quem deixa
+  // recado voltam ao padrão
+  helpOffer: "[]",
+  helpWant: "[]",
+  publicProfile: 0,
+  recadosFrom: "conexoes",
 };
 
 /** colunas de members que ficam como estão na exclusão (não são pessoais) */

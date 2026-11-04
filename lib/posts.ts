@@ -47,6 +47,8 @@ export type Post = {
   communityId: number | null;
   communityName: string | null;
   communitySlug: string | null;
+  /** recado no perfil (migration 041): quem recebe. null = post normal */
+  profileId: number | null;
   username: string;
   name: string | null;
   avatarUrl: string | null;
@@ -69,13 +71,18 @@ export type Post = {
 /**
  * Onde o post mora. `global` é o feed agregado (tudo que é visível:
  * global, edições e comunidades); `member` são os posts que a pessoa
- * escreveu. `solto` é só o post sem edição nem comunidade.
+ * escreveu; `profile` são os recados deixados no perfil de alguém
+ * (migration 041). `solto` é só o post sem edição nem comunidade.
+ *
+ * Recado nunca entra em `global`, `member` nem `solto`: quem lista recado
+ * pede o escopo `profile`.
  */
 export type PostScope =
   | { kind: "global" }
   | { kind: "hackathon"; id: string }
   | { kind: "community"; id: number }
-  | { kind: "member"; id: number };
+  | { kind: "member"; id: number }
+  | { kind: "profile"; id: number };
 
 /** escopo do listPosts antigo (spec 028), mantido pra quem já chama */
 export type LegacyPostScope = { hackathonId: string } | { communityId: number } | { global: true };
@@ -111,10 +118,17 @@ export async function listPostIds(scope: ScopeArg, meId: number | null, opts: Li
       where.push("p.memberId = @scopeM");
       params.scopeM = scope.id;
       break;
+    case "profile":
+      where.push("p.profileId = @scopeP");
+      params.scopeP = scope.id;
+      break;
     case "solto":
       where.push("p.hackathonId IS NULL AND p.communityId IS NULL");
       break;
   }
+  // recado (migration 041) só aparece no escopo do perfil: fora dele é como
+  // se não existisse (feed, atividade, mural de edição e de comunidade)
+  if (scope.kind !== "profile") where.push("p.profileId IS NULL");
   if (!opts.includeHidden) where.push(SPACE_UP_SQL);
   if (meId) where.push(hiddenAuthorSql("p.memberId"));
   if (opts.antes) {
@@ -135,6 +149,7 @@ type PostRow = Omit<Post, "reactions" | "myReaction" | "likeCount" | "likedByMe"
 
 const SELECT = `SELECT p.id, p.memberId, p.body, p.link, p.createdAt, p.editedAt, p.hackathonId,
        h.name AS hackathonName, p.communityId, co.name AS "communityName", co.slug AS "communitySlug",
+       p.profileId,
        m.username, m.name, m.avatarUrl, m.headline, m.persona, m.xp,
        (SELECT l.kind FROM likes l WHERE l.postId = p.id AND l.memberId = @me) AS "myReaction",
        (SELECT COUNT(*) FROM post_comments c WHERE c.postId = p.id AND ${hiddenAuthorSql("c.memberId")}
@@ -198,12 +213,15 @@ export async function hydratePosts(ids: number[], meId: number | null): Promise<
         !!viewer &&
         (viewer.role === "admin" ||
           row.memberId === viewer.id ||
+          // recado: o dono do perfil apaga qualquer um (migration 041)
+          (row.profileId !== null && Number(row.profileId) === viewer.id) ||
           (row.communityId !== null && spaces.communities.has(Number(row.communityId))) ||
           (row.hackathonId !== null && spaces.editions.has(row.hackathonId)));
       byId.set(Number(row.id), {
         ...row,
         id: Number(row.id),
         memberId: Number(row.memberId),
+        profileId: row.profileId == null ? null : Number(row.profileId),
         commentCount: Number(row.commentCount),
         reactions,
         myReaction,
@@ -248,7 +266,7 @@ export async function getPost(id: number, meId: number | null): Promise<Post | n
   if (!Number.isSafeInteger(id) || id <= 0) return null;
   const row = await db
     .prepare(
-      `SELECT p.memberId, p.hackathonId, COALESCE(co.hidden, 0) AS hidden,
+      `SELECT p.memberId, p.hackathonId, p.profileId, COALESCE(co.hidden, 0) AS hidden,
               COALESCE(hh.active, 1) AS "editionActive", COALESCE(hc.hidden, 0) AS "editionHidden"
        FROM posts p
        LEFT JOIN communities co ON co.id = p.communityId
@@ -256,7 +274,7 @@ export async function getPost(id: number, meId: number | null): Promise<Post | n
        LEFT JOIN communities hc ON hc.id = hh.communityId
        WHERE p.id = ?`,
     )
-    .get<{ memberId: number; hackathonId: string | null; hidden: number; editionActive: number; editionHidden: number }>(id);
+    .get<{ memberId: number; hackathonId: string | null; profileId: number | null; hidden: number; editionActive: number; editionHidden: number }>(id);
   if (!row) return null;
   const adminOnly = Number(row.hidden) === 1 || Number(row.editionActive) === 0;
   if (adminOnly || Number(row.editionHidden) === 1) {
@@ -266,6 +284,9 @@ export async function getPost(id: number, meId: number | null): Promise<Post | n
     if (!adminOnly && !(await canManageEdition(viewer, row.hackathonId!))) return null;
   }
   if (meId && (await isBlockedEither(meId, Number(row.memberId)))) return null;
+  // recado (migration 041): bloqueio com o dono do perfil vale nos dois
+  // sentidos, igual ao /u dele
+  if (meId && row.profileId != null && (await isBlockedEither(meId, Number(row.profileId)))) return null;
   return (await hydratePosts([id], meId))[0] ?? null;
 }
 
@@ -289,13 +310,17 @@ export async function createPost(
   link?: string | null,
   hackathonId?: string | null,
   communityId?: number | null,
+  profileId?: number | null,
 ): Promise<Post> {
   const v = validatePostInput(body, link);
   // escopo é só persistido aqui — edição existe/ativa e inscrição do membro
-  // são validados na rota, que tem os códigos HTTP (404/400/403)
+  // são validados na rota, que tem os códigos HTTP (404/400/403). Recado
+  // (profileId) passa por lib/recados.ts, que valida antes de chamar.
   const row = await db
-    .prepare("INSERT INTO posts (memberId, body, link, hackathonId, communityId) VALUES (?, ?, ?, ?, ?) RETURNING id")
-    .get<{ id: number }>(memberId, v.body, v.link, hackathonId?.trim() || null, communityId ?? null);
+    .prepare(
+      "INSERT INTO posts (memberId, body, link, hackathonId, communityId, profileId) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+    )
+    .get<{ id: number }>(memberId, v.body, v.link, hackathonId?.trim() || null, communityId ?? null, profileId ?? null);
   return (await hydratePosts([row!.id], memberId))[0];
 }
 
@@ -324,14 +349,16 @@ type ModeratableActor = { id: number; role: string } | null;
 
 /**
  * Regra única de quem apaga post (e comentário dele): autor, admin global,
- * dono ou organizador da comunidade do post, organizador ou staff da edição.
+ * dono do perfil onde o recado está, dono ou organizador da comunidade do
+ * post, organizador ou staff da edição.
  */
 export async function canModeratePost(
   member: ModeratableActor,
-  post: { memberId: number; communityId: number | null; hackathonId: string | null },
+  post: { memberId: number; communityId: number | null; hackathonId: string | null; profileId?: number | null },
 ): Promise<boolean> {
   if (!member) return false;
   if (member.role === "admin" || member.id === Number(post.memberId)) return true;
+  if (post.profileId != null && member.id === Number(post.profileId)) return true;
   if (post.communityId !== null && (await canManageCommunity(member, Number(post.communityId)))) return true;
   if (post.hackathonId !== null && (await hasEditionRole(member, post.hackathonId, "staff"))) return true;
   return false;
@@ -339,8 +366,8 @@ export async function canModeratePost(
 
 async function postSpace(postId: number) {
   return db
-    .prepare("SELECT memberId, communityId, hackathonId FROM posts WHERE id = ?")
-    .get<{ memberId: number; communityId: number | null; hackathonId: string | null }>(postId);
+    .prepare("SELECT memberId, communityId, hackathonId, profileId FROM posts WHERE id = ?")
+    .get<{ memberId: number; communityId: number | null; hackathonId: string | null; profileId: number | null }>(postId);
 }
 
 // reações e comentários saem junto por cascade (migration 034)

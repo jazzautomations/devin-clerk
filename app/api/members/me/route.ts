@@ -9,6 +9,9 @@ import { parsePersonas, personaLabel } from "@/lib/personas";
 import { deleteMemberData } from "@/lib/privacy";
 import { saveOnboarding } from "@/lib/members";
 import { LIMITS, shortText } from "@/lib/onboarding";
+import { parseAreas, type AreaKey } from "@/lib/areas";
+import { isRecadosFrom, type RecadosFrom } from "@/lib/recados";
+import { setPins } from "@/lib/profileFacts";
 
 export async function PATCH(req: Request) {
   const { userId } = await auth();
@@ -67,6 +70,39 @@ export async function PATCH(req: Request) {
   if (typeof body.persona === "string" && body.persona !== "" && !personaLabel(body.persona)) {
     return Response.json({ error: "opção de perfil desconhecida" }, { status: 400 });
   }
+  // perfil rico (migration 041): áreas de ajuda, perfil aberto, quem deixa
+  // recado e os projetos fixados. Tudo validado antes de gravar qualquer coisa.
+  let helpOffer: AreaKey[] | undefined;
+  let helpWant: AreaKey[] | undefined;
+  for (const [key, field] of [["helpOffer", "posso ajudar"], ["helpWant", "quero ajuda"]] as const) {
+    if (body[key] === undefined) continue;
+    const parsed = parseAreas(body[key]);
+    if ("error" in parsed) return Response.json({ error: `${field}: ${parsed.error}` }, { status: 400 });
+    if (key === "helpOffer") helpOffer = parsed.value;
+    else helpWant = parsed.value;
+  }
+  let publicProfile: boolean | undefined;
+  if (body.publicProfile !== undefined) {
+    if (typeof body.publicProfile !== "boolean") {
+      return Response.json({ error: "perfil aberto: use true ou false" }, { status: 400 });
+    }
+    publicProfile = body.publicProfile;
+  }
+  let recadosFrom: RecadosFrom | undefined;
+  if (body.recadosFrom !== undefined) {
+    if (!isRecadosFrom(body.recadosFrom)) {
+      return Response.json({ error: "quem pode deixar recado: conexoes, todos ou ninguem" }, { status: 400 });
+    }
+    recadosFrom = body.recadosFrom;
+  }
+  if (body.pins !== undefined) {
+    if (!member) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+      await setPins(member, body.pins);
+    } catch (e) {
+      return Response.json({ error: e instanceof Error ? e.message : "fixados inválidos" }, { status: 400 });
+    }
+  }
   await updateMemberProfile(userId, {
     name: typeof body.name === "string" ? body.name : undefined,
     bio: typeof body.bio === "string" ? body.bio : undefined,
@@ -80,6 +116,10 @@ export async function PATCH(req: Request) {
     headline: typeof body.headline === "string" ? body.headline : undefined,
     persona: typeof body.persona === "string" ? body.persona : undefined,
     personas,
+    helpOffer,
+    helpWant,
+    publicProfile,
+    recadosFrom,
   });
   if (member && Object.keys(extra).length > 0) await saveOnboarding(member.id, extra, false);
   // nome da conquista ("1ª campanha"), nunca o id interno ("debut")

@@ -87,10 +87,11 @@ test.describe("trajetória do builder — arco de edições no perfil", () => {
     memberPage: page,
   }) => {
     await ensureArc();
-    const res = await page.goto(`/u/${MEMBER}`);
+    // perfil-rico (migration 041): a trajetória mora na aba ?aba=trajetoria
+    const res = await page.goto(`/u/${MEMBER}?aba=trajetoria`);
     expect(res?.status()).toBe(200);
 
-    await expect(page.getByText("trajetória", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "trajetória" })).toBeVisible();
     // linha-resumo: 3 edições, 1 pódio (1º Unifacens), 2 projetos entregues
     await expect(
       page.getByText(/3 edições · 1 pódio · 2 projetos entregues/),
@@ -119,9 +120,11 @@ test.describe("trajetória do builder — arco de edições no perfil", () => {
 
   test("membro sem participação não renderiza a seção", async ({ memberPage: page }) => {
     await ensureArc();
-    const res = await page.goto("/u/e2e_arc_zero");
+    const res = await page.goto("/u/e2e_arc_zero?aba=trajetoria");
     expect(res?.status()).toBe(200);
-    await expect(page.getByText("trajetória", { exact: true })).toHaveCount(0);
+    // a aba existe (é um link), o arco não: sem lista e com o vazio no lugar
+    await expect(page.getByRole("list", { name: "trajetória" })).toHaveCount(0);
+    await expect(page.getByTestId("profile-arc")).toContainText("ainda não participou de hackathon");
     // perfil continua íntegro — heading e empty state de campanhas
     await expect(
       page.getByRole("heading", { name: "@e2e_arc_zero" }),

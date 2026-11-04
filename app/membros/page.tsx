@@ -4,9 +4,11 @@ import { listLeaderboard, type LeaderboardSort } from "@/lib/members";
 import { XpBar } from "@/components/XpBar";
 import { Avatar } from "@/components/Avatar";
 import { FollowButton } from "@/components/FollowButton";
+import { MemberFilters } from "@/components/MemberFilters";
 import { hiddenIdsFor } from "@/lib/blocks";
 import { followingIds } from "@/lib/memberFollows";
 import { currentMember } from "@/lib/session";
+import { areaLabel, isAreaKey } from "@/lib/areas";
 
 export const metadata: Metadata = {
   title: "membros",
@@ -15,17 +17,34 @@ export const metadata: Metadata = {
   alternates: { canonical: "/membros" },
 };
 
+/** filtro só vale com valor conhecido: lixo na URL não vira SQL */
+const areaParam = (v: string | undefined) => (isAreaKey(v) ? v : undefined);
+const textParam = (v: string | undefined) => v?.trim() || undefined;
+
 export default async function MembrosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sort?: string; q?: string }>;
+  searchParams: Promise<{
+    sort?: string;
+    q?: string;
+    oferece?: string;
+    quer?: string;
+    cidade?: string;
+    faculdade?: string;
+  }>;
 }) {
-  const { sort, q: rawQ } = await searchParams;
-  const q = rawQ?.trim() ?? "";
-  const mode: LeaderboardSort = sort === "recent" ? "recent" : "xp";
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const mode: LeaderboardSort = sp.sort === "recent" ? "recent" : "xp";
+  const filter = {
+    oferece: areaParam(sp.oferece),
+    quer: areaParam(sp.quer),
+    cidade: textParam(sp.cidade),
+    faculdade: textParam(sp.faculdade),
+  };
   const me = await currentMember();
   const [all, hidden, mine] = await Promise.all([
-    listLeaderboard(mode, 100, q),
+    listLeaderboard(mode, 100, q, filter),
     me ? hiddenIdsFor(me.id) : null,
     me ? followingIds(me.id) : [],
   ]);
@@ -34,6 +53,17 @@ export default async function MembrosPage({
   const members = all.filter((m) => !out.has(m.id) && !m.clerkId.startsWith("deleted:"));
   const followed = new Set(mine);
   const isXp = mode === "xp";
+
+  // os chips de ordenar mantêm os filtros da URL
+  const keep = new URLSearchParams();
+  if (q) keep.set("q", q);
+  for (const [k, v] of Object.entries(filter)) if (v) keep.set(k, v);
+  const sortHref = (next?: "recent") => {
+    const params = new URLSearchParams(keep);
+    if (next) params.set("sort", next);
+    const s = params.toString();
+    return s ? `/membros?${s}` : "/membros";
+  };
 
   const chip = (active: boolean) =>
     `border-[1.5px] px-3 py-1.5 transition ${
@@ -56,44 +86,29 @@ export default async function MembrosPage({
         </p>
       </div>
 
-      <form action="/membros" className="flex gap-2">
-        {!isXp && <input type="hidden" name="sort" value="recent" />}
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder="username, nome, skill…"
-          aria-label="buscar membros"
-          className="w-full max-w-md border-[1.5px] border-line bg-surface px-4 py-2.5 font-mono text-sm outline-none transition placeholder:text-muted focus:border-accent"
-        />
-        <button
-          type="submit"
-          className="border-[1.5px] border-line px-4 py-2.5 font-mono text-sm text-muted transition hover:border-accent hover:text-accent"
-        >
-          buscar
-        </button>
-      </form>
+      <MemberFilters
+        action="/membros"
+        values={{ q, ...filter }}
+        sort={isXp ? undefined : "recent"}
+        searchLabel="buscar membros"
+      />
 
       <div className="flex gap-2 font-mono text-xs">
-        <Link
-          href={q ? `/membros?q=${encodeURIComponent(q)}` : "/membros"}
-          aria-current={isXp ? "page" : undefined}
-          className={chip(isXp)}
-        >
+        <Link href={sortHref()} aria-current={isXp ? "page" : undefined} className={chip(isXp)}>
           por xp
         </Link>
-        <Link
-          href={
-            q
-              ? `/membros?sort=recent&q=${encodeURIComponent(q)}`
-              : "/membros?sort=recent"
-          }
-          aria-current={!isXp ? "page" : undefined}
-          className={chip(!isXp)}
-        >
+        <Link href={sortHref("recent")} aria-current={!isXp ? "page" : undefined} className={chip(!isXp)}>
           recém-chegados
         </Link>
       </div>
+
+      {(filter.oferece || filter.quer) && (
+        <p className="font-mono text-[12px] text-muted" data-testid="filtro-area">
+          {filter.oferece ? `oferece ${areaLabel(filter.oferece)}` : ""}
+          {filter.oferece && filter.quer ? " · " : ""}
+          {filter.quer ? `quer ${areaLabel(filter.quer)}` : ""}
+        </p>
+      )}
 
       <ul className="flex flex-col gap-2">
         {members.map((m) => (
@@ -133,10 +148,29 @@ export default async function MembrosPage({
                       {m.headline}
                     </span>
                   )}
+                  {(m.city || m.institution) && (
+                    <span className="font-mono text-[12px] text-muted [overflow-wrap:anywhere]">
+                      {[m.city, m.institution].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
                   <span className="font-mono text-[12px] text-muted">
                     {m.badges ?? 0} badges · {m.campaigns ?? 0} camp. ·{" "}
                     {m.cards ?? 0} cards
                   </span>
+                  {((m.helpOffer ?? []).length > 0 || (m.helpWant ?? []).length > 0) && (
+                    <span className="flex flex-wrap gap-1">
+                      {(m.helpOffer ?? []).map((k) => (
+                        <span key={`o-${k}`} className="border border-line bg-mint px-1.5 font-mono text-[11px] text-accent">
+                          ajuda em {areaLabel(k)}
+                        </span>
+                      ))}
+                      {(m.helpWant ?? []).map((k) => (
+                        <span key={`w-${k}`} className="border border-line px-1.5 font-mono text-[11px] text-muted">
+                          quer ajuda em {areaLabel(k)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
               </span>
               <span className="w-full shrink-0 sm:w-52">
@@ -159,7 +193,9 @@ export default async function MembrosPage({
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
           {q
             ? `nenhum membro com "${q}"`
-            : "Ninguém por aqui ainda."}
+            : filter.oferece || filter.quer || filter.cidade || filter.faculdade
+              ? "Ninguém com esses filtros ainda."
+              : "Ninguém por aqui ainda."}
         </p>
       )}
     </section>

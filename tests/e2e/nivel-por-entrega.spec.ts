@@ -124,7 +124,8 @@ test("badge influente antiga some do perfil", async ({ memberPage: page }) => {
   const m = await me();
   await db.prepare("INSERT OR IGNORE INTO member_badges (memberId, badgeId) VALUES (?, 'influente'), (?, 'debut')").run(m.id, m.id);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/u/${m.username}`, { waitUntil: "domcontentloaded" });
+  // perfil-rico (migration 041): as conquistas moram na aba ?aba=colecao
+  await page.goto(`/u/${m.username}?aba=colecao`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("1ª campanha").first()).toBeVisible();
   await expect(page.getByText("influente")).toHaveCount(0);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
