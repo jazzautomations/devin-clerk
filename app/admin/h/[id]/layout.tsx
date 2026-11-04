@@ -43,6 +43,9 @@ const GROUPS: { label: string; tabs: Tab[] }[] = [
       { href: "/incidentes", label: "incidentes", roles: ["organizador"], conductHandler: true },
       // denúncias do mural da edição (migration 032): mesma gente dos incidentes
       { href: "/denuncias", label: "denúncias", roles: ["organizador"], conductHandler: true },
+      // encontros na edição (migration 050): o organizador liga/desliga e vê
+      // só números agregados, nunca nome
+      { href: "/encontros", label: "encontros", roles: ["organizador"] },
       { href: "/palco", label: "palco", roles: ["organizador", "staff"] },
     ],
   },
@@ -60,6 +63,8 @@ const GROUPS: { label: string; tabs: Tab[] }[] = [
     tabs: [
       { href: "/certificados", label: "certificados", roles: ["organizador"] },
       { href: "/nps", label: "satisfação", roles: ["organizador"] },
+      // acompanhamento do projeto nas 4 semanas depois do evento (migration 052)
+      { href: "/quatro-semanas", label: "4 semanas", roles: ["organizador"] },
     ],
   },
 ];

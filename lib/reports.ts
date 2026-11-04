@@ -73,7 +73,12 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
 
 // post ou comentário de comunidade escondida não existe pra quem não é admin
 // (GET /api/posts?c= dá 404): denunciar também dá 404, sem confirmar o autor.
-async function resolveTarget(type: ReportTarget, id: string, viewerRole: string | null): Promise<Target | null> {
+async function resolveTarget(
+  type: ReportTarget,
+  id: string,
+  viewerRole: string | null,
+  reporterId: number,
+): Promise<Target | null> {
   const num = /^\d{1,12}$/.test(id) ? Number(id) : null;
   const seesHidden = viewerRole === "admin";
   switch (type) {
@@ -236,6 +241,43 @@ async function resolveTarget(type: ReportTarget, id: string, viewerRole: string 
         hackathonId: r.hackathonId,
       };
     }
+    case "encontro": {
+      // encontro na edição (migration 050): a denúncia é sobre a OUTRA pessoa
+      // do encontro e vai pra quem trata incidentes daquela edição. Sem
+      // encontro não existe denúncia de encontro (404), e o texto livre que a
+      // pessoa escreveu no próprio lado (nota privada) não entra no snapshot.
+      if (num === null) return null;
+      const r = await db
+        .prepare(
+          `SELECT e."hackathonId", e.status, h.name AS "hackathonName",
+                  e."lowId", e."highId", e."initiatorId",
+                  m.id AS "peerId", m.username, m.role
+           FROM encounters e
+           JOIN hackathons h ON h.id = e."hackathonId"
+           JOIN members m ON m.id = CASE WHEN e."lowId" = @reporter THEN e."highId" ELSE e."lowId" END
+           WHERE e.id = @id AND (e."lowId" = @reporter OR e."highId" = @reporter)`,
+        )
+        .get<{
+          hackathonId: string;
+          status: string;
+          hackathonName: string;
+          lowId: number;
+          highId: number;
+          initiatorId: number;
+          peerId: number;
+          username: string;
+          role: string;
+        }>({ id: num, reporter: reporterId });
+      if (!r) return null;
+      return {
+        authorId: r.peerId,
+        authorUsername: r.username,
+        authorRole: r.role,
+        snapshot: `Encontro registrado no ${r.hackathonName} (@${r.username} e você), situação: ${r.status}.`,
+        communityId: null,
+        hackathonId: r.hackathonId,
+      };
+    }
     default:
       return null;
   }
@@ -306,7 +348,7 @@ export async function createReport(input: CreateReportInput): Promise<CreateRepo
   if (reason.length < REPORT_LIMITS.reasonMin) throw new ReportError("Conte em poucas palavras o que está errado.", 400);
   if (reason.length > REPORT_LIMITS.reason) throw new ReportError(`Até ${REPORT_LIMITS.reason} caracteres.`, 400);
 
-  const target = await resolveTarget(type as ReportTarget, targetId, input.reporterRole ?? null);
+  const target = await resolveTarget(type as ReportTarget, targetId, input.reporterRole ?? null, input.reporterId);
   if (!target) throw new ReportError("Não encontrado.", 404);
   if (target.authorId === input.reporterId) throw new ReportError("Isso é seu. Se quiser, apague.", 400);
   if (await authorModerates(target)) {
@@ -347,7 +389,7 @@ export async function createReport(input: CreateReportInput): Promise<CreateRepo
         target.hackathonId,
         {
           kind: "outro",
-          description: `Denúncia de ${label}${type === "depoimento" ? " de time" : " no mural da edição"}.\nMotivo: ${reason}\n\nTexto denunciado:\n${clip(target.snapshot, 1500)}\n\nFila: /admin/h/${target.hackathonId}/denuncias`,
+          description: `Denúncia de ${label}${type === "depoimento" ? " de time" : type === "encontro" ? " na edição" : " no mural da edição"}.\nMotivo: ${reason}\n\nTexto denunciado:\n${clip(target.snapshot, 1500)}\n\nFila: /admin/h/${target.hackathonId}/denuncias`,
           location: null,
           occurredAt: null,
           contact: null,
@@ -449,6 +491,9 @@ function toReport(r: ReportRow): Report {
     href = `/desafios/${r.targetChallengeId}#entrega-${r.targetId}`;
   } else if (r.targetType === "depoimento" && r.testimonialOwner) {
     href = `/u/${r.testimonialOwner}`;
+  } else if (r.targetType === "encontro" && r.hackathonId) {
+    // encontro não tem página pública: a fila leva pra tela de encontros da edição
+    href = `/h/${r.hackathonId}/encontros`;
   } else if ((r.targetType === "topic" || r.targetType === "topic_reply") && r.targetTopicSlug && r.targetTopicId) {
     href = `/comunidade/${r.targetTopicSlug}/t/${r.targetTopicId}${r.targetReplyId ? `#r-${r.targetReplyId}` : ""}`;
   }

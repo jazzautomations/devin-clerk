@@ -70,6 +70,9 @@ export default async function PerfilPage() {
         <Link href="/perfil/bloqueados" className="self-start font-mono text-xs text-muted underline-offset-4 hover:text-accent hover:underline" data-testid="perfil-bloqueados-link">
           bloqueados e silenciados →
         </Link>
+        <Link href="/perfil/conexoes" className="self-start font-mono text-xs text-muted underline-offset-4 hover:text-accent hover:underline" data-testid="perfil-conexoes-link">
+          quem eu conheci →
+        </Link>
       </div>
       {/* bicho (migration 043) */}
       <section

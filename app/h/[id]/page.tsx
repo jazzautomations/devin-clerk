@@ -3,6 +3,7 @@ import { canManageEdition } from "@/lib/roles";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
+import { encountersOn } from "@/lib/encounters";
 import { getHackathon, isOver } from "@/lib/hackathons";
 import { absoluteUrl, eventJsonLd, jsonLd } from "@/lib/seo";
 import { getMemberByClerkId } from "@/lib/members";
@@ -228,6 +229,8 @@ export default async function HackathonPage({
   ]);
   // roadmap 037 #4 — itens abertos da programação viram subEvent no JSON-LD
   const publicSchedule = await listVisibleScheduleItems(h.id, ANON_VIEWER);
+  // encontros na edição (spec 046, onda 5): só aparece com o organizador ligando
+  const meetOn = h.hosted ? await encountersOn(h.id) : false;
   // spec 039 — o próximo passo da pessoa nesta edição, no topo da página
   const step = await getNextStep(h, member, now);
   const cancellable = canRegister && (myStatus === "approved" || myStatus === "pending" || myStatus === "waitlist");
@@ -738,6 +741,13 @@ export default async function HackathonPage({
                   <EditionLink href={`/h/${h.id}/programacao`} label="programação" note={`${publicSchedule.length} itens · .ics`} />
                 )}
                 {(past || hasArchive) && <EditionLink href={`/h/${h.id}/projetos`} label="projetos entregues" />}
+                {meetOn && (
+                  <EditionLink
+                    href={`/h/${h.id}/encontros`}
+                    label="encontros"
+                    note={registered ? "código do bicho · QR" : "pra quem fez check-in"}
+                  />
+                )}
                 <EditionLink href={`/h/${h.id}/duvidas`} label="dúvidas pra organização" />
                 <EditionLink href={`/h/${h.id}/conduta`} label="código de conduta da edição" />
                 <EditionLink href={`/h/${h.id}/incidente`} label="relatar um problema (pode ser anônimo)" />

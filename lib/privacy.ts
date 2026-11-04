@@ -46,6 +46,12 @@ export const PEER_COLUMNS = new Set([
   // recado no perfil (migration 041): o texto mora em posts, com o autor em
   // memberId e quem recebe em profileId. Saiu um dos dois, o recado sai.
   "profileId",
+  // encontros na edição (migration 050): o par fica em lowId/highId e quem
+  // pediu em initiatorId. Saiu um dos dois, o encontro sai (o par não existe
+  // com uma pessoa só).
+  "lowId",
+  "highId",
+  "initiatorId",
 ]);
 /** quem denunciou: anonimizado (SET NULL), a denúncia fica */
 const REPORTER_COLUMNS = new Set(["reporterId"]);
