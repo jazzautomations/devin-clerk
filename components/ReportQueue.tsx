@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ReportResolve } from "@/components/ReportResolve";
 import { ReportTakedown } from "@/components/ReportTakedown";
 import { formatDbTime } from "@/lib/format";
@@ -21,9 +22,11 @@ type Props = {
   anchor?: string;
   showRouting?: boolean;
   empty: string;
+  /** ações extras por denúncia (a moderação da comunidade apaga o post e remove o autor) */
+  extra?: (r: Report) => ReactNode;
 };
 
-export function ReportQueue({ open, resolved, counts, type, basePath, anchor = "", showRouting = false, empty }: Props) {
+export function ReportQueue({ open, resolved, counts, type, basePath, anchor = "", showRouting = false, empty, extra }: Props) {
   const total = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0);
   const types = (Object.keys(counts) as ReportTarget[]).filter((t) => (counts[t] ?? 0) > 0);
   const href = (t: ReportTarget | null) => `${basePath}${t ? `${basePath.includes("?") ? "&" : "?"}tipo=${t}` : ""}${anchor}`;
@@ -79,6 +82,7 @@ export function ReportQueue({ open, resolved, counts, type, basePath, anchor = "
               </p>
               <div className="flex flex-wrap items-start gap-2">
                 {r.targetType === "depoimento" && <ReportTakedown id={r.id} />}
+                {extra?.(r)}
                 <ReportResolve id={r.id} />
               </div>
             </li>

@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { userMessage } from "@/lib/apiError";
 
 // Ações da página da comunidade que precisam de clique: entrar/sair, seguir,
-// aviso da organização, organizadores (dono), denúncia e moderação (admin).
+// aviso da organização, organizadores (dono), denúncia, moderação (dono e
+// organizador) e moderação do admin global.
 
 async function call(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -224,6 +226,18 @@ export function OrganizersPanel({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Moderação da própria comunidade (migration 046): fila de denúncia, mural,
+ * remover membro, aviso, posse e exclusão. Só dono e organizador veem.
+ */
+export function ModerateLink({ slug, open }: { slug: string; open: number }) {
+  return (
+    <Link href={`/comunidade/${slug}/moderacao`} className="btn-ghost min-h-[44px]!" data-testid="community-moderation-link">
+      moderar{open > 0 ? ` · ${open}` : ""}
+    </Link>
   );
 }
 

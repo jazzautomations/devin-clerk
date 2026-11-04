@@ -16,6 +16,10 @@ export async function POST(req: Request, { params }: Ctx) {
   if (r === "member") {
     return Response.json({ error: "Você já está na comunidade, e quem é membro já segue." }, { status: 409 });
   }
+  // removido com "impedir de voltar" (migration 046)
+  if (r === "banned") {
+    return Response.json({ error: "Você não pode entrar nesta comunidade." }, { status: 403 });
+  }
   return Response.json({ following: true, new: r === "followed" }, { status: r === "followed" ? 201 : 200 });
 }
 
