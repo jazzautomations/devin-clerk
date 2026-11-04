@@ -97,6 +97,8 @@ export const ANONYMIZE: Record<string, AnonValue> = {
   helpWant: "[]",
   publicProfile: 0,
   recadosFrom: "conexoes",
+  // liga do semestre (migration 054): conta excluída sai da lista da liga
+  leagueOptIn: 0,
 };
 
 /** colunas de members que ficam como estão na exclusão (não são pessoais) */

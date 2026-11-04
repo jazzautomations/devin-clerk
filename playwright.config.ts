@@ -10,6 +10,9 @@ process.env.HACKAHUB_RSVP_SECRET ||= "e2e-rsvp-secret-nao-usar-em-producao";
 // idem pro link "parar de receber" do resumo semanal (lib/digest.ts usa o
 // segredo do ingresso, obrigatório em modo produção)
 process.env.HACKAHUB_TICKET_SECRET ||= "e2e-ticket-secret-nao-usar-em-producao";
+// liga do semestre (migration 054): entra ligada no e2e — o 404 com a flag
+// desligada é provado em tests/api/liga.test.ts, que roda sem ela
+process.env.HACKAHUB_LIGA_ON ||= "on";
 // dossiê (migration 029): o server lê o "GitHub" de um servidor falso local
 // (tests/e2e/github-mock.mjs) — e2e nunca vai pra api.github.com
 // fetch (undici) recusa as "bad ports" do padrão Fetch: com E2E_PORT=3190 o
@@ -42,7 +45,7 @@ export default defineConfig({
     },
     {
       command:
-        `HACKAHUB_DEPLOY_TOOL=on HACKAHUB_ALLOW_MINORS=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p ${PORT}`,
+        `HACKAHUB_DEPLOY_TOOL=on HACKAHUB_ALLOW_MINORS=on HACKAHUB_LIGA_ON=on HACKAHUB_DIST_DIR=.next-e2e npm run start -- -p ${PORT}`,
       port: PORT,
       reuseExistingServer: false,
       timeout: 120_000,
