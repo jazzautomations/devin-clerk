@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { encountersOn } from "@/lib/encounters";
+import { getFollowThrough } from "@/lib/followThrough";
 import { getHackathon, isOver } from "@/lib/hackathons";
 import { absoluteUrl, eventJsonLd, jsonLd } from "@/lib/seo";
 import { getMemberByClerkId } from "@/lib/members";
@@ -231,6 +232,8 @@ export default async function HackathonPage({
   const publicSchedule = await listVisibleScheduleItems(h.id, ANON_VIEWER);
   // encontros na edição (spec 046, onda 5): só aparece com o organizador ligando
   const meetOn = h.hosted ? await encountersOn(h.id) : false;
+  // 4 semanas depois (onda 5): link público aparece quando a organização abriu
+  const ftOn = h.hosted ? (await getFollowThrough(h.id)) !== null : false;
   // spec 039 — o próximo passo da pessoa nesta edição, no topo da página
   const step = await getNextStep(h, member, now);
   const cancellable = canRegister && (myStatus === "approved" || myStatus === "pending" || myStatus === "waitlist");
@@ -747,6 +750,9 @@ export default async function HackathonPage({
                     label="encontros"
                     note={registered ? "código do bicho · QR" : "pra quem fez check-in"}
                   />
+                )}
+                {ftOn && (
+                  <EditionLink href={`/h/${h.id}/quatro-semanas`} label="4 semanas depois" note="o projeto continua" />
                 )}
                 <EditionLink href={`/h/${h.id}/duvidas`} label="dúvidas pra organização" />
                 <EditionLink href={`/h/${h.id}/conduta`} label="código de conduta da edição" />
