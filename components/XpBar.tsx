@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { levelFor } from "@/lib/game";
+import { ligaEnabled } from "@/lib/league";
 import type { XpFact } from "@/lib/xp";
 
 const SEGMENTS = 24;
@@ -64,6 +66,17 @@ export function XpBar({ xp, facts, own = false }: { xp: number; facts?: XpFact[]
         <p className="font-mono text-xs text-muted" data-testid="xp-origem-vazio">
           Seu primeiro fato conta quando você fizer check-in num hackathon.
         </p>
+      )}
+      {own && ligaEnabled() && (
+        // spec 046 onda 5 (migration 054): a porta da liga. Desligada por
+        // flag, o link não aparece e /liga dá 404.
+        <Link
+          href="/liga"
+          className="font-mono text-xs text-accent underline underline-offset-4"
+          data-testid="xp-liga-link"
+        >
+          ver sua faixa na liga →
+        </Link>
       )}
     </div>
   );

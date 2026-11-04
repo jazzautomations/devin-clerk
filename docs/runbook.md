@@ -403,6 +403,7 @@ combinar com ela. Sem `--apply` o script só mostra o que entraria.
 | `NEXT_PUBLIC_SITE_URL` | canonical/OG/sitemap |
 | `HACKAHUB_ADMIN_EMAILS` | admins globais (lista separada por vírgula; só promove, ver Admins) |
 | `HACKAHUB_DEPLOY_TOOL` | só `on` liga o deploy tool — **nunca em prod nesta máquina** |
+| `HACKAHUB_LIGA_ON` | só `on` liga a liga do semestre (`/liga`, migration 054) — desligada por padrão; o fundador liga depois de conversar com 5 organizadores (spec 040 #21) |
 | `HACKAHUB_TICKET_SECRET` | HMAC do QR do ingresso (trocar invalida os QRs emitidos) |
 | `HACKAHUB_CRON_SECRET` | bearer do `/api/cron/deliveries` (cron a cada 2 min, `ops/deliveries.sh`; a mesma passada dispara a pesquisa NPS pós-edição — idempotente, sem crontab novo) e do `/api/cron/submissions` (lembretes da entrega, cron a cada 5 min, `ops/submissions.sh`) e `/api/cron/rsvp` |
 | `RESEND_API_KEY`, `HACKAHUB_EMAIL_FROM`, `RESEND_WEBHOOK_SECRET` | e-mail dos avisos; sem eles as entregas ficam `skipped` |

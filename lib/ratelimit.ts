@@ -78,6 +78,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // depoimento de time (migration 037): escrever é forte (5 por dia por
   // membro); editar, apagar, aceitar, recusar e esconder dividem um balde por hora
   testimonials: { limit: 5, windowMs: DAY }, // POST /api/testimonials — membro
+  // liga do semestre (migration 054): o toggle do opt-in é um clique, não um
+  // botão de refresh; 30/h cobre indecisão e freia script
+  liga: { limit: 30, windowMs: HOUR }, // PATCH /api/me/liga — membro
   "testimonial-actions": { limit: 60, windowMs: HOUR }, // PATCH/DELETE …/[id] e accept/decline/hide
   // bicho (migration 043): salvar o config do criador
   mascote: { limit: 30, windowMs: HOUR }, // PUT /api/members/me/mascote — membro
