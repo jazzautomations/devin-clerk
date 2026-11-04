@@ -23,6 +23,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   votes: { limit: 60, windowMs: HOUR }, // POST /api/projects/[teamId]/vote
   likes: { limit: 60, windowMs: HOUR }, // POST /api/posts/[id]/like
   "post-edit": { limit: 30, windowMs: HOUR }, // PATCH post e comentário (migration 034)
+  // repost (migration 049): compartilhar e desfazer dividem o balde. 30/h
+  // cobre quem compartilha bastante e freia script repostando tudo
+  reposts: { limit: 30, windowMs: HOUR }, // POST/DELETE /api/posts/[id]/repost
   register: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/register
   team: { limit: 10, windowMs: HOUR }, // POST /api/hackathons/[id]/team
   "team-board": { limit: 10, windowMs: HOUR }, // POST …/[id]/team-board

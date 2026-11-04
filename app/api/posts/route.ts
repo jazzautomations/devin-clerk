@@ -2,10 +2,11 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
 import { getCommunityBySlug, getMembership } from "@/lib/communities";
 import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
-import { createPost, listPosts } from "@/lib/posts";
+import { createPost, listPosts, shareTarget } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
 import { limitOrNull } from "@/lib/ratelimit";
 import { canManageEdition } from "@/lib/roles";
+import { notifyOnce } from "@/lib/notifications";
 
 export async function GET(req?: Request) {
   // leitura pública — rede social é vitrine; postar exige conta.
@@ -101,11 +102,49 @@ export async function POST(req: Request) {
     }
     communityId = community.id;
   }
+  // citação (migration 049): quoteOfId aponta pro post citado. Corpo é
+  // obrigatório (quem cita comenta por cima) e quem escreveu o original
+  // decide se aceita: allowQuote = 0 dá 403.
+  let quoteOfId: number | null = null;
+  let quoteAuthorId: number | null = null;
+  const rawQ: unknown = body.quoteOfId;
+  if (rawQ !== undefined && rawQ !== null && rawQ !== "") {
+    const target = await shareTarget(Number(rawQ), member.id);
+    if (!target.ok) {
+      return Response.json({ error: target.error }, { status: target.status });
+    }
+    if (!target.post.allowQuote) {
+      return Response.json({ error: "A pessoa não aceita citação neste post" }, { status: 403 });
+    }
+    quoteOfId = target.post.id;
+    quoteAuthorId = target.post.memberId;
+  }
+  // opção de recusar citação no próprio post (o composer manda allowQuote)
+  const allowQuote = typeof body.allowQuote === "boolean" ? body.allowQuote : true;
   let post;
   try {
-    post = await createPost(member.id, body.body, typeof body.link === "string" ? body.link : null, hackathonId, communityId);
+    post = await createPost(
+      member.id,
+      body.body,
+      typeof body.link === "string" ? body.link : null,
+      hackathonId,
+      communityId,
+      null,
+      null,
+      { quoteOfId, allowQuote },
+    );
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Link inválido" }, { status: 400 });
+  }
+  if (quoteOfId !== null && quoteAuthorId !== null) {
+    // 1 aviso por par ator→post: o href é a citação, pra pessoa ver o que foi dito
+    await notifyOnce(quoteAuthorId, {
+      type: "quote",
+      actorId: member.id,
+      actorUsername: member.username,
+      text: `@${member.username} citou seu post`,
+      href: `/post/${post.id}`,
+    });
   }
   // post não dá XP (plano 046): o que conta é presença e entrega
   return Response.json({ post }, { status: 201 });

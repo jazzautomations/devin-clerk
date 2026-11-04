@@ -4,7 +4,7 @@ import { parseEventTime } from "@/lib/eventTime";
 import { followsAnyCommunity } from "@/lib/follows";
 import { hostedSql } from "@/lib/hackathons";
 import { followingIds } from "@/lib/memberFollows";
-import { hydratePosts, type Post } from "@/lib/posts";
+import { hydratePosts, shareOriginUpSql, type Post } from "@/lib/posts";
 import { followsAnyProject } from "@/lib/projectUpdates";
 
 // Timeline (spec 046, onda 2, migration 038). O /feed vira a página social:
@@ -27,6 +27,10 @@ import { followsAnyProject } from "@/lib/projectUpdates";
 //   "ao-vivo": mural das edições que rodam no HackaHub agora (listLiveEditions).
 //   "tudo": todo post visível.
 // - countNewPosts é o "N posts novos" do TimelineList: mesma query, id > desde.
+// - Repost (migration 049) entra como post de quem repostou: o original
+//   aparece uma vez por página, no lugar do repost mais novo, e o card monta
+//   o "@a e @b compartilharam" a partir de Post.sharedBy. Repost de post que
+//   eu não vejo mais não entra (shareOriginUpSql).
 // - Nada aqui dá XP, badge ou ordenação por reação (plano 046, naoFazer).
 
 export const TIMELINE_TABS = ["seguindo", "comunidades", "ao-vivo", "tudo"] as const;
@@ -103,7 +107,7 @@ type Scope = { where: string[]; params: Record<string, unknown> };
 /** o recorte de cada aba, com o filtro de segurança em todas */
 async function scopeFor(meId: number | null, aba: TimelineTab, now: Date): Promise<Scope> {
   const params: Record<string, unknown> = { me: meId ?? -1 };
-  const where: string[] = [SPACE_UP_SQL, hiddenAuthorSql("p.memberId")];
+  const where: string[] = [SPACE_UP_SQL, hiddenAuthorSql("p.memberId"), shareOriginUpSql("p")];
   switch (aba) {
     case "seguindo": {
       if (!meId) {
@@ -138,6 +142,11 @@ async function scopeFor(meId: number | null, aba: TimelineTab, now: Date): Promi
 /**
  * Uma página da timeline. `antes` é o cursor (id exclusivo): p.id < antes,
  * ORDER BY p.id DESC, sem OFFSET. `next` null = acabou.
+ *
+ * O mesmo original aparece uma vez por página: os reposts dele são agrupados
+ * e fica o mais novo (o card mostra "@a e @b compartilharam" com Post.sharedBy).
+ * O cursor continua sendo o id do último item mostrado, então nada se perde
+ * entre páginas: o que foi pulado eram duplicatas da mesma origem.
  */
 export async function timelinePage(
   meId: number | null,
@@ -154,11 +163,20 @@ export async function timelinePage(
   }
   params.limit = size + 1; // uma a mais só pra saber se tem próxima
   const rows = await db
-    .prepare(`SELECT p.id FROM posts p WHERE ${where.join(" AND ")} ORDER BY p.id DESC LIMIT @limit`)
-    .all<{ id: number }>(params);
-  const ids = rows.slice(0, size).map((r) => Number(r.id));
+    .prepare(`SELECT p.id, p."repostOfId" AS origin FROM posts p WHERE ${where.join(" AND ")} ORDER BY p.id DESC LIMIT @limit`)
+    .all<{ id: number; origin: number | null }>(params);
+  const seen = new Set<number>();
+  const picked: number[] = [];
+  for (const r of rows) {
+    const key = r.origin === null ? Number(r.id) : Number(r.origin);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(Number(r.id));
+    if (picked.length > size) break;
+  }
+  const ids = picked.slice(0, size);
   const posts = await hydratePosts(ids, meId);
-  const next = rows.length > size && ids.length > 0 ? ids[ids.length - 1] : null;
+  const next = picked.length > size && ids.length > 0 ? ids[ids.length - 1] : null;
   return { posts, next };
 }
 

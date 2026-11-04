@@ -7,6 +7,8 @@ import db from "@/lib/db";
 
 // Um post (migration 034): GET lê, PATCH edita (só o autor), DELETE apaga
 // (canModeratePost: autor, admin, quem modera a comunidade ou a edição).
+// PATCH também liga e desliga a opção de aceitar citação (migration 049):
+// {allowQuote: false} sozinho não reescreve o texto.
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -38,7 +40,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!body || typeof body !== "object") return json("Post vazio", 400);
   let res;
   try {
-    res = await updatePost(postId, member, body.body, body.link);
+    res = await updatePost(postId, member, {
+      body: body.body,
+      link: body.link,
+      allowQuote: body.allowQuote,
+    });
   } catch (e) {
     return json(e instanceof Error ? e.message : "Post inválido", 400);
   }

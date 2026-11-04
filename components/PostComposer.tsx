@@ -10,6 +10,8 @@ import { MentionField } from "@/components/MentionField";
 // Link do próprio HackaHub (/p/12, /h/x, /u/x, /comunidade/x) vira card.
 // Menção @ (migration 039): digitar @ abre o autocomplete de quem existe;
 // # vira tag na leitura. initialBody é o atalho de /tag/[tag] ("#x ").
+// Citação (migration 049): a opção "não aceitar citação" viaja como
+// allowQuote = false e vale pro post que está nascendo.
 
 export function PostComposer({
   hackathonId = null,
@@ -27,6 +29,8 @@ export function PostComposer({
 }) {
   const [body, setBody] = useState(initialBody);
   const [link, setLink] = useState("");
+  // marcado = o post nasce sem aceitar citação (allowQuote = false)
+  const [noQuote, setNoQuote] = useState(false);
   const [status, setStatus] = useState<"idle" | "posting" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +44,7 @@ export function PostComposer({
         link: link || undefined,
         hackathonId: hackathonId ?? undefined,
         communitySlug: communitySlug ?? undefined,
+        allowQuote: !noQuote,
       }),
     }).catch(() => null);
     if (res?.ok) {
@@ -47,6 +52,7 @@ export function PostComposer({
       onPosted(post as Post);
       setBody("");
       setLink("");
+      setNoQuote(false);
       setStatus("idle");
       setError(null);
       return;
@@ -89,6 +95,15 @@ export function PostComposer({
           {status === "posting" ? "postando…" : "postar →"}
         </button>
       </div>
+      <label className="flex min-h-[32px] items-center gap-2 font-mono text-[12px] text-muted" data-testid="composer-no-quote">
+        <input
+          type="checkbox"
+          checked={noQuote}
+          onChange={(e) => setNoQuote(e.target.checked)}
+          className="h-4 w-4 accent-[#047a43]"
+        />
+        não aceitar citação
+      </label>
       {status === "error" && (
         <p role="alert" className="font-mono text-xs text-orange">
           {error ?? "não deu pra postar. Tente de novo."}
