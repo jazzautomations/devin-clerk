@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { hiddenAuthorSql } from "@/lib/blocks";
 import { getMembership } from "@/lib/communities";
+import { isBannedFromCommunity } from "@/lib/communityModeration";
 
 // Seguir comunidade (migration 030). Decisão de produto: membro = segue.
 // O "seguir" leve existe pra quem não quer ser membro (comunidade de outra
@@ -12,14 +13,15 @@ import { getMembership } from "@/lib/communities";
 const FOLLOWED_SQL = `SELECT cm.communityId FROM community_members cm WHERE cm.memberId = @me
   UNION SELECT cf.communityId FROM community_follows cf WHERE cf.memberId = @me`;
 
-export type FollowResult = "followed" | "already" | "member";
+export type FollowResult = "followed" | "already" | "member" | "banned";
 
 /**
  * segue. Quem já é membro não ganha linha nova (membro já segue). A checagem
  * de membro vai no próprio INSERT; a corrida com o entrar que ainda sobrar
- * o leaveCommunity limpa.
+ * o leaveCommunity limpa. Quem foi removido com ban (046) não segue.
  */
 export async function followCommunity(communityId: number, memberId: number): Promise<FollowResult> {
+  if (await isBannedFromCommunity(communityId, memberId)) return "banned";
   const res = await db
     .prepare(
       `INSERT INTO community_follows (communityId, memberId)

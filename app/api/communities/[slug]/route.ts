@@ -1,5 +1,7 @@
 import { getMembership, parseCommunityInput, updateCommunity } from "@/lib/communities";
-import { requireCommunity, requireCommunityManager } from "@/lib/communityAuth";
+import { requireCommunity, requireCommunityManager, requireCommunityOwner } from "@/lib/communityAuth";
+import { softDeleteCommunity } from "@/lib/communityModeration";
+import { limitOrNull } from "@/lib/ratelimit";
 
 type Ctx = { params: Promise<{ slug: string }> };
 
@@ -31,4 +33,21 @@ export async function PATCH(req: Request, { params }: Ctx) {
   }
   const community = await updateCommunity(g.community.id, parsed.value);
   return Response.json({ community });
+}
+
+// DELETE: exclui a comunidade (migration 046). Só o dono, e só com o
+// endereço digitado ({ confirm: "<slug>" }). É soft: deletedAt e hidden,
+// então some das listas e a página dá 404; hackathons mantêm o communityId.
+export async function DELETE(req: Request, { params }: Ctx) {
+  const { slug } = await params;
+  const g = await requireCommunityOwner(slug);
+  if ("response" in g) return g.response;
+  const limited = limitOrNull(req, "community-moderation", g.member.id);
+  if (limited) return limited;
+  const b = (await req.json().catch(() => null)) as { confirm?: unknown } | null;
+  if (typeof b?.confirm !== "string" || b.confirm.trim() !== g.community.slug) {
+    return Response.json({ error: "Digite o endereço da comunidade pra confirmar." }, { status: 400 });
+  }
+  await softDeleteCommunity(g.community, g.member);
+  return Response.json({ ok: true });
 }

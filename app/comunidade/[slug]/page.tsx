@@ -11,7 +11,8 @@ import { TopicList } from "@/components/TopicList";
 import { countTopics, hotTopics } from "@/lib/topics";
 import { MeetupRows } from "@/components/MeetupRows";
 import { PublicCard } from "@/components/PublicCard";
-import { FollowButton, JoinButton, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
+import { FollowButton, JoinButton, ModerateLink, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
+import { NoticeActions } from "@/components/CommunityModActions";
 import { SupportCommunityForm } from "@/components/CommunitySupportActions";
 import { CommunitySupporters } from "@/components/CommunitySupporters";
 import {
@@ -207,6 +208,8 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
                 <Link href={`/comunidade/${c.slug}/apoio`} className="btn-ghost min-h-[44px]!" data-testid="community-support-panel">
                   apoio{supportLeads > 0 ? ` · ${supportLeads} ${supportLeads === 1 ? "pedido" : "pedidos"}` : ""}
                 </Link>
+                {/* moderação da própria comunidade (046): fila, mural, membros, posse */}
+                <ModerateLink slug={c.slug} open={openReports} />
                 <Link href={`/comunidade/${c.slug}/denuncias`} className="btn-ghost min-h-[44px]!" data-testid="community-reports-link">
                   denúncias{openReports > 0 ? ` · ${openReports}` : ""}
                 </Link>
@@ -393,6 +396,8 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
                       {n.username ? `@${n.username} · ` : ""}
                       {fmtData(n.createdAt.replace(" ", "T") + "Z")}
                     </p>
+                    {/* editar e apagar o aviso (046): quem organiza o espaço */}
+                    {canManage && <NoticeActions slug={c.slug} noticeId={n.id} title={n.title} body={n.body} />}
                   </li>
                 ))}
               </ul>

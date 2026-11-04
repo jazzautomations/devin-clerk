@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { isBannedFromCommunity, logCommunityAction } from "@/lib/communityModeration";
 import { inAppAllowedSql, notify } from "@/lib/notifications";
 import { emailDriver } from "@/lib/notify/email";
 import { eventRegion } from "@/lib/regions";
@@ -34,6 +35,8 @@ export type Community = {
   createdAt: string;
   hidden: boolean;
   verified: boolean;
+  /** excluída pelo dono (migration 046): some das listas e a página dá 404 */
+  deletedAt: string | null;
 };
 
 type Row = Omit<Community, "online" | "hidden" | "verified"> & { online: number; hidden: number; verified: number };
@@ -47,7 +50,7 @@ const toCommunity = (r: Row): Community => ({
 
 export class CommunityError extends Error {
   constructor(
-    public code: "slug_taken" | "invalid" | "last_owner" | "not_member",
+    public code: "slug_taken" | "invalid" | "last_owner" | "not_member" | "banned",
     message: string,
   ) {
     super(message);
@@ -174,7 +177,7 @@ export function parseCommunityInput(
 // ---------- leitura ----------
 
 export async function getCommunityBySlug(slug: string): Promise<Community | null> {
-  const row = await db.prepare("SELECT * FROM communities WHERE slug = ?").get<Row>(slug);
+  const row = await db.prepare(`SELECT * FROM communities WHERE slug = ? AND "deletedAt" IS NULL`).get<Row>(slug);
   return row ? toCommunity(row) : null;
 }
 
@@ -243,7 +246,8 @@ const LIST_SQL = `
     SELECT h.id, h.name, h.startsAt FROM hackathons h
     WHERE h.communityId = c.id AND h.active = 1 AND to_ts(COALESCE(h.endsAt, h.startsAt)) >= now()
     ORDER BY to_ts(h.startsAt) LIMIT 1
-  ) nx ON true`;
+  ) nx ON true
+  WHERE c."deletedAt" IS NULL`;
 
 type ListRow = Row & Omit<CommunityListItem, keyof Community>;
 
@@ -376,7 +380,7 @@ export async function listMyCommunities(memberId: number): Promise<MyCommunity[]
            WHERE h.communityId = c.id AND h.active = 1 AND to_ts(COALESCE(h.endsAt, h.startsAt)) >= now()
            ORDER BY to_ts(h.startsAt) LIMIT 1
          ) nx ON true
-         WHERE cm.memberId = ? AND c.hidden = 0
+         WHERE cm.memberId = ? AND c.hidden = 0 AND c."deletedAt" IS NULL
          ORDER BY CASE cm.role WHEN 'dono' THEN 0 WHEN 'organizador' THEN 1 WHEN 'membro' THEN 2 ELSE 3 END, c.name`,
       )
       .all<Omit<MyCommunity, "online"> & { online: number }>(memberId)
@@ -460,6 +464,10 @@ export async function updateCommunity(id: number, patch: CommunityInput): Promis
 
 /** entra como membro. true = entrou agora (o dono recebe notificação) */
 export async function joinCommunity(c: Pick<Community, "id" | "slug" | "name">, member: { id: number; username: string }): Promise<boolean> {
+  // quem foi removido com "impedir de voltar" não entra nem por engano
+  if (await isBannedFromCommunity(c.id, member.id)) {
+    throw new CommunityError("banned", "Você não pode entrar nesta comunidade.");
+  }
   const res = await db
     .prepare("INSERT OR IGNORE INTO community_members (communityId, memberId, role) VALUES (?, ?, 'membro')")
     .run(c.id, member.id);
@@ -644,6 +652,55 @@ export async function createNotice(
       .run(`${c.name}: ${title}`, `/comunidade/${c.slug}#avisos`, c.id, by);
     return { id: row!.id, notified: res.changes };
   })();
+}
+
+/**
+ * Edita um aviso (migration 046). O que não veio no patch fica como estava.
+ * Devolve null quando o aviso não é desta comunidade. Não notifica de novo:
+ * quem já recebeu o aviso vê o texto atualizado no mural.
+ */
+export async function updateNotice(
+  communityId: number,
+  noticeId: number,
+  patch: { title?: string; body?: string },
+  actorId: number,
+): Promise<CommunityNotice | null> {
+  const sets: string[] = [];
+  const bag: Record<string, unknown> = { id: noticeId, c: communityId };
+  for (const k of ["title", "body"] as const) {
+    if (!(k in patch)) continue;
+    bag[k] = patch[k];
+    sets.push(`${k} = @${k}`);
+  }
+  if (sets.length === 0) {
+    const current = await db
+      .prepare(
+        `SELECT n.id, n.title, n.body, n.createdAt, m.username
+         FROM community_notices n LEFT JOIN members m ON m.id = n."createdBy"
+         WHERE n.id = @id AND n."communityId" = @c`,
+      )
+      .get<CommunityNotice>(bag);
+    return current ?? null;
+  }
+  const row = await db
+    .prepare(
+      `UPDATE community_notices SET ${sets.join(", ")} WHERE id = @id AND "communityId" = @c
+       RETURNING id, title, body, createdAt`,
+    )
+    .get<Omit<CommunityNotice, "username">>(bag);
+  if (!row) return null;
+  await logCommunityAction(communityId, actorId, "notice.edit", `aviso "${row.title}"`);
+  return { ...row, username: null };
+}
+
+/** apaga um aviso (migration 046). false = não existe nesta comunidade. */
+export async function deleteNotice(communityId: number, noticeId: number, actorId: number): Promise<boolean> {
+  const row = await db
+    .prepare(`DELETE FROM community_notices WHERE id = ? AND "communityId" = ? RETURNING title`)
+    .get<{ title: string }>(noticeId, communityId);
+  if (!row) return false;
+  await logCommunityAction(communityId, actorId, "notice.delete", `aviso "${row.title}"`);
+  return true;
 }
 
 // ---------- moderação ----------

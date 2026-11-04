@@ -1,5 +1,6 @@
 import db from "@/lib/db";
 import { block } from "@/lib/blocks";
+import { logCommunityAction } from "@/lib/communityModeration";
 import { editionPhase } from "@/lib/arena";
 import { getHackathon } from "@/lib/hackathons";
 import { canHandleIncidents, createIncident } from "@/lib/incidents";
@@ -578,6 +579,8 @@ export async function resolveReport(id: number, actor: Actor, resolution: unknow
     .prepare("UPDATE reports SET resolvedAt = sqlite_now(), resolvedBy = ?, resolution = ? WHERE id = ? AND resolvedAt IS NULL")
     .run(actor.id, text, id);
   if (res.changes === 0) return { ok: false, status: 409, error: "Essa denúncia já foi resolvida." };
+  // fila da comunidade (046): a resolução entra no log de moderação dela
+  if (report.communityId !== null) await logCommunityAction(report.communityId, actor.id, "report.resolve", `#${id}`);
   return { ok: true, report: (await getReport(id))! };
 }
 

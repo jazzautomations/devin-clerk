@@ -46,6 +46,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   "community-notices": { limit: 10, windowMs: HOUR }, // POST …/[slug]/notices
   "community-invites": { limit: 20, windowMs: HOUR }, // POST …/[slug]/organizers
   "community-report": { limit: 5, windowMs: HOUR }, // POST …/[slug]/report
+  // moderação da própria comunidade (046): aviso, membro, ban, excluir e
+  // transferir dividem o balde; 120/h cobre uma faxina e freia script
+  "community-moderation": { limit: 120, windowMs: HOUR }, // PATCH/DELETE …/[slug]/notices/[noticeId], DELETE …/[slug]/members/[username], DELETE …/[slug], POST …/[slug]/transfer
   // apoiadores (028): cadastrar, ordenar e remover contam no mesmo balde
   "community-supporters": { limit: 60, windowMs: HOUR }, // POST/PATCH/DELETE …/[slug]/supporters
   // entrega do projeto (spec 034): autosave dispara 1,2 s depois de cada pausa
