@@ -99,7 +99,15 @@ export const RARITY_BORDER: Record<Rarity, string> = {
 };
 
 /** retired: não é mais concedida nem exibida (as linhas antigas ficam no banco) */
-export type Badge = { id: string; name: string; desc: string; glyph: string; retired?: boolean };
+export type Badge = {
+  id: string;
+  name: string;
+  desc: string;
+  glyph: string;
+  retired?: boolean;
+  /** item do bicho que o selo destrava (spec 046, onda 4, lib/mascote/itens) */
+  item?: string;
+};
 
 export const BADGES: Record<string, Badge> = {
   pioneiro: {
@@ -152,7 +160,38 @@ export const BADGES: Record<string, Badge> = {
     desc: "organiza edições no HackaHub",
     glyph: "⬟",
   },
+  // spec 046, onda 4: selos que vestem um item do bicho. Quem CONCEDE são as
+  // features da onda 5 (quatro semanas, roda de encontros, time ponte); aqui
+  // só ficam declarados, com o item que cada um destrava.
+  "quatro-semanas": {
+    id: "quatro-semanas",
+    name: "quatro semanas",
+    desc: "acompanhou o projeto nas 4 semanas depois do evento",
+    glyph: "▦",
+    item: "estrela",
+  },
+  roda: {
+    id: "roda",
+    name: "roda",
+    desc: "participou de uma roda numa edição",
+    glyph: "◉",
+    item: "antena",
+  },
+  ponte: {
+    id: "ponte",
+    name: "ponte",
+    desc: "fez time com gente de outra comunidade ou área",
+    glyph: "⇄",
+    item: "mapa",
+  },
 };
+
+/** selos que vestem um item do bicho: badgeId → itemId (lib/mascote/itens) */
+export function badgesComItem(): { id: string; item: string }[] {
+  return Object.values(BADGES)
+    .filter((b) => !!b.item && !b.retired)
+    .map((b) => ({ id: b.id, item: b.item as string }));
+}
 
 /** ids aposentados: as linhas antigas ficam em member_badges, mas não contam
  *  em lugar nenhum (perfil, lista de membros) */

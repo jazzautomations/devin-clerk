@@ -14,7 +14,9 @@ import { listMyContactShares } from "@/lib/sponsorContacts";
 import { channelsEnabled } from "@/lib/notify/channels";
 import { formatDbTime } from "@/lib/format";
 import { MascoteViewer } from "@/components/MascoteViewer";
-import { mascoteDoMembro } from "@/lib/mascote/store";
+import { BichoAvatarToggle } from "@/components/BichoAvatarToggle";
+import { bichoDoMembro, ESTAGIO_NOME } from "@/lib/mascote/evolucao";
+import { nomeItem } from "@/lib/mascote/itens";
 import { ESPECIE_DEFS } from "@/lib/mascote/especies";
 import { COPY_CRESCE } from "@/lib/mascote/tipos";
 import { getMemberProjects } from "@/lib/archive";
@@ -39,7 +41,7 @@ export default async function PerfilPage() {
     getContactPrefs(member.id),
     listMyImageConsents(member.id),
     listMyContactShares(member.id),
-    mascoteDoMembro(member.id),
+    bichoDoMembro(member.id),
   ]);
   // perfil rico (migration 041): fixados e as opções de projeto
   const [projects, pins] = await Promise.all([getMemberProjects(member.username), listPins(member.id)]);
@@ -77,20 +79,34 @@ export default async function PerfilPage() {
       >
         <div className="desk w-[176px] shrink-0 border-x-2 p-2">
           <div className="border-2 border-line bg-background">
-            <MascoteViewer config={bicho.config} tamanho={160} />
+            <MascoteViewer config={bicho.config} itens={bicho.pecas} estagio={bicho.estagio} tamanho={160} />
           </div>
         </div>
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
           <h2 className="text-xl font-extrabold tracking-[-0.03em]">Seu bicho</h2>
-          <p className="font-mono text-[13px] [overflow-wrap:anywhere]">
+          <p className="font-mono text-[13px] [overflow-wrap:anywhere]" data-testid="perfil-bicho-nome">
             <span className="font-semibold">{bicho.config.nome}</span>
             <span className="text-muted"> · {ESPECIE_DEFS[bicho.config.especie].nome}</span>
+            <span className="text-muted"> · {ESTAGIO_NOME[bicho.estagio]}</span>
             {!bicho.salvo && <span className="text-muted"> · sorteado</span>}
+          </p>
+          <p className="font-mono text-[12.5px] text-muted" data-testid="perfil-bicho-fatos">
+            {bicho.fatos === 0 ? "nenhum fato verificado ainda" : `${bicho.fatos} ${bicho.fatos === 1 ? "fato verificado" : "fatos verificados"}`}
+            {bicho.semanas.total >= 2 && ` · constrói há ${bicho.semanas.total} semanas`}
+            {" · "}
+            {bicho.itens.length ? bicho.itens.map((id) => nomeItem(id)).join(", ") : "sem item ainda"}
           </p>
           <p className="max-w-prose text-sm text-muted">{COPY_CRESCE}</p>
           <Link href="/perfil/bicho" className="btn-ghost min-h-[44px]! self-start rounded-[6px] font-mono text-[14px]!" data-testid="perfil-bicho-editar">
             {bicho.salvo ? "trocar o visual →" : "montar seu bicho →"}
           </Link>
+          <BichoAvatarToggle
+            inicial={member.avatarKind}
+            bichoUrl={bicho.src}
+            fotoUrl={member.clerkImageUrl}
+            username={member.username}
+            name={member.name}
+          />
         </div>
       </section>
       <ProfileReminder member={member} href="/bem-vindo?refazer=1" />

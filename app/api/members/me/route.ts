@@ -1,5 +1,5 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { getMemberByClerkId, updateMemberProfile } from "@/lib/members";
+import { getMemberByClerkId, setAvatarKind, updateMemberProfile } from "@/lib/members";
 import { checkBadges } from "@/lib/xp";
 import { isOpenToValue } from "@/lib/openTo";
 import { setOpenTo } from "@/lib/talent";
@@ -43,6 +43,16 @@ export async function PATCH(req: Request) {
     if ("error" in applied) {
       return Response.json({ error: applied.error }, { status: 400 });
     }
+  }
+  // avatar (migration 047): foto do Clerk ou bicho. A troca regrava
+  // members.avatarUrl, então a lista seguinte já mostra o avatar novo.
+  let avatarKind: "foto" | "bicho" | undefined;
+  if (body.avatarKind !== undefined) {
+    if (body.avatarKind !== "foto" && body.avatarKind !== "bicho") {
+      return Response.json({ error: "avatar: use foto ou bicho" }, { status: 400 });
+    }
+    if (!member) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    avatarKind = body.avatarKind;
   }
   if (member && openTo !== undefined) await setOpenTo(member.id, openTo);
   // redes: guarda o handle canônico; valor inválido volta 400 com o motivo
@@ -122,9 +132,10 @@ export async function PATCH(req: Request) {
     recadosFrom,
   });
   if (member && Object.keys(extra).length > 0) await saveOnboarding(member.id, extra, false);
+  const avatar = member && avatarKind ? await setAvatarKind(member.id, avatarKind) : null;
   // nome da conquista ("1ª campanha"), nunca o id interno ("debut")
   const newBadges = member ? (await checkBadges(member.id)).map((b) => b.name) : [];
-  return Response.json({ ok: true, newBadges });
+  return Response.json({ ok: true, newBadges, avatar });
 }
 
 // LGPD art. 18 VI — excluir conta: apaga conteúdo pessoal, anonimiza o que

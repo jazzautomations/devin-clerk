@@ -7,6 +7,7 @@ import { ESPECIE_DEFS } from "@/lib/mascote/especies";
 import { svgDataUri, toSvg } from "@/lib/mascote/isometrico";
 import { PALETA, type CorId } from "@/lib/mascote/paleta";
 import { sortearConfig, sortearNome } from "@/lib/mascote/semente";
+import { ITEM_MAX, ITEM_IDS, ITENS, pecaItem, type ItemEstado, type ItemId } from "@/lib/mascote/itens";
 import {
   ACESSORIOS,
   BOCAS,
@@ -19,7 +20,9 @@ import {
   POSES,
   ROUPAS,
   TOPOS,
+  type Estagio,
   type MascoteConfig,
+  type Peca,
 } from "@/lib/mascote/tipos";
 import { validarMascote, type ErrosMascote } from "@/lib/mascote/validar";
 import { montar } from "@/lib/mascote/voxel";
@@ -27,10 +30,11 @@ import { userMessage } from "@/lib/apiError";
 
 // Criador do bicho (migration 043). Tudo liberado desde o começo: trocar é
 // instantâneo, o dado sorteia, desfazer volta um passo e só "salvar" grava.
-// Item que vem de fato verificado é extra e chega na onda 4.
+// A seção "itens" (migration 047) é a única parte que não é livre: o item
+// travado mostra o fato que o destrava e o servidor recusa item sem fato.
 
 type CampoLista = "especie" | "olhos" | "boca" | "topo" | "roupa" | "mao" | "acessorio" | "cenario";
-type Aba = CampoLista | "cores" | "pose";
+type Aba = CampoLista | "cores" | "pose" | "itens";
 
 const LISTAS: Record<CampoLista, readonly string[]> = {
   especie: ESPECIES,
@@ -54,6 +58,7 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "acessorio", rotulo: "rosto" },
   { id: "pose", rotulo: "pose" },
   { id: "cenario", rotulo: "cenário" },
+  { id: "itens", rotulo: "itens" },
 ];
 
 const POSE_TEXTO: Record<(typeof POSES)[number], string> = {
@@ -64,8 +69,8 @@ const POSE_TEXTO: Record<(typeof POSES)[number], string> = {
 
 const igual = (a: MascoteConfig, b: MascoteConfig) => JSON.stringify(a) === JSON.stringify(b);
 
-function Miniatura({ config }: { config: MascoteConfig }) {
-  const src = useMemo(() => svgDataUri(toSvg(montar(config), { tamanho: 96 })), [config]);
+function Miniatura({ config, itens }: { config: MascoteConfig; itens?: Peca[] }) {
+  const src = useMemo(() => svgDataUri(toSvg(montar(config, { itens }), { tamanho: 96 })), [config, itens]);
   // eslint-disable-next-line @next/next/no-img-element -- SVG gerado no cliente
   return <img src={src} alt="" className="aspect-square w-full object-contain" draggable={false} />;
 }
@@ -96,6 +101,9 @@ export function MascoteEditor({
   onSalvo,
   rotuloSalvar = "salvar",
   extra,
+  estagio,
+  itensIniciais,
+  itensDisponiveis,
 }: {
   inicial: MascoteConfig;
   /** false = bicho da semente, ainda não salvo */
@@ -104,10 +112,18 @@ export function MascoteEditor({
   rotuloSalvar?: string;
   /** ação ao lado do salvar (o "pular" do onboarding) */
   extra?: ReactNode;
+  /** estágio pelo fato verificado (migration 047); sem ele, adulto */
+  estagio?: Estagio;
+  /** itens que a pessoa está vestindo */
+  itensIniciais?: ItemId[];
+  /** catálogo com o que cada item destrava; sem ele não há aba "itens" */
+  itensDisponiveis?: ItemEstado[];
 }) {
   const [config, setConfig] = useState<MascoteConfig>(inicial);
+  const [itens, setItens] = useState<ItemId[]>(itensIniciais ?? []);
   const [historico, setHistorico] = useState<MascoteConfig[]>([]);
   const [gravado, setGravado] = useState<MascoteConfig | null>(salvoInicial ? inicial : null);
+  const [gravadoItens, setGravadoItens] = useState<ItemId[]>(itensIniciais ?? []);
   const [aba, setAba] = useState<Aba>("especie");
   const [estado, setEstado] = useState<"livre" | "salvando" | "salvo">("livre");
   const [erros, setErros] = useState<ErrosMascote>({});
@@ -121,6 +137,18 @@ export function MascoteEditor({
     setErros({});
   }
   const escolher = <K extends keyof MascoteConfig>(campo: K, valor: MascoteConfig[K]) => trocar({ ...config, [campo]: valor });
+
+  /** até ITEM_MAX itens; travado não entra (quem decide é o fato) */
+  function alternarItem(id: ItemId) {
+    const estado = itensDisponiveis?.find((i) => i.id === id);
+    if (estado && !estado.unlocked) return;
+    setItens((atual) => {
+      if (atual.includes(id)) return atual.filter((x) => x !== id);
+      if (atual.length >= ITEM_MAX) return atual;
+      return [...atual, id];
+    });
+    setEstado("livre");
+  }
 
   function desfazer() {
     const anterior = historico.at(-1);
@@ -143,7 +171,9 @@ export function MascoteEditor({
     const res = await fetch("/api/members/me/mascote", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(local.config),
+      // com a seção de itens, config e itens viajam juntos: o servidor
+      // recusa item que o fato ainda não destravou
+      body: JSON.stringify(itensDisponiveis ? { config: local.config, itens } : local.config),
     }).catch(() => null);
     if (!res) {
       setEstado("livre");
@@ -157,13 +187,17 @@ export function MascoteEditor({
     }
     setConfig(data.config);
     setGravado(data.config);
+    setGravadoItens(itens);
     setEstado("salvo");
     onSalvo?.({ config: data.config, src: data.src });
   }
 
-  const sujo = !gravado || !igual(gravado, config);
+  const mesmosItens = (a: ItemId[], b: ItemId[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const sujo = !gravado || !igual(gravado, config) || !mesmosItens(itens, gravadoItens);
   const def = ESPECIE_DEFS[config.especie];
-  const lista = aba !== "cores" && aba !== "pose" ? aba : null;
+  const lista = aba !== "cores" && aba !== "pose" && aba !== "itens" ? aba : null;
+  const abas = itensDisponiveis ? ABAS : ABAS.filter((a) => a.id !== "itens");
+  const pecas = itens.map(pecaItem);
 
   return (
     <div className="window hard @container min-w-0" data-testid="mascote-editor">
@@ -178,7 +212,7 @@ export function MascoteEditor({
         {/* palco */}
         <div className="desk flex min-w-0 flex-col items-center gap-3 border-t-0! px-4 pt-5 pb-4 @3xl:border-r-2 @3xl:border-b-0!">
           <div className="w-full max-w-[300px] border-2 border-line bg-background">
-            <MascoteViewer config={config} girar tamanho={300} />
+            <MascoteViewer config={config} itens={pecas} estagio={estagio} girar tamanho={300} />
           </div>
           <div className="w-full max-w-[300px] border-2 border-line bg-background px-3 py-2 text-center">
             <p className="truncate text-[18px] font-extrabold tracking-[-0.02em]" data-testid="mascote-nome-palco">
@@ -250,7 +284,7 @@ export function MascoteEditor({
           </div>
 
           <div role="tablist" aria-label="partes do bicho" className="flex min-w-0 overflow-x-auto border-b-2 border-line [scrollbar-width:thin]">
-            {ABAS.map((a) => (
+            {abas.map((a) => (
               <button
                 key={a.id}
                 type="button"
@@ -327,6 +361,44 @@ export function MascoteEditor({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {aba === "itens" && (
+              <div className="flex flex-col gap-3">
+                <p className="font-mono text-[12px] text-muted" data-testid="mascote-itens-resumo">
+                  até {ITEM_MAX} no bicho · {itens.length} escolhido{itens.length === 1 ? "" : "s"} · o resto fica no armário
+                </p>
+                <div role="group" aria-label="itens do bicho" className="grid grid-cols-3 gap-2 @md:grid-cols-4">
+                  {ITEM_IDS.map((id) => {
+                    const estadoItem = itensDisponiveis?.find((i) => i.id === id);
+                    const unlocked = !!estadoItem?.unlocked;
+                    const on = itens.includes(id);
+                    const cheio = !on && itens.length >= ITEM_MAX;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={on}
+                        aria-label={ITENS[id].nome}
+                        disabled={!unlocked || cheio}
+                        onClick={() => alternarItem(id)}
+                        className={`flex min-w-0 flex-col items-center gap-1 border-[1.5px] p-1.5 text-center transition disabled:cursor-not-allowed ${
+                          on ? "border-foreground bg-mint shadow-[3px_3px_0_var(--line)]" : "border-line-soft hover:border-line"
+                        } ${unlocked ? "" : "opacity-50"}`}
+                        data-testid={`mascote-item-${id}`}
+                        data-unlocked={unlocked ? "1" : "0"}
+                      >
+                        <Miniatura config={config} itens={[pecaItem(id)]} />
+                        <span className="w-full truncate font-mono text-[12px]">{ITENS[id].nome}</span>
+                        <span className="w-full font-mono text-[11px] leading-tight text-muted">
+                          {unlocked ? (on ? "vestindo" : "destravado") : ITENS[id].destrava}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

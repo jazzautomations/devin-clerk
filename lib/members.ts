@@ -6,6 +6,8 @@ import { toLikePattern } from "@/lib/search";
 import { RETIRED_BADGE_IDS } from "@/lib/game";
 import { areasFromJson, type AreaKey } from "@/lib/areas";
 import { isRecadosFrom, type RecadosFrom } from "@/lib/recados";
+import { bichoDoMembro, regravarAvatar, type AvatarKind } from "@/lib/mascote/evolucao";
+import { normalizarItens, type ItemId } from "@/lib/mascote/itens";
 
 // badge aposentado (criador, influente) não entra no contador "N badges".
 // ids são constantes do código, sem entrada de usuário.
@@ -20,6 +22,12 @@ export type Member = {
   name: string | null;
   email: string;
   avatarUrl: string | null;
+  // spec 046, onda 4 (migration 047): avatar é a foto do Clerk ('foto') ou o
+  // bicho ('bicho'); clerkImageUrl guarda a foto pra voltar com um clique
+  avatarKind: AvatarKind;
+  clerkImageUrl: string | null;
+  /** até 3 itens do bicho escolhidos em /perfil (vazio = os mais recentes) */
+  mascoteItens: ItemId[];
   bio: string | null;
   skills: string[];
   github: string | null;
@@ -49,18 +57,34 @@ export type Member = {
   recadosFrom?: RecadosFrom;
 };
 
-type MemberRow = Omit<Member, "skills" | "personas" | "intents" | "helpOffer" | "helpWant" | "recadosFrom"> & {
+type MemberRow = Omit<
+  Member,
+  "skills" | "personas" | "intents" | "helpOffer" | "helpWant" | "recadosFrom" | "mascoteItens"
+> & {
   skills: string;
   personas: string;
   intents?: string;
   helpOffer?: string;
   helpWant?: string;
   recadosFrom?: string;
+  mascoteItens?: string | null;
 };
+
+/** JSON de itens salvos; lixo no banco vira lista vazia */
+function itensFromJson(raw: string | null | undefined): ItemId[] {
+  if (!raw) return [];
+  try {
+    return normalizarItens(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
 
 function toMember(row: MemberRow): Member {
   return {
     ...row,
+    avatarKind: row.avatarKind === "bicho" ? "bicho" : "foto",
+    mascoteItens: itensFromJson(row.mascoteItens),
     skills: JSON.parse(row.skills),
     personas: JSON.parse(row.personas ?? "[]"),
     intents: JSON.parse(row.intents ?? "[]"),
@@ -97,19 +121,27 @@ export async function getOrCreateMember(clerkUser: {
   lastName: string | null;
   email: string;
   imageUrl?: string | null;
+  /** Clerk user.hasImage: false = não tem foto de verdade (vira bicho) */
+  hasImage?: boolean;
 }): Promise<Member> {
   const existing = await db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkUser.id) as MemberRow | undefined;
   if (existing) {
     // avatar é dado do Clerk: sync na materialização — truthy e diferente
-    // atualiza; nulo preserva (leitura nunca apaga o que já foi gravado)
-    if (clerkUser.imageUrl && clerkUser.imageUrl !== existing.avatarUrl) {
-      await db.prepare("UPDATE members SET avatarUrl = ? WHERE id = ?").run(
-        clerkUser.imageUrl,
-        existing.id,
-      );
-      existing.avatarUrl = clerkUser.imageUrl;
+    // atualiza; nulo preserva (leitura nunca apaga o que já foi gravado).
+    // Desde a 047 o Clerk manda sempre em clerkImageUrl e só manda no
+    // avatarUrl de quem usa a foto: quem escolheu o bicho não é sobrescrito
+    // pelo login seguinte.
+    const foto = clerkUser.imageUrl ?? null;
+    const usaFoto = existing.avatarKind !== "bicho";
+    if (foto && (foto !== existing.clerkImageUrl || (usaFoto && foto !== existing.avatarUrl))) {
+      const avatarUrl = usaFoto ? foto : existing.avatarUrl;
+      await db
+        .prepare(`UPDATE members SET clerkImageUrl = ?, avatarUrl = ? WHERE id = ?`)
+        .run(foto, avatarUrl, existing.id);
+      existing.clerkImageUrl = foto;
+      existing.avatarUrl = avatarUrl;
     }
     return promoteListedAdmin(toMember(existing));
   }
@@ -121,20 +153,31 @@ export async function getOrCreateMember(clerkUser: {
   // primeiro num site público
   const isAdmin = adminEmails().includes(clerkUser.email.toLowerCase());
 
+  // quem entra sem foto real no Clerk já nasce com o bicho como avatar (o
+  // avatarUrl do bicho é gravado logo abaixo, quando o id existe)
+  const semFoto = clerkUser.hasImage === false;
+  const avatarKind: AvatarKind = semFoto ? "bicho" : "foto";
+
   await db.prepare(
-    `INSERT INTO members (clerkId, username, name, email, role, avatarUrl)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO members (clerkId, username, name, email, role, avatarUrl, clerkImageUrl, avatarKind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     clerkUser.id,
     username,
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null,
     clerkUser.email,
     isAdmin ? "admin" : "member",
+    semFoto ? null : (clerkUser.imageUrl ?? null),
     clerkUser.imageUrl ?? null,
+    avatarKind,
   );
   const created = await db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkUser.id) as MemberRow;
+  if (semFoto) {
+    const { avatarUrl } = await regravarAvatar(created.id);
+    created.avatarUrl = avatarUrl;
+  }
   await claimEditionInvites(created.id, created.email);
   await claimSponsorInvites(created.id, created.email);
   await claimCommunityInvites(created.id, created.email);
@@ -458,4 +501,45 @@ export async function saveOnboarding(memberId: number, patch: OnboardingPatch, f
   if (finish) sets.push("onboardedAt = COALESCE(onboardedAt, datetime('now'))");
   if (sets.length === 0) return;
   await db.prepare(`UPDATE members SET ${sets.join(", ")} WHERE id = @id`).run(params);
+}
+
+// ---------- avatar e itens do bicho (spec 046, onda 4, migration 047) ----------
+
+/**
+ * Troca o avatar entre a foto do Clerk e o bicho. Em "bicho" o avatarUrl vira
+ * o SVG do bicho (com estágio, itens e hash); em "foto" volta a foto do Clerk
+ * — ou null, que cai nas iniciais. As listas não precisam saber de nada:
+ * continuam lendo members.avatarUrl.
+ */
+export async function setAvatarKind(
+  memberId: number,
+  kind: AvatarKind,
+): Promise<{ avatarKind: AvatarKind; avatarUrl: string | null }> {
+  if (kind === "bicho") {
+    const bicho = await bichoDoMembro(memberId);
+    await db.prepare("UPDATE members SET avatarKind = 'bicho', avatarUrl = ? WHERE id = ?").run(
+      bicho.src,
+      memberId,
+    );
+    return { avatarKind: "bicho", avatarUrl: bicho.src };
+  }
+  const row = await db
+    .prepare("SELECT clerkImageUrl FROM members WHERE id = ?")
+    .get<{ clerkImageUrl: string | null }>(memberId);
+  const foto = row?.clerkImageUrl ?? null;
+  await db.prepare("UPDATE members SET avatarKind = 'foto', avatarUrl = ? WHERE id = ?").run(
+    foto,
+    memberId,
+  );
+  return { avatarKind: "foto", avatarUrl: foto };
+}
+
+/** os itens que a pessoa quer vestir (até 3); quem chama já validou o destrave */
+export async function setMascoteItens(memberId: number, itens: ItemId[]): Promise<ItemId[]> {
+  const limpos = normalizarItens(itens);
+  await db.prepare("UPDATE members SET mascoteItens = ? WHERE id = ?").run(
+    limpos.length ? JSON.stringify(limpos) : null,
+    memberId,
+  );
+  return limpos;
 }

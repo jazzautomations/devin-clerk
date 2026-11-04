@@ -87,6 +87,10 @@ export const ANONYMIZE: Record<string, AnonValue> = {
   // bicho (migration 043): config e data da última troca
   mascote: null,
   mascoteUpdatedAt: null,
+  // bicho como avatar (migration 047): volta ao padrão, sem foto e sem itens
+  avatarKind: "foto",
+  clerkImageUrl: null,
+  mascoteItens: null,
   // perfil rico (migration 041): áreas de ajuda, perfil aberto e quem deixa
   // recado voltam ao padrão
   helpOffer: "[]",

@@ -31,7 +31,7 @@ const toNotification = (row: NotificationRow): Notification => ({
  * - essencial: inscrição, ingresso, RSVP, time, júri, certificado, moderação.
  */
 export type NotificationGroupName = "social" | "comunidade" | "essencial";
-export const TYPE_GROUP: Record<string, Exclude<NotificationGroupName, "essencial">> = {
+export const TYPE_GROUP: Record<string, NotificationGroupName> = {
   like: "social",
   reaction: "social",
   comment: "social",
@@ -49,6 +49,9 @@ export const TYPE_GROUP: Record<string, Exclude<NotificationGroupName, "essencia
   community_notice: "comunidade",
   edicao_nova: "comunidade",
   agenda: "comunidade",
+  // item do bicho (migration 047): conquista pessoal, sem ator. Não desliga e
+  // não agrupa — é o mesmo tratamento do resto de "essencial".
+  mascote_item: "essencial",
 };
 
 export function groupOf(type: string): NotificationGroupName {

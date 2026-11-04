@@ -6,7 +6,11 @@ import { openE2eDb } from "./db";
 // do Clerk) renderiza <img>; sem foto renderiza o bloco de iniciais. Seed
 // direto no banco do dev server, idempotente pra rerun.
 
-const AVATAR_URL = "https://img.clerk.com/e2e-avatar.png";
+// O <img> do avatar cai pras iniciais quando a imagem falha (spec 046, onda
+// 4). Host externo não resolve no e2e, então a "foto" é um PNG 1x1 em data
+// URI: carrega sem rede e continua provando o caminho da foto do Clerk.
+const AVATAR_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
 const POST_COM = "post e2e — autor com avatar";
 const POST_SEM = "post e2e — autor sem avatar";
 

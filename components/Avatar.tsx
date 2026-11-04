@@ -1,5 +1,11 @@
-// spec 020 — identidade visual do membro. avatarUrl vem do Clerk (imageUrl);
-// sem foto cai pro bloco de iniciais — nunca <img> quebrado nem texto-só.
+"use client";
+
+import { useState } from "react";
+
+// spec 020 + spec 046 (onda 4) — identidade visual do membro. avatarUrl é a
+// única coisa que as listas leem: é a foto do Clerk ou, pra quem escolheu, o
+// SVG do bicho (/api/mascote/…). Sem nada (ou se a imagem falhar) cai pro
+// bloco de iniciais — nunca <img> quebrado nem texto-só.
 // <img> simples de propósito: dispensa remotePatterns no next.config e o
 // Clerk só emite URLs https.
 
@@ -15,6 +21,11 @@ export function initialsFor(
   const src = parts[0] ?? username;
   const letters = src.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase();
   return letters || "?";
+}
+
+/** o avatar é o bicho (rota pública do SVG), não a foto do Clerk */
+export function isBichoAvatar(avatarUrl: string | null | undefined): boolean {
+  return !!avatarUrl && avatarUrl.startsWith("/api/mascote/");
 }
 
 const SIZES = {
@@ -38,22 +49,26 @@ export function Avatar({
   size?: AvatarSize;
   className?: string;
 }) {
+  const [falhou, setFalhou] = useState(false);
   const base = `shrink-0 rounded ${SIZES[size]} ${className}`;
-  if (avatarUrl) {
+  if (avatarUrl && !falhou) {
+    const bicho = isBichoAvatar(avatarUrl);
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- avatar remoto do Clerk; next/image exigiria remotePatterns só pra isso
+      // eslint-disable-next-line @next/next/no-img-element -- avatar remoto do Clerk ou SVG do bicho; next/image exigiria remotePatterns só pra isso
       <img
-        data-avatar
+        data-avatar={bicho ? "bicho" : "foto"}
         src={avatarUrl}
         alt=""
         loading="lazy"
-        className={`${base} border border-line object-cover`}
+        onError={() => setFalhou(true)}
+        // o bicho é voxel: fica inteiro no quadro, sobre a banda, sem corte
+        className={`${base} border border-line ${bicho ? "bg-band object-contain" : "object-cover"}`}
       />
     );
   }
   return (
     <span
-      data-avatar
+      data-avatar="iniciais"
       aria-hidden
       className={`${base} inline-flex select-none items-center justify-center border-[1.5px] border-line bg-band font-mono font-semibold text-foreground`}
     >

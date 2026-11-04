@@ -24,7 +24,8 @@ import { followsMe, isFollowingMember, ownCounts } from "@/lib/memberFollows";
 import { sharedTeamsLabel } from "@/lib/evidence";
 import { FollowButton } from "@/components/FollowButton";
 import { MascoteViewer } from "@/components/MascoteViewer";
-import { mascoteDoMembro } from "@/lib/mascote/store";
+import { bichoDoMembro, ESTAGIO_NOME } from "@/lib/mascote/evolucao";
+import { nomeItem } from "@/lib/mascote/itens";
 import { ESPECIE_DEFS } from "@/lib/mascote/especies";
 import { PostCard } from "@/components/PostCard";
 import { TestimonialList } from "@/components/TestimonialList";
@@ -478,7 +479,7 @@ export default async function PublicProfilePage({
   const me = viewer ? { id: viewer.id, username: viewer.username, role: viewer.role } : null;
 
   const [bicho, numbers, pins, xp, canWrite] = await Promise.all([
-    mascoteDoMembro(member.id),
+    bichoDoMembro(member.id),
     profileNumbers(member.id),
     pinnedProjects(member.id, member.username),
     computeXp(member.id),
@@ -523,18 +524,28 @@ export default async function PublicProfilePage({
             {member.name ?? `@${member.username}`}
           </h1>
         </div>
-        {/* bicho (migration 043) */}
-        <figure className="flex items-center gap-4" data-testid="u-bicho">
-          <div className="desk w-[132px] shrink-0 border-x-2 p-1.5">
+        {/* bicho (migration 043, estágio e itens na 047): o herói do perfil */}
+        <figure className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5" data-testid="u-bicho">
+          <div className="desk w-[200px] shrink-0 border-x-2 p-2">
             <div className="border-2 border-line bg-background">
-              <MascoteViewer config={bicho.config} tamanho={116} />
+              <MascoteViewer config={bicho.config} itens={bicho.pecas} estagio={bicho.estagio} tamanho={184} />
             </div>
           </div>
-          <figcaption className="flex min-w-0 flex-col gap-0.5 font-mono text-[13px]">
-            <span className="font-semibold [overflow-wrap:anywhere]">{bicho.config.nome}</span>
-            <span className="text-muted">
-              {ESPECIE_DEFS[bicho.config.especie].nome} · {ESPECIE_DEFS[bicho.config.especie].frase}
+          <figcaption className="flex min-w-0 flex-col gap-1 font-mono text-[13px]">
+            <span className="text-[15px] font-semibold [overflow-wrap:anywhere]">{bicho.config.nome}</span>
+            <span className="text-muted" data-testid="u-bicho-estagio">
+              {ESPECIE_DEFS[bicho.config.especie].nome} · {ESTAGIO_NOME[bicho.estagio]}
             </span>
+            {bicho.semanas.total >= 2 && (
+              <span className="text-muted" data-testid="u-bicho-semanas">
+                constrói há {bicho.semanas.total} semanas
+              </span>
+            )}
+            {bicho.itens.length > 0 && (
+              <span className="text-muted" data-testid="u-bicho-itens">
+                {bicho.itens.map((id) => nomeItem(id)).join(", ")}
+              </span>
+            )}
             {own && (
               <Link href="/perfil/bicho" className="mt-1 text-accent underline-offset-4 hover:underline" data-testid="u-bicho-editar">
                 trocar o visual →

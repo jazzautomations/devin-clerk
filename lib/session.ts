@@ -57,6 +57,9 @@ export const currentMember = cache(async (): Promise<Member | null> => {
     lastName: user?.lastName ?? null,
     email: user?.primaryEmailAddress?.emailAddress ?? existing?.email ?? "",
     imageUrl: user?.imageUrl ?? null,
+    // hasImage false = conta sem foto real: o membro novo nasce com o bicho
+    // como avatar (spec 046, onda 4)
+    hasImage: user?.hasImage,
   });
   markSynced(userId);
   if (member) await touchLastSeen(member.id);
