@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { areaLabel } from "@/lib/areas";
 import { levelFor } from "@/lib/game";
 import type { BoardCard } from "@/lib/teamboard";
+import { InviteToTeamButton } from "@/components/OpeningCard";
 
 const input =
   "w-full border-[1.5px] border-line bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-[#6b6b6b] focus:border-accent focus:outline-none";
@@ -14,6 +16,9 @@ const input =
 // A nota de cada anúncio só chega pra quem tem inscrição aprovada (o GET
 // com sessão traz; a lista da página não traz), então o inscrito busca de
 // novo ao abrir.
+//
+// spec 046 onda 3: o card mostra "posso ajudar com" (áreas do perfil) e,
+// pra quem já tem time na edição, "convidar pro meu time" (team_invites).
 export function TeamBoardPanel({
   hackathonId,
   canPost,
@@ -33,6 +38,8 @@ export function TeamBoardPanel({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // meu time nesta edição (null = sem time): o convite só aparece pra quem tem
+  const [myTeamId, setMyTeamId] = useState<number | null>(null);
 
   const mine =
     canPost && myUsername
@@ -54,6 +61,12 @@ export function TeamBoardPanel({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (live && data?.entries) setEntries(data.entries);
+      })
+      .catch(() => {});
+    fetch(`/api/hackathons/${hackathonId}/team`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (live && data?.team?.id) setMyTeamId(Number(data.team.id));
       })
       .catch(() => {});
     return () => {
@@ -179,8 +192,32 @@ export function TeamBoardPanel({
               <p className="font-mono text-xs text-foreground">
                 <span className="text-muted">busca:</span> {e.need}
               </p>
+              {e.helpOffer.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {e.helpOffer.map((k) => (
+                    <span
+                      key={k}
+                      className="border border-line bg-mint px-1.5 py-0.5 font-mono text-[11.5px] text-accent"
+                    >
+                      posso ajudar com {areaLabel(k)}
+                    </span>
+                  ))}
+                </div>
+              )}
               {e.note && (
                 <p className="font-mono text-xs text-muted">{e.note}</p>
+              )}
+              {(e.city || e.institution) && (
+                <p className="font-mono text-[11.5px] text-muted [overflow-wrap:anywhere]">
+                  {[e.city, e.institution].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              {/* convite de time (spec 046 onda 3): só pra quem tem time aqui
+                  e não convida quem já está num time */}
+              {myTeamId && !e.hasTeam && e.username !== myUsername && (
+                <div className="border-t border-line pt-2">
+                  <InviteToTeamButton hackathonId={hackathonId} username={e.username} />
+                </div>
               )}
             </li>
           ))}
@@ -255,7 +292,7 @@ export function TeamBoardPanel({
               className={`${input} resize-none`}
             />
             <span id="board-note-help" className="font-mono text-[12px] text-muted">
-              Só quem tem inscrição aprovada nesta edição vê a nota. Não coloque telefone nem e-mail: quem se
+              Só quem tem inscrição aprovada nesta edição vê a nota. Não escreva telefone nem e-mail aqui: quem se
               interessar chama você pelo perfil.
             </span>
           </label>

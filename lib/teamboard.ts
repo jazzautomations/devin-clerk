@@ -1,4 +1,6 @@
 import db from "@/lib/db";
+import { areasFromJson, type AreaKey } from "@/lib/areas";
+import { hiddenAuthorSql } from "@/lib/blocks";
 
 export type BoardEntry = {
   id: number;
@@ -14,6 +16,12 @@ export type BoardEntry = {
   headline: string | null;
   persona: string | null;
   xp: number;
+  // perfil rico (migration 041): o card mostra "posso ajudar com"
+  helpOffer: AreaKey[];
+  city: string | null;
+  institution: string | null;
+  // já está num time desta edição? (o card não oferece convite pra quem já tem)
+  hasTeam: boolean;
 };
 
 /**
@@ -22,20 +30,26 @@ export type BoardEntry = {
  */
 export type BoardCard = Omit<BoardEntry, "memberId" | "note"> & { note?: string | null };
 
-type Row = Omit<BoardEntry, "skills" | "active"> & {
+type Row = Omit<BoardEntry, "skills" | "active" | "helpOffer"> & {
   skills: string;
   active: number;
+  helpOffer: string;
 };
 
 const select = `SELECT l.id, l.memberId, l.hackathonId, l.skills, l.need, l.note,
        l.active, l.createdAt,
-       m.username, m.name, m.headline, m.persona, m.xp
+       m.username, m.name, m.headline, m.persona, m.xp, m."helpOffer",
+       m.city, m.institution,
+       EXISTS (SELECT 1 FROM teams t JOIN team_members tm ON tm."teamId" = t.id
+                WHERE t."hackathonId" = l."hackathonId" AND tm.username = m.username) AS "hasTeam"
        FROM looking_for_team l JOIN members m ON m.id = l.memberId`;
 
 const toEntry = (r: Row): BoardEntry => ({
   ...r,
   skills: JSON.parse(r.skills),
   active: r.active === 1,
+  helpOffer: areasFromJson(r.helpOffer),
+  hasTeam: Boolean(r.hasTeam),
 });
 
 export const NEED_MAX = 200;
@@ -113,6 +127,47 @@ export async function listBoardEntries(
     const { memberId: _m, note, ...card } = toEntry(r);
     void _m;
     return opts.withNotes ? { ...card, note } : card;
+  });
+}
+
+export type SeekerFilter = {
+  hackathonId?: string | null;
+  area?: AreaKey | null;
+  cidade?: string | null;
+  faculdade?: string | null;
+  limit?: number;
+};
+
+/**
+ * Quem procura time, de todas as edições (/times, spec 046 onda 3). Bloqueio
+ * e silêncio (dois sentidos) somem da lista; `viewerId` nulo não esconde nada.
+ */
+export async function listSeekers(filter: SeekerFilter, viewerId: number | null = null): Promise<BoardCard[]> {
+  return (
+    await db
+      .prepare(
+        `${select} WHERE l.active = 1
+           AND (@hid::text IS NULL OR l."hackathonId" = @hid::text)
+           AND (@area::text IS NULL OR m."helpOffer" LIKE '%"' || @area || '"%')
+           AND (@cidade::text IS NULL OR m.city LIKE '%' || @cidade || '%')
+           AND (@faculdade::text IS NULL OR m.institution LIKE '%' || @faculdade || '%')
+           AND ${hiddenAuthorSql("l.memberId", "me")}
+         ORDER BY l."createdAt" DESC, l.id DESC
+         LIMIT @limit`,
+      )
+      .all({
+        hid: filter.hackathonId ?? null,
+        area: filter.area ?? null,
+        cidade: filter.cidade ?? null,
+        faculdade: filter.faculdade ?? null,
+        me: viewerId ?? -1,
+        limit: filter.limit ?? 60,
+      }) as Row[]
+  ).map((r) => {
+    const { memberId: _m, note: _n, ...card } = toEntry(r);
+    void _m;
+    void _n;
+    return card;
   });
 }
 

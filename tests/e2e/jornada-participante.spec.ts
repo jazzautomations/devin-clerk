@@ -174,7 +174,7 @@ test.describe("jornada do participante", () => {
     await db.prepare("DELETE FROM team_members WHERE teamId = ?").run(t!.id);
     await page.goto(`/h/${ED}`);
     await page.getByRole("button", { name: "+ procuro time" }).click();
-    await expect(page.getByText("Não coloque telefone nem e-mail")).toBeVisible();
+    await expect(page.getByText("Não escreva telefone nem e-mail aqui")).toBeVisible();
     await noHorizontalScroll(page);
     await shot(page, "procuro-time-390");
   });

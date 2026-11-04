@@ -259,7 +259,7 @@ test.describe("timeline", () => {
     await expect(desktop.getByRole("link", { name: "buscar" })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 900 });
-    await page.getByRole("button", { name: "menu" }).click();
+    await page.getByRole("button", { name: "menu", exact: true }).click();
     const mobile = page.getByRole("navigation", { name: "Navegação principal (menu)" });
     await expect(mobile.getByRole("link", { name: "feed" })).toHaveAttribute("href", "/feed");
     await expect(mobile.getByRole("link", { name: "buscar" })).toHaveAttribute("href", "/busca");
