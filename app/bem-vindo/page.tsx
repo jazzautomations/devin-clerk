@@ -8,6 +8,8 @@ import { getOrCreateMember } from "@/lib/members";
 import { safeRedirect } from "@/lib/onboarding";
 import { getOpenKinds } from "@/lib/roleApplications";
 import { getOpenTo } from "@/lib/talent";
+import { mascoteDoMembro } from "@/lib/mascote/store";
+import { teammatesToFollow } from "@/lib/memberFollows";
 
 // spec 039 — onboarding pós-cadastro. O proxy manda pra cá a primeira
 // página logada de quem ainda não tem o cookie de onboarding; aqui o banco
@@ -47,7 +49,11 @@ export default async function BemVindoPage({ searchParams }: PageProps<"/bem-vin
       break;
     }
   }
-  const openTo = await getOpenTo(member.id);
+  const [openTo, mascote, pessoas] = await Promise.all([
+    getOpenTo(member.id),
+    mascoteDoMembro(member.id),
+    teammatesToFollow(member.id, 4),
+  ]);
   const first = (member.name ?? user?.firstName ?? "").split(" ")[0];
 
   return (
@@ -65,6 +71,8 @@ export default async function BemVindoPage({ searchParams }: PageProps<"/bem-vin
         redirectUrl={back}
         nextEdition={next ? { id: next.id, name: next.name } : null}
         helpEdition={help}
+        mascote={{ config: mascote.config, salvo: mascote.salvo }}
+        pessoas={pessoas}
         initial={{
           name: member.name ?? "",
           headline: member.headline ?? "",

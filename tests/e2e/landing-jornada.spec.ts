@@ -191,6 +191,8 @@ test.describe("onboarding e painel", () => {
     await page.getByTestId("onboarding-continue").click();
     await expect(page.getByText(/passo 3 de 3/)).toBeVisible();
     await page.getByTestId("onboarding-continue").click();
+    // migration 043: o passo opcional do bicho vem depois dos links
+    await page.getByTestId("onboarding-bicho-pular").click();
     await expect(page.getByTestId("onboarding-done")).toBeVisible();
     await expect(page.getByTestId("onboarding-next")).toHaveAttribute("href", /^\/h\/[^/]+$/);
   });

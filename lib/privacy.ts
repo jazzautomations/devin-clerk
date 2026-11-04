@@ -73,6 +73,9 @@ export const ANONYMIZE: Record<string, AnonValue> = {
   institution: null,
   course: null,
   lastSeenAt: null,
+  // bicho (migration 043): config e data da última troca
+  mascote: null,
+  mascoteUpdatedAt: null,
 };
 
 /** colunas de members que ficam como estão na exclusão (não são pessoais) */

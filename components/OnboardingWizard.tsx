@@ -6,10 +6,18 @@ import { MAX_PERSONAS, PERSONAS } from "@/lib/personas";
 import { OPEN_TO, openToLabel } from "@/lib/openTo";
 import { INTENTS, LIMITS, onboardingNext, type IntentKey } from "@/lib/onboarding";
 import { CommunitySuggestions } from "@/components/CommunitySuggestions";
+import { Avatar } from "@/components/Avatar";
+import { FollowButton } from "@/components/FollowButton";
+import { MascoteEditor } from "@/components/MascoteEditor";
+import type { FollowPerson } from "@/lib/memberFollows";
+import type { MascoteConfig } from "@/lib/mascote/tipos";
 
 // spec 039 — /bem-vindo: 3 passos curtos (quem é você, perfil básico,
 // links), barra de progresso, voltar e pular. Cada "próximo" grava o passo;
 // concluir ou pular marca o onboarding e mostra o próximo passo.
+// Migration 043: depois dos links vem o passo opcional "Monte seu bicho"
+// (o onboarding já está marcado; pular mantém o bicho da semente) e o fim
+// mostra gente pra seguir e comunidades.
 
 type Initial = {
   name: string;
@@ -25,6 +33,9 @@ type Initial = {
 };
 
 const STEPS = ["quem é você", "seu perfil", "links"] as const;
+/** depois dos 3 passos: o bicho (opcional, grava no próprio editor) e o fim */
+const BICHO = STEPS.length;
+const FIM = STEPS.length + 1;
 
 const label = "font-mono text-[12px] tracking-[0.06em] text-muted uppercase";
 const input =
@@ -35,13 +46,18 @@ export function OnboardingWizard({
   redirectUrl,
   nextEdition,
   helpEdition,
+  mascote,
+  pessoas = [],
 }: {
   initial: Initial;
+  mascote: { config: MascoteConfig; salvo: boolean };
+  /** gente pra seguir na tela de conclusão */
+  pessoas?: FollowPerson[];
   redirectUrl: string | null;
   nextEdition: { id: string; name: string } | null;
   helpEdition: { id: string; name: string; kind: "mentor" | "jurado" | "voluntario" } | null;
 }) {
-  const [step, setStep] = useState(0); // 0..2 passos, 3 = fim
+  const [step, setStep] = useState(0); // 0..2 dados, 3 = bicho, 4 = fim
   const [v, setV] = useState<Initial>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,10 +105,10 @@ export function OnboardingWizard({
   }
 
   async function skip() {
-    if (await send({ finish: true })) setStep(STEPS.length);
+    if (await send({ finish: true })) setStep(FIM);
   }
 
-  if (step === STEPS.length) {
+  if (step === FIM) {
     const n = onboardingNext({ intents: v.intents as IntentKey[], redirectUrl, nextEdition, helpEdition });
     return (
       <section className="flex flex-col gap-6" data-testid="onboarding-done" aria-live="polite">
@@ -104,6 +120,29 @@ export function OnboardingWizard({
             {n.label} →
           </Link>
         </div>
+        {pessoas.length > 0 && (
+          <section className="flex flex-col gap-3 border-[1.5px] border-line p-5" data-testid="onboarding-people">
+            <div>
+              <p className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">opcional</p>
+              <h3 className="mt-1 text-[20px] font-extrabold tracking-[-0.02em]">Gente pra seguir</h3>
+              <p className="mt-1 text-[14.5px] text-muted">Quem já fez time com você.</p>
+            </div>
+            <ul className="border-b border-line">
+              {pessoas.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-line py-3">
+                  <Link href={`/u/${p.username}`} className="flex min-w-0 items-center gap-3">
+                    <Avatar username={p.username} name={p.name} avatarUrl={p.avatarUrl} size="md" />
+                    <span className="min-w-0">
+                      <span className="block truncate font-bold">{p.name ?? `@${p.username}`}</span>
+                      <span className="block truncate font-mono text-[12px] text-muted">@{p.username}</span>
+                    </span>
+                  </Link>
+                  <FollowButton username={p.username} following={p.followedByMe} compact />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <CommunitySuggestions city={v.city} />
         <p className="font-mono text-[13px] text-muted">
           dá pra mudar tudo depois em{" "}
@@ -118,7 +157,8 @@ export function OnboardingWizard({
 
   return (
     <section className="flex flex-col gap-7" aria-labelledby="onb-step-title">
-      {/* progresso */}
+      {/* progresso (o passo do bicho é extra, fica fora da contagem) */}
+      {step < BICHO && (
       <div className="flex flex-col gap-2">
         <p className="font-mono text-[12px] text-muted">
           passo {step + 1} de {STEPS.length} · <span className="text-accent">{STEPS[step]}</span>
@@ -135,6 +175,7 @@ export function OnboardingWizard({
           ))}
         </ol>
       </div>
+      )}
 
       {step === 0 && (
         <div className="flex flex-col gap-7">
@@ -288,12 +329,43 @@ export function OnboardingWizard({
         </div>
       )}
 
+      {step === BICHO && (
+        <div className="flex flex-col gap-5" data-testid="onboarding-bicho">
+          <div>
+            <p className="font-mono text-[12px] tracking-[0.06em] text-muted uppercase">opcional</p>
+            <h2 id="onb-step-title" className="mt-1 text-[clamp(1.7rem,5vw,2.4rem)] leading-[1] font-extrabold tracking-[-0.035em]">
+              Monte seu bicho
+            </h2>
+            <p className="mt-2 text-[14.5px] text-muted">
+              Ele aparece no seu perfil. Se pular, fica esse que veio sorteado, e dá pra trocar depois no perfil.
+            </p>
+          </div>
+          <MascoteEditor
+            inicial={mascote.config}
+            salvo={mascote.salvo}
+            rotuloSalvar="salvar e concluir"
+            onSalvo={() => setStep(FIM)}
+            extra={
+              <button
+                type="button"
+                onClick={() => setStep(FIM)}
+                className="min-h-[44px] font-mono text-[13px] text-muted underline-offset-4 hover:underline"
+                data-testid="onboarding-bicho-pular"
+              >
+                pular
+              </button>
+            }
+          />
+        </div>
+      )}
+
       {error && (
         <p role="alert" className="font-mono text-[13px] text-orange">
           {error}
         </p>
       )}
 
+      {step < BICHO && (
       <div className="flex flex-col-reverse gap-3 border-t-2 border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-5">
           {step > 0 && (
@@ -309,6 +381,7 @@ export function OnboardingWizard({
           {saving ? "salvando…" : step === STEPS.length - 1 ? "concluir →" : "próximo →"}
         </button>
       </div>
+      )}
     </section>
   );
 }

@@ -66,6 +66,8 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // membro); editar, apagar, aceitar, recusar e esconder dividem um balde por hora
   testimonials: { limit: 5, windowMs: DAY }, // POST /api/testimonials — membro
   "testimonial-actions": { limit: 60, windowMs: HOUR }, // PATCH/DELETE …/[id] e accept/decline/hide
+  // bicho (migration 043): salvar o config do criador
+  mascote: { limit: 30, windowMs: HOUR }, // PUT /api/members/me/mascote — membro
   // dossiê (migration 029): botão "atualizar" do organizador consulta o GitHub
   "dossie-refresh": { limit: 30, windowMs: HOUR }, // POST …/admin/…/dossie/[teamId]
   // preferências de notificação (migration 040): cada toggle é um PATCH
