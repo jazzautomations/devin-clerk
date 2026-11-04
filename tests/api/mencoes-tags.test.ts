@@ -81,14 +81,14 @@ describe("menção", () => {
     const a = await member();
     const b = await member();
     const post = await createPost(a.id, `oi @${b.username}`);
-    await updatePost(post.id, a, `oi @${b.username}, corrigido`, null);
+    await updatePost(post.id, a, { body: `oi @${b.username}, corrigido` });
     expect(await notes(b.id)).toHaveLength(1);
     // some com a menção: a linha sai do índice
-    await updatePost(post.id, a, "sem menção agora", null);
+    await updatePost(post.id, a, { body: "sem menção agora" });
     expect(await mentionRows(post.id)).toEqual([]);
     expect((await notes(b.id)).length).toBe(1);
     // volta com ela: aviso continua sendo um só
-    await updatePost(post.id, a, `voltei @${b.username}`, null);
+    await updatePost(post.id, a, { body: `voltei @${b.username}` });
     expect(await mentionRows(post.id)).toEqual([{ memberId: b.id, commentId: null }]);
     expect(await notes(b.id)).toHaveLength(1);
   });
@@ -196,7 +196,7 @@ describe("tag", () => {
     const a = await member();
     const post = await createPost(a.id, "#react e #ia");
     expect((await tagRows(post.id)).map((r) => r.tag)).toEqual(["ia", "react"]);
-    await updatePost(post.id, a, "#react só", null);
+    await updatePost(post.id, a, { body: "#react só" });
     expect((await tagRows(post.id)).map((r) => r.tag)).toEqual(["react"]);
     expect(await postIdsByTag("ia", a.id)).toEqual([]);
   });

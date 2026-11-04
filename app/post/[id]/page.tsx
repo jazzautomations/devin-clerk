@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { listComments } from "@/lib/comments";
 import { parseId } from "@/lib/ids";
 import { getPost } from "@/lib/posts";
@@ -29,6 +29,9 @@ export default async function PostPage({ params }: Props) {
   if (!me) notFound();
   const post = await getPost(id, me.id);
   if (!post) notFound();
+  // repost não tem conversa própria (migration 049): o endereço dele é o do
+  // original, que é onde a reação e os comentários moram
+  if (post.repostOfId !== null) redirect(`/post/${post.repostOfId}`);
   const comments = await listComments(post.id, me.id);
   const back = post.communitySlug
     ? { href: `/comunidade/${post.communitySlug}`, label: post.communityName ?? "comunidade" }
