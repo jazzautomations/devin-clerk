@@ -162,7 +162,9 @@ test.describe("seguir comunidade", () => {
   test("/feed abre em 'minhas comunidades': aviso, hackathon e mural por data, com páginas", async ({ memberPage: page }) => {
     for (const vw of [1280, 390]) {
       await page.setViewportSize({ width: vw, height: 900 });
-      await page.goto("/feed");
+      // spec 046 onda 2: quem segue comunidade abre no "seguindo"; a aba de
+      // novidades da comunidade continua aqui, um clique à frente
+      await page.goto("/feed?aba=comunidades");
       await expect(page.getByTestId("feed-tab-comunidades")).toHaveAttribute("aria-current", "page");
       const list = page.getByTestId("feed-community-updates");
       const items = list.getByTestId("community-update");

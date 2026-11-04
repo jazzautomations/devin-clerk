@@ -3,7 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { getOpenHackathons } from "@/lib/hackathons";
 import { getOrCreateMember } from "@/lib/members";
 import { touchLastSeen } from "@/lib/session";
-import { listPosts } from "@/lib/posts";
+import { TIMELINE_HOME_SIZE, timelinePage } from "@/lib/timeline";
 import { getRegistrationIds } from "@/lib/registrations";
 import { getMemberBadges, getMemberCards, recomputeXp } from "@/lib/xp";
 import { FeedSection } from "@/components/FeedSection";
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   const name = user?.firstName ?? member.name ?? email.split("@")[0];
   const now = new Date();
 
-  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, posts, communities, updates, xp, toWrite] = await Promise.all([
+  const [active, roles, open, registeredIds, badges, cards, certificates, attendance, timeline, communities, updates, xp, toWrite] = await Promise.all([
     listMyActiveEditions(member.id, now),
     listMyEditionRoles(member.id),
     getOpenHackathons(now),
@@ -59,7 +59,8 @@ export default async function DashboardPage() {
     getMemberCards(member.id),
     listMemberCertificates(member.id),
     getAttendanceHistory(member.id, now),
-    listPosts(20, member.id),
+    // os 5 primeiros da aba seguindo: o painel é resumo, a timeline é no /feed
+    timelinePage(member.id, "seguindo", null, TIMELINE_HOME_SIZE),
     listMyCommunities(member.id),
     listCommunityUpdates(member.id, { limit: 3 }),
     // o próprio painel já recalcula (não espera o cron da hora cheia)
@@ -323,17 +324,17 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* mural da comunidade */}
-      <section aria-labelledby="mural-title" className="flex flex-col gap-4">
+      {/* timeline: os 5 primeiros de quem a pessoa segue */}
+      <section aria-labelledby="mural-title" className="flex flex-col gap-4" data-testid="dashboard-timeline">
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
           <h2 id="mural-title" className="text-[clamp(1.5rem,3vw,2rem)] leading-none font-extrabold tracking-[-0.035em]">
-            Mural da comunidade
+            Sua timeline
           </h2>
           <Link href="/feed" className="font-mono text-[13px] text-accent underline-offset-4 hover:underline">
-            abrir o feed →
+            ver timeline →
           </Link>
         </div>
-        <FeedSection initialPosts={posts} me={member.username} isAdmin={member.role === "admin"} />
+        <FeedSection initialPosts={timeline.posts} me={member.username} isAdmin={member.role === "admin"} />
       </section>
     </div>
   );

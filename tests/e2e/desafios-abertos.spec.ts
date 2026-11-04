@@ -117,7 +117,9 @@ test.describe("desafios abertos", () => {
     // allTextContents não espera: com a máquina carregada a nav ainda não tinha os links
     await expect(nav.getByRole("link", { name: "desafios" })).toBeVisible();
     const labels = await nav.getByRole("link").allTextContents();
-    expect(labels.slice(0, 2)).toEqual(["hackathons", "desafios"]);
+    // spec 046 onda 2: o feed é a primeira porta do menu
+    expect(labels[0]).toBe("feed");
+    expect(labels.slice(1, 3)).toEqual(["hackathons", "desafios"]);
     await nav.getByRole("link", { name: "desafios" }).click();
     await expect(page).toHaveURL(/\/desafios$/);
     await expect(nav.getByRole("link", { name: "desafios" })).toHaveAttribute("aria-current", "page");

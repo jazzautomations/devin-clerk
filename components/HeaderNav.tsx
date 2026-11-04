@@ -9,14 +9,17 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 
 type NavLink = { href: string; label: string; match: readonly string[] };
 
-// logado: as portas da plataforma
+// logado: as portas da plataforma. O feed é a primeira (spec 046, onda 2:
+// a timeline é o lugar de abrir todo dia) e a busca fecha a lista.
 const NAV_IN: NavLink[] = [
+  { href: "/feed", label: "feed", match: ["/feed", "/post/"] },
   { href: "/radar", label: "hackathons", match: ["/radar", "/h/"] },
   { href: "/desafios", label: "desafios", match: ["/desafios"] },
   { href: "/comunidades", label: "comunidades", match: ["/comunidades", "/comunidade/"] },
   { href: "/projetos", label: "projetos", match: ["/projetos", "/p/"] },
-  { href: "/membros", label: "pessoas", match: ["/membros", "/u/", "/feed"] },
+  { href: "/membros", label: "pessoas", match: ["/membros", "/u/"] },
   { href: "/organizar", label: "organizar", match: ["/organizar"] },
+  { href: "/busca", label: "buscar", match: ["/busca"] },
 ];
 // sem conta (spec 039): a plataforma é logada, então o header leva pro que
 // explica o produto — landing por seção, /organizar e /empresas
@@ -35,7 +38,7 @@ function isActive(pathname: string, match: readonly string[]) {
 export function DesktopNav({ variant }: { variant: "in" | "out" }) {
   const pathname = usePathname() ?? "/";
   return (
-    <nav aria-label="Navegação principal" className="hidden items-center gap-6 lg:flex xl:gap-7">
+    <nav aria-label="Navegação principal" className="hidden min-w-0 items-center gap-4 lg:flex xl:gap-6">
       {linksFor(variant).map((l) => {
         const active = isActive(pathname, l.match);
         return (
@@ -43,7 +46,7 @@ export function DesktopNav({ variant }: { variant: "in" | "out" }) {
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`py-2 text-[15px] font-medium decoration-[1.5px] underline-offset-[6px] hover:underline ${
+            className={`shrink-0 py-2 text-[15px] font-medium whitespace-nowrap decoration-[1.5px] underline-offset-[6px] hover:underline ${
               active ? "underline decoration-accent decoration-2" : ""
             }`}
           >
