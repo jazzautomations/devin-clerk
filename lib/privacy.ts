@@ -191,6 +191,17 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
   const anon = `removido-${memberId}`;
 
   await db.transaction(async () => {
+    // papel no time (migration 036) é texto da pessoa: sai também da cópia
+    // no snapshot de cada versão enviada (o resto do snapshot não muda).
+    // Roda antes das inscrições: cancelar tira a pessoa do time.
+    await db
+      .prepare(
+        `UPDATE project_submissions
+         SET snapshot = (snapshot::jsonb #- ARRAY['roles', ?::text])::text
+         WHERE teamId IN (SELECT teamId FROM team_members WHERE username = ?)
+           AND (snapshot::jsonb #> ARRAY['roles', ?::text]) IS NOT NULL`,
+      )
+      .run(member.username, member.username, member.username);
     // inscrições: pedido/fila sai de vez; aprovado em edição que ainda não
     // começou libera a vaga pelo cancelamento normal (promove a fila e tira
     // a pessoa do time, que segue podendo entregar); edição em andamento ou

@@ -13,6 +13,7 @@ export function PublicCard({
   children,
   extra,
   cta,
+  rest,
 }: {
   kind: "perfil" | "projeto" | "comunidade";
   title: string;
@@ -24,11 +25,13 @@ export function PublicCard({
   extra?: ReactNode;
   /** texto do botão; o padrão é o do perfil/projeto */
   cta?: string;
+  /** texto ao lado do botão; o padrão é o do tipo */
+  rest?: string;
 }) {
   const LABEL = { perfil: "PERFIL", projeto: "PROJETO", comunidade: "COMUNIDADE" } as const;
   const REST = {
     perfil: "Trajetória, projetos, cartas e links ficam pra quem tem conta.",
-    projeto: "A história, a demo e o código aparecem aqui quando a edição abre os projetos.",
+    projeto: "O projeto completo fica pra quem tem conta.",
     comunidade: "Membros, mural, avisos e os hackathons que já rolaram ficam pra quem entra.",
   } as const;
   const CTA = {
@@ -63,7 +66,7 @@ export function PublicCard({
       </article>
       <div className="flex flex-col gap-3 border-[1.5px] border-line p-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[15px] text-muted">
-          {REST[kind]}
+          {rest ?? REST[kind]}
         </p>
         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
           <Link href={`/sign-up?redirect_url=${back}`} className="btn" data-testid="public-card-cta">

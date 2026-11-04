@@ -270,6 +270,8 @@ export const AFTER_LOCK_KEYS = new Set([
 export const STORY_KEYS = ["inspiration", "howBuilt", "challenges", "learned"] as const;
 
 export const TAGLINE_MAX = 140;
+/** itens aceitos em technologies no PATCH (só 12 ficam; acima disso é 400) */
+export const TECH_INPUT_MAX = 50;
 
 /** sugestões da lista controlada; o time pode digitar outras */
 export const TECH_SUGGESTIONS = KNOWN_TECH;
@@ -343,8 +345,12 @@ export function validateDraftPatch(raw: Record<string, unknown>): DraftPatch {
   }
   if (raw.technologies !== undefined) {
     // valida o formato; depois fica com até 12 únicas pela tag (da 13ª em
-    // diante é ignorada, lib/techTags)
-    stringList(raw.technologies, "technologies", Number.MAX_SAFE_INTEGER, 40);
+    // diante é ignorada, lib/techTags). O teto de itens descarta abuso antes
+    // de percorrer a lista
+    if (Array.isArray(raw.technologies) && raw.technologies.length > TECH_INPUT_MAX) {
+      throw new EntryError(`technologies: no máximo ${TECH_INPUT_MAX}`);
+    }
+    stringList(raw.technologies, "technologies", TECH_INPUT_MAX, 40);
     out.technologies = parseTechEntries(raw.technologies).map((e) => e.label);
   }
   if (raw.socialPosts !== undefined) {

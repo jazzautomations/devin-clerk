@@ -296,6 +296,18 @@ export type ProjectView = {
   openToPublic: boolean;
 };
 
+/**
+ * Texto do cartão público de /p pra quem não tem conta (puro). Só promete
+ * que o projeto abre quando ainda pode abrir: time que não entregou não
+ * ganha promessa, e conteúdo que já aparece pra quem entra (time abandonado,
+ * edição fora do ar) fica pra quem tem conta.
+ */
+export function anonProjectNote(v: Pick<ProjectView, "status" | "showContent">): string {
+  if (v.status === "nao_entregue") return "Este time não entregou projeto nesta edição.";
+  if (v.showContent) return "O projeto completo fica pra quem tem conta.";
+  return "O projeto entregue aparece aqui quando a edição publica as entregas.";
+}
+
 export async function getProjectView(
   teamId: number,
   viewer: { id: number; role: string; username: string } | null,
@@ -366,8 +378,9 @@ export async function getProjectView(
           username: p.username,
           name: p.name,
           avatarUrl: p.avatarUrl,
-          role: entry.roles[p.username] ?? null,
-          deliveredRole: delivered?.roles[p.username] ?? null,
+          // papel é texto da vitrine: some junto com ela antes da trava
+          role: showContent ? (entry.roles[p.username] ?? null) : null,
+          deliveredRole: showContent ? (delivered?.roles[p.username] ?? null) : null,
         }
       : { username: null, name: null, avatarUrl: null, role: null, deliveredRole: null },
   );

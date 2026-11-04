@@ -245,6 +245,7 @@ test.describe("vitrine do projeto", () => {
     await setDeadline(Date.now() + 5 * H);
     await page.goto(`/p/${ids.team}`);
     await expect(page.getByTestId("public-card")).toBeVisible();
+    await expect(page.getByTestId("public-card")).toContainText("O projeto entregue aparece aqui quando a edição publica as entregas.");
     await expect(page.getByText("a feira some do mapa toda semana")).toHaveCount(0);
     await setDeadline(Date.now() - 60_000);
   });
@@ -263,5 +264,38 @@ test.describe("vitrine do projeto", () => {
     await page.goto("/projetos?tech=tecnologia-que-ninguem-usa");
     await expect(page.locator("li", { hasText: "Feira Viva E2E" })).toHaveCount(0);
     await expect(page.getByText("nenhum projeto feito com tecnologia-que-ninguem-usa ainda")).toBeVisible();
+  });
+
+  test("mudar só o papel não apaga o que o colega salvou depois que a página abriu", async ({ memberPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/h/${ED}/entrega`);
+    const vitrine = page.getByTestId("showcase-editor");
+    await expect(vitrine.getByLabel(/^Como foi feito/)).toHaveValue("três noites de Next.js e Postgres");
+    // o colega salva a história e a galeria com a página já aberta
+    const db = openE2eDb();
+    await db.prepare(`UPDATE team_projects SET "howBuilt" = 'reescrito pela Bia' WHERE teamId = ?`).run(ids.team);
+    await db
+      .prepare("INSERT INTO project_media (teamId, url, caption, position) VALUES (?, 'https://img.e2e.invalid/tela-3.png', 'da Bia', 2)")
+      .run(ids.team);
+
+    await vitrine.getByLabel(/seu papel no time/).fill("front, pitch e testes");
+    await expect
+      .poll(
+        async () =>
+          (
+            await db
+              .prepare("SELECT tm.role FROM team_members tm JOIN members m ON m.username = tm.username WHERE tm.teamId = ? AND m.email = ?")
+              .get<{ role: string | null }>(ids.team, E2E_MEMBER_EMAIL)
+          )?.role,
+        { timeout: 15_000 },
+      )
+      .toBe("front, pitch e testes");
+    await expect(vitrine.getByTestId("showcase-save")).toHaveText("vitrine salva", { timeout: 15_000 });
+    expect((await project())?.howBuilt).toBe("reescrito pela Bia");
+    const media = await db.prepare("SELECT url FROM project_media WHERE teamId = ? ORDER BY position").all<{ url: string }>(ids.team);
+    expect(media).toHaveLength(3);
+    // e o editor passa a mostrar o que o colega salvou
+    await expect(vitrine.getByLabel(/^Como foi feito/)).toHaveValue("reescrito pela Bia");
+    await expect(vitrine.getByLabel("imagem 3", { exact: true })).toHaveValue("https://img.e2e.invalid/tela-3.png");
   });
 });

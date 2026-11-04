@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { Entry, EntryFields, EntryLink, EntryStatus, ShowcaseFields } from "@/lib/entries";
+import type { Entry, EntryFields, EntryLink, EntryStatus } from "@/lib/entries";
+import { mergeStory, storyPayload, toStory, type Story, type StoryKey } from "@/lib/showcaseDraft";
 import { normalizeTech, parseTechEntries, TECH_MAX, techLabel } from "@/lib/techTags";
 
 // spec 034 — editor da entrega: rascunho com autosave ("último salvamento"),
@@ -91,42 +92,6 @@ function toPayload(f: Form) {
   };
 }
 
-type Story = {
-  inspiration: string;
-  howBuilt: string;
-  challenges: string;
-  learned: string;
-  coverUrl: string;
-  media: { url: string; caption: string }[];
-  role: string;
-};
-
-function toStory(s: ShowcaseFields | null, role: string | null): Story {
-  return {
-    inspiration: s?.inspiration ?? "",
-    howBuilt: s?.howBuilt ?? "",
-    challenges: s?.challenges ?? "",
-    learned: s?.learned ?? "",
-    coverUrl: s?.coverUrl ?? "",
-    media: (s?.media ?? []).map((m) => ({ url: m.url, caption: m.caption ?? "" })),
-    role: role ?? "",
-  };
-}
-
-/** sem projeto criado ainda, só o papel pode ser salvo */
-function storyPayload(s: Story, hasProject: boolean): Record<string, unknown> {
-  if (!hasProject) return { role: s.role };
-  return {
-    inspiration: s.inspiration,
-    howBuilt: s.howBuilt,
-    challenges: s.challenges,
-    learned: s.learned,
-    coverUrl: s.coverUrl,
-    media: s.media.filter((m) => m.url.trim()).map((m) => ({ url: m.url.trim(), caption: m.caption })),
-    role: s.role,
-  };
-}
-
 const STORY_FIELDS = [
   ["inspiration", "Inspiração", "de onde veio a ideia, quem tem esse problema"],
   ["howBuilt", "Como foi feito", "arquitetura, stack, como o time dividiu o trabalho"],
@@ -184,12 +149,13 @@ export function EntryEditor({
   const [story, setStory] = useState<Story>(() => toStory(initial.showcase, initial.roles?.[me] ?? null));
   const [storySave, setStorySave] = useState<"idle" | "pending" | "saving" | "error">("idle");
   const [storyErr, setStoryErr] = useState("");
-  const storyDirtyRef = useRef(false);
+  // chaves da vitrine mexidas e ainda não salvas: o autosave manda só elas
+  const storyDirtyRef = useRef<Set<StoryKey>>(new Set());
   const s = entry.settings;
   const locked = entry.locked;
   const hasProject = !!entry.fields;
 
-  async function patch(body: Record<string, unknown>, onError: (m: string) => void = setErr): Promise<boolean> {
+  async function patch(body: Record<string, unknown>, onError: (m: string) => void = setErr): Promise<Entry | null> {
     let res: Response;
     try {
       res = await fetch(`/api/hackathons/${hackathonId}/entry`, {
@@ -199,30 +165,42 @@ export function EntryEditor({
       });
     } catch {
       onError("sem conexão: não salvou. Tente de novo.");
-      return false;
+      return null;
     }
     if (res.status === 401) {
       router.push("/sign-in");
-      return false;
+      return null;
     }
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       onError(data?.error ?? "erro ao salvar");
-      return false;
+      return null;
     }
     setEntry(data.entry);
     onError("");
-    return true;
+    return data.entry as Entry;
   }
 
   // autosave da vitrine: independente da trava (o servidor deixa passar)
   useEffect(() => {
-    if (!storyDirtyRef.current) return;
+    if (storyDirtyRef.current.size === 0) return;
     const t = setTimeout(async () => {
+      const body = storyPayload(story, storyDirtyRef.current, hasProject);
+      const sent = Object.keys(body) as StoryKey[];
+      if (sent.length === 0) return;
+      // o que for digitado durante o save marca de novo e vai no próximo
+      for (const k of sent) storyDirtyRef.current.delete(k);
       setStorySave("saving");
-      const ok = await patch(storyPayload(story, hasProject), setStoryErr);
-      if (ok) storyDirtyRef.current = false;
-      setStorySave(ok ? "idle" : "error");
+      const saved = await patch(body, setStoryErr);
+      if (!saved) {
+        for (const k of sent) storyDirtyRef.current.add(k);
+        setStorySave("error");
+        return;
+      }
+      // o resto vem do servidor: pega o que outro integrante salvou
+      const keep = new Set([...storyDirtyRef.current, ...sent]);
+      setStory((x) => mergeStory(x, toStory(saved.showcase, saved.roles?.[me] ?? null), keep));
+      setStorySave(storyDirtyRef.current.size > 0 ? "pending" : "idle");
     }, 1200);
     return () => clearTimeout(t);
     // patch muda a cada render; o gatilho é a vitrine
@@ -230,7 +208,7 @@ export function EntryEditor({
   }, [story]);
 
   function setS<K extends keyof Story>(k: K, v: Story[K]) {
-    storyDirtyRef.current = true;
+    storyDirtyRef.current.add(k);
     setStorySave("pending");
     setStory((x) => ({ ...x, [k]: v }));
   }
@@ -254,7 +232,7 @@ export function EntryEditor({
   // (sem título o autosave não roda, então o texto só existe aqui)
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (!dirtyRef.current && !storyDirtyRef.current) return;
+      if (!dirtyRef.current && storyDirtyRef.current.size === 0) return;
       e.preventDefault();
       e.returnValue = "";
     };
@@ -275,7 +253,8 @@ export function EntryEditor({
     setSubmitMsg("");
     // campos ainda não salvos vão junto no envio: o envio não depende do autosave
     const pendingForm = dirtyRef.current && form.title.trim() ? toPayload(form) : null;
-    const pendingStory = storyDirtyRef.current && hasProject ? storyPayload(story, true) : null;
+    const storyKeys = hasProject ? [...storyDirtyRef.current] : [];
+    const pendingStory = storyKeys.length > 0 ? storyPayload(story, storyKeys, true) : null;
     const pending = pendingForm || pendingStory ? { ...pendingStory, ...pendingForm } : null;
     let res: Response;
     try {
@@ -299,7 +278,7 @@ export function EntryEditor({
       return;
     }
     if (pendingForm) dirtyRef.current = false;
-    if (pendingStory) storyDirtyRef.current = false;
+    for (const k of storyKeys) storyDirtyRef.current.delete(k);
     setEntry(data.entry);
     setErr("");
     setSubmitMsg(`versão ${data.version} enviada — o time recebeu a confirmação`);

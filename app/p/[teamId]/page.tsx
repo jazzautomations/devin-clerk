@@ -5,7 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { appConfig } from "@/app.config";
 import { getLatestDeployForTeam } from "@/lib/deploys";
 import { formatBrt, parseDbTime } from "@/lib/entries";
-import { getProjectView, youtubeId } from "@/lib/entriesPublic";
+import { anonProjectNote, getProjectView, youtubeId } from "@/lib/entriesPublic";
 import { getMemberByClerkId } from "@/lib/members";
 import { hasVoted, voteCountFor } from "@/lib/votes";
 import { getAudienceResult } from "@/lib/stage";
@@ -88,6 +88,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
         title={data.title}
         subtitle={data.showContent ? (data.fields?.tagline ?? null) : null}
         path={`/p/${data.teamId}`}
+        rest={anonProjectNote(data)}
         facts={[
           ["edição", data.hackathonName],
           ["time", data.teamName],

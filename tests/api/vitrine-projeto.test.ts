@@ -3,11 +3,12 @@ import { join } from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import db from "@/lib/db";
 import { createTeam } from "@/lib/archive";
-import { getEntry, showcaseDiffers, syncProjectTech, techSuggestions, toDbTime } from "@/lib/entries";
-import { getProjectView, youtubeId } from "@/lib/entriesPublic";
+import { getEntry, saveDraft, showcaseDiffers, submitEntry, syncProjectTech, techSuggestions, toDbTime } from "@/lib/entries";
+import { anonProjectNote, getProjectView, youtubeId } from "@/lib/entriesPublic";
 import { listProjects, listTopTech } from "@/lib/projects";
 import { deleteMemberData } from "@/lib/privacy";
 import { resetRateLimits } from "@/lib/ratelimit";
+import { mergeStory, storyPayload, toStory } from "@/lib/showcaseDraft";
 
 // Vitrine do projeto (spec 046, migration 036): história, capa, galeria e
 // papel editáveis depois da trava; snapshot intacto e aviso de "atualizado
@@ -197,11 +198,17 @@ describe("vitrine — PATCH /api/hackathons/[id]/entry", () => {
       { role: "x".repeat(81) },
       { technologies: "Next.js" },
       { technologies: ["x".repeat(41)] },
+      // lista enorme é recusada antes de ser percorrida
+      { technologies: Array.from({ length: 51 }, () => "!!!") },
+      { technologies: Array.from({ length: 200_000 }, () => "!!!") },
     ];
     for (const body of bad) {
       const res = await r.PATCH(req("PATCH", body), ctx);
       expect(res.status, JSON.stringify(body).slice(0, 80)).toBe(400);
     }
+    const fifty = await r.PATCH(req("PATCH", { technologies: [...full.technologies, ...Array.from({ length: 48 }, () => "!!!")] }), ctx);
+    expect(fifty.status).toBe(200);
+    expect((await fifty.json()).entry.fields.technologies).toEqual(full.technologies);
     const ok = await r.PATCH(req("PATCH", { media: [], coverUrl: "", inspiration: "x".repeat(2000) }), ctx);
     expect(ok.status).toBe(200);
     expect((await ok.json()).entry.showcase).toMatchObject({ media: [], coverUrl: null });
@@ -292,6 +299,17 @@ describe("vitrine depois da trava", () => {
     expect(closed.openToPublic).toBe(false);
     expect(closed.showcase).toBeNull();
     expect(closed.updatedAfterDelivery).toBe(false);
+    // papel é texto da vitrine: antes da trava, quem é de fora não vê
+    const outsider = (await getProjectView(teamId, { id: ids.vt_fora, username: "vt_fora", role: "member" }))!;
+    expect(outsider.showContent).toBe(false);
+    expect(outsider.credits.map((c) => [c.role, c.deliveredRole])).toEqual([
+      [null, null],
+      [null, null],
+    ]);
+    expect(anonProjectNote(outsider)).toBe("O projeto entregue aparece aqui quando a edição publica as entregas.");
+    // quem é do time vê o próprio rascunho com os papéis
+    const inside = (await getProjectView(teamId, { id: ids.vt_ana, username: "vt_ana", role: "member" }))!;
+    expect(inside.credits.find((c) => c.username === "vt_ana")?.role).toBe("front, pitch e café");
   });
 
   it("edição que esconde o conteúdo depois do prazo não abre pra deslogado", async () => {
@@ -342,6 +360,31 @@ describe("helpers da vitrine", () => {
     expect(showcaseDiffers(base, { ...base, inspiration: "b" })).toBe(true);
   });
 
+  it("anonProjectNote só promete abrir o que ainda pode abrir", () => {
+    expect(anonProjectNote({ status: "nao_entregue", showContent: false })).toBe("Este time não entregou projeto nesta edição.");
+    expect(anonProjectNote({ status: "travado", showContent: true })).toBe("O projeto completo fica pra quem tem conta.");
+    expect(anonProjectNote({ status: "travado", showContent: false })).toBe(
+      "O projeto entregue aparece aqui quando a edição publica as entregas.",
+    );
+  });
+
+  it("rascunho da vitrine: autosave manda só o que mudou e o resto vem do servidor", () => {
+    const opened = toStory(null, null);
+    const typed = { ...opened, role: "back-end" };
+    expect(storyPayload(typed, ["role"], true)).toEqual({ role: "back-end" });
+    expect(storyPayload({ ...typed, inspiration: "x" }, ["inspiration"], false)).toEqual({});
+    expect(
+      storyPayload({ ...opened, media: [{ url: " https://a.dev/1.png ", caption: "" }, { url: "", caption: "vazia" }] }, ["media"], true),
+    ).toEqual({ media: [{ url: "https://a.dev/1.png", caption: "" }] });
+    const server = toStory(
+      { inspiration: "da Ana", howBuilt: null, challenges: "GPS", learned: null, coverUrl: null, media: [{ url: "https://a.dev/2.png", caption: null }] },
+      "back-end",
+    );
+    const merged = mergeStory({ ...typed, learned: "digitando" }, server, new Set(["role", "learned"]));
+    expect(merged).toMatchObject({ inspiration: "da Ana", challenges: "GPS", learned: "digitando", role: "back-end" });
+    expect(merged.media).toEqual([{ url: "https://a.dev/2.png", caption: "" }]);
+  });
+
   it("syncProjectTech reescreve o índice a partir de technologies; sugestão só com 2 times", async () => {
     await db.prepare("UPDATE team_projects SET technologies = ? WHERE teamId = ?").run(JSON.stringify(["Go", "golang", "Elixir"]), teamId);
     expect(await syncProjectTech(teamId)).toEqual(["go", "elixir"]);
@@ -367,5 +410,29 @@ describe("helpers da vitrine", () => {
       { username: "vt_ana", role: "back-end" },
     ]);
     expect((await getEntry(teamId))!.roles.vt_ana).toBe("front, pitch e café");
+  });
+
+  it("exclusão de conta tira o papel do snapshot entregue e não acende o aviso de atualização", async () => {
+    await member("vt_cris");
+    await member("vt_duda");
+    const t = (await createTeam(H, { name: "Time Snapshot", placement: 0, memberUsernames: ["vt_cris", "vt_duda"] })).team.id;
+    await setDeadline(new Date(Date.now() + 3_600_000));
+    await saveDraft(t, { username: "vt_cris" }, { ...full, title: "Mapa Snapshot", role: "dados" });
+    await saveDraft(t, { username: "vt_duda" }, { role: "design" });
+    await submitEntry(t, { id: ids.vt_cris, username: "vt_cris" });
+    await setDeadline(new Date(Date.now() - 60_000));
+    expect((await getProjectView(t, null))!.updatedAfterDelivery).toBe(false);
+
+    await deleteMemberData(ids.vt_cris);
+    const snap = JSON.parse(
+      (await db.prepare("SELECT snapshot FROM project_submissions WHERE teamId = ?").get<{ snapshot: string }>(t))!.snapshot,
+    );
+    expect(snap.roles).toEqual({ vt_duda: "design" });
+    expect(snap.title).toBe("Mapa Snapshot");
+    expect(JSON.stringify(snap)).not.toContain("dados");
+    expect((await getProjectView(t, null))!.updatedAfterDelivery).toBe(false);
+    // snapshot de outro time não muda
+    const other = await db.prepare("SELECT snapshot FROM project_submissions WHERE teamId = ? ORDER BY version DESC LIMIT 1").get<{ snapshot: string }>(teamId);
+    expect(JSON.parse(other!.snapshot).roles).toEqual({ vt_ana: "front e pitch", vt_bia: "back-end" });
   });
 });
