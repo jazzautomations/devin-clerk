@@ -22,6 +22,7 @@ export async function GET(req: Request, { params }: Ctx) {
       flair: sp.get("flair"),
       q: sp.get("q"),
       includeRemoved: canModerate,
+      canModerate,
     }),
     listFlairs(g.community.id),
   ]);

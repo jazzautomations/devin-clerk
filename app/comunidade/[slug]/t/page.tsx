@@ -38,7 +38,7 @@ export default async function TopicsPage({ params, searchParams }: PageProps<"/c
   const role = await getMembership(c.id, member.id);
   const canModerate = member.role === "admin" || role === "dono" || role === "organizador";
   const [{ pinned, topics }, flairs] = await Promise.all([
-    listTopics(c.id, member.id, { sort, period, flair, q, includeRemoved: canModerate }),
+    listTopics(c.id, member.id, { sort, period, flair, q, includeRemoved: canModerate, canModerate }),
     listFlairs(c.id),
   ]);
   const isMember = role !== null;

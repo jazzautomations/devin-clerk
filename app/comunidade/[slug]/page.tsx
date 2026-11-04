@@ -137,7 +137,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   ]);
   const openReports = Object.values(reportCounts).reduce((a, b) => a + (b ?? 0), 0);
   // bloco "Tópicos em alta" (migration 058)
-  const hot = await hotTopics(c.id, member.id, 5, now);
+  const hot = await hotTopics(c.id, member.id, 5, now, canManage);
   const organizers = members.filter((m) => m.role === "organizador");
   const owners = members.filter((m) => m.role === "dono");
   const links = (

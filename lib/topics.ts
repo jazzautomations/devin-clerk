@@ -128,8 +128,9 @@ export type ListTopicsOpts = {
   flair?: string | null;
   q?: string | null;
   limit?: number;
-  /** moderador vê os removidos (com selo) */
+  /** moderador vê os removidos (com selo) e não perde tópico de quem bloqueou */
   includeRemoved?: boolean;
+  canModerate?: boolean;
   now?: Date;
 };
 
@@ -146,7 +147,8 @@ export async function listTopics(
   const sort = opts.sort ?? "em-alta";
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
   const bag: Record<string, unknown> = { c: communityId, me: viewerId ?? -1 };
-  const base = ["t.communityId = @c", hiddenAuthorSql("t.memberId")];
+  const base = ["t.communityId = @c"];
+  if (!opts.canModerate) base.push(hiddenAuthorSql("t.memberId"));
   if (!opts.includeRemoved) base.push("t.removedAt IS NULL");
   const flair = cleanFlair(opts.flair);
   if (flair) {
@@ -186,11 +188,11 @@ export async function listTopics(
 }
 
 /** bloco "Tópicos em alta" da página da comunidade (fixados entram no ranking como qualquer um) */
-export async function hotTopics(communityId: number, viewerId: number | null, n = 5, now = new Date()): Promise<TopicSummary[]> {
+export async function hotTopics(communityId: number, viewerId: number | null, n = 5, now = new Date(), canModerate = false): Promise<TopicSummary[]> {
   const rows = (
     await db
       .prepare(
-        `${SUMMARY} WHERE t.communityId = @c AND t.removedAt IS NULL AND ${hiddenAuthorSql("t.memberId")}
+        `${SUMMARY} WHERE t.communityId = @c AND t.removedAt IS NULL${canModerate ? "" : ` AND ${hiddenAuthorSql("t.memberId")}`}
          ORDER BY to_ts(t.createdAt) DESC, t.id DESC LIMIT ${HOT_POOL}`,
       )
       .all<SummaryRow>({ c: communityId, me: viewerId ?? -1 })
@@ -292,18 +294,23 @@ export async function getTopic(id: number, viewer: Actor | null): Promise<TopicD
   const r = await topicRow(id, viewer?.id ?? null);
   if (!r) return null;
   if (Number(r.hidden) && viewer?.role !== "admin") return null;
-  if (viewer && r.memberId !== null && (await isBlockedEither(viewer.id, Number(r.memberId)))) return null;
   const access = await accessFor(Number(r.communityId), viewer);
+  if (viewer && !access.canModerate && r.memberId !== null && (await isBlockedEither(viewer.id, Number(r.memberId)))) return null;
   const s = toSummary(r);
-  const hideText = s.deleted || (s.removed && !access.canModerate);
+  const hidden = s.removed && !access.canModerate;
+  const hideText = s.deleted || hidden;
   return {
     ...s,
+    // removido: pra quem não modera, título e autor são justamente o conteúdo
+    title: hidden ? "[removido pela moderação]" : s.title,
+    flair: hidden ? null : s.flair,
+    author: hidden ? null : s.author,
     body: hideText ? "" : r.body,
     editedAt: r.editedAt,
     acceptedReplyId: r.acceptedReplyId === null ? null : Number(r.acceptedReplyId),
     communitySlug: r.slug,
     communityName: r.communityName,
-    poll: s.kind === "enquete" ? await pollFor(s.id, viewer?.id ?? null, s.locked || s.removed) : null,
+    poll: s.kind === "enquete" && !hidden ? await pollFor(s.id, viewer?.id ?? null, s.locked || s.removed) : null,
     mine: !!viewer && r.memberId !== null && Number(r.memberId) === viewer.id && !s.deleted,
     isMember: access.isMember,
     canModerate: access.canModerate,
@@ -519,8 +526,10 @@ async function loadCtx(topicId: number, actor: Actor): Promise<Ctx> {
     .get<Omit<Ctx, keyof Access> & { hidden: number }>(topicId);
   if (!t || (Number(t.hidden) && actor.role !== "admin")) throw new TopicError("Tópico não encontrado.", 404);
   const memberId = t.memberId === null ? null : Number(t.memberId);
-  if (memberId !== null && (await isBlockedEither(actor.id, memberId))) throw new TopicError("Tópico não encontrado.", 404);
   const access = await accessFor(Number(t.communityId), actor);
+  // moderador não perde a moderação por bloqueio: quem bloqueia o dono
+  // continua sendo moderado por ele
+  if (memberId !== null && !access.canModerate && (await isBlockedEither(actor.id, memberId))) throw new TopicError("Tópico não encontrado.", 404);
   return { ...t, id: Number(t.id), communityId: Number(t.communityId), memberId, replyCount: Number(t.replyCount), ...access };
 }
 
@@ -951,7 +960,7 @@ export async function forgetTopicAuthor(memberId: number): Promise<void> {
       .run(v.targetType, v.targetId, v.targetId);
   }
   await db.prepare("DELETE FROM topic_poll_votes WHERE memberId = ?").run(memberId);
-  for (const topicId of new Set(gone.map((g) => Number(g.topicId)))) await recountReplies(topicId);
+  for (const topicId of new Set([...gone, ...marked].map((g) => Number(g.topicId)))) await recountReplies(topicId);
 }
 
 // ---------- HTTP ----------

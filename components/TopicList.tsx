@@ -85,7 +85,6 @@ export function TopicList({
                 className={`min-w-0 font-bold break-words underline-offset-4 hover:text-accent hover:underline ${compact ? "text-[15.5px] leading-snug" : "text-[17px] leading-snug tracking-[-0.01em]"} ${t.removed || t.deleted ? "text-muted" : ""}`}
                 data-testid="topic-link"
               >
-                {t.deleted ? "[apagado] " : ""}
                 {t.title}
               </Link>
               <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[12px] text-muted">
