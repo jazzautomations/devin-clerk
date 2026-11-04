@@ -9,10 +9,14 @@ import {
   judgedVersions,
   lockAt,
   toDbTime,
+  showcaseDiffers,
   type EntryFields,
   type EntryStatus,
   type JudgedVersion,
+  type ShowcaseFields,
 } from "@/lib/entries";
+import { canNetwork } from "@/lib/network";
+import { parseTechEntries, type TechEntry } from "@/lib/techTags";
 import { isPublished } from "@/lib/jury";
 import { listWinners, type PrizeKind } from "@/lib/prizes";
 import { hasEditionRole } from "@/lib/roles";
@@ -222,6 +226,40 @@ export async function visibleArchive(
 
 // ---------- /p/[teamId] ----------
 
+/** "Quem fez": integrante fora do canNetwork aparece só como "integrante" */
+export type TeamCredit = {
+  username: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+  /** papel atual */
+  role: string | null;
+  /** papel na versão entregue */
+  deliveredRole: string | null;
+};
+
+/** id de vídeo do YouTube validado (11 caracteres); null pra qualquer outra coisa */
+export function youtubeId(url: string | null | undefined): string | null {
+  if (!url) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const host = u.hostname.replace(/^(www\.|m\.)/, "");
+  let id: string | null = null;
+  if (host === "youtu.be") id = u.pathname.split("/")[1] ?? null;
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    if (u.pathname === "/watch") id = u.searchParams.get("v");
+    else {
+      const m = u.pathname.match(/^\/(embed|shorts|live)\/([^/]+)/);
+      id = m ? m[2] : null;
+    }
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
+
 export type ProjectView = {
   teamId: number;
   teamName: string;
@@ -244,7 +282,31 @@ export type ProjectView = {
   awards: string[];
   challenges: { id: string; title: string; sponsor: string }[];
   isMember: boolean;
+  /** vitrine atual (história, capa, galeria); null quando o conteúdo não aparece */
+  showcase: ShowcaseFields | null;
+  /** vitrine da versão avaliada, pra "ver como foi entregue" */
+  delivered: ShowcaseFields | null;
+  /** a vitrine mudou depois da entrega travada */
+  updatedAfterDelivery: boolean;
+  credits: TeamCredit[];
+  /** "Feito com": tag + rótulo, na ordem do time */
+  tech: TechEntry[];
+  editionStartsAt: string | null;
+  /** quem não tem conta vê a página completa (spec 046) */
+  openToPublic: boolean;
 };
+
+/**
+ * Texto do cartão público de /p pra quem não tem conta (puro). Só promete
+ * que o projeto abre quando ainda pode abrir: time que não entregou não
+ * ganha promessa, e conteúdo que já aparece pra quem entra (time abandonado,
+ * edição fora do ar) fica pra quem tem conta.
+ */
+export function anonProjectNote(v: Pick<ProjectView, "status" | "showContent">): string {
+  if (v.status === "nao_entregue") return "Este time não entregou projeto nesta edição.";
+  if (v.showContent) return "O projeto completo fica pra quem tem conta.";
+  return "O projeto entregue aparece aqui quando a edição publica as entregas.";
+}
 
 export async function getProjectView(
   teamId: number,
@@ -253,15 +315,25 @@ export async function getProjectView(
 ): Promise<ProjectView | null> {
   const entry = await getEntry(teamId, now);
   if (!entry || !entry.fields) return null;
-  const [{ settings, published, phase }, h, versions, winners] = await Promise.all([
+  const [{ settings, published, phase }, h, versions, winners, people] = await Promise.all([
     phaseOf(entry.hackathonId, now),
     db
       .prepare(
-        `SELECT h.name, t.placement FROM teams t JOIN hackathons h ON h.id = t.hackathonId WHERE t.id = ?`,
+        `SELECT h.name, h.startsAt, h.active, h.publishedAt, t.placement
+         FROM teams t JOIN hackathons h ON h.id = t.hackathonId WHERE t.id = ?`,
       )
-      .get<{ name: string; placement: number }>(teamId),
+      .get<{ name: string; startsAt: string | null; active: number; publishedAt: string | null; placement: number }>(
+        teamId,
+      ),
     judgedVersions(entry.hackathonId),
     listWinners(entry.hackathonId),
+    db
+      .prepare(
+        `SELECT tm.username, m.id, m.name, m.avatarUrl
+         FROM team_members tm LEFT JOIN members m ON m.username = tm.username
+         WHERE tm.teamId = ? ORDER BY tm.username`,
+      )
+      .all<{ username: string; id: number | null; name: string | null; avatarUrl: string | null }>(teamId),
   ]);
   const isMember = !!viewer && entry.members.includes(viewer.username);
   const isStaff = !!viewer && (await hasEditionRole(viewer, entry.hackathonId, "staff"));
@@ -286,6 +358,35 @@ export async function getProjectView(
   } else {
     showContent = false; // não entregue
   }
+
+  // vitrine: a atual quando o conteúdo aparece (o júri não avalia, segue
+  // editável depois da trava); a entregue sai do snapshot avaliado
+  const showcase = showContent ? entry.showcase : null;
+  const delivered = showContent && judged && !isDraftPreview ? judged.snapshot : null;
+  const updatedAfterDelivery =
+    !!delivered &&
+    !!entry.showcase &&
+    deadlinePassed(settings, now) &&
+    showcaseDiffers({ ...entry.showcase, roles: entry.roles }, delivered);
+
+  const visible = await Promise.all(
+    people.map((p) => (p.id === null ? Promise.resolve(false) : canNetwork(p.id, entry.hackathonId))),
+  );
+  const credits: TeamCredit[] = people.map((p, i) =>
+    visible[i]
+      ? {
+          username: p.username,
+          name: p.name,
+          avatarUrl: p.avatarUrl,
+          // papel é texto da vitrine: some junto com ela antes da trava
+          role: showContent ? (entry.roles[p.username] ?? null) : null,
+          deliveredRole: showContent ? (delivered?.roles[p.username] ?? null) : null,
+        }
+      : { username: null, name: null, avatarUrl: null, role: null, deliveredRole: null },
+  );
+
+  const abandoned = entry.versions.length > 0 && entry.members.length === 0;
+  const editionPublic = !!h && (h.active === 1 || !!h.publishedAt);
 
   const challengeIds = fields?.challengeIds ?? [];
   const challenges =
@@ -315,5 +416,12 @@ export async function getProjectView(
     awards: winners.filter((w) => w.teamId === teamId).map((w) => `${w.place}º lugar · ${w.categoryName}`),
     challenges,
     isMember,
+    showcase,
+    delivered,
+    updatedAfterDelivery,
+    credits,
+    tech: parseTechEntries(fields?.technologies ?? []),
+    editionStartsAt: h?.startsAt ?? null,
+    openToPublic: editionPublic && showContent && !isDraftPreview && !abandoned,
   };
 }

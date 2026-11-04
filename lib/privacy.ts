@@ -194,6 +194,17 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
   const anon = `removido-${memberId}`;
 
   await db.transaction(async () => {
+    // papel no time (migration 036) é texto da pessoa: sai também da cópia
+    // no snapshot de cada versão enviada (o resto do snapshot não muda).
+    // Roda antes das inscrições: cancelar tira a pessoa do time.
+    await db
+      .prepare(
+        `UPDATE project_submissions
+         SET snapshot = (snapshot::jsonb #- ARRAY['roles', ?::text])::text
+         WHERE teamId IN (SELECT teamId FROM team_members WHERE username = ?)
+           AND (snapshot::jsonb #> ARRAY['roles', ?::text]) IS NOT NULL`,
+      )
+      .run(member.username, member.username, member.username);
     // inscrições: pedido/fila sai de vez; aprovado em edição que ainda não
     // começou libera a vaga pelo cancelamento normal (promove a fila e tira
     // a pessoa do time, que segue podendo entregar); edição em andamento ou
@@ -270,7 +281,8 @@ export async function deleteMemberData(memberId: number): Promise<string | null>
         .prepare(`UPDATE ${ident(table)} SET ${fields.map((f) => `${ident(f)} = NULL`).join(", ")} WHERE ${ident(column)} = ?`)
         .run(memberId);
     }
-    await db.prepare("UPDATE team_members SET username = ? WHERE username = ?").run(anon, member.username);
+    // o papel no time (migration 036) é texto da pessoa: sai junto com o @
+    await db.prepare("UPDATE team_members SET username = ?, role = NULL WHERE username = ?").run(anon, member.username);
     // inscrição mantida pela contagem não aparece mais na lista pública
     await db.prepare("UPDATE registrations SET publicListing = 0 WHERE memberId = ?").run(memberId);
     const cols = Object.keys(ANONYMIZE);

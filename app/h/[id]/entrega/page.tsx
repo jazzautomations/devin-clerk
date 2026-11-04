@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { EntryEditor } from "@/components/EntryEditor";
 import { getChallenges } from "@/lib/challenges";
-import { formatBrt, lockAt, myEntry, TECH_SUGGESTIONS, toDbTime } from "@/lib/entries";
+import { formatBrt, lockAt, myEntry, techSuggestions, toDbTime } from "@/lib/entries";
 import { getHackathon } from "@/lib/hackathons";
 import { listCriteria } from "@/lib/jury";
 import { getMemberByClerkId } from "@/lib/members";
@@ -23,10 +23,11 @@ export default async function EntryPage({ params }: PageProps<"/h/[id]/entrega">
   const member = await getMemberByClerkId(userId);
   if (!member) return redirectToSignIn({ returnBackUrl: `/h/${id}/entrega` });
 
-  const [entry, criteria, challenges] = await Promise.all([
+  const [entry, criteria, challenges, tags] = await Promise.all([
     myEntry(id, member.username),
     listCriteria(id),
     getChallenges(id),
+    techSuggestions(),
   ]);
   const lock = entry ? lockAt(entry.settings) : null;
 
@@ -53,9 +54,10 @@ export default async function EntryPage({ params }: PageProps<"/h/[id]/entrega">
         <EntryEditor
           hackathonId={id}
           initial={entry}
+          me={member.username}
           rubric={criteria.map((c) => c.label)}
           challenges={challenges.map((c) => ({ id: c.id, title: c.title, sponsor: c.sponsor }))}
-          techSuggestions={TECH_SUGGESTIONS}
+          techSuggestions={tags}
         />
       ) : (
         <p className="border-[1.5px] border-line px-5 py-6 text-muted">

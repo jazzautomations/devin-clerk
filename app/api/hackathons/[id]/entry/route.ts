@@ -9,7 +9,9 @@ import { limitOrNull } from "@/lib/ratelimit";
 // spec 034 — entrega do projeto do MEU time na edição.
 // GET  → rascunho + status + versões + o que falta
 // PATCH → autosave do rascunho (campo avaliado depois do prazo = 403;
-//         afterNotes "depois do hackathon" passa sempre)
+//         afterNotes "depois do hackathon" e a vitrine (inspiration,
+//         howBuilt, challenges, learned, coverUrl, media, role) passam
+//         sempre; role é o papel de quem salva — spec 046)
 // POST → enviar: valida obrigatórios e grava versão imutável; com repositório
 //        do GitHub, lê os commits pro dossiê do organizador (migration 029)
 //        depois da resposta. Corpo opcional = os campos ainda não salvos: o

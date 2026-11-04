@@ -49,17 +49,18 @@ test.describe("escolha do povo — voto da comunidade", () => {
     expect(res.headers()["content-type"]).toContain("application/json");
   });
 
-  test("ficha /p/[teamId]: membro vê o botão ▲; anon vê o cartão com CTA de cadastro", async ({
+  test("ficha /p/[teamId]: membro vê o botão ▲; anon vê a vitrine com CTA de cadastro no lugar do voto", async ({
     page,
     memberPage,
   }) => {
     const id = await seedTeamId();
     await memberPage.goto(`/p/${id}`);
     await expect(memberPage.getByRole("button", { name: /escolha do povo/i })).toBeVisible();
-    // spec 039 — sem conta: cartão mínimo, sem voto, e o CTA volta pra ficha
+    // spec 046 — sem conta: projeto do arquivo abre a vitrine completa, sem
+    // voto; o CTA de cadastro volta pra ficha
     await page.goto(`/p/${id}`);
-    await expect(page.getByTestId("public-card")).toBeVisible();
+    await expect(page.getByTestId("project-page")).toBeVisible();
     await expect(page.getByRole("button", { name: /escolha do povo/i })).toHaveCount(0);
-    await expect(page.getByTestId("public-card-cta")).toHaveAttribute("href", `/sign-up?redirect_url=%2Fp%2F${id}`);
+    await expect(page.getByTestId("anon-vote").getByRole("link")).toHaveAttribute("href", `/sign-up?redirect_url=%2Fp%2F${id}`);
   });
 });
