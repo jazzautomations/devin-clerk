@@ -124,6 +124,18 @@ export async function getOrCreateMember(clerkUser: {
   /** Clerk user.hasImage: false = não tem foto de verdade (vira bicho) */
   hasImage?: boolean;
 }): Promise<Member> {
+  // convidado importado (Luma, planilha) entrando pela primeira vez: o membro
+  // stub criado pelo import (clerkId com prefixo import:) e adotado — vira a
+  // conta de verdade mantendo inscricao, cartao, selos e historico.
+  await db
+    .prepare(
+      `UPDATE members SET "clerkId" = @id
+       WHERE id = (SELECT id FROM members
+                   WHERE "clerkId" LIKE 'import:%' AND LOWER(email) = LOWER(@email)
+                   ORDER BY id LIMIT 1)`,
+    )
+    .run({ id: clerkUser.id, email: clerkUser.email });
+
   const existing = await db
     .prepare("SELECT * FROM members WHERE clerkId = ?")
     .get(clerkUser.id) as MemberRow | undefined;
