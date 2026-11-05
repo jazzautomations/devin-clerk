@@ -26,6 +26,18 @@ async function shot(page: Page, name: string) {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
 }
 
+/** hidratação de verdade: ao montar, o React pendura __reactProps$/__reactFiber$ nos nós que gerencia */
+async function hydrated(page: Page, selector: string) {
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      return !!el && Object.keys(el).some((k) => k.startsWith("__react"));
+    },
+    selector,
+    { timeout: 15_000 },
+  );
+}
+
 /** "2026-11-14T18:00" daqui a N dias, no relógio de Brasília */
 function brtInput(days: number) {
   const d = new Date(Date.now() + days * 86_400_000 - 3 * 3_600_000);
@@ -154,6 +166,8 @@ test.describe("desafios abertos", () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto(`/comunidade/${MINE}/desafios/novo`);
     const form = page.getByTestId("desafio-form");
+    // fills e cliques antes da hidratação não pegam no estado do React
+    await hydrated(page, '[data-testid="desafio-form"]');
     await form.getByLabel("título").fill(MY_TITLE);
     await form.getByLabel("o que construir").fill("Mostre a fila do bandejão em tempo real.\nFunciona no celular.");
     await form.getByLabel("regras (opcional)").fill("Solo ou em time.");
@@ -203,6 +217,7 @@ test.describe("desafios abertos", () => {
     await page.goto(`/desafios/${ids.otherChallenge}`);
     await expect(page.getByTestId("desafio-contagem")).toContainText("0 entregas até agora");
     const form = page.getByTestId("entry-form");
+    await hydrated(page, '[data-testid="entry-form"]');
     await form.getByLabel(/^repo/).fill("http://github.com/e2e/bot");
     await form.getByLabel("o que você fez").fill("Bot no Telegram que lê o edital.");
     await page.getByTestId("entry-submit").click();
@@ -273,6 +288,7 @@ test.describe("desafios abertos", () => {
     const betoEntry = await db
       .prepare(`SELECT id FROM open_challenge_entries WHERE "challengeId" = ? AND "memberId" = ?`)
       .get<{ id: number }>(id, ids.beto);
+    await hydrated(page, '[data-testid="result-place-1"]');
     await page.getByTestId("result-place-1").selectOption(String(betoEntry!.id));
     await page.getByTestId("result-place-2").selectOption(String(anaEntry!.id));
     await noHorizontalScroll(page);
@@ -349,6 +365,7 @@ test.describe("desafios abertos", () => {
     await page.goto(`/desafios/${ids.otherChallenge}`);
     const ana = page.getByTestId("desafio-entrega").filter({ hasText: "bot da ana" });
     await expect(page.getByTestId("entrega-tirar")).toHaveCount(0);
+    await hydrated(page, '[data-testid="report-open"]');
     await ana.getByTestId("report-open").click();
     const dialog = ana.getByTestId("report-dialog");
     await dialog.getByLabel("spam ou propaganda").check();
@@ -370,6 +387,7 @@ test.describe("desafios abertos", () => {
     const id = (await myChallengeId())!;
     await page.goto(`/desafios/${id}`);
     const beto = page.getByTestId("desafio-entrega").filter({ hasText: "fila do beto" });
+    await hydrated(page, '[data-testid="entrega-tirar"]');
     page.once("dialog", (d) => d.accept());
     await beto.getByTestId("entrega-tirar").click();
     await expect(page.getByTestId("desafio-entregas")).not.toContainText("fila do beto");

@@ -22,6 +22,18 @@ async function me(): Promise<{ id: number; username: string }> {
   return (await openE2eDb().prepare("SELECT id, username FROM members WHERE email = ?").get<{ id: number; username: string }>(E2E_MEMBER_EMAIL))!;
 }
 
+/** hidratação de verdade: ao montar, o React pendura __reactProps$/__reactFiber$ nos nós que gerencia */
+async function hydrated(page: Page, selector: string) {
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      return !!el && Object.keys(el).some((k) => k.startsWith("__react"));
+    },
+    selector,
+    { timeout: 15_000 },
+  );
+}
+
 async function cleanup() {
   const db = openE2eDb();
   // posts primeiro: communityId e teamId são FK sem cascade
@@ -103,24 +115,27 @@ test.describe("espaços da comunidade + rss aberto", () => {
     await expect(bar).toBeVisible();
     for (const s of ["geral", "ajuda", "vagas", "mostra"]) await expect(page.getByTestId(`space-chip-${s}`)).toBeVisible();
     await noHorizontalScroll(page);
-    // posta em #ajuda pelo seletor do composer — select controlado: antes da
-    // hidratação a escolha não pega no estado, então repete até ficar
+    // posta em #ajuda pelo seletor do composer — select controlado: a
+    // escolha antes da hidratação muda o DOM mas não o estado, e o React
+    // desfaz o DOM em silêncio ao hidratar (o post ia parar no #geral).
+    // Espera a hidratação de verdade antes de escolher.
     const sel = page.getByTestId("composer-space").locator("select");
-    await expect(async () => {
-      await sel.selectOption({ label: "#ajuda" });
-      const escolhido = await sel.evaluate((el: HTMLSelectElement) => el.selectedOptions[0]?.textContent ?? "");
-      expect(escolhido).toBe("#ajuda");
-    }).toPass({ timeout: 15_000 });
+    await hydrated(page, '[data-testid="composer-space"] select');
+    await sel.selectOption({ label: "#ajuda" });
+    await expect(sel.locator("option:checked")).toHaveText("#ajuda");
     await page.getByLabel("o que você está construindo").fill("socorro: o build quebrou de novo");
     await page.getByRole("button", { name: "postar →" }).click();
-    await expect(page.getByText("socorro: o build quebrou de novo").first()).toBeVisible({ timeout: 15_000 });
+    // espera o cartão do post (data-post-body), não só o texto: getByText
+    // casa com o VALOR do textarea também e passa antes do POST voltar —
+    // e aí /s/ajuda renderizava antes do INSERT commitar
+    await expect(page.locator("[data-post-body]", { hasText: "socorro: o build quebrou de novo" })).toBeVisible({ timeout: 15_000 });
     // foi pro geral? não: caiu no #ajuda — o mural da página (geral) não mostra
     await page.goto(`/comunidade/${COM}/s/ajuda`);
     await expect(page.getByTestId("space-title")).toHaveText("#ajuda");
-    await expect(page.getByText("socorro: o build quebrou de novo")).toBeVisible();
+    await expect(page.locator("[data-post-body]", { hasText: "socorro: o build quebrou de novo" })).toBeVisible();
     await noHorizontalScroll(page);
     await page.goto(`/comunidade/${COM}/s/geral`);
-    await expect(page.getByText("socorro: o build quebrou de novo")).toHaveCount(0);
+    await expect(page.locator("[data-post-body]", { hasText: "socorro: o build quebrou de novo" })).toHaveCount(0);
     // e o post aparece no feed da comunidade (todos os espaços)
     const feed = await page.request.get(`/comunidade/${COM}/feed.xml`);
     expect(await feed.text()).toContain("socorro: o build quebrou de novo");
@@ -131,11 +146,11 @@ test.describe("espaços da comunidade + rss aberto", () => {
     await page.goto(`/comunidade/${COM}/espacos`);
     await expect(page.getByTestId("spaces-admin")).toBeVisible();
     await noHorizontalScroll(page);
-    // cria — mesmo cuidado com a hidratação: o fill precisa ficar
-    await expect(async () => {
-      await page.getByTestId("space-name").fill("projetos");
-      await expect(page.getByTestId("space-name")).toHaveValue("projetos", { timeout: 1000 });
-    }).toPass({ timeout: 15_000 });
+    // cria — fill antes da hidratação não pega no estado (o React desfaz o
+    // DOM ao montar): espera a hidratação antes de digitar
+    await hydrated(page, '[data-testid="space-name"]');
+    await page.getByTestId("space-name").fill("projetos");
+    await expect(page.getByTestId("space-name")).toHaveValue("projetos");
     await page.getByTestId("space-description").fill("o que você está fazendo");
     await page.getByTestId("space-create").click();
     await expect(page.getByTestId("space-row-projetos")).toBeVisible({ timeout: 15_000 });
@@ -144,6 +159,7 @@ test.describe("espaços da comunidade + rss aberto", () => {
     await expect(page.getByTestId("space-chip-projetos")).toBeVisible();
     // volta e renomeia ajuda → slug fica, nome muda
     await page.goto(`/comunidade/${COM}/espacos`);
+    await hydrated(page, '[data-testid="space-edit-ajuda"]');
     await page.getByTestId("space-edit-ajuda").click();
     await page.getByTestId("space-row-ajuda").getByLabel("nome do espaço").fill("ajuda geral");
     await page.getByTestId("space-row-ajuda").getByRole("button", { name: "salvar" }).click();
@@ -159,6 +175,7 @@ test.describe("espaços da comunidade + rss aberto", () => {
     await page.goto(`/comunidade/${COM}/s/vagas`);
     await expect(page.getByTestId("space-page")).toHaveCount(0);
     await page.goto(`/comunidade/${COM}/espacos`);
+    await hydrated(page, '[data-testid="spaces-admin"]');
     await page.getByLabel("desarquivar vagas").click();
     await expect(page.getByTestId("space-row-vagas")).toBeVisible({ timeout: 15_000 });
     await noHorizontalScroll(page);
