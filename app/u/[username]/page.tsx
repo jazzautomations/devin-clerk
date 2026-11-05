@@ -362,7 +362,10 @@ export async function generateMetadata({
   return {
     title: name,
     description,
-    alternates: { canonical: `/u/${member.username}` },
+    alternates: {
+      canonical: `/u/${member.username}`,
+      types: { "application/atom+xml": `/u/${member.username}/feed.xml` },
+    },
     openGraph: {
       title: name,
       description,
