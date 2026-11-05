@@ -22,7 +22,7 @@ const NAV_IN: NavLink[] = [
   { href: "/membros", label: "pessoas", match: ["/membros", "/u/"] },
   { href: "/organizar", label: "organizar", match: ["/organizar"] },
   { href: "/busca", label: "buscar", match: ["/busca"] },
-  // spec 046 onda 6: o copilot responde "já fizeram isso?" (feat-copilot)
+  // copilot do arquivo (spec 046 onda 6): "já fizeram isso?" com citação
   { href: "/copilot", label: "copilot", match: ["/copilot"] },
 ];
 // sem conta (spec 039): a plataforma é logada, então o header leva pro que

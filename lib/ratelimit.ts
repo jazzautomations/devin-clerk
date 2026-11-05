@@ -124,6 +124,12 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // 5/dia segura spam frio sem estrangular quem conheceu gente no dia
   dm: { limit: 120, windowMs: HOUR }, // POST /api/dm e …/[id]/messages — membro
   "dm-requests": { limit: 5, windowMs: DAY }, // pedido de conversa — membro
+  // copilot do arquivo (migration 055): pergunta e voto dividem o balde;
+  // 30/h cobre uma sessão de pesquisa e freia script
+  copilot: { limit: 30, windowMs: HOUR }, // POST /api/copilot e /api/copilot/feedback
+  // cota própria do resumo via LLM (20/dia por membro): estourada, a
+  // pergunta segue respondida só com os fatos — o LLM nunca é obrigatório
+  "copilot-llm": { limit: 20, windowMs: DAY }, // resumo via LLM em /api/copilot
 };
 
 const FALLBACK: RateLimitOpts = { limit: 60, windowMs: HOUR };

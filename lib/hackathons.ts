@@ -41,6 +41,8 @@ export type Hackathon = {
   eligibilityUrl?: string | null;
   prizeUsd?: number | null;
   submissionDeadline?: string | null;
+  // tolerância em minutos depois do prazo de entrega (migration 010)
+  submissionGraceMinutes?: number;
   brand?: string | null;
   // primeira vez que a edição ficou no ar (migration 019). Fora do ar com
   // publishedAt = arquivada; sem publishedAt = rascunho.
