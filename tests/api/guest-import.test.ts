@@ -9,7 +9,8 @@ async function seedEdition() {
   await db
     .prepare(
       `INSERT INTO hackathons (id, name, organizer, "startsAt", format, location, "registrationUrl", tags, active, source)
-       VALUES (?, 'Edição Import', 'Teste', '2027-01-10T09:00:00-03:00', 'presencial', 'São Paulo', ?, '[]', 1, 'painel')`,
+       VALUES (?, 'Edição Import', 'Teste', '2027-01-10T09:00:00-03:00', 'presencial', 'São Paulo', ?, '[]', 1, 'painel')
+       ON CONFLICT (id) DO NOTHING`,
     )
     .run(HID, `/h/${HID}`);
 }
