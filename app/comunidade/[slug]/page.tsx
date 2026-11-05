@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: PageProps<"/comunidade/[slug]
   return {
     title: c.name,
     description,
-    alternates: { canonical: `/comunidade/${c.slug}` },
+    alternates: { canonical: `/comunidade/${c.slug}`, types: { "application/atom+xml": `/comunidade/${c.slug}/feed.xml` } },
     openGraph: { title: c.name, description, url: absoluteUrl(`/comunidade/${c.slug}`) },
   };
 }

@@ -22,6 +22,10 @@ export const PUBLIC_PAGES: RegExp[] = [
   new RegExp(`^/u/${SEG}$`), // cartão público mínimo do perfil
   new RegExp(`^/p/${SEG}$`), // cartão público mínimo do projeto
   new RegExp(`^/comunidade/${SEG}$`), // cartão público mínimo da comunidade (divulgação)
+  // feeds Atom abertos (rss-aberto): leitor de feed não loga
+  new RegExp(`^/u/${SEG}/feed\\.xml$`),
+  new RegExp(`^/p/${SEG}/feed\\.xml$`),
+  new RegExp(`^/comunidade/${SEG}/feed\\.xml$`),
   new RegExp(`^/agenda/${SEG}$`), // teaser do evento da agenda (sem o link da sala)
   new RegExp(`^/rsvp/${SEG}$`), // link assinado do e-mail de confirmação
   /^\/demo\/.+$/, // demo publicada do time (o app do time roda no proxy, sem login)
