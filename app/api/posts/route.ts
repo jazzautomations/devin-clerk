@@ -1,8 +1,9 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getHackathon } from "@/lib/hackathons";
-import { getCommunityBySlug, getMembership } from "@/lib/communities";
+import { getCommunityBySlug, getMembership, canManageCommunity } from "@/lib/communities";
+import { defaultSpace, getSpaceById, getSpaceBySlug, postIdsBySpace } from "@/lib/communitySpaces";
 import { getMemberByClerkId, getOrCreateMember } from "@/lib/members";
-import { createPost, listPosts, shareTarget } from "@/lib/posts";
+import { createPost, hydratePosts, listPosts, shareTarget } from "@/lib/posts";
 import { getRegistrationIds } from "@/lib/registrations";
 import { limitOrNull } from "@/lib/ratelimit";
 import { canManageEdition } from "@/lib/roles";
@@ -20,6 +21,16 @@ export async function GET(req?: Request) {
     const community = await getCommunityBySlug(c);
     if (!community || (community.hidden && me?.role !== "admin")) {
       return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    // migration 057 — ?s=<slug do espaço> recorta um mural só; arquivado 404
+    const spaceSlug = req ? new URL(req.url).searchParams.get("s") : null;
+    if (spaceSlug) {
+      const space = await getSpaceBySlug(community.id, spaceSlug);
+      if (!space || space.archivedAt) {
+        return Response.json({ error: "Not found" }, { status: 404 });
+      }
+      const ids = await postIdsBySpace(space, me?.id ?? null, null, 50, { includeHidden: me?.role === "admin" });
+      return Response.json({ posts: await hydratePosts(ids, me?.id ?? null) });
     }
     return Response.json({
       posts: await listPosts(50, me?.id ?? null, { communityId: community.id }, { includeHidden: me?.role === "admin" }),
@@ -102,6 +113,35 @@ export async function POST(req: Request) {
     }
     communityId = community.id;
   }
+  // espaço do mural (migration 057): spaceId é do post de comunidade — de
+  // outra comunidade, arquivado ou fora do tipo dá 400; política
+  // organizacao pede dono/organizador/admin (403). Sem espaço, cai no
+  // geral.
+  let spaceId: number | null = null;
+  const rawS: unknown = body.spaceId;
+  const hasSpace = rawS !== undefined && rawS !== null && rawS !== "";
+  if (communityId !== null) {
+    if (hasSpace) {
+      if (typeof rawS !== "number" || !Number.isInteger(rawS)) {
+        return Response.json({ error: "espaço inválido" }, { status: 400 });
+      }
+      const space = await getSpaceById(rawS);
+      if (!space || space.communityId !== communityId) {
+        return Response.json({ error: "espaço inválido" }, { status: 400 });
+      }
+      if (space.archivedAt) {
+        return Response.json({ error: "espaço arquivado" }, { status: 400 });
+      }
+      if (space.postPolicy === "organizacao" && !(await canManageCommunity(member, communityId))) {
+        return Response.json({ error: "Só a organização posta neste espaço." }, { status: 403 });
+      }
+      spaceId = space.id;
+    } else {
+      spaceId = (await defaultSpace(communityId)).id;
+    }
+  } else if (hasSpace) {
+    return Response.json({ error: "espaço é só pra post de comunidade" }, { status: 400 });
+  }
   // citação (migration 049): quoteOfId aponta pro post citado. Corpo é
   // obrigatório (quem cita comenta por cima) e quem escreveu o original
   // decide se aceita: allowQuote = 0 dá 403.
@@ -132,6 +172,7 @@ export async function POST(req: Request) {
       null,
       null,
       { quoteOfId, allowQuote },
+      spaceId,
     );
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Link inválido" }, { status: 400 });

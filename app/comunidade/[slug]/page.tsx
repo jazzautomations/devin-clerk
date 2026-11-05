@@ -10,6 +10,7 @@ import { FeedSection } from "@/components/FeedSection";
 import { TopicList } from "@/components/TopicList";
 import { countTopics, hotTopics } from "@/lib/topics";
 import { MeetupRows } from "@/components/MeetupRows";
+import { SpaceBar } from "@/components/SpaceBar";
 import { PublicCard } from "@/components/PublicCard";
 import { FollowButton, JoinButton, ModerateLink, ModerationToggles, NoticeForm, OrganizersPanel, ReportLink } from "@/components/CommunityActions";
 import { NoticeActions } from "@/components/CommunityModActions";
@@ -24,12 +25,13 @@ import {
   podiumFor,
 } from "@/lib/communities";
 import { listSupporters } from "@/lib/communitySupporters";
+import { defaultSpace, listSpaces, postIdsBySpace, spaceEmptyHint, spacePostable } from "@/lib/communitySpaces";
 import { parseEventTime } from "@/lib/eventTime";
 import { isFollowing } from "@/lib/follows";
 import { getCommunityHackathons } from "@/lib/hackathons";
 import { countCommunityLeads } from "@/lib/leads";
 import { upcomingMeetups } from "@/lib/meetups";
-import { listPosts } from "@/lib/posts";
+import { hydratePosts } from "@/lib/posts";
 import { countOpenByType } from "@/lib/reports";
 import { getRegistrationIds } from "@/lib/registrations";
 import { absoluteUrl } from "@/lib/seo";
@@ -57,7 +59,7 @@ export async function generateMetadata({ params }: PageProps<"/comunidade/[slug]
   return {
     title: c.name,
     description,
-    alternates: { canonical: `/comunidade/${c.slug}` },
+    alternates: { canonical: `/comunidade/${c.slug}`, types: { "application/atom+xml": `/comunidade/${c.slug}/feed.xml` } },
     openGraph: { title: c.name, description, url: absoluteUrl(`/comunidade/${c.slug}`) },
   };
 }
@@ -129,10 +131,12 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
   // bloco "Tópicos em alta" (migration 058)
   const hot = await hotTopics(c.id, member.id, 5, now, canManage);
   const isOwner = isAdmin || role === "dono";
-  const [members, notices, posts, podium, invites, registeredIds, following, supportLeads, reportCounts, agenda] = await Promise.all([
+  const geralSpace = await defaultSpace(c.id);
+  const [members, notices, posts, spaces, podium, invites, registeredIds, following, supportLeads, reportCounts, agenda] = await Promise.all([
     listCommunityMembers(c.id),
     listNotices(c.id, 5),
-    listPosts(30, member.id, { communityId: c.id }, { includeHidden: isAdmin }),
+    postIdsBySpace(geralSpace, member.id, null, 30, { includeHidden: isAdmin }).then((ids) => hydratePosts(ids, member.id)),
+    listSpaces(c.id),
     podiumFor(past.map((h) => h.id)),
     isOwner ? listCommunityInvites(c.id) : Promise.resolve([]),
     getRegistrationIds(member.id),
@@ -141,6 +145,7 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
     canManage ? countOpenByType({ communityId: c.id, viewerId: member.id }) : Promise.resolve<Awaited<ReturnType<typeof countOpenByType>>>({}),
     upcomingMeetups(c.id, 3, now),
   ]);
+  const postableSpaces = spaces.filter((sp) => spacePostable(sp, role, canManage)).map((sp) => ({ id: sp.id, slug: sp.slug, name: sp.name }));
   const openReports = Object.values(reportCounts).reduce((a, b) => a + (b ?? 0), 0);
   const organizers = members.filter((m) => m.role === "organizador");
   const owners = members.filter((m) => m.role === "dono");
@@ -364,12 +369,23 @@ export default async function CommunityPage({ params, searchParams }: PageProps<
             )}
           </section>
 
-          {/* mural */}
+          {/* mural: dividido em espaços (migration 057) — a página mostra o
+              geral; cada espaço tem mural próprio em /s/[space] */}
           <section id="mural" aria-labelledby="mural-title" className="flex scroll-mt-24 flex-col gap-4">
             <h2 id="mural-title" className="text-[clamp(1.5rem,3vw,2rem)] leading-none font-extrabold tracking-[-0.035em]">
               Mural
             </h2>
-            <FeedSection initialPosts={posts} canPost={!!role} me={member.username} isAdmin={isAdmin} communitySlug={c.slug} />
+            <SpaceBar slug={c.slug} spaces={spaces} active={geralSpace.slug} canManage={canManage} />
+            <FeedSection
+              initialPosts={posts}
+              canPost={!!role}
+              me={member.username}
+              isAdmin={isAdmin}
+              communitySlug={c.slug}
+              spaces={postableSpaces}
+              spaceSlug={geralSpace.slug}
+              emptyHint={spaceEmptyHint(geralSpace)}
+            />
           </section>
         </div>
 

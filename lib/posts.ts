@@ -476,6 +476,9 @@ export async function createPost(
   teamId?: number | null,
   /** repost ou citação (migration 049); o alvo é validado por shareTarget */
   share: PostShare = {},
+  /** espaço do mural da comunidade (migration 057); a rota valida dono do
+   * espaço, arquivado e política, e resolve o geral quando não vem */
+  spaceId?: number | null,
 ): Promise<Post> {
   const repostOfId = share.repostOfId ?? null;
   const quoteOfId = share.quoteOfId ?? null;
@@ -486,8 +489,8 @@ export async function createPost(
   // (profileId) passa por lib/recados.ts, que valida antes de chamar.
   const row = await db
     .prepare(
-      `INSERT INTO posts (memberId, body, link, hackathonId, communityId, profileId, teamId, "repostOfId", "quoteOfId", "allowQuote")
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO posts (memberId, body, link, hackathonId, communityId, profileId, teamId, "repostOfId", "quoteOfId", "allowQuote", "spaceId")
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     )
     .get<{ id: number }>(
       memberId,
@@ -500,6 +503,7 @@ export async function createPost(
       repostOfId,
       quoteOfId,
       share.allowQuote === false ? 0 : 1,
+      spaceId ?? null,
     );
   await syncMentionsAndTags(row!.id, null, v.body, await actorOf(memberId));
   return (await hydratePosts([row!.id], memberId))[0];
