@@ -95,6 +95,9 @@ export const RATE_LIMITS: Record<string, RateLimitOpts> = {
   // tópicos da comunidade (migration 058): abrir, responder e votar (voto em
   // tópico, em resposta e em enquete dividem o balde); editar e apagar o
   // próprio ou moderar caem em topic-edit
+  // espaços da comunidade (migration 057): criar, ordenar, renomear e
+  // arquivar dividem o balde; 30/h cobre arrumar a casa e freia script
+  "community-spaces": { limit: 30, windowMs: HOUR }, // POST/PATCH …/communities/[slug]/spaces
   "topic-create": { limit: 10, windowMs: HOUR }, // POST …/communities/[slug]/topics
   "topic-reply": { limit: 60, windowMs: HOUR }, // POST /api/topics/[id]/replies
   "topic-vote": { limit: 300, windowMs: HOUR }, // POST /api/topics/[id]/vote, …/replies/[replyId]/vote, …/poll

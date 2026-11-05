@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Post } from "@/lib/posts";
 import { PostCard } from "@/components/PostCard";
-import { PostComposer } from "@/components/PostComposer";
+import { PostComposer, type ComposerSpace } from "@/components/PostComposer";
 
 // Lista de posts com a caixa de postar em cima: /feed, /dashboard, mural da
 // edição (spec 028) e mural da comunidade (migration 027). Cada post é um
@@ -19,6 +19,10 @@ export function FeedSection({
   hackathonId = null,
   editionLabel = null,
   communitySlug = null,
+  spaces = null,
+  spaceSlug = null,
+  emptyHint = null,
+  noPostHint = null,
 }: {
   initialPosts: Post[];
   canPost?: boolean;
@@ -29,6 +33,14 @@ export function FeedSection({
   editionLabel?: string | null;
   /** mural da comunidade (migration 027): posta e recarrega com o escopo */
   communitySlug?: string | null;
+  /** espaços postáveis do mural (migration 057): liga o seletor do composer */
+  spaces?: ComposerSpace[] | null;
+  /** espaço ativo na página /s/[space]: pré-selecionado no composer */
+  spaceSlug?: string | null;
+  /** frase do mural vazio (cada espaço tem a sua) */
+  emptyHint?: string | null;
+  /** aviso quando canPost=false (espaço organizacao: leitura pra membro) */
+  noPostHint?: string | null;
 }) {
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   // o PostCard decide "é meu" pelo id ou pelo @; o id sai do próprio feed
@@ -44,22 +56,26 @@ export function FeedSection({
           hackathonId={hackathonId}
           communitySlug={communitySlug}
           editionLabel={editionLabel}
+          spaces={spaces}
+          spaceSlug={spaceSlug}
           onPosted={(p) => setPosts((ps) => [p, ...ps])}
         />
       )}
 
       {hackathonId && !canPost && <p className="font-mono text-[12px] text-muted">{"só inscritos postam no mural"}</p>}
       {communitySlug && !canPost && (
-        <p className="font-mono text-[12px] text-muted">quem está na comunidade posta no mural</p>
+        <p className="font-mono text-[12px] text-muted">{noPostHint ?? "quem está na comunidade posta no mural"}</p>
       )}
 
       {posts.length === 0 ? (
         <p className="border-[1.5px] border-line px-5 py-8 text-center font-mono text-xs text-muted">
-          {hackathonId
-            ? "mural vazio — seja o primeiro a postar da edição"
-            : communitySlug
-              ? "mural vazio. Conte o que a comunidade está construindo."
-              : "feed vazio — seja o primeiro a postar o que tá construindo"}
+          {emptyHint
+            ? emptyHint
+            : hackathonId
+              ? "mural vazio — seja o primeiro a postar da edição"
+              : communitySlug
+                ? "mural vazio. Conte o que a comunidade está construindo."
+                : "feed vazio — seja o primeiro a postar o que tá construindo"}
         </p>
       ) : (
         <ul className="divide-y divide-line border-y border-line">

@@ -5,6 +5,9 @@ import { userMessage } from "@/lib/apiError";
 import type { Post } from "@/lib/posts";
 import { MentionField } from "@/components/MentionField";
 
+/** espaço do mural da comunidade (migration 057): o que a pessoa pode postar */
+export type ComposerSpace = { id: number; slug: string; name: string };
+
 // Caixa de postar (migration 034): texto até 500 e link opcional. Com
 // hackathonId posta no mural da edição; com communitySlug, no da comunidade.
 // Link do próprio HackaHub (/p/12, /h/x, /u/x, /comunidade/x) vira card.
@@ -18,6 +21,8 @@ export function PostComposer({
   communitySlug = null,
   editionLabel = null,
   initialBody = "",
+  spaces = null,
+  spaceSlug = null,
   onPosted,
 }: {
   hackathonId?: string | null;
@@ -25,10 +30,19 @@ export function PostComposer({
   editionLabel?: string | null;
   /** texto já preenchido (página de tag: "#nextjs ") */
   initialBody?: string;
+  /** espaços em que a pessoa pode postar (mural da comunidade, migration 057) */
+  spaces?: ComposerSpace[] | null;
+  /** espaço pré-selecionado (página /s/[space]); sem ele cai no geral */
+  spaceSlug?: string | null;
   onPosted: (post: Post) => void;
 }) {
   const [body, setBody] = useState(initialBody);
   const [link, setLink] = useState("");
+  // espaço escolhido no seletor: o da página, o geral ou o primeiro da lista
+  const [spaceId, setSpaceId] = useState<number | null>(() => {
+    if (!spaces?.length) return null;
+    return (spaces.find((s) => s.slug === spaceSlug) ?? spaces.find((s) => s.slug === "geral") ?? spaces[0]).id;
+  });
   // marcado = o post nasce sem aceitar citação (allowQuote = false)
   const [noQuote, setNoQuote] = useState(false);
   const [status, setStatus] = useState<"idle" | "posting" | "error">("idle");
@@ -44,6 +58,7 @@ export function PostComposer({
         link: link || undefined,
         hackathonId: hackathonId ?? undefined,
         communitySlug: communitySlug ?? undefined,
+        spaceId: spaceId ?? undefined,
         allowQuote: !noQuote,
       }),
     }).catch(() => null);
@@ -69,6 +84,23 @@ export function PostComposer({
           {"postando no mural: "}
           {editionLabel ?? hackathonId}
         </p>
+      )}
+      {communitySlug && spaces && spaces.length > 0 && (
+        <label className="flex items-center gap-2 font-mono text-[12px] text-muted" data-testid="composer-space">
+          em
+          <select
+            value={spaceId ?? ""}
+            onChange={(e) => setSpaceId(Number(e.target.value))}
+            aria-label="espaço do mural"
+            className="border-[1.5px] border-line bg-background px-2 py-1.5 font-mono text-[12px] text-foreground focus:border-accent focus:outline-none"
+          >
+            {spaces.map((s) => (
+              <option key={s.id} value={s.id}>
+                #{s.slug}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
       <MentionField
         value={body}

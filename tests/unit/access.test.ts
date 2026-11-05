@@ -27,6 +27,9 @@ const PUBLICAS = [
   "/p/12",
   "/p/12/opengraph-image",
   "/comunidade/hack-inova",
+  "/u/marina.builds/feed.xml",
+  "/p/12/feed.xml",
+  "/comunidade/hack-inova/feed.xml",
   "/radar",
   "/rsvp/token.assinado",
   "/demo/time-x/",
@@ -65,6 +68,8 @@ const PRIVADAS = [
   "/comunidades/nova",
   "/comunidade/hack-inova/editar",
   "/comunidade/hack-inova/hackathon/novo",
+  "/comunidade/hack-inova/s/ajuda",
+  "/comunidade/hack-inova/espacos",
   "/legalidade",
   "/organizar/outra-coisa",
 ];
